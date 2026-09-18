@@ -13,7 +13,9 @@ export const SEND_BUTTON = {
 export const MESSAGE = {
   container: 'div#main',
   textNode: '.copyable-text',
-  focusable: 'div[role="listitem"]'
+  focusable: 'div[role="listitem"]',
+  /** "Read more" marker on a collapsed long message; collapsed text must not be translated. */
+  expandMore: '[data-tab="10"]'
 }
 
 export const APP = {

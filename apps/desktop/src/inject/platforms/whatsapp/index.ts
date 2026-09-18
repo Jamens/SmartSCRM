@@ -4,6 +4,7 @@ import type { SelectorConfig, UserInfo } from '../../core/PlatformAdapter'
 import { WHATSAPP } from '../../constants/channels'
 import { INPUT, MESSAGE, APP } from './selectors'
 import { mountBadge } from '../../shared/ui/badge'
+import { startMessageTranslation } from '../../core/translation/domScan'
 
 /**
  * WhatsApp platform adapter (skeleton).
@@ -79,6 +80,10 @@ export class WhatsAppAdapter extends PlatformAdapter {
 
   hookInput(_injector: BaseInjector): void {
     /* input interception lands with quick-reply (P4) */
+  }
+
+  setupTranslationListeners(injector: BaseInjector): () => void {
+    return startMessageTranslation(injector)
   }
 
   cleanup(): void {

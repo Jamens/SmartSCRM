@@ -24,6 +24,7 @@ export class StateManager {
   previewEnabled = true
   disableChinese = true
   disableChinesePreventSend = false
+  translationRevision = 0
   currentChatId: string | null = null
   currentChatUser = ''
   currentLoginUser: LoginUser | null = null
@@ -71,6 +72,9 @@ export class StateManager {
     if (typeof flags.disableChinesePreventSend === 'boolean') {
       this.disableChinesePreventSend = flags.disableChinesePreventSend
     }
+    if (typeof flags.revision === 'number' && flags.revision !== this.translationRevision) {
+      this.translationRevision = flags.revision
+    }
   }
 
   attachTranslationTimer(timer: ReturnType<typeof setInterval>): void {
@@ -110,6 +114,7 @@ export class StateManager {
     this.idNameMap = {}
     this.chatInfo = {}
     this.unreadCount = 0
+    this.translationRevision = 0
     if (this._translationTimer) {
       clearInterval(this._translationTimer)
       this._translationTimer = null
