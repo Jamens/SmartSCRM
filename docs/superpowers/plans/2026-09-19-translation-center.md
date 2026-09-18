@@ -246,7 +246,7 @@ INSERT INTO translation_node (name, label, url, base_delay_ms, reachable, sort) 
 SET @tid = (SELECT id FROM tenant WHERE invite_code = 'DEMO0001' LIMIT 1);
 INSERT INTO translation_setting (tenant_id) VALUES (@tid);
 
--- Simulated dictionary: 40 SCRM phrases x 8 languages. Unknown words stay untranslated
+-- Simulated dictionary: 41 SCRM phrases x 8 languages. Unknown words stay untranslated
 -- on purpose (that is what `partial` reports), so this list only needs the common lines.
 -- lang set: zh-CN en vi id lo hi my ms
 INSERT INTO translation_phrase (phrase_key, lang_code, text) VALUES
@@ -3586,7 +3586,7 @@ git log --oneline -8
 
 - [ ] **Step 5: 已知限制如实记录（不写进代码注释，写在最终报告里）**
 
-- 模拟词典只有 40 条短语，真实对话会大面积 `partial: true`：这是刻意的，避免假装本地能做真翻译。
+- 模拟词典只有 41 条短语，真实对话会大面积 `partial: true`：这是刻意的，避免假装本地能做真翻译。
 - WhatsApp DOM 类名（`.copyable-text`、`[data-tab="10"]`）随版本漂移，坏了只改 `platforms/whatsapp/selectors.ts` 一处。
 - Telegram 渲染本期不接线：翻译逻辑在 `inject/core/translation/` 下与平台无关，TG 只差一组选择器 + 一个 `setupTranslationListeners` 覆盖。
 - 按客户覆盖语向（`translation_setting.scope='customer'`）与语音翻译本体留到后续阶段；本期 `voice_enabled` 只入库、UI 标"本期不生效"。

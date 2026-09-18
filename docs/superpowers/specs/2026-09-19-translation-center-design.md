@@ -169,7 +169,7 @@ CREATE TABLE `translation_phrase` (
 ) ENGINE = InnoDB DEFAULT CHARSET = utf8mb4 COLLATE = utf8mb4_unicode_ci COMMENT 'seed dictionary for the simulated engine';
 ```
 
-种子：40 条高频 SCRM 话术（问候 / 询价 / 催付 / 售后 / 节日祝福 / 引导下单）× 8 语种 = 320 行，人工撰写。
+种子：41 条高频 SCRM 话术（问候 / 询价 / 催付 / 售后 / 节日祝福 / 引导下单）× 8 语种 = 328 行，人工撰写。
 
 ### 2.5 实体约定
 
@@ -429,7 +429,7 @@ Git Bash 内联中文会静默失败；没有 mysql CLI，查库走 HTTP；自�
 - **DOM 类名随 WhatsApp 版本漂移**：`copyable-text` / `_ak1q` / `_ak1r` 这类类名会变。
   所有选择器集中在 `inject/platforms/whatsapp/selectors.ts`，坏了只改一处。
   若 `true_` 前缀判方向失效，退化表现是"自己的消息也按 receive 语向译"——正是 R1 要求的行为，不会崩。
-- **模拟词典只 40 条**：真实对话会大面积 `partial: true`。这是刻意的（不假装离线能做真翻译）。
+- **模拟词典只 41 条**：真实对话会大面积 `partial: true`。这是刻意的（不假装离线能做真翻译）。
   要更好看有两条独立路径：扩词典，或在 wa-js 落地后接真实通道。
 - **`view:invoke` 是新增攻击面**：白名单 + 长度 + 速率三重限制，响应不含凭据。
 - **渲染只能在桌面端真机验证**：typecheck / build 覆盖不到 WhatsApp DOM，§6.3 未跑完前不得声明功能完成。
