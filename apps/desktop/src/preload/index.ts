@@ -63,6 +63,8 @@ const scrm = {
       config: Record<string, unknown>
     ): Promise<void> => ipcRenderer.invoke('wcv-inject', viewId, channel, config),
     uninject: (viewId: string): Promise<void> => ipcRenderer.invoke('wcv-uninject', viewId),
+    sendToView: (viewId: string, channel: string, payload: unknown): Promise<boolean> =>
+      ipcRenderer.invoke('wcv-send-to-view', viewId, channel, payload),
     onState: (callback: (state: ViewStateEvent) => void): (() => void) => {
       const listener = (_event: IpcRendererEvent, state: ViewStateEvent): void => callback(state)
       ipcRenderer.on('view:state', listener)

@@ -178,6 +178,18 @@ export class WebContentsViewManager {
       .catch(() => undefined)
   }
 
+  /** Push to an embedded page; `preload/view.ts` exposes these as `window.ele.on(channel, cb)`. */
+  sendToView(viewId: string, channel: string, payload: unknown): boolean {
+    const managed = this.views.get(viewId)
+    if (!managed) return false
+    managed.view.webContents.send(`view:host:${channel}`, payload)
+    return true
+  }
+
+  getInjectConfig(viewId: string): Record<string, unknown> | undefined {
+    return this.injects.get(viewId)?.config
+  }
+
   private async runInject(viewId: string): Promise<void> {
     const entry = this.injects.get(viewId)
     const managed = this.views.get(viewId)

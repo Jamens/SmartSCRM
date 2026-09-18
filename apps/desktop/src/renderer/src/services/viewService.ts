@@ -31,6 +31,9 @@ const fallback: ViewApi = {
   getActiveId: noVal<string | null>(null),
   inject: noop,
   uninject: noop,
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  sendToView: (_viewId: string, _channel: string, _payload: unknown): Promise<boolean> =>
+    Promise.resolve(false),
   onState: () => () => {},
   onPageMessage: () => () => {}
 }

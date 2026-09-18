@@ -1689,6 +1689,13 @@ await v.executeJS('selftest', 'window.ele.invoke("translate-api", { text: "x".re
 
 > 这一步是本机唯一能在不扫码登录的情况下验证注入 → 后端通路的手段；它验证的是通道，不是 WhatsApp DOM 渲染（那是 §6.3 手工清单）。
 
+> 自动化替代（本机已按此验证通过）：`pnpm exec electron-vite dev --remoteDebuggingPort 9223` 起应用，
+> 用 Node 原生 `WebSocket` 连 `http://127.0.0.1:9223/json/list` 里那个 `page` 目标，
+> 把上面每条表达式作为 `Runtime.evaluate`（`awaitPromise` + `returnByValue`）依次发过去即可，
+> 不需要人肉点 DevTools。会话用 `window.scrm.session.save({accessToken,…})` 写入、
+> 验证完 `window.scrm.session.clear()` 清掉（令牌来自后端 `/api/auth/login`），
+> 因此 `translationBridge` 拿到的是应用自己的存储路径，不需要手工摆文件。
+
 - [ ] **Step 7: 提交**
 
 ```bash

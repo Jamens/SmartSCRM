@@ -1,6 +1,7 @@
 import { ipcMain, type Rectangle, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { viewManager } from './manager'
 import { getMainWindow } from '../window/mainWindow'
+import { requestTranslation } from '../services/translationBridge'
 
 /** Channels an embedded page is allowed to push up to the host window. */
 const ALLOWED_HOST_CHANNELS = new Set<string>([
@@ -14,6 +15,25 @@ const ALLOWED_HOST_CHANNELS = new Set<string>([
   'update-unread-count',
   'auth-status-change'
 ])
+
+/** Channels an embedded page may ask the host to serve. */
+const ALLOWED_INVOKE_CHANNELS = new Set<string>(['translate-api'])
+/** Channels the host renderer may push into an embedded page. */
+const ALLOWED_PUSH_CHANNELS = new Set<string>(['update-translation-flags'])
+const RATE_WINDOW_MS = 1000
+const RATE_LIMIT = 20
+const rateBuckets = new Map<string, { windowStart: number; count: number }>()
+
+function rateLimited(viewId: string): boolean {
+  const now = Date.now()
+  const bucket = rateBuckets.get(viewId)
+  if (!bucket || now - bucket.windowStart >= RATE_WINDOW_MS) {
+    rateBuckets.set(viewId, { windowStart: now, count: 1 })
+    return false
+  }
+  bucket.count += 1
+  return bucket.count > RATE_LIMIT
+}
 
 function forwardToHost(viewId: string, channel: string, data: unknown): void {
   getMainWindow()?.webContents.send('view:page-message', { viewId, channel, data })
@@ -36,6 +56,10 @@ export function registerViewIpc(): void {
       viewManager.inject(viewId, channel, config)
   )
   ipcMain.handle('wcv-uninject', (_e, viewId: string) => viewManager.uninject(viewId))
+  ipcMain.handle('wcv-send-to-view', (_e, viewId: string, channel: string, payload: unknown) => {
+    if (!ALLOWED_PUSH_CHANNELS.has(channel)) return false
+    return viewManager.sendToView(viewId, channel, payload)
+  })
 
   // Page (injected script) -> host window. `event.sender` identifies which view sent it.
   const routePageMessage = (event: IpcMainEvent, kind: 'toHost' | 'send', arg: { channel: string; data: unknown }): void => {
@@ -46,8 +70,28 @@ export function registerViewIpc(): void {
   ipcMain.on('view:toHost', (event, arg) => routePageMessage(event, 'toHost', arg))
   ipcMain.on('view:send', (event, arg) => routePageMessage(event, 'send', arg))
 
-  // Page -> host request/response. Translation & data APIs are mocked until their phases land.
-  ipcMain.handle('view:invoke', (_event: IpcMainInvokeEvent, arg: { channel: string; data: unknown }) => {
-    return { ok: true, mocked: true, channel: arg?.channel ?? null, data: null }
-  })
+  // Page -> host request/response. Only whitelisted channels reach the backend, and the
+  // page can never name a language, a channel or a token (spec §4.2).
+  ipcMain.handle(
+    'view:invoke',
+    async (event: IpcMainInvokeEvent, arg: { channel: string; data: unknown }) => {
+      if (!arg || !ALLOWED_INVOKE_CHANNELS.has(arg.channel)) return null
+      const viewId = viewManager.getViewIdByWebContents(event.sender.id)
+      if (!viewId || rateLimited(viewId)) return null
+      const req = arg.data as Partial<{ text: string; type: string; input: boolean; noCache: boolean }> | undefined
+      const text = typeof req?.text === 'string' ? req.text : ''
+      if (!text || text.length > 5000) return null
+      const type = req?.type === 'send' ? 'send' : 'receive'
+      const apiBase = viewManager.getInjectConfig(viewId)?.apiBase
+      return requestTranslation(
+        {
+          text,
+          type,
+          ...(req?.input === true ? { input: true } : {}),
+          ...(req?.noCache === true ? { noCache: true } : {})
+        },
+        typeof apiBase === 'string' ? apiBase : undefined
+      )
+    }
+  )
 }
