@@ -35,3 +35,6 @@ data/
 
 # Generated inject bundle (built by apps/desktop build:inject)
 apps/desktop/resources/inject.bundle.js
+
+# Local verification scratch (throwaway probes and logs)
+tmp/

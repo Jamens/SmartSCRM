@@ -802,7 +802,7 @@ public class SimulatedTranslationEngine {
         int covered = 0;
         for (Pattern p : patterns) {
             if (!p.source().isEmpty() && out.contains(p.source())) {
-                covered += p.source().length() * countOccurrences(out, p.source());
+                covered += visibleChars(p.source()) * countOccurrences(out, p.source());
                 out = out.replace(p.source(), p.target());
             }
         }
@@ -1403,8 +1403,11 @@ echo "${#T_DEMO} ${#T_QA}"
 预期：两个长度都大于 100（token 拿到）。用 Write 工具创建 `tmp/p5-translate-zh.json`（UTF-8）：
 
 ```json
-{"text": "你好，订单已发货", "type": "receive"}
+{"text": "Xin chào, đơn hàng đã được gửi", "type": "receive"}
 ```
+
+载荷必须是**外语**：默认 receive 语向是「自动 → zh-CN」，喂中文会走进同语向分支，
+既证明不了词典翻译，也证明不了写缓存。
 
 - [ ] **Step 2: 17 条契约用例**
 
@@ -1417,7 +1420,7 @@ echo "${#T_DEMO} ${#T_QA}"
 | 3 | `PUT /settings` body `{"server":"xx","receiveToLang":"zh-CN","sendToLang":"en"}` | `code:40000` |
 | 4 | `PUT /settings` body `{"server":"hk","channel":"2",...}` | `code:40000`（R5 后端侧） |
 | 5 | `GET /nodes/delays` 两次 | 7 项、`my2.delay === null`、两次同名节点 delay 有差异（R9 抖动） |
-| 6 | `POST /translate @tmp/p5-translate-zh.json` | `cached:false`、`translation` 含 `Hello`、`fromLangCode="zh-CN"`、`cacheKey` 形如 `receive-1-auto-zh-CN-<16 hex>` |
+| 6 | `POST /translate @tmp/p5-translate-zh.json` | `cached:false`、`translation=="你好, 订单已发货"`、`fromLangCode="vi"`、`partial:true`（逗号未命中）、`cacheKey` 形如 `receive-1-auto-zh-CN-<16 hex>` |
 | 7 | 同命令再跑一次 | `cached:true`；`GET /cache/stats` 里该键 `hitCount` 变 1 |
 | 8 | `PUT /settings {"channel":"2",...}` 后再 `POST /translate` 同文本 | `cached:false`（key 含渠道） |
 | 9 | `PUT /settings {"channel":"1","sendFromLang":"en","sendToLang":"en",...}` 后 `POST /translate {"text":"hello there","type":"send"}` 两次 | 两次都 `cached:false`，译文 == 归一化原文（R7） |
@@ -1425,7 +1428,7 @@ echo "${#T_DEMO} ${#T_QA}"
 | 11 | `POST /translate {"text":"hello there friend","type":"send","input":true}` 两次 | 两次 `cached:false`，且 `GET /cache/stats` 的 `totalKeys` 不因这两次增长 |
 | 12 | `PUT /settings {"receiveFromLang":"sw","receiveToLang":"is",...}` 后 `POST /translate {"text":"habari gani","type":"receive"}` | `translation=="habari gani"`、`partial:true`、HTTP 200（R8）；随后把 from/to 恢复 `""` / `zh-CN` |
 | 13 | `POST /translate @tmp/p5-translate-5001.json`（5001 个 `a`） | `code:40000` |
-| 14 | `PUT /settings {"channel":"3",...}` 后 `POST /translate {"text":"ok","type":"send","noCache":true}`（send 语向 en→…） | 译文句首大写且以 `.` 结尾；再 `PUT channel:"1"` 跑同文本 → 保持原样 |
+| 14 | `PUT /settings {"channel":"3","sendFromLang":"zh-CN","sendToLang":"en",...}` 后 `POST /translate {"text":"你好","type":"send","noCache":true}` | 译文 `"Hello."`（句首大写 + 句号）；再 `PUT {"channel":"1"}` 跑同文本 → `"Hello"` 保持原样。语向必须真的发生翻译，否则同语向分支直接返回原文，`style()` 走不到 |
 | 15 | `GET /cache/stats` | `totalKeys >= 1`、`totalHits >= 1`、`top` ≤ 5 条 |
 | 16 | 用 `$T_QA` 跑 `POST /translate @tmp/p5-translate-zh.json`（先确保 QA 租户 channel=1） | `cached:false`（R3 跨租户不共享） |
 | 17 | 不带 token `POST /translate @tmp/p5-translate-zh.json` | HTTP 401，`code:40100` |
@@ -1672,10 +1675,10 @@ await v.setBounds('selftest', { x: 80, y: 80, width: 600, height: 400 })
 await v.inject('selftest', 'WhatsApp', { webviewId: 'selftest', inviteCode: 'DEMO0001' })
 await v.executeJS('selftest', 'JSON.stringify(window.ele ? { bridge: true } : {})')
 await v.executeJS('selftest',
-  'window.ele.invoke("translate-api", { text: "你好", type: "receive" }).then(r => JSON.stringify(r))')
+  'window.ele.invoke("translate-api", { text: "你好", type: "send" }).then(r => JSON.stringify(r))')
 ```
 
-预期：最后一行返回一个 JSON 字符串，其中 `translation` 含 `Hello`、`cached` 为 `false`/`true`、`cacheKey` 形如 `receive-1-auto-zh-CN-xxxxxxxxxxxxxxxx`。这证明 页面 → 主进程 → Java 的转发、白名单与令牌桶入口都通了。再验证白名单：
+预期：最后一行返回一个 JSON 字符串，其中 `translation` 含 `Hello`、`cached` 为 `false`/`true`、`cacheKey` 形如 `send-1-auto-en-xxxxxxxxxxxxxxxx`。这里用 `type:"send"`（默认语向 → en）而不是 `receive`：receive 的目标语是 `zh-CN`，喂中文会走进同语向分支、拿不到 `Hello`。这一步证明 页面 → 主进程 → Java 的转发、白名单与令牌桶入口都通了。再验证白名单：
 
 ```js
 await v.executeJS('selftest', 'window.ele.invoke("delete-everything", {}).then(r => JSON.stringify(r ?? null))')
