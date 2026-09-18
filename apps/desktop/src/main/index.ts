@@ -3,6 +3,7 @@ import { electronApp, optimizer } from '@electron-toolkit/utils'
 import { createMainWindow, setQuitting } from './window/mainWindow'
 import { createTray } from './window/tray'
 import { attachWindowEvents, registerIpcHandlers } from './ipc'
+import { viewManager } from './webContentsView/manager'
 
 const gotLock = app.requestSingleInstanceLock()
 
@@ -35,7 +36,10 @@ if (!gotLock) {
     })
   })
 
-  app.on('before-quit', () => setQuitting(true))
+  app.on('before-quit', () => {
+    setQuitting(true)
+    viewManager.destroyAll()
+  })
 
   app.on('window-all-closed', () => {
     if (process.platform !== 'darwin') {

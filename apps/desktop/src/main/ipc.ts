@@ -1,8 +1,11 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { clearSession, getDeviceId, getSession, saveSession, type StoredSession } from './state/session'
 import { getMainWindow, showMainWindow } from './window/mainWindow'
+import { registerViewIpc } from './webContentsView/ipc'
 
 export function registerIpcHandlers(): void {
+  registerViewIpc()
+
   ipcMain.handle('app:get-device-id', () => getDeviceId())
 
   ipcMain.handle('session:save', (_event, session: StoredSession) => {

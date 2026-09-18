@@ -1,0 +1,106 @@
+import {
+  AtSign,
+  Globe,
+  MessageCircle,
+  MessagesSquare,
+  Radio,
+  Send,
+  Sparkles,
+  type LucideIcon
+} from 'lucide-react'
+
+/** Mirrors the legacy PLATFORM_TYPE constants and the shared contract. */
+export enum PlatformType {
+  WhatsApp = 1,
+  Line = 2,
+  AIStar = 3,
+  Telegram = 4,
+  Facebook = 5,
+  Messenger = 6,
+  WhatsAppProtocol = 7
+}
+
+export interface PlatformMeta {
+  type: PlatformType
+  label: string
+  short: string
+  /** Public web client opened inside the embedded view; null when the channel has no web login. */
+  embedUrl: string | null
+  hint: string
+  color: string
+  icon: LucideIcon
+}
+
+export const PLATFORMS: Record<PlatformType, PlatformMeta> = {
+  [PlatformType.WhatsApp]: {
+    type: PlatformType.WhatsApp,
+    label: 'WhatsApp',
+    short: 'WA',
+    embedUrl: 'https://web.whatsapp.com',
+    hint: '扫码登录 WhatsApp Web',
+    color: '#25D366',
+    icon: MessageCircle
+  },
+  [PlatformType.Line]: {
+    type: PlatformType.Line,
+    label: 'LINE',
+    short: 'LINE',
+    embedUrl: null,
+    hint: 'LINE 无公开网页端，暂未开放内嵌',
+    color: '#06C755',
+    icon: AtSign
+  },
+  [PlatformType.AIStar]: {
+    type: PlatformType.AIStar,
+    label: 'AIStar',
+    short: 'AI',
+    embedUrl: null,
+    hint: '内部智能助手通道',
+    color: '#7C3AED',
+    icon: Sparkles
+  },
+  [PlatformType.Telegram]: {
+    type: PlatformType.Telegram,
+    label: 'Telegram',
+    short: 'TG',
+    embedUrl: 'https://web.telegram.org',
+    hint: '手机号验证码登录 Telegram Web',
+    color: '#229ED9',
+    icon: Send
+  },
+  [PlatformType.Facebook]: {
+    type: PlatformType.Facebook,
+    label: 'Facebook',
+    short: 'FB',
+    embedUrl: 'https://www.facebook.com',
+    hint: '登录 Facebook 账号',
+    color: '#1877F2',
+    icon: Globe
+  },
+  [PlatformType.Messenger]: {
+    type: PlatformType.Messenger,
+    label: 'Messenger',
+    short: 'MSG',
+    embedUrl: 'https://www.messenger.com',
+    hint: '登录 Messenger',
+    color: '#0084FF',
+    icon: MessagesSquare
+  },
+  [PlatformType.WhatsAppProtocol]: {
+    type: PlatformType.WhatsAppProtocol,
+    label: 'WA 协议号',
+    short: 'WAP',
+    embedUrl: null,
+    hint: '协议托管账号，无需网页登录',
+    color: '#128C7E',
+    icon: Radio
+  }
+}
+
+export const EMBEDDABLE_PLATFORMS: PlatformType[] = Object.values(PLATFORMS)
+  .filter((p) => p.embedUrl !== null)
+  .map((p) => p.type)
+
+export function platformOf(type: number): PlatformMeta | null {
+  return PLATFORMS[type as PlatformType] ?? null
+}

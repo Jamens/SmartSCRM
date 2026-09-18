@@ -7,6 +7,19 @@ export interface StoredSession {
   user: unknown
 }
 
+export interface ViewBounds {
+  x: number
+  y: number
+  width: number
+  height: number
+}
+
+export interface ViewStateEvent {
+  viewId: string
+  event: 'created' | 'destroyed' | 'title' | 'loading' | 'ready'
+  payload: unknown
+}
+
 const scrm = {
   app: {
     getDeviceId: (): Promise<string> => ipcRenderer.invoke('app:get-device-id')
@@ -25,6 +38,23 @@ const scrm = {
       const listener = (_event: IpcRendererEvent, maximized: boolean): void => callback(maximized)
       ipcRenderer.on('win:maximized-changed', listener)
       return () => ipcRenderer.removeListener('win:maximized-changed', listener)
+    }
+  },
+  view: {
+    create: (viewId: string, url: string): Promise<boolean> => ipcRenderer.invoke('wcv-create', viewId, url),
+    destroy: (viewId: string): Promise<void> => ipcRenderer.invoke('wcv-destroy', viewId),
+    show: (viewId: string): Promise<void> => ipcRenderer.invoke('wcv-show', viewId),
+    hideAll: (): Promise<void> => ipcRenderer.invoke('wcv-hide-all'),
+    setBounds: (viewId: string, rect: ViewBounds): Promise<void> => ipcRenderer.invoke('wcv-set-bounds', viewId, rect),
+    reload: (viewId: string): Promise<void> => ipcRenderer.invoke('wcv-reload', viewId),
+    navigate: (viewId: string, url: string): Promise<void> => ipcRenderer.invoke('wcv-navigate', viewId, url),
+    executeJS: <T>(viewId: string, code: string): Promise<T> => ipcRenderer.invoke('wcv-execute-js', viewId, code),
+    getOpenIds: (): Promise<string[]> => ipcRenderer.invoke('wcv-get-open-ids'),
+    getActiveId: (): Promise<string | null> => ipcRenderer.invoke('wcv-get-active-id'),
+    onState: (callback: (state: ViewStateEvent) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, state: ViewStateEvent): void => callback(state)
+      ipcRenderer.on('view:state', listener)
+      return () => ipcRenderer.removeListener('view:state', listener)
     }
   }
 }
