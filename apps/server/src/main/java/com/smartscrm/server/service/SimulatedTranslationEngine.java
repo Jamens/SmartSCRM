@@ -88,7 +88,10 @@ public class SimulatedTranslationEngine {
         int covered = 0;
         for (Pattern p : patterns) {
             if (!p.source().isEmpty() && out.contains(p.source())) {
-                covered += p.source().length() * countOccurrences(out, p.source());
+                // Compare visible chars on both sides: phrase sources carry spaces that
+                // visibleChars() strips from the denominator, so raw lengths would
+                // over-count coverage and mask unmatched punctuation.
+                covered += visibleChars(p.source()) * countOccurrences(out, p.source());
                 out = out.replace(p.source(), p.target());
             }
         }

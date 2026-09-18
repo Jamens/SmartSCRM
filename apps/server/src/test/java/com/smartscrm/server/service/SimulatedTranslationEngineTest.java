@@ -46,6 +46,15 @@ class SimulatedTranslationEngineTest {
     }
 
     @Test
+    void spacesInsideMatchedPhrasesDoNotHideUnmatchedPunctuation() {
+        SimulatedTranslationEngine.EngineResult r =
+            engine.translate("Xin chào, đơn hàng đã được gửi", "", "zh-CN", "1");
+        assertEquals("你好, 订单已发货", r.translation());
+        assertEquals("vi", r.fromLang());
+        assertTrue(r.partial());
+    }
+
+    @Test
     void unsupportedPairReturnsSourceTextAndPartial() {
         SimulatedTranslationEngine.EngineResult r = engine.translate("habari gani", "sw", "is", "1");
         assertEquals("habari gani", r.translation());
