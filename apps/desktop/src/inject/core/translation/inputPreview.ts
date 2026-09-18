@@ -1,0 +1,150 @@
+import { CSS_CLASSES, TRANSLATE_THROTTLE_TIME } from '../../constants/config'
+import type { BaseInjector } from '../BaseInjector'
+import { requestTranslate, type TranslateResponse } from './translationQueue'
+
+const PREVIEW_ID = 'scrm-inject-preview'
+/** Marks the Enter this module re-dispatches, so it reaches the platform instead of being intercepted again. */
+const FORWARDED_ENTER = '__scrmForwardedEnter'
+
+/**
+ * Send-direction preview (R1: the only place the `send` language direction is used).
+ * The request goes out with `input: true`, so the backend never writes half-typed text
+ * into the translation cache.
+ */
+export function mountInputPreview(injector: BaseInjector): () => void {
+  const { adapter, state } = injector
+  let layer: HTMLElement | null = null
+  let debounce: ReturnType<typeof setTimeout> | null = null
+  let lastText = ''
+  let stopped = false
+
+  function ensureLayer(): HTMLElement {
+    const found = document.getElementById(PREVIEW_ID)
+    if (found) return found
+    const created = document.createElement('div')
+    created.id = PREVIEW_ID
+    created.className = CSS_CLASSES.TRANSLATED
+    created.style.position = 'fixed'
+    created.style.zIndex = '2147483000'
+    created.style.maxWidth = '360px'
+    created.style.background = 'rgba(11, 23, 51, 0.92)'
+    created.style.color = '#fff'
+    created.style.padding = '6px 10px'
+    created.style.borderRadius = '10px'
+    document.body.appendChild(created)
+    return created
+  }
+
+  function place(input: HTMLElement): void {
+    if (!layer) return
+    const rect = input.getBoundingClientRect()
+    layer.style.left = `${Math.max(8, rect.left)}px`
+    layer.style.top = `${Math.max(8, rect.top - 12)}px`
+    layer.style.transform = 'translateY(-100%)'
+  }
+
+  function hide(): void {
+    if (layer) layer.style.display = 'none'
+    lastText = ''
+  }
+
+  function paint(result: TranslateResponse): void {
+    if (!layer || stopped) return
+    layer.style.display = 'block'
+    layer.textContent = ''
+
+    const text = document.createElement('span')
+    text.className = 'translated-text'
+    text.textContent = result.translation
+    layer.appendChild(text)
+
+    if (state.disableChinese && result.containsChinese) {
+      const hint = document.createElement('div')
+      hint.className = CSS_CLASSES.TRANSLATE_ERROR
+      hint.textContent = '译文含中文，可能被拦截'
+      layer.appendChild(hint)
+    }
+
+    const use = document.createElement('span')
+    use.className = CSS_CLASSES.MASK
+    use.textContent = '用译文替换输入框'
+    use.tabIndex = 0
+    use.addEventListener('click', () => void adapter.setInputText(result.translation))
+    layer.appendChild(use)
+  }
+
+  const onInput = (): void => {
+    if (!state.sendLangSetting.enabled || !state.previewEnabled) {
+      hide()
+      return
+    }
+    const input = adapter.getInputElement()
+    const text = input ? adapter.getInputText() : ''
+    if (!text || text === lastText) {
+      if (!text) hide()
+      return
+    }
+    lastText = text
+    if (debounce) clearTimeout(debounce)
+    debounce = setTimeout(async () => {
+      const target = adapter.getInputElement()
+      if (!target) return
+      layer = ensureLayer()
+      place(target)
+      const result = await requestTranslate(injector, { text, type: 'send', input: true })
+      if (result) paint(result)
+      else hide()
+    }, TRANSLATE_THROTTLE_TIME)
+  }
+
+  const onKeydown = (e: KeyboardEvent): void => {
+    if (e.key !== 'Enter' || e.shiftKey) return
+    // 自己转发出去的那次 Enter 必须放行给平台，否则「先译再发」会自我循环。
+    if ((e as KeyboardEvent & Record<string, unknown>)[FORWARDED_ENTER]) return
+    const input = adapter.getInputElement()
+    const text = input ? adapter.getInputText() : ''
+    if (!input || !text) return
+
+    if (state.disableChinese && state.disableChinesePreventSend) {
+      // The preview already tells us; block before WhatsApp sees the Enter.
+      if (/[\u4e00-\u9fa5]/.test(text)) {
+        e.preventDefault()
+        e.stopPropagation()
+        layer = ensureLayer()
+        place(input)
+        layer.style.display = 'block'
+        layer.textContent = '消息含中文，已拦截发送'
+        return
+      }
+    }
+    if (!state.sendLangSetting.enabled || !state.enterToSend) return
+
+    e.preventDefault()
+    e.stopPropagation()
+    void (async () => {
+      const result = await requestTranslate(injector, { text, type: 'send' })
+      if (!result) return
+      await adapter.setInputText(result.translation)
+      const forwarded = new KeyboardEvent('keydown', {
+        key: 'Enter',
+        code: 'Enter',
+        keyCode: 13,
+        bubbles: true
+      })
+      Object.defineProperty(forwarded, FORWARDED_ENTER, { value: true })
+      adapter.getInputElement()?.dispatchEvent(forwarded)
+    })()
+  }
+
+  const root = document.body
+  root.addEventListener('input', onInput, true)
+  root.addEventListener('keydown', onKeydown, true)
+
+  return () => {
+    stopped = true
+    if (debounce) clearTimeout(debounce)
+    root.removeEventListener('input', onInput, true)
+    root.removeEventListener('keydown', onKeydown, true)
+    document.getElementById(PREVIEW_ID)?.remove()
+  }
+}

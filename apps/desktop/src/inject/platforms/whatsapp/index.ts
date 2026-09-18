@@ -5,6 +5,7 @@ import { WHATSAPP } from '../../constants/channels'
 import { INPUT, MESSAGE, APP } from './selectors'
 import { mountBadge } from '../../shared/ui/badge'
 import { startMessageTranslation } from '../../core/translation/domScan'
+import { mountInputPreview } from '../../core/translation/inputPreview'
 
 /**
  * WhatsApp platform adapter (skeleton).
@@ -83,7 +84,12 @@ export class WhatsAppAdapter extends PlatformAdapter {
   }
 
   setupTranslationListeners(injector: BaseInjector): () => void {
-    return startMessageTranslation(injector)
+    const stopScan = startMessageTranslation(injector)
+    const stopPreview = mountInputPreview(injector)
+    return () => {
+      stopPreview()
+      stopScan()
+    }
   }
 
   cleanup(): void {

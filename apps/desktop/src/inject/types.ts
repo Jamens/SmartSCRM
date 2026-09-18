@@ -28,6 +28,7 @@ export interface TranslationFlags {
   previewEnabled: boolean
   disableChinese: boolean
   disableChinesePreventSend: boolean
+  enterToSend: boolean
   /** Bumped by the renderer whenever the stored settings actually changed. */
   revision: number
 }

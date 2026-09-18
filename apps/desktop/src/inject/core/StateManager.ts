@@ -24,6 +24,7 @@ export class StateManager {
   previewEnabled = true
   disableChinese = true
   disableChinesePreventSend = false
+  enterToSend = false
   translationRevision = 0
   currentChatId: string | null = null
   currentChatUser = ''
@@ -72,6 +73,7 @@ export class StateManager {
     if (typeof flags.disableChinesePreventSend === 'boolean') {
       this.disableChinesePreventSend = flags.disableChinesePreventSend
     }
+    if (typeof flags.enterToSend === 'boolean') this.enterToSend = flags.enterToSend
     if (typeof flags.revision === 'number' && flags.revision !== this.translationRevision) {
       this.translationRevision = flags.revision
     }
