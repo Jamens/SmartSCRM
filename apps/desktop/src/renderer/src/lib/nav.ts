@@ -1,5 +1,7 @@
 import {
+  FolderOpen,
   LayoutDashboard,
+  MessagesSquare,
   Target,
   Tags,
   Users,
@@ -17,7 +19,9 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/workspace', label: '工作台', icon: LayoutDashboard },
   { path: '/customers', label: '客户', icon: Users },
   { path: '/labels', label: '标签', icon: Tags },
-  { path: '/audiences', label: '人群包', icon: Target }
+  { path: '/audiences', label: '人群包', icon: Target },
+  { path: '/quick-replies', label: '快捷回复', icon: MessagesSquare },
+  { path: '/materials', label: '素材库', icon: FolderOpen }
 ]
 
 export const DEFAULT_NAV_PATH = '/workspace'
