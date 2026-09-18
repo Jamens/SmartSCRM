@@ -1,0 +1,16 @@
+{
+    "name": "smartscrm",
+    "version": "0.1.0",
+    "private": true,
+    "description": "SmartSCRM - Electron + React + TypeScript SCRM desktop client with Spring Boot backend",
+    "scripts": {
+        "dev:desktop": "pnpm --filter @smartscrm/desktop dev",
+        "build:desktop": "pnpm --filter @smartscrm/desktop build",
+        "dev:server": "cd apps/server && ./mvnw spring-boot:run",
+        "typecheck": "pnpm -r typecheck"
+    },
+    "engines": {
+        "node": ">=20.19.0"
+    },
+    "packageManager": "pnpm@11.18.0"
+}
