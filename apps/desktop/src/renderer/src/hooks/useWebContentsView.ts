@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState, type RefObject } from 'react'
 import { viewService } from '@/services/viewService'
+import { subscribeOverlay } from '@/services/viewOverlay'
 
 export interface ActiveView {
   viewId: string
@@ -77,6 +78,22 @@ export function useWebContentsView(
       void viewService.hideAll()
     }
   }, [active?.viewId, active?.url, active?.channel, containerRef])
+
+  // 对话框这类浮层打开时收起视图，浮层完全消失后再把视图放回舞台原位。
+  const activeViewId = active?.viewId
+  useEffect(() => {
+    if (!activeViewId) return
+    return subscribeOverlay((open) => {
+      if (open) {
+        void viewService.hideAll()
+        return
+      }
+      void (async () => {
+        await viewService.show(activeViewId)
+        boundsRef.current()
+      })()
+    })
+  }, [activeViewId])
 
   const reload = useCallback((): void => {
     if (!active) return

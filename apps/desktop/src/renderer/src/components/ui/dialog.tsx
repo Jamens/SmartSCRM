@@ -4,6 +4,7 @@ import { XIcon } from "lucide-react"
 import { Dialog as DialogPrimitive } from "radix-ui"
 
 import { Button } from "@/components/ui/button"
+import { beginOverlay, endOverlay } from "@/services/viewOverlay"
 
 function Dialog({
   ...props
@@ -49,14 +50,34 @@ function DialogContent({
   className,
   children,
   showCloseButton = true,
+  ref,
   ...props
 }: React.ComponentProps<typeof DialogPrimitive.Content> & {
   showCloseButton?: boolean
 }) {
+  // Radix 的 Root 会一直渲染子树，节点存在与否由内部的 Presence 决定：组件挂载 ≠ 对话框打开。
+  // 所以浮层计数必须挂在真实的 DOM 节点上——节点出现即浮层出现，退场动画结束节点消失即浮层结束，
+  // 内嵌平台视图（主进程的原生层，永远画在 DOM 之上）据此让位与归位。
+  const overlayCounted = React.useRef(false)
+  const setOverlayRef = React.useCallback(
+    (node: HTMLDivElement | null): void => {
+      if (node && !overlayCounted.current) {
+        overlayCounted.current = true
+        beginOverlay()
+      } else if (!node && overlayCounted.current) {
+        overlayCounted.current = false
+        endOverlay()
+      }
+      if (typeof ref === "function") ref(node)
+      else if (ref) ref.current = node
+    },
+    [ref]
+  )
   return (
     <DialogPortal data-slot="dialog-portal">
       <DialogOverlay />
       <DialogPrimitive.Content
+        ref={setOverlayRef}
         data-slot="dialog-content"
         className={cn(
           "fixed top-[50%] left-[50%] z-50 grid w-full max-w-[calc(100%-2rem)] translate-x-[-50%] translate-y-[-50%] gap-4 rounded-lg border bg-background p-6 shadow-lg duration-200 outline-none data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=closed]:zoom-out-95 data-[state=open]:animate-in data-[state=open]:fade-in-0 data-[state=open]:zoom-in-95 sm:max-w-lg",
