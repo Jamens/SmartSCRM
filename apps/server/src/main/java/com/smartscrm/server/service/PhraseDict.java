@@ -6,6 +6,7 @@ import com.smartscrm.server.mapper.TranslationPhraseMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -21,6 +22,8 @@ public class PhraseDict {
     private final TranslationPhraseMapper phraseMapper;
     private volatile Map<String, Map<String, String>> index;
 
+    /** Explicit because the test-seam constructor below leaves Spring without a default choice. */
+    @Autowired
     public PhraseDict(TranslationPhraseMapper phraseMapper) {
         this.phraseMapper = phraseMapper;
     }

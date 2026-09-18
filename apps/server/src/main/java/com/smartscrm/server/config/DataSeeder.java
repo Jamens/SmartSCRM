@@ -32,6 +32,25 @@ public class DataSeeder {
         };
     }
 
+    /** A second tenant so cross-tenant isolation is observable through the HTTP API. */
+    @Bean
+    public ApplicationRunner seedIsolationTenant(TenantMapper tenantMapper, AppUserMapper userMapper,
+                                                 PasswordEncoder encoder) {
+        return args -> {
+            if (tenantMapper.selectCount(new LambdaQueryWrapper<Tenant>()
+                .eq(Tenant::getInviteCode, "QA0002")) > 0) {
+                return;
+            }
+            Tenant qa = new Tenant();
+            qa.setInviteCode("QA0002");
+            qa.setName("QA Isolation Tenant");
+            qa.setStatus(1);
+            tenantMapper.insert(qa);
+            userMapper.insert(buildUser(qa.getId(), "qa", "qa12345", "QA", "owner", encoder));
+            log.info("Seeded QA0002 tenant for cross-tenant isolation checks");
+        };
+    }
+
     private AppUser buildUser(Long tenantId, String username, String rawPassword, String nickname, String role,
                               PasswordEncoder encoder) {
         AppUser user = new AppUser();
