@@ -20,6 +20,12 @@ export interface ViewStateEvent {
   payload: unknown
 }
 
+export interface PageMessageEvent {
+  viewId: string
+  channel: string
+  data: unknown
+}
+
 const scrm = {
   app: {
     getDeviceId: (): Promise<string> => ipcRenderer.invoke('app:get-device-id')
@@ -51,10 +57,21 @@ const scrm = {
     executeJS: <T>(viewId: string, code: string): Promise<T> => ipcRenderer.invoke('wcv-execute-js', viewId, code),
     getOpenIds: (): Promise<string[]> => ipcRenderer.invoke('wcv-get-open-ids'),
     getActiveId: (): Promise<string | null> => ipcRenderer.invoke('wcv-get-active-id'),
+    inject: (
+      viewId: string,
+      channel: string,
+      config: Record<string, unknown>
+    ): Promise<void> => ipcRenderer.invoke('wcv-inject', viewId, channel, config),
+    uninject: (viewId: string): Promise<void> => ipcRenderer.invoke('wcv-uninject', viewId),
     onState: (callback: (state: ViewStateEvent) => void): (() => void) => {
       const listener = (_event: IpcRendererEvent, state: ViewStateEvent): void => callback(state)
       ipcRenderer.on('view:state', listener)
       return () => ipcRenderer.removeListener('view:state', listener)
+    },
+    onPageMessage: (callback: (msg: PageMessageEvent) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, msg: PageMessageEvent): void => callback(msg)
+      ipcRenderer.on('view:page-message', listener)
+      return () => ipcRenderer.removeListener('view:page-message', listener)
     }
   }
 }

@@ -5,7 +5,17 @@ import tailwindcss from '@tailwindcss/vite'
 
 export default defineConfig({
   main: {},
-  preload: {},
+  preload: {
+    build: {
+      rollupOptions: {
+        input: {
+          index: resolve('src/preload/index.ts'),
+          view: resolve('src/preload/view.ts')
+        },
+        output: { format: 'cjs', entryFileNames: '[name].js' }
+      }
+    }
+  },
   renderer: {
     resolve: {
       alias: {

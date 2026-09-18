@@ -32,3 +32,6 @@ pnpm-debug.log*
 
 # Database local data
 data/
+
+# Generated inject bundle (built by apps/desktop build:inject)
+apps/desktop/resources/inject.bundle.js

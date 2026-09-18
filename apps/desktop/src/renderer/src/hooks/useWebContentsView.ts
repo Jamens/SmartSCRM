@@ -4,12 +4,16 @@ import { viewService } from '@/services/viewService'
 export interface ActiveView {
   viewId: string
   url: string
+  /** Channel key for the injected bundle; when set, the view is injected after it is ready. */
+  channel?: string
+  /** Config forwarded to `__SCRM_INJECT__`. */
+  injectConfig?: Record<string, unknown>
 }
 
 /**
  * Binds a React-measured placeholder to a main-process WebContentsView:
- * creates/shows the embedded page, then keeps its bounds locked to the
- * container through ResizeObserver + window resize events.
+ * creates/shows the embedded page, injects the SCRM bundle when requested,
+ * then keeps its bounds locked to the container via ResizeObserver.
  */
 export function useWebContentsView(
   containerRef: RefObject<HTMLElement | null>,
@@ -38,7 +42,7 @@ export function useWebContentsView(
       return
     }
     let cancelled = false
-    const { viewId, url } = active
+    const { viewId, url, channel, injectConfig } = active
 
     void (async () => {
       setLoading(true)
@@ -46,6 +50,9 @@ export function useWebContentsView(
       if (cancelled) return
       await viewService.show(viewId)
       boundsRef.current()
+      if (channel && injectConfig) {
+        await viewService.inject(viewId, channel, injectConfig)
+      }
     })()
 
     const unsubscribe = viewService.onState((state) => {
@@ -64,8 +71,9 @@ export function useWebContentsView(
       unsubscribe()
       observer.disconnect()
       window.removeEventListener('resize', boundsRef.current)
+      if (channel) void viewService.uninject(viewId)
     }
-  }, [active?.viewId, active?.url, containerRef])
+  }, [active?.viewId, active?.url, active?.channel, containerRef])
 
   const reload = useCallback((): void => {
     if (!active) return

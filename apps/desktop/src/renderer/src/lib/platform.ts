@@ -24,6 +24,8 @@ export interface PlatformMeta {
   type: PlatformType
   label: string
   short: string
+  /** Channel key understood by the injected bundle's `__SCRM_INJECT__`. */
+  channel: string
   /** Public web client opened inside the embedded view; null when the channel has no web login. */
   embedUrl: string | null
   hint: string
@@ -36,6 +38,7 @@ export const PLATFORMS: Record<PlatformType, PlatformMeta> = {
     type: PlatformType.WhatsApp,
     label: 'WhatsApp',
     short: 'WA',
+    channel: 'WhatsApp',
     embedUrl: 'https://web.whatsapp.com',
     hint: '扫码登录 WhatsApp Web',
     color: '#25D366',
@@ -45,6 +48,7 @@ export const PLATFORMS: Record<PlatformType, PlatformMeta> = {
     type: PlatformType.Line,
     label: 'LINE',
     short: 'LINE',
+    channel: 'Line',
     embedUrl: null,
     hint: 'LINE 无公开网页端，暂未开放内嵌',
     color: '#06C755',
@@ -54,6 +58,7 @@ export const PLATFORMS: Record<PlatformType, PlatformMeta> = {
     type: PlatformType.AIStar,
     label: 'AIStar',
     short: 'AI',
+    channel: 'AIStar',
     embedUrl: null,
     hint: '内部智能助手通道',
     color: '#7C3AED',
@@ -63,6 +68,7 @@ export const PLATFORMS: Record<PlatformType, PlatformMeta> = {
     type: PlatformType.Telegram,
     label: 'Telegram',
     short: 'TG',
+    channel: 'Telegram',
     embedUrl: 'https://web.telegram.org',
     hint: '手机号验证码登录 Telegram Web',
     color: '#229ED9',
@@ -72,6 +78,7 @@ export const PLATFORMS: Record<PlatformType, PlatformMeta> = {
     type: PlatformType.Facebook,
     label: 'Facebook',
     short: 'FB',
+    channel: 'Facebook',
     embedUrl: 'https://www.facebook.com',
     hint: '登录 Facebook 账号',
     color: '#1877F2',
@@ -81,6 +88,7 @@ export const PLATFORMS: Record<PlatformType, PlatformMeta> = {
     type: PlatformType.Messenger,
     label: 'Messenger',
     short: 'MSG',
+    channel: 'Messenger',
     embedUrl: 'https://www.messenger.com',
     hint: '登录 Messenger',
     color: '#0084FF',
@@ -90,6 +98,7 @@ export const PLATFORMS: Record<PlatformType, PlatformMeta> = {
     type: PlatformType.WhatsAppProtocol,
     label: 'WA 协议号',
     short: 'WAP',
+    channel: 'WhatsAppProtocol',
     embedUrl: null,
     hint: '协议托管账号，无需网页登录',
     color: '#128C7E',

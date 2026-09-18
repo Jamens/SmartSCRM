@@ -1,4 +1,6 @@
-import { WebContentsView, shell, BrowserWindow, type Rectangle } from 'electron'
+import { WebContentsView, shell, BrowserWindow, app, type Rectangle } from 'electron'
+import { join } from 'path'
+import { readFileSync, existsSync } from 'fs'
 import { getMainWindow } from '../window/mainWindow'
 
 interface ManagedView {
@@ -6,6 +8,12 @@ interface ManagedView {
   url: string
   host: string
   visible: boolean
+}
+
+interface InjectEntry {
+  channel: string
+  config: Record<string, unknown>
+  injected: boolean
 }
 
 const HIDDEN: Rectangle = { x: 0, y: 0, width: 0, height: 0 }
@@ -28,6 +36,9 @@ function rootHost(hostname: string): string {
 export class WebContentsViewManager {
   private views = new Map<string, ManagedView>()
   private activeViewId: string | null = null
+  private injects = new Map<string, InjectEntry>()
+  private wcToView = new Map<number, string>()
+  private readonly viewPreloadPath = join(__dirname, '../preload/view.js')
 
   private hostWindow(): BrowserWindow | null {
     return getMainWindow()
@@ -47,9 +58,12 @@ export class WebContentsViewManager {
         partition,
         contextIsolation: true,
         nodeIntegration: false,
-        sandbox: true
+        sandbox: true,
+        preload: this.viewPreloadPath
       }
     })
+
+    this.wcToView.set(view.webContents.id, viewId)
 
     try {
       const host = new URL(url).hostname
@@ -57,6 +71,10 @@ export class WebContentsViewManager {
     } catch {
       /* invalid url surfaces on loadURL below */
     }
+
+    view.webContents.on('dom-ready', () => {
+      void this.runInject(viewId)
+    })
 
     win.contentView.addChildView(view)
     view.setBounds(HIDDEN)
@@ -127,10 +145,57 @@ export class WebContentsViewManager {
     if (!managed) return
     const win = this.hostWindow()
     win?.contentView.removeChildView(managed.view)
+    this.wcToView.delete(managed.view.webContents.id)
+    this.injects.delete(viewId)
     managed.view.webContents.close()
     this.views.delete(viewId)
     if (this.activeViewId === viewId) this.activeViewId = null
     this.emit(viewId, 'destroyed', managed.url)
+  }
+
+  // ============ Injection ============
+
+  getViewIdByWebContents(webContentsId: number): string | undefined {
+    return this.wcToView.get(webContentsId)
+  }
+
+  /** Register (or update) the inject intent for a view and inject immediately if the page is ready. */
+  inject(viewId: string, channel: string, config: Record<string, unknown>): void {
+    const managed = this.views.get(viewId)
+    if (!managed) return
+    this.injects.set(viewId, { channel, config, injected: false })
+    if (!managed.view.webContents.isLoading()) void this.runInject(viewId)
+  }
+
+  uninject(viewId: string): void {
+    const managed = this.views.get(viewId)
+    const entry = this.injects.get(viewId)
+    if (!managed || !entry) return
+    entry.injected = false
+    this.injects.delete(viewId)
+    void managed.view.webContents
+      .executeJavaScript('window.__SCRM_DESTROY__ && window.__SCRM_DESTROY__(); true', true)
+      .catch(() => undefined)
+  }
+
+  private async runInject(viewId: string): Promise<void> {
+    const entry = this.injects.get(viewId)
+    const managed = this.views.get(viewId)
+    if (!entry || !managed) return
+    const source = readInjectBundle()
+    if (!source) {
+      console.warn('[inject] inject.bundle.js 未找到，跳过注入')
+      return
+    }
+    const call = `\n;window.__SCRM_INJECT__ && window.__SCRM_INJECT__(${JSON.stringify(
+      entry.channel
+    )}, ${JSON.stringify(entry.config)});`
+    try {
+      await managed.view.webContents.executeJavaScript(source + call, true)
+      entry.injected = true
+    } catch (e) {
+      console.error(`[inject] ${viewId} 注入失败`, e)
+    }
   }
 
   getOpenIds(): string[] {
@@ -184,6 +249,26 @@ function safeHost(url: string): string {
   } catch {
     return ''
   }
+}
+
+let cachedBundle: { path: string; source: string } | null = null
+
+function injectBundlePath(): string {
+  return app.isPackaged
+    ? join(process.resourcesPath, 'inject.bundle.js')
+    : join(app.getAppPath(), 'resources', 'inject.bundle.js')
+}
+
+function readInjectBundle(): string | null {
+  const path = injectBundlePath()
+  if (!app.isPackaged) {
+    return existsSync(path) ? readFileSync(path, 'utf-8') : null
+  }
+  if (cachedBundle && cachedBundle.path === path) return cachedBundle.source
+  if (!existsSync(path)) return null
+  const source = readFileSync(path, 'utf-8')
+  cachedBundle = { path, source }
+  return source
 }
 
 export const viewManager = new WebContentsViewManager()

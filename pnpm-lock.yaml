@@ -72,7 +72,7 @@ importers:
         specifier: ^5.103.1
         version: 5.103.1(@tanstack/react-query@5.103.1(react@19.3.0))(@types/react@19.3.0)(csstype@3.2.3)(react@19.3.0)
       '@types/node':
-        specifier: ^22.19.1
+        specifier: ^22.20.3
         version: 22.20.3
       '@types/react':
         specifier: ^19.2.7
@@ -92,6 +92,9 @@ importers:
       electron-vite:
         specifier: ^5.0.0
         version: 5.0.0(supports-color@7.2.0)(vite@7.3.6(@types/node@22.20.3)(jiti@2.7.0)(lightningcss@1.32.0))
+      esbuild:
+        specifier: ^0.28.2
+        version: 0.28.2
       eslint:
         specifier: ^9.39.1
         version: 9.39.5(jiti@2.7.0)(supports-color@7.2.0)

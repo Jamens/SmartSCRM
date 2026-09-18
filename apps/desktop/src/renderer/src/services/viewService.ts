@@ -29,7 +29,10 @@ const fallback: ViewApi = {
   executeJS: <T>(_viewId: string, _code: string): Promise<T> => Promise.resolve(undefined as T),
   getOpenIds: noVal<string[]>([]),
   getActiveId: noVal<string | null>(null),
-  onState: () => () => {}
+  inject: noop,
+  uninject: noop,
+  onState: () => () => {},
+  onPageMessage: () => () => {}
 }
 
 export const isElectron = typeof window !== 'undefined' && !!window.scrm

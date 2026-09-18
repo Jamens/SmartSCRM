@@ -1,0 +1,10 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
+  "include": ["src/inject/**/*"],
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "types": []
+  }
+}

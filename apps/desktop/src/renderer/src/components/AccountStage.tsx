@@ -1,8 +1,10 @@
-import { useRef } from 'react'
-import { LoaderCircle, MonitorOff, RotateCw } from 'lucide-react'
+import { useRef, useState } from 'react'
+import { Languages, LoaderCircle, MonitorOff, RotateCw } from 'lucide-react'
 import { platformOf } from '@/lib/platform'
 import { isElectron } from '@/services/viewService'
 import { useWebContentsView, type ActiveView } from '@/hooks/useWebContentsView'
+import { useAuthStore } from '@/stores/auth'
+import { API_BASE } from '@/lib/http'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import type { PlatformAccount } from '@/stores/accounts'
@@ -13,11 +15,26 @@ interface Props {
 
 export default function AccountStage({ account }: Props): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
+  const [injectOn, setInjectOn] = useState(true)
+  const inviteCode = useAuthStore((s) => s.user?.inviteCode) ?? ''
   const meta = account ? platformOf(account.platformType) : null
   const embedUrl = meta?.embedUrl ?? null
+  const canInject = isElectron && embedUrl && meta?.channel && injectOn
 
   const active: ActiveView | null =
-    account && embedUrl ? { viewId: account.viewId, url: embedUrl } : null
+    account && embedUrl
+      ? {
+          viewId: account.viewId,
+          url: embedUrl,
+          channel: canInject ? meta?.channel : undefined,
+          injectConfig: {
+            webviewId: account.viewId,
+            inviteCode,
+            apiBase: API_BASE,
+            previewEnabled: true
+          }
+        }
+      : null
   const { loading, reload } = useWebContentsView(containerRef, active)
 
   if (!account) {
@@ -50,6 +67,17 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
           />
           {account.status === 1 ? '在线' : '离线'}
         </Badge>
+        <Button
+          variant={injectOn ? 'secondary' : 'ghost'}
+          size="sm"
+          className="gap-1.5"
+          onClick={() => setInjectOn((v) => !v)}
+          disabled={!isElectron || !embedUrl}
+          title="注入增强脚本（悬浮标识 / 后续翻译能力）"
+        >
+          <Languages className="size-4" />
+          注入{injectOn ? '开' : '关'}
+        </Button>
         <Button
           variant="ghost"
           size="icon"
