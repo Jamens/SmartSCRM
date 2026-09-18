@@ -24,6 +24,12 @@ mybatis-plus:
       id-type: auto
       logic-delete-field: deleted
 
+app:
+  jwt:
+    secret: "smartscrm-local-dev-secret-key-please-change-32bytes-min"
+    access-ttl-seconds: 7200
+    refresh-ttl-seconds: 2592000
+
 logging:
   level:
     com.smartscrm: debug

@@ -155,3 +155,29 @@
         @apply bg-background text-foreground antialiased;
     }
 }
+
+@utility drag-region {
+    -webkit-app-region: drag;
+}
+
+@utility no-drag {
+    -webkit-app-region: no-drag;
+}
+
+@keyframes drift-slow {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(30px, 40px) scale(1.1); }
+}
+
+@keyframes drift-fast {
+    0%, 100% { transform: translate(0, 0) scale(1); }
+    50% { transform: translate(-40px, -30px) scale(1.08); }
+}
+
+@utility animate-drift-slow {
+    animation: drift-slow 14s ease-in-out infinite;
+}
+
+@utility animate-drift-fast {
+    animation: drift-fast 10s ease-in-out infinite;
+}
