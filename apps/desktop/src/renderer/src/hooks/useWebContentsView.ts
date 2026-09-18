@@ -72,6 +72,9 @@ export function useWebContentsView(
       observer.disconnect()
       window.removeEventListener('resize', boundsRef.current)
       if (channel) void viewService.uninject(viewId)
+      // 内嵌视图是主进程里的原生层，永远画在文档之上，DOM 的卸载带不走它：
+      // 舞台一消失（切路由、退出登录）就必须主动收起，否则它会留在原坐标盖住别的页面。
+      void viewService.hideAll()
     }
   }, [active?.viewId, active?.url, active?.channel, containerRef])
 
