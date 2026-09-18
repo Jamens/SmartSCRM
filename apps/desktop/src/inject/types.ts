@@ -21,6 +21,17 @@ declare global {
   }
 }
 
+/** Host -> inject translation switches. Language choice is resolved by the backend (R2). */
+export interface TranslationFlags {
+  receiveEnabled: boolean
+  sendEnabled: boolean
+  previewEnabled: boolean
+  disableChinese: boolean
+  disableChinesePreventSend: boolean
+  /** Bumped by the renderer whenever the stored settings actually changed. */
+  revision: number
+}
+
 export interface InjectConfig {
   webviewId: string
   inviteCode: string

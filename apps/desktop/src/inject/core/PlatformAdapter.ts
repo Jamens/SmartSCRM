@@ -65,20 +65,13 @@ export abstract class PlatformAdapter extends EventEmitter {
     return 0
   }
 
-  renderTranslation(element: HTMLElement, translatedText: string): void {
-    const existing = element.querySelector('.translated')
-    if (existing) {
-      existing.textContent = translatedText
-    } else {
-      const el = document.createElement('div')
-      el.className = 'translated'
-      el.textContent = translatedText
-      element.appendChild(el)
-    }
-  }
-
   setupPlatformListeners(_injector: BaseInjector): void {
     /* overridden per platform */
+  }
+
+  /** Mount translation behaviour even when a backgrounded view skips foreground lightening. */
+  setupTranslationListeners(_injector: BaseInjector): () => void {
+    return () => {}
   }
 
   shouldSkipBaseOpenChat(): boolean {

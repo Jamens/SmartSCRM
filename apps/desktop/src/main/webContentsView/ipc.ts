@@ -13,6 +13,7 @@ const ALLOWED_HOST_CHANNELS = new Set<string>([
   'upload-msg',
   'get-new-message',
   'update-unread-count',
+  'translation-flags-applied',
   'auth-status-change'
 ])
 

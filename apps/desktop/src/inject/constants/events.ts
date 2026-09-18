@@ -41,8 +41,8 @@ export const NO_TRANSLATE_CANCEL = 'no-translate-cancel'
 export const SEND_QUICK_REPLY = 'send-quick-reply'
 export const SEND_GROUP_MESSAGE = 'send-group-message'
 export const OPEN_CHAT = 'open-chat'
-export const LANG_SETTING_CHANGE = 'update-lang-setting'
-export const VOICE_SETTING_CHANGE = 'update-voice-setting'
+/** Single host -> inject channel carrying every translation toggle (spec §4.1 fix 2). */
+export const UPDATE_TRANSLATION_FLAGS = 'update-translation-flags'
 
 export const WEBVIEW_READY = 'webview-ready'
 export const WEBVIEW_READY_TIMEOUT = 'webview-ready-timeout'

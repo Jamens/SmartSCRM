@@ -1,7 +1,7 @@
 import { StateManager } from './StateManager'
 import type { PlatformAdapter } from './PlatformAdapter'
-import type { InjectConfig } from '../types'
-import { INJECTOR_READY, REPORT_ERROR } from '../constants/events'
+import type { InjectConfig, TranslationFlags } from '../types'
+import { INJECTOR_READY, REPORT_ERROR, UPDATE_TRANSLATION_FLAGS } from '../constants/events'
 import { LOGIN_CHECK_INTERVAL } from '../constants/config'
 import { isInjectBackgroundModeEnabled } from './featureFlag'
 
@@ -23,6 +23,7 @@ export class BaseInjector {
   private _destroyed = false
   private readonly _runtimeOptimizationEnabled: boolean
   private readonly _hostListeners: Array<() => void> = []
+  private _translationDisposers: Array<() => void> = []
 
   constructor(adapter: PlatformAdapter, options: InjectConfig) {
     this.adapter = adapter
@@ -43,6 +44,7 @@ export class BaseInjector {
     try {
       await this.adapter.init()
       this._setupIpcListeners()
+      this._attachTranslation()
       if (!this._runtimeOptimizationEnabled || this.platform !== 'WhatsApp') {
         this._attachForegroundFeatures()
       }
@@ -76,12 +78,21 @@ export class BaseInjector {
       const off = window.ele!.on(channel, (payload) => handler(payload as T))
       this._hostListeners.push(off)
     }
-    on<{ enabled: boolean }>('lang-setting-change', (msg) =>
-      this.state.updateLangSetting('receive', { enabled: msg.enabled })
-    )
-    on<{ enabled: boolean }>('voice-setting-change', (msg) =>
-      this.state.updateVoiceSetting({ enabled: msg.enabled })
-    )
+    on<TranslationFlags>(UPDATE_TRANSLATION_FLAGS, (flags) => this._applyFlags(flags))
+  }
+
+  private _applyFlags(flags: TranslationFlags): void {
+    this.state.updateTranslationFlags(flags)
+    this.sendToHost('translation-flags-applied', { webviewId: this.webviewId, revision: flags.revision })
+  }
+
+  /** Translation is mounted outside the background-lightening gate: a hidden view still needs it. */
+  private _attachTranslation(): void {
+    try {
+      this._translationDisposers.push(this.adapter.setupTranslationListeners(this))
+    } catch (e) {
+      this._reportError('translation', e)
+    }
   }
 
   private _attachForegroundFeatures(): void {
@@ -131,6 +142,8 @@ export class BaseInjector {
     if (this._loginCheckTimer) clearInterval(this._loginCheckTimer)
     this._hostListeners.forEach((off) => off())
     this._hostListeners.length = 0
+    this._translationDisposers.forEach((off) => off())
+    this._translationDisposers.length = 0
     this.adapter.cleanup()
     this.state.destroy()
   }

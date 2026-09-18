@@ -1,13 +1,10 @@
-import { DEFAULT_LANG_SETTING, DEFAULT_VOICE_SETTING } from '../constants/config'
+import { DEFAULT_RECEIVE_LANG_SETTING, DEFAULT_SEND_LANG_SETTING } from '../constants/config'
+import type { TranslationFlags } from '../types'
 
 export interface LangSetting {
   enabled: boolean
-  fromLang: string
-  toLang: string
-}
-
-export interface VoiceSetting {
-  enabled: boolean
+  fromLangCode: string
+  toLangCode: string
 }
 
 export interface LoginUser {
@@ -22,9 +19,11 @@ type Watcher = (value: any, oldValue: any) => void
 /** Central state container for an injected page. */
 export class StateManager {
   isSending = false
-  receiveLangSetting: LangSetting = { ...DEFAULT_LANG_SETTING }
-  sendLangSetting: LangSetting = { ...DEFAULT_LANG_SETTING }
-  voiceSetting: VoiceSetting = { ...DEFAULT_VOICE_SETTING }
+  receiveLangSetting: LangSetting = { ...DEFAULT_RECEIVE_LANG_SETTING }
+  sendLangSetting: LangSetting = { ...DEFAULT_SEND_LANG_SETTING }
+  previewEnabled = true
+  disableChinese = true
+  disableChinesePreventSend = false
   currentChatId: string | null = null
   currentChatUser = ''
   currentLoginUser: LoginUser | null = null
@@ -60,13 +59,23 @@ export class StateManager {
     return () => this._listeners.get(key)?.delete(callback)
   }
 
-  updateLangSetting(type: 'receive' | 'send', setting: Partial<LangSetting>): void {
-    if (type === 'receive') this.receiveLangSetting = { ...this.receiveLangSetting, ...setting }
-    else if (type === 'send') this.sendLangSetting = { ...this.sendLangSetting, ...setting }
+  updateTranslationFlags(flags: Partial<TranslationFlags>): void {
+    if (typeof flags.receiveEnabled === 'boolean') {
+      this.receiveLangSetting = { ...this.receiveLangSetting, enabled: flags.receiveEnabled }
+    }
+    if (typeof flags.sendEnabled === 'boolean') {
+      this.sendLangSetting = { ...this.sendLangSetting, enabled: flags.sendEnabled }
+    }
+    if (typeof flags.previewEnabled === 'boolean') this.previewEnabled = flags.previewEnabled
+    if (typeof flags.disableChinese === 'boolean') this.disableChinese = flags.disableChinese
+    if (typeof flags.disableChinesePreventSend === 'boolean') {
+      this.disableChinesePreventSend = flags.disableChinesePreventSend
+    }
   }
 
-  updateVoiceSetting(setting: Partial<VoiceSetting>): void {
-    this.voiceSetting = { ...this.voiceSetting, ...setting }
+  attachTranslationTimer(timer: ReturnType<typeof setInterval>): void {
+    if (this._translationTimer) clearInterval(this._translationTimer)
+    this._translationTimer = timer
   }
 
   markInitDone(feature: string): void {
