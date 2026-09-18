@@ -1,6 +1,7 @@
 package com.smartscrm.server.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.Material;
 import com.smartscrm.server.entity.MaterialGroup;
@@ -103,6 +104,13 @@ public class MaterialService {
         Material material = requireMaterial(tenantId, id);
         apply(material, tenantId, req);
         materialMapper.updateById(material);
+        // updateById skips null fields, so clear the optional columns explicitly.
+        materialMapper.update(null, new LambdaUpdateWrapper<Material>()
+            .eq(Material::getId, id)
+            .set(Material::getGroupId, material.getGroupId())
+            .set(Material::getMimeType, material.getMimeType())
+            .set(Material::getSizeBytes, material.getSizeBytes())
+            .set(Material::getRemark, material.getRemark()));
         return MaterialVO.of(materialMapper.selectById(id));
     }
 

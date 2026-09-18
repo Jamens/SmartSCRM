@@ -1,6 +1,7 @@
 package com.smartscrm.server.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.common.PageResult;
@@ -70,6 +71,12 @@ public class CustomerService {
         customer.setEmail(req.email());
         customer.setRemark(req.remark());
         customerMapper.updateById(customer);
+        // updateById skips null fields, so cleared optional columns must be written explicitly.
+        customerMapper.update(null, new LambdaUpdateWrapper<Customer>()
+            .eq(Customer::getId, id)
+            .set(Customer::getCountry, customer.getCountry())
+            .set(Customer::getEmail, customer.getEmail())
+            .set(Customer::getRemark, customer.getRemark()));
         return detail(tenantId, id);
     }
 

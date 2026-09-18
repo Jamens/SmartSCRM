@@ -128,6 +128,10 @@ public class QuickReplyService {
         QuickReply reply = requireReply(tenantId, id);
         applyHeader(reply, tenantId, req);
         replyMapper.updateById(reply);
+        // updateById skips null fields, so an emptied shortcut must be cleared explicitly.
+        replyMapper.update(null, new LambdaUpdateWrapper<QuickReply>()
+            .eq(QuickReply::getId, id)
+            .set(QuickReply::getShortcut, reply.getShortcut()));
         itemMapper.delete(new LambdaQueryWrapper<QuickReplyItem>().eq(QuickReplyItem::getReplyId, id));
         saveItems(tenantId, id, req.items());
         return detail(tenantId, id);

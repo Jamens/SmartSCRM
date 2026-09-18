@@ -1,6 +1,7 @@
 package com.smartscrm.server.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.common.PageResult;
 import com.smartscrm.server.entity.CustomerAudience;
@@ -62,6 +63,11 @@ public class AudienceService {
         }
         apply(audience, req);
         mapper.updateById(audience);
+        // updateById skips null fields, so cleared keyword/tagIds must be written explicitly.
+        mapper.update(null, new LambdaUpdateWrapper<CustomerAudience>()
+            .eq(CustomerAudience::getId, id)
+            .set(CustomerAudience::getKeyword, audience.getKeyword())
+            .set(CustomerAudience::getTagIds, audience.getTagIds()));
         return toVO(tenantId, mapper.selectById(id));
     }
 
