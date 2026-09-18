@@ -9,7 +9,7 @@ import {
   type LucideIcon
 } from 'lucide-react'
 
-/** Mirrors the legacy PLATFORM_TYPE constants and the shared contract. */
+/** Platform ids; the numeric values match the server's `platform_type` column. */
 export enum PlatformType {
   WhatsApp = 1,
   Line = 2,

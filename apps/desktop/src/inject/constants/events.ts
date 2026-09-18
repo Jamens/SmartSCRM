@@ -1,4 +1,4 @@
-/** IPC event names between injected scripts and the host (ported from legacy constants/events.js). */
+/** IPC event names between injected scripts and the host. */
 
 // Inject -> host
 export const INJECTOR_READY = 'injector-ready'

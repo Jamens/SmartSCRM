@@ -1,6 +1,6 @@
 const STORAGE_KEY = 'injectBackgroundModeV1'
 
-/** WhatsApp-only background UI lightening toggle (ported from legacy runtime/featureFlag). */
+/** WhatsApp-only background UI lightening toggle. */
 export function isInjectBackgroundModeEnabled(platform: string, configuredValue?: boolean): boolean {
   if (platform !== 'WhatsApp') return false
   if (typeof configuredValue === 'boolean') return configuredValue

@@ -1,4 +1,4 @@
-/** Platform channel identifiers (ported from legacy inject/constants/channels.js). */
+/** Platform names as they appear in account rows and inject config. */
 
 export const WHATSAPP = 'WhatsApp'
 export const AISTAR = 'AIStar'
@@ -7,7 +7,7 @@ export const LINE = 'Line'
 export const FACEBOOK = 'Facebook'
 export const MESSENGER = 'Messenger'
 
-/** Order preserved for legacy `channelCode` compatibility. */
+/** Positions define the numeric codes in CHANNEL_INDEX; keep the two lists in the same order. */
 export const CHANNEL_CODE = [WHATSAPP, AISTAR, TELEGRAM, LINE, FACEBOOK, MESSENGER] as const
 
 export const CHANNEL_INDEX: Record<string, number> = {

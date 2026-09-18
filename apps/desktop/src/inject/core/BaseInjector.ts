@@ -6,9 +6,8 @@ import { LOGIN_CHECK_INTERVAL } from '../constants/config'
 import { isInjectBackgroundModeEnabled } from './featureFlag'
 
 /**
- * Inject lifecycle owner (slim port of legacy core/BaseInjector).
- * Currently supports: adapter init, business IPC wiring, mount + login poll + destroy.
- * Runtime-mode lightening and translation polling will be added with P5 / P7.
+ * Inject lifecycle owner: adapter init, business IPC wiring, mount + login poll + destroy.
+ * Background-UI lightening is already gated by featureFlag; translation mounting comes with P5.
  */
 export class BaseInjector {
   readonly adapter: PlatformAdapter

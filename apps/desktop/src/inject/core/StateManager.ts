@@ -19,7 +19,7 @@ export interface LoginUser {
 
 type Watcher = (value: any, oldValue: any) => void
 
-/** Central state container for an injected page (ported from legacy core/StateManager). */
+/** Central state container for an injected page. */
 export class StateManager {
   isSending = false
   receiveLangSetting: LangSetting = { ...DEFAULT_LANG_SETTING }

@@ -1,4 +1,4 @@
-/** Telegram Web DOM selectors (compact port of legacy platforms/telegram/selectors.js). */
+/** Telegram Web DOM selectors. */
 
 export const INPUT = {
   box: '.middle-column-footer',

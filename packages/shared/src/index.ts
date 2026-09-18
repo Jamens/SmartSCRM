@@ -3,7 +3,7 @@
  * Keep in sync with the Java DTOs under com.smartscrm.server.
  */
 
-/** Platform type ids, aligned with the legacy PLATFORM_TYPE constants. */
+/** Platform type ids, matching the `platform_type` column stored by the server. */
 export enum PlatformType {
   WhatsApp = 1,
   Line = 2,

@@ -13,7 +13,7 @@ export interface SelectorConfig {
 }
 
 /**
- * Platform adapter contract (ported from legacy core/PlatformAdapter).
+ * Platform adapter contract.
  * Concrete adapters implement DOM access + platform-specific actions.
  */
 export abstract class PlatformAdapter extends EventEmitter {

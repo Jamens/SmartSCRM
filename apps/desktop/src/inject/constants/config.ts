@@ -1,4 +1,4 @@
-/** Inject system configuration constants (ported from the legacy inject layer). */
+/** Scan / throttle intervals, default settings and injected class names. */
 
 export const TRANSLATION_POLL_INTERVAL = 1000
 export const MESSAGE_SCAN_INTERVAL = 500

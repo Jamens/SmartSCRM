@@ -1,4 +1,4 @@
-/** WhatsApp Web DOM selectors (compact port of legacy platforms/whatsapp/selectors.js). */
+/** WhatsApp Web DOM selectors. */
 
 export const INPUT = {
   main: '#main div[contenteditable="true"]',
