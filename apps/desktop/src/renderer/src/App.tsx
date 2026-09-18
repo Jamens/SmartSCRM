@@ -1,8 +1,13 @@
 import { useEffect } from 'react'
+import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
-import TitleBar from '@/components/TitleBar'
-import LoginPage from '@/pages/LoginPage'
+import AppLayout from '@/layouts/AppLayout'
 import HomePage from '@/pages/HomePage'
+import CustomersPage from '@/pages/CustomersPage'
+import LabelsPage from '@/pages/LabelsPage'
+import AudiencesPage from '@/pages/AudiencesPage'
+import LoginPage from '@/pages/LoginPage'
+import { DEFAULT_NAV_PATH } from '@/lib/nav'
 import { LoaderCircle } from 'lucide-react'
 
 function App(): React.JSX.Element {
@@ -30,10 +35,18 @@ function App(): React.JSX.Element {
   }
 
   return (
-    <div className="flex h-screen flex-col">
-      <TitleBar onLogout={() => void logout()} />
-      <HomePage />
-    </div>
+    <HashRouter>
+      <Routes>
+        <Route element={<AppLayout onLogout={() => void logout()} />}>
+          <Route index element={<Navigate to={DEFAULT_NAV_PATH} replace />} />
+          <Route path="/workspace" element={<HomePage />} />
+          <Route path="/customers" element={<CustomersPage />} />
+          <Route path="/labels" element={<LabelsPage />} />
+          <Route path="/audiences" element={<AudiencesPage />} />
+          <Route path="*" element={<Navigate to={DEFAULT_NAV_PATH} replace />} />
+        </Route>
+      </Routes>
+    </HashRouter>
   )
 }
 
