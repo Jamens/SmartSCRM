@@ -1,12 +1,14 @@
 import { Outlet } from 'react-router-dom'
 import TitleBar from '@/components/TitleBar'
 import ModuleRail from '@/components/ModuleRail'
+import { useTranslationSync } from '@/lib/translationSync'
 
 interface Props {
   onLogout: () => void
 }
 
 export default function AppLayout({ onLogout }: Props): React.JSX.Element {
+  useTranslationSync()
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <TitleBar onLogout={onLogout} />
