@@ -18,7 +18,7 @@
 | # | 功能 | 阶段 |
 |---|------|------|
 | B1 | 多平台账号视图（WebContentsView + 分区登录态 + 代理） | P2 |
-| B15 | 注入脚本系统（WhatsApp/TG 适配器、翻译/UI/消息，迁移复用） | P2 |
+| B15 | 注入脚本系统（WhatsApp/TG 适配器、翻译/UI/消息） | P2 |
 | B4 | 客户管理（联系人/标签树/备注/时间线/受众包） | P3 |
 | B3 | 快捷回复素材库（文字/图片/名片多组件） | P4 |
 | B2 | 翻译中心（4 渠道 + 节点测速 + 模拟翻译 + 译文缓存） | P5 |
@@ -36,7 +36,7 @@
 ## 技术选型
 - desktop: Electron 39 + React 19 + TS(strict) + electron-vite + Tailwind v4 + shadcn/ui + Zustand + TanStack Query + react-i18next
 - server: Java 17 + Spring Boot 3.5 + MyBatis-Plus + Flyway + MySQL 8（库名 `smartscrm_react`，不动旧 `smartscrm` 库）
-- 数据模型：从老项目 24 张表（SQLite）推断映射，去掉 extra1-5 临时列，invite_code → tenant_id
+- 数据模型：所有业务表按 `tenant_id` 做租户隔离，字段一律用语义名列（不留 `extra1`-`extra5` 之类的临时列）
 
 ## 协作约定
 - 每完成一个阶段功能：本地测试通过 → git commit（用户自行 push）

@@ -1,7 +1,7 @@
 # SmartSCRM
 
 Electron + React + TypeScript desktop SCRM client with a Spring Boot + MySQL backend.
-Rewritten from the legacy Vue 3 Electron client; UI, theme (royal blue + gold) and iconography are original.
+Custom UI: royal blue + gold theme with original iconography.
 
 ## Structure (hybrid monorepo)
 
