@@ -126,7 +126,7 @@ apps/desktop/src/renderer/src/
 
 跑 `./mvnw -q -DskipTests help:evaluate -Dexpression=project.version -DforceStdout`（在 `apps/server` 目录）。预期：输出 `0.1.0` 且无 `Could not resolve` 错误——这一步只是确认新 jar 能从仓库拉到。
 
-若报 `Could not resolve net.openhft:zero-allocation-hashing:0.16`（本机 Maven 镜像没有这个坐标），不要卡在这里：撤掉这条依赖与 `LongHashFactory` 的 import，`buildCacheKey` 改用下面这段等价的本地 hash，§6.1 的"16 位 hex"形状不变。
+若报 `Could not resolve net.openhft:zero-allocation-hashing:0.16`（本机 Maven 镜像没有这个坐标），不要卡在这里：撤掉这条依赖与 `LongHashFunction` 的 import，`buildCacheKey` 改用下面这段等价的本地 hash，§6.1 的"16 位 hex"形状不变。
 
 ```java
     /** FNV-1a 64-bit — only used to keep cache keys short and stable. */
@@ -140,7 +140,7 @@ apps/desktop/src/renderer/src/
     }
 ```
 
-（Task 3 的 `buildCacheKey` 里把 `String.format("%016x", LongHashFactory...)` 换成 `hash64(normalized)` 即可，其余不动。）
+（Task 3 的 `buildCacheKey` 里把 `LongHashFunction.xx().hashChars(normalized)` 换成 `hash64(normalized)`、并去掉那行 import 即可，其余不动。）
 
 - [ ] **Step 2: 写 `V5__translation.sql`**
 
@@ -541,6 +541,7 @@ import com.smartscrm.server.mapper.TranslationPhraseMapper;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
 /**
@@ -556,6 +557,8 @@ public class PhraseDict {
     private final TranslationPhraseMapper phraseMapper;
     private volatile Map<String, Map<String, String>> index;
 
+    /** Explicit because the test-seam constructor below leaves Spring without a default choice. */
+    @Autowired
     public PhraseDict(TranslationPhraseMapper phraseMapper) {
         this.phraseMapper = phraseMapper;
     }
@@ -1037,7 +1040,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.regex.Pattern;
-import net.openhft.hashing.LongHashFactory;
+import net.openhft.hashing.LongHashFunction;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -1205,7 +1208,7 @@ public class TranslationService {
     }
 
     public static String buildCacheKey(String type, String channel, String fromLang, String toLang, String normalized) {
-        long hash = LongHashFactory.XXH64.getInstance().hashUnencodedChars(normalized);
+        long hash = LongHashFunction.xx().hashChars(normalized);
         String from = (fromLang == null || fromLang.isBlank()) ? "auto" : fromLang;
         return type + "-" + channel + "-" + from + "-" + toLang + "-" + String.format("%016x", hash);
     }
