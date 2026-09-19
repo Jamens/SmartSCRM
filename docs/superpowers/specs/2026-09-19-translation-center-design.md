@@ -63,7 +63,7 @@
 
 ---
 
-## 2. 数据模型 `V5__translation.sql`
+## 2. 数据模型 `V5__translation.sql`（`V6` 只改线路注释）
 
 沿用 V4 风格：反引号、`DATETIME(3)` 默认 `CURRENT_TIMESTAMP(3)` + `ON UPDATE`、`uk_` / `idx_` / `fk_` 前缀、
 `InnoDB` + `utf8mb4_unicode_ci`、英文注释。
@@ -78,7 +78,7 @@ CREATE TABLE `translation_setting` (
   `scope_key`                    VARCHAR(64) NULL                      COMMENT 'customer id when scope=customer',
   `server`                       VARCHAR(16) NOT NULL DEFAULT 'sg'     COMMENT 'translation node name',
   `server_mode`                  VARCHAR(8)  NOT NULL DEFAULT 'auto'   COMMENT 'auto | manual',
-  `channel`                      VARCHAR(4)  NOT NULL DEFAULT '1'      COMMENT '1=Google 2=DeepL 3=ChatGPT 4=Gemini',
+  `channel`                      VARCHAR(4)  NOT NULL DEFAULT '1'      COMMENT '1=Google 2=DeepL 3=ChatGPT 4=Gemini 5=百度 6=有道 7=腾讯',
   `receive_enabled`              TINYINT(1)  NOT NULL DEFAULT 1,
   `receive_from_lang`            VARCHAR(16) NOT NULL DEFAULT ''       COMMENT 'empty = auto detect',
   `receive_to_lang`              VARCHAR(16) NOT NULL DEFAULT 'zh-CN',
@@ -249,7 +249,11 @@ pom.xml  + net.openhft:zero-allocation-hashing   （xxhash64）
    - `1 Google`：原样输出
    - `2 DeepL`：压缩多余空白
    - `3 ChatGPT` / `4 Gemini`：目标 `en` 时句首大写并补 `.`；目标 `zh-CN` 时句末补 `。`
+   - `5 百度`：原样输出（与 `1` 同风格，差异只体现在缓存键上）
+   - `6 有道`：先压缩空白，再按目标语言收句（同 `3`/`4` 的句号规则）
+   - `7 腾讯`：给整条译文套上目标语言的引号——`en` 用 `"…"`，`zh-CN` 用 `「…」`
 
+   未列入的语向一律不加任何加工：风格只认 `en` 与 `zh-CN`，其余原样输出。
    切渠道必然换 key，因此每次都会重译，UI 上能看到差异。
 6. **不做人为延迟**（R9）。
 7. **改匹配规则等于改译文**：`translation_cache` 存的是最终答案（连 `partial` 一起存），
@@ -379,6 +383,12 @@ renderer/src/lib/nav.ts + App.tsx        /translation 路由 + 「翻译中心�
 | 2 DeepL | `deeplSourceLanguages` | `deeplTargetLanguages`（**两张不同清单**） |
 | 3 ChatGPT | `chatGptLanguages` | `chatGptLanguages` |
 | 4 Gemini | `allLanguages` | `allLanguages` |
+| 5 百度 | `allLanguages` | `allLanguages` |
+| 6 有道 | `allLanguages` | `allLanguages` |
+| 7 腾讯 | `allLanguages` | `allLanguages` |
+
+`5` / `6` / `7` 三条是后加的，候选清单一律回落 `allLanguages`（引擎能真正出译文的仍是 §3.4 的 8 语种）；
+渠道与节点的兼容规则不因它们改变：`hk` 仍然只服务 `1 Google`。
 
 四组清单都是 `lib/langData.ts` 的导出常量，纯静态内容（约 100 语言 × 多个语种名列），不入库。
 显示名当前取中文列，缺失回退英文列；其余语种名列一并带上，P14 接 i18n 时按 locale 取列，无需二次整理。

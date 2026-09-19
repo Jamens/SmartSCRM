@@ -28,7 +28,7 @@ import org.springframework.stereotype.Service;
 public class TranslationService {
 
     private static final Pattern CHINESE = Pattern.compile("[\\u4e00-\\u9fa5]");
-    private static final Set<String> CHANNELS = Set.of("1", "2", "3", "4");
+    private static final Set<String> CHANNELS = Set.of("1", "2", "3", "4", "5", "6", "7");
 
     private final TranslationSettingMapper settingMapper;
     private final TranslationNodeMapper nodeMapper;
@@ -54,7 +54,7 @@ public class TranslationService {
         String channel = defaultIfBlank(input.channel(), current.getChannel());
         String server = defaultIfBlank(input.server(), current.getServer());
         if (!CHANNELS.contains(channel)) {
-            throw new BizException(40000, "channel 只能是 1 / 2 / 3 / 4");
+            throw new BizException(40000, "channel 只能是 1..7");
         }
         Set<String> nodeNames = nodeMapper.selectList(new LambdaQueryWrapper<TranslationNode>())
             .stream().map(TranslationNode::getName).collect(java.util.stream.Collectors.toSet());

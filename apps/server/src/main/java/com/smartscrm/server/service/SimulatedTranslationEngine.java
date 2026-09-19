@@ -129,21 +129,59 @@ public class SimulatedTranslationEngine {
         return Pattern.compile(Pattern.quote(phrase), Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     }
 
+    /**
+     * Channel styles exist to be *observable*, not to fake quality differences: each line has
+     * one deterministic tell (collapsed whitespace, a closed sentence, quotes around the answer).
+     * Unknown target languages fall through untouched — styling never rewrites what it doesn't know.
+     */
     private String style(String channel, String toLang, String text) {
         if ("2".equals(channel)) {
-            return text.replaceAll("\\s+", " ").trim();
+            return collapse(text);
         }
         if ("3".equals(channel) || "4".equals(channel)) {
-            if (text.isEmpty()) {
-                return text;
-            }
-            if ("en".equals(toLang)) {
-                String capped = Character.toUpperCase(text.charAt(0)) + text.substring(1);
-                return capped.endsWith(".") ? capped : capped + ".";
-            }
-            if ("zh-CN".equals(toLang)) {
-                return text.endsWith("。") ? text : text + "。";
-            }
+            return closeSentence(text, toLang);
+        }
+        if ("5".equals(channel)) {
+            return text;
+        }
+        if ("6".equals(channel)) {
+            return closeSentence(collapse(text), toLang);
+        }
+        if ("7".equals(channel)) {
+            return quote(text, toLang);
+        }
+        return text;
+    }
+
+    private String collapse(String text) {
+        return text.replaceAll("\\s+", " ").trim();
+    }
+
+    /** English gets a capitalised, full-stopped sentence; Chinese a 。; anything else is left alone. */
+    private String closeSentence(String text, String toLang) {
+        if (text.isEmpty()) {
+            return text;
+        }
+        if ("en".equals(toLang)) {
+            String capped = Character.toUpperCase(text.charAt(0)) + text.substring(1);
+            return capped.endsWith(".") ? capped : capped + ".";
+        }
+        if ("zh-CN".equals(toLang)) {
+            return text.endsWith("。") ? text : text + "。";
+        }
+        return text;
+    }
+
+    /** Quotation marks follow the target language: ASCII for English, 「」 for Chinese. */
+    private String quote(String text, String toLang) {
+        if (text.isEmpty()) {
+            return text;
+        }
+        if ("en".equals(toLang)) {
+            return "\"" + text + "\"";
+        }
+        if ("zh-CN".equals(toLang)) {
+            return "「" + text + "」";
         }
         return text;
     }

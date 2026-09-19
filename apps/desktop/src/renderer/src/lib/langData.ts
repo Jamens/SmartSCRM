@@ -72,11 +72,15 @@ export const chatGptLanguages: Language[] = pick([
 /** The eight languages the simulated engine can actually produce (spec §3.4 step 2). */
 export const ENGINE_LANGUAGES = ['zh-CN', 'en', 'vi', 'id', 'lo', 'hi', 'my', 'ms']
 
+/** 线路只决定译文风格与缓存键，真实翻译一律由本地模拟引擎完成（spec §3.4）。 */
 export const TRANSLATION_CHANNELS = [
   { code: '1', label: 'Google' },
   { code: '2', label: 'DeepL' },
   { code: '3', label: 'ChatGPT' },
-  { code: '4', label: 'Gemini' }
+  { code: '4', label: 'Gemini' },
+  { code: '5', label: '百度' },
+  { code: '6', label: '有道' },
+  { code: '7', label: '腾讯' }
 ]
 
 export function sourceLanguagesFor(channel: string): Language[] {

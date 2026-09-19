@@ -107,6 +107,26 @@ class SimulatedTranslationEngineTest {
     }
 
     @Test
+    void baiduStyleOutputsVerbatimLikeGoogle() {
+        assertEquals("你好", engine.translate("Hello", "en", "zh-CN", "5").translation());
+        assertEquals("Hello\nyour order has been shipped",
+            engine.translate("你好\n订单已发货", "zh-CN", "en", "5").translation());
+    }
+
+    @Test
+    void youdaoStyleCollapsesWhitespaceAndClosesTheSentence() {
+        assertEquals("Hello your order has been shipped.",
+            engine.translate("你好\n订单已发货", "zh-CN", "en", "6").translation());
+        assertEquals("你好。", engine.translate("Hello", "en", "zh-CN", "6").translation());
+    }
+
+    @Test
+    void tencentStyleWrapsTheTranslationInQuotesOfTheTargetLanguage() {
+        assertEquals("\"Hello\"", engine.translate("你好", "zh-CN", "en", "7").translation());
+        assertEquals("「你好」", engine.translate("Hello", "en", "zh-CN", "7").translation());
+    }
+
+    @Test
     void normalizeCollapsesSpacesButKeepsNewlines() {
         assertEquals("a b\nc d", SimulatedTranslationEngine.normalize("  a   b \n c  d  "));
     }
