@@ -4,6 +4,7 @@ import type { SelectorConfig, UserInfo } from '../../core/PlatformAdapter'
 import { WHATSAPP } from '../../constants/channels'
 import { INPUT, MESSAGE, APP } from './selectors'
 import { mountBadge } from '../../shared/ui/badge'
+import { replaceEditorText } from '../../core/editorText'
 import { startMessageTranslation } from '../../core/translation/domScan'
 import { mountInputPreview } from '../../core/translation/inputPreview'
 
@@ -48,6 +49,9 @@ export class WhatsAppAdapter extends PlatformAdapter {
   async setInputText(text: string): Promise<void> {
     const input = this.getInputElement()
     if (!input) return
+    if (replaceEditorText(input, text)) return
+    // 兜底只写给有内容的情况：innerText = '' 会让页面看起来空了、编辑器却还留着原草稿。
+    if (!text) return
     input.focus()
     input.innerText = text
     input.dispatchEvent(new InputEvent('input', { bubbles: true, data: text, inputType: 'insertText' }))
