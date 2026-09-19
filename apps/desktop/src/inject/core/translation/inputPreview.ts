@@ -69,6 +69,11 @@ export function mountInputPreview(injector: BaseInjector): () => void {
     use.className = CSS_CLASSES.MASK
     use.textContent = '用译文替换输入框'
     use.tabIndex = 0
+    // mousedown 的默认动作是把焦点从输入框抢给这个 span，ProseMirror 随即异步恢复它
+    // 自己记住的光标；处理器里同步的 focus+全选+paste 会输在这场竞态里，整段被编辑器
+    // 回滚、只剩兜底 insertText 的首字母。阻止默认动作后点击只触发处理器，不动编辑器。
+    use.addEventListener('pointerdown', (e) => e.preventDefault())
+    use.addEventListener('mousedown', (e) => e.preventDefault())
     use.addEventListener('click', () => void adapter.setInputText(result.translation))
     layer.appendChild(use)
   }

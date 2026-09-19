@@ -43,7 +43,12 @@ export async function replaceEditorText(el: HTMLElement, text: string): Promise<
     return !written()
   }
 
-  // 1) 合成 paste：走编辑器自己的输入事务，含空格的整段译文只认这条路。
+  // 1) 合成 paste：走编辑器自己的输入事务，含空格/IME 之后的整段替换只认这条路。
+  //    全选后必须让出一个宏任务再发 paste：真实鼠标点击场景下，编辑器（ProseMirror）
+  //    轮询 DOM 选区有约 20ms 的节流，同任务里全选+paste 会让粘贴落在旧的折叠光标上
+  //    （变成追加）；等待后二次全选，覆盖期间被第三方处理器改掉的选区。
+  selectAll()
+  await sleep(60)
   selectAll()
   const dt = new DataTransfer()
   dt.setData('text/plain', text)
