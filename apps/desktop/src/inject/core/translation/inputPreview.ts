@@ -140,11 +140,39 @@ export function mountInputPreview(injector: BaseInjector): () => void {
   root.addEventListener('input', onInput, true)
   root.addEventListener('keydown', onKeydown, true)
 
+  /**
+   * 空了就收起。只挂在 input 上不够：这类富文本输入框由页面自己接管退格——
+   * 按键被处理器消化、DOM 由框架改写，不会产生 input 事件，浮层就会把旧译文一直挂着。
+   * keyup 覆盖「用户逐字删/全选删」，MutationObserver 覆盖「页面代改」（发送后清空、右键删除）。
+   */
+  const hideIfEmpty = (): void => {
+    const input = adapter.getInputElement()
+    if (!input || !adapter.getInputText()) hide()
+  }
+  root.addEventListener('keyup', hideIfEmpty, true)
+
+  const composerWatcher = new MutationObserver(hideIfEmpty)
+  let watched: HTMLElement | null = null
+  const watchComposer = (): void => {
+    const input = adapter.getInputElement() ?? null
+    if (input === watched) return
+    composerWatcher.takeRecords()
+    watched = input
+    if (input) composerWatcher.observe(input, { childList: true, characterData: true, subtree: true })
+  }
+  watchComposer()
+  root.addEventListener('input', watchComposer, true)
+  root.addEventListener('keyup', watchComposer, true)
+
   return () => {
     stopped = true
     if (debounce) clearTimeout(debounce)
     root.removeEventListener('input', onInput, true)
     root.removeEventListener('keydown', onKeydown, true)
+    root.removeEventListener('keyup', hideIfEmpty, true)
+    root.removeEventListener('input', watchComposer, true)
+    root.removeEventListener('keyup', watchComposer, true)
+    composerWatcher.disconnect()
     document.getElementById(PREVIEW_ID)?.remove()
   }
 }
