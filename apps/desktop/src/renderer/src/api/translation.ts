@@ -62,6 +62,31 @@ export interface TranslateVO {
   fromLangCode: string
   toLangCode: string
   cacheKey: string
+  /** 在线线路回退到本地模拟引擎时为 true */
+  degraded: boolean
+  /** 降级原因：未配置密钥或厂商报错；正常时为 null */
+  degradeReason: string | null
+}
+
+export interface TranslationCredentialVO {
+  provider: string
+  appId: string
+  hasSecret: boolean
+  region: string | null
+  updatedAt: string | null
+}
+
+export interface TranslationCredentialInput {
+  provider: string
+  appId: string
+  secretKey?: string
+  region?: string
+}
+
+export interface CredentialTestVO {
+  ok: boolean
+  latencyMs: number | null
+  message: string
 }
 
 export interface TranslationCacheEntryVO {
@@ -132,5 +157,32 @@ export function useTrialTranslate() {
     mutationFn: (input: { text: string; type: TranslateType }) =>
       http.post<TranslateVO>('/api/translation/translate', input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: STATS_KEY })
+  })
+}
+
+const CREDENTIALS_KEY = ['translation-credentials'] as const
+
+export function useTranslationCredentials() {
+  return useQuery({
+    queryKey: CREDENTIALS_KEY,
+    queryFn: () => http.get<TranslationCredentialVO[]>('/api/translation/credentials')
+  })
+}
+
+/** 密钥只写不读：保存后返回的是掩码视图（hasSecret），secretKey 留空表示保留旧密钥。 */
+export function usePutCredential() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (input: TranslationCredentialInput) =>
+      http.put<TranslationCredentialVO>('/api/translation/credentials', input),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: CREDENTIALS_KEY })
+  })
+}
+
+/** 「测试」按钮：真实向厂商发一条探测请求，失败也返回 200 + ok=false。 */
+export function useTestCredential() {
+  return useMutation({
+    mutationFn: (provider: string) =>
+      http.post<CredentialTestVO>('/api/translation/credentials/test', { provider })
   })
 }

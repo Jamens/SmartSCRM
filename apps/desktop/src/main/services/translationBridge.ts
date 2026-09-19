@@ -19,6 +19,9 @@ export interface TranslateResponse {
   fromLangCode: string
   toLangCode: string
   cacheKey: string
+  /** 线上线路失败或未配置密钥时为 true：译文来自本地模拟引擎，且该结果不入缓存 */
+  degraded: boolean
+  degradeReason: string | null
 }
 
 /**

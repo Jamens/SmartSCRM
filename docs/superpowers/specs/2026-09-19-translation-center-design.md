@@ -12,7 +12,7 @@
 
 硬约束：
 
-- **不产生任何线上请求**。4 渠道与 7 节点是本项目内的可配置数据 + 选择规则，译文由本地 Java 模拟引擎生成。
+- **译文默认由本地 Java 模拟引擎生成**。渠道与节点是本项目内的可配置数据 + 选择规则，测速不产生任何网络请求。唯一的线上出口是 §9 的百度/腾讯线上翻译适配器：仅在用户在「密钥配置」里填入密钥后启用，未配置或调用失败一律回退模拟引擎并显式标降级。
 - 数据落在本地 MySQL `smartscrm_react`；Java 后端是唯一数据层。
 - 注入层运行在真实 WhatsApp Web 页面内，保留内嵌真页面的能力。
 - 前端只用 pnpm 构建；后端用 JDK17 + `./mvnw`。
@@ -249,9 +249,9 @@ pom.xml  + net.openhft:zero-allocation-hashing   （xxhash64）
    - `1 Google`：原样输出
    - `2 DeepL`：压缩多余空白
    - `3 ChatGPT` / `4 Gemini`：目标 `en` 时句首大写并补 `.`；目标 `zh-CN` 时句末补 `。`
-   - `5 百度`：原样输出（与 `1` 同风格，差异只体现在缓存键上）
+   - `5 百度`：原样输出（与 `1` 同风格，差异只体现在缓存键上；配置密钥后该线路走 §9 线上适配器，此风格仅在未配置/降级时生效）
    - `6 有道`：先压缩空白，再按目标语言收句（同 `3`/`4` 的句号规则）
-   - `7 腾讯`：给整条译文套上目标语言的引号——`en` 用 `"…"`，`zh-CN` 用 `「…」`
+   - `7 腾讯`：给整条译文套上目标语言的引号——`en` 用 `"…"`，`zh-CN` 用 `「…」`（配置密钥后走 §9 线上适配器，此风格仅在未配置/降级时生效）
 
    未列入的语向一律不加任何加工：风格只认 `en` 与 `zh-CN`，其余原样输出。
    切渠道必然换 key，因此每次都会重译，UI 上能看到差异。
@@ -531,3 +531,45 @@ Git Bash 内联中文会静默失败；没有 mysql CLI，查库走 HTTP；自�
 | P5c | `langData` + `api/translation` + `switch.tsx` + `TranslationPage` + nav / 路由 + `translationSync` | `pnpm typecheck` + `pnpm build` 绿；§6.3 剩余项 |
 
 每片独立可回滚；测试通过后各提交一次（`feat:` / `fix:` / `update:` 前缀），推送手动执行。
+
+---
+
+## 9. P5d 线上翻译适配器（百度 / 腾讯）
+
+线路 5（百度）与线路 7（腾讯）在配置密钥后改走真实线上 API；其余线路（1–4、6）维持本地模拟引擎不变。
+
+### 9.1 数据与凭据
+
+- `V7__translation_credential.sql`：表 `translation_credential`（`tenant_id + provider` 唯一，`provider ∈ {baidu, tencent}`，字段 `app_id / secret_key / region`），无种子行。
+- 密钥 **write-only over HTTP**：GET 只回 `provider/appId/hasSecret/region/updatedAt`，永不回读 `secret_key`；PUT 时 `secretKey` 留空表示保留原值，首次保存必须给密钥。
+- 密钥只存在于后端与本地库；不进渲染层 store、不下沉 preload / 注入层。
+- `POST /api/translation/credentials/test`：用固定样例「你好，很高兴认识你」（zh-CN → en）真打一次网关，返回 `ok / latencyMs / message`。
+
+### 9.2 适配器
+
+| | 百度 | 腾讯 TMT |
+|---|---|---|
+| 端点 | `GET fanyi-api.baidu.com/api/trans/vip/translate` | `POST tmt.tencentcloudapi.com` |
+| 鉴权 | `sign = MD5(appid + q + salt + 密钥)` | TC3-HMAC-SHA256（`Tc3Signer`，service `tmt`，`X-TC-Action: TextTranslate`，version `2018-03-21`） |
+| 长度 | `q` ≤ 5000 字符 | `SourceText` ≤ 5000 **UTF-8 字节**，超限按行切块拼接 |
+| 语种码 | `zh/en/vie/…`（自有码表） | `zh-CN/en/vi/…`（`auto` 支持源语言） |
+
+两者都实现 `TranslationProvider`（`providerId / supports / translate(Credentials, …)`），返回 `ProviderResult(translation, detectedFrom)`；失败抛 `ProviderException`（消息带服务商名与错误码，直接面向用户展示）。
+
+### 9.3 路由与降级
+
+- `TranslationService`：`CHANNEL_TO_PROVIDER = {5→baidu, 7→tencent}`。命中该线路且已配置密钥 → 走线上；成功结果照常写 `translation_cache`。
+- **未配置密钥或线上调用失败 → 回退模拟引擎**，`TranslateVO` 置 `degraded=true` + `degradeReason`（人可读原因）；**降级结果一律不写缓存**，避免把兜底译文固化。
+- `degraded / degradeReason` 随 TranslateVO JSON 透传到注入层与主进程桥（类型已补齐）。
+
+### 9.4 前端（翻译中心）
+
+- 新增「密钥配置」卡片：百度（App ID + 密钥）与腾讯（SecretId + SecretKey + 可选地域）两个表单；保存后密钥输入框清空且永不回读；「测试」按钮就地显示 `可用 · Xms` 或 `不可用：<原因>`。
+- 线路徽章：未配置密钥的 5/7 灰显不可点并标「未配置」，配置后标「线上」；页头角标按当前线路显示 `模拟通道 / 线上 · X / 线上未就绪 · 模拟兜底`。
+- 试用结果在降级时显示「降级·模拟」并给出原因行。
+
+### 9.5 验证口径
+
+- 签名/切块/语种映射由单测钉死（含 TC3 外部向量）；线上链路以真实网关的**错误转移**为证：假密钥下百度回 `52003 UNAUTHORIZED USER`、腾讯回 `AuthFailure.SecretIdNotFound`，说明端点、签名结构与网络出口均正确。
+- **真实密钥联调未跑**（等待用户在「密钥配置」填入自有 key），在此之前所有「线上」结论仅到"网关可达、鉴权被正确拒绝"为止。
+- 免费额度参考（2026-09 核实）：腾讯 TMT 约 500 万字符/月；百度通用翻译约 200 万字符/月。

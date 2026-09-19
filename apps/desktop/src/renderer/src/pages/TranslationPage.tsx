@@ -3,6 +3,7 @@ import {
   Activity,
   Coins,
   Database,
+  KeyRound,
   Languages,
   RotateCw,
   Send,
@@ -29,19 +30,25 @@ import {
   SelectValue
 } from '@/components/ui/select'
 import {
+  usePutCredential,
+  useTestCredential,
   useTranslationCacheStats,
+  useTranslationCredentials,
   useTranslationDelays,
   useTranslationNodes,
   useTranslationSettings,
   useTrialTranslate,
   useUpdateTranslationSettings,
+  type CredentialTestVO,
   type ServerDelayVO,
   type TranslateType,
+  type TranslationCredentialVO,
   type TranslationSettingVO
 } from '@/api/translation'
 import {
   ENGINE_LANGUAGES,
   TRANSLATION_CHANNELS,
+  channelProvider,
   languageName,
   sourceLanguagesFor,
   targetLanguagesFor
@@ -67,6 +74,7 @@ export default function TranslationPage(): React.JSX.Element {
   const settingsQuery = useTranslationSettings()
   const nodesQuery = useTranslationNodes()
   const statsQuery = useTranslationCacheStats()
+  const credentialsQuery = useTranslationCredentials()
   const updateSettings = useUpdateTranslationSettings()
   const [measureOn, setMeasureOn] = useState(true)
   const delaysQuery = useTranslationDelays(measureOn)
@@ -79,6 +87,9 @@ export default function TranslationPage(): React.JSX.Element {
   const settings = draft ?? settingsQuery.data ?? null
   const delays = delaysQuery.data ?? []
   const nodes = nodesQuery.data ?? []
+  const credentials = credentialsQuery.data ?? []
+  const credentialOf = (provider: string): TranslationCredentialVO | undefined =>
+    credentials.find((c) => c.provider === provider)
 
   const choice = useMemo(
     () => (settings ? pickBestNode(delays, settings.server, settings.channel) : null),
@@ -119,9 +130,17 @@ export default function TranslationPage(): React.JSX.Element {
   const nodeLabel = (name: string): string =>
     nodes.find((n) => n.name === name)?.label ?? name
 
+  const providerOfActive = channelProvider(settings.channel)
+  const activeIsConfigured =
+    providerOfActive === null || (credentialOf(providerOfActive)?.hasSecret ?? false)
+
   return (
     <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
-      <PageHeader />
+      <PageHeader
+        online={providerOfActive !== null}
+        onlineReady={activeIsConfigured}
+        channelLabel={TRANSLATION_CHANNELS.find((c) => c.code === settings.channel)?.label}
+      />
       <div className="grid min-h-0 flex-1 grid-cols-1 gap-4 overflow-auto p-6 xl:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)]">
         <div className="flex flex-col gap-4">
           <NodeCard
@@ -129,6 +148,7 @@ export default function TranslationPage(): React.JSX.Element {
             delays={delays}
             nodes={nodes}
             choice={choice}
+            configuredProviders={configuredProviders(credentials)}
             onReselect={(server) => void patch({ server, serverMode: server === AUTO ? AUTO : 'manual' })}
             onChannel={(channel) => void patch({ channel })}
             onAuto={() => void patch({ server: pickBestNode(delays, settings.server, settings.channel).server, serverMode: AUTO })}
@@ -199,6 +219,10 @@ export default function TranslationPage(): React.JSX.Element {
               />
             </CardContent>
           </Card>
+          <KeyConfigCard
+            credentialOf={credentialOf}
+            loadError={!credentialsQuery.isPending && credentialsQuery.isError}
+          />
         </div>
 
         <div className="flex flex-col gap-4">
@@ -263,7 +287,20 @@ function ShieldIcon(): React.JSX.Element {
   return <Shield className="size-4 text-primary" />
 }
 
-function PageHeader(): React.JSX.Element {
+function PageHeader({
+  online,
+  onlineReady,
+  channelLabel
+}: {
+  online?: boolean
+  onlineReady?: boolean
+  channelLabel?: string
+}): React.JSX.Element {
+  const badge = !online
+    ? '模拟通道'
+    : onlineReady
+      ? `线上 · ${channelLabel ?? ''}`
+      : '线上未就绪 · 模拟兜底'
   return (
     <header className="flex items-center justify-between border-b border-border/60 px-6 py-4">
       <div>
@@ -277,7 +314,7 @@ function PageHeader(): React.JSX.Element {
       </div>
       <Badge variant="outline" className="gap-1.5">
         <Activity className="size-3" />
-        模拟通道
+        {badge}
       </Badge>
     </header>
   )
@@ -346,6 +383,7 @@ function NodeCard({
   delays,
   nodes,
   choice,
+  configuredProviders,
   onReselect,
   onChannel,
   onAuto
@@ -354,6 +392,7 @@ function NodeCard({
   delays: ServerDelayVO[]
   nodes: { name: string; label: string }[]
   choice: { server: string } | null
+  configuredProviders: Set<string>
   onReselect: (server: string) => void
   onChannel: (channel: string) => void
   onAuto: () => void
@@ -367,7 +406,9 @@ function NodeCard({
           <Database className="size-4 text-primary" />
           节点与线路
         </CardTitle>
-        <CardDescription>节点只影响测速与自动选优，译文一律由本地引擎生成</CardDescription>
+        <CardDescription>
+          节点只影响测速与自动选优；模拟线路译文由本地引擎生成，线上线路（百度/腾讯）需配置密钥
+        </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
@@ -406,21 +447,29 @@ function NodeCard({
         <div className="flex items-center gap-2">
           <span className="text-xs text-muted-foreground">线路</span>
           <div className="flex flex-wrap gap-1.5">
-            {TRANSLATION_CHANNELS.map((channel) => (
-              <button
-                key={channel.code}
-                type="button"
-                onClick={() => onChannel(channel.code)}
-                className={cn(
-                  'rounded-full border px-2.5 py-1 text-[11px] transition-colors',
-                  settings.channel === channel.code
-                    ? 'border-gold bg-gold/15 text-foreground'
-                    : 'border-border text-muted-foreground'
-                )}
-              >
-                {channel.code} {channel.label}
-              </button>
-            ))}
+            {TRANSLATION_CHANNELS.map((channel) => {
+              const provider = channelProvider(channel.code)
+              const needsKey = provider !== null && !configuredProviders.has(provider)
+              return (
+                <button
+                  key={channel.code}
+                  type="button"
+                  title={needsKey ? '未配置密钥，先在下方「密钥配置」填写' : undefined}
+                  disabled={needsKey}
+                  onClick={() => onChannel(channel.code)}
+                  className={cn(
+                    'rounded-full border px-2.5 py-1 text-[11px] transition-colors',
+                    settings.channel === channel.code
+                      ? 'border-gold bg-gold/15 text-foreground'
+                      : 'border-border text-muted-foreground',
+                    needsKey && 'cursor-not-allowed opacity-40'
+                  )}
+                >
+                  {channel.code} {channel.label}
+                  {provider && (needsKey ? ' · 未配置' : ' · 线上')}
+                </button>
+              )
+            })}
           </div>
         </div>
       </CardContent>
@@ -619,6 +668,11 @@ function TrialCard(): React.JSX.Element {
             <p className="text-foreground">{trial.data.translation}</p>
             <p className="mt-1 flex flex-wrap gap-x-2 text-[11px] text-muted-foreground">
               <span>{trial.data.cached ? '命中缓存' : '新生成'}</span>
+              {trial.data.degraded && (
+                <span className="text-amber-600" title={trial.data.degradeReason ?? ''}>
+                  降级·模拟
+                </span>
+              )}
               {trial.data.partial && <span className="text-amber-600">partial</span>}
               {trial.data.containsChinese && <span className="text-amber-600">含中文</span>}
               <span>
@@ -626,6 +680,9 @@ function TrialCard(): React.JSX.Element {
               </span>
               <span>渠道 {trial.data.channel}</span>
             </p>
+            {trial.data.degraded && trial.data.degradeReason && (
+              <p className="mt-1 text-[11px] text-muted-foreground">{trial.data.degradeReason}</p>
+            )}
             <p className="mt-1 break-all font-mono text-[10px] text-muted-foreground/70">
               {trial.data.cacheKey}
             </p>
@@ -636,5 +693,208 @@ function TrialCard(): React.JSX.Element {
         )}
       </CardContent>
     </Card>
+  )
+}
+
+/** 已保存密钥（hasSecret）的服务商集合，用于线路灰显与页头角标。 */
+function configuredProviders(list: TranslationCredentialVO[]): Set<string> {
+  return new Set(list.filter((c) => c.hasSecret).map((c) => c.provider))
+}
+
+interface ProviderForm {
+  provider: 'baidu' | 'tencent'
+  title: string
+  appIdLabel: string
+  appIdPlaceholder: string
+  secretLabel: string
+  regionLabel?: string
+  regionPlaceholder?: string
+  hint: string
+}
+
+const PROVIDER_FORMS: ProviderForm[] = [
+  {
+    provider: 'baidu',
+    title: '百度翻译',
+    appIdLabel: 'App ID',
+    appIdPlaceholder: '例：20240101000000001',
+    secretLabel: '密钥',
+    hint: '翻译开放平台 · 通用翻译 API（线路 5）· 免费额度约 200 万字符/月'
+  },
+  {
+    provider: 'tencent',
+    title: '腾讯云 TMT',
+    appIdLabel: 'SecretId',
+    appIdPlaceholder: '例：AKID****************',
+    secretLabel: 'SecretKey',
+    regionLabel: '地域（可选）',
+    regionPlaceholder: '默认 ap-shanghai',
+    hint: '机器翻译 TextTranslate（线路 7）· 免费额度约 500 万字符/月'
+  }
+]
+
+function KeyConfigCard({
+  credentialOf,
+  loadError
+}: {
+  credentialOf: (provider: string) => TranslationCredentialVO | undefined
+  loadError: boolean
+}): React.JSX.Element {
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <KeyRound className="size-4 text-primary" />
+          密钥配置
+        </CardTitle>
+        <CardDescription>
+          密钥只保存在本地后端，写入后不再回读；留空密钥保存表示保留原值。
+          未配置密钥的线上线路自动回退本地模拟引擎并标降级。
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {loadError && (
+          <p className="text-[11px] text-red-600">密钥状态读取失败，请确认后端已启动。</p>
+        )}
+        {PROVIDER_FORMS.map((form) => (
+          <ProviderKeyForm key={form.provider} form={form} credential={credentialOf(form.provider)} />
+        ))}
+      </CardContent>
+    </Card>
+  )
+}
+
+function ProviderKeyForm({
+  form,
+  credential
+}: {
+  form: ProviderForm
+  credential?: TranslationCredentialVO
+}): React.JSX.Element {
+  const put = usePutCredential()
+  const test = useTestCredential()
+  const [appId, setAppId] = useState('')
+  const [secret, setSecret] = useState('')
+  const [region, setRegion] = useState('')
+  const [seeded, setSeeded] = useState(false)
+  const [testResult, setTestResult] = useState<CredentialTestVO | null>(null)
+
+  // 后端加载完成后一次性回填非敏感字段（appId/region）；密钥本身永不回读。
+  useEffect(() => {
+    if (credential && !seeded) {
+      setAppId(credential.appId)
+      setRegion(credential.region ?? '')
+      setSeeded(true)
+    }
+  }, [credential, seeded])
+
+  const configured = credential?.hasSecret === true
+
+  async function save(): Promise<void> {
+    try {
+      await put.mutateAsync({
+        provider: form.provider,
+        appId: appId.trim(),
+        secretKey: secret.trim(),
+        region: region.trim()
+      })
+      setSecret('')
+    } catch {
+      // 失败原因经 put.error.message 就地展示
+    }
+  }
+
+  async function runTest(): Promise<void> {
+    setTestResult(null)
+    try {
+      setTestResult(await test.mutateAsync(form.provider))
+    } catch {
+      setTestResult({ ok: false, latencyMs: null, message: '测试请求失败，请确认后端已启动' })
+    }
+  }
+
+  return (
+    <div className="flex flex-col gap-2 rounded-lg border border-border/60 px-3 py-3">
+      <div className="flex items-center gap-2">
+        <span className="text-xs font-semibold text-foreground">{form.title}</span>
+        <Badge
+          variant="outline"
+          className={cn('border-0', configured ? 'bg-emerald-500/15 text-emerald-600' : 'bg-muted text-muted-foreground')}
+        >
+          {configured ? '已配置' : '未配置'}
+        </Badge>
+        <span className="ml-auto text-[10px] text-muted-foreground/80">{form.hint}</span>
+      </div>
+      <div className={cn('grid gap-2', form.regionLabel ? 'grid-cols-3' : 'grid-cols-2')}>
+        <div className="flex flex-col gap-1">
+          <Label className="text-[11px] text-muted-foreground">{form.appIdLabel}</Label>
+          <Input
+            value={appId}
+            onChange={(e) => setAppId(e.target.value)}
+            placeholder={form.appIdPlaceholder}
+            className="h-8 text-xs"
+          />
+        </div>
+        <div className="flex flex-col gap-1">
+          <Label className="text-[11px] text-muted-foreground">{form.secretLabel}</Label>
+          <Input
+            type="password"
+            value={secret}
+            onChange={(e) => setSecret(e.target.value)}
+            placeholder={configured ? '已保存，留空则不修改' : ''}
+            className="h-8 text-xs"
+          />
+        </div>
+        {form.regionLabel && (
+          <div className="flex flex-col gap-1">
+            <Label className="text-[11px] text-muted-foreground">{form.regionLabel}</Label>
+            <Input
+              value={region}
+              onChange={(e) => setRegion(e.target.value)}
+              placeholder={form.regionPlaceholder}
+              className="h-8 text-xs"
+            />
+          </div>
+        )}
+      </div>
+      <div className="flex items-center gap-2">
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1.5 text-xs"
+          disabled={!appId.trim() || put.isPending}
+          onClick={() => void save()}
+        >
+          保存
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          className="h-7 gap-1.5 text-xs"
+          disabled={!configured || test.isPending}
+          onClick={() => void runTest()}
+        >
+          {test.isPending ? '测试中…' : '测试'}
+        </Button>
+        {put.isSuccess && <span className="text-[11px] text-emerald-600">已保存</span>}
+        {put.isError && (
+          <span className="truncate text-[11px] text-red-600">
+            {(put.error as Error)?.message ?? '保存失败'}
+          </span>
+        )}
+      </div>
+      {testResult && (
+        <p
+          className={cn(
+            'break-all text-[11px]',
+            testResult.ok ? 'text-emerald-600' : 'text-red-600'
+          )}
+        >
+          {testResult.ok
+            ? `可用 · ${testResult.latencyMs ?? '?'}ms`
+            : `不可用：${testResult.message}`}
+        </p>
+      )}
+    </div>
   )
 }

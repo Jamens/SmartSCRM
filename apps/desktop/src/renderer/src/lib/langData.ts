@@ -72,7 +72,8 @@ export const chatGptLanguages: Language[] = pick([
 /** The eight languages the simulated engine can actually produce (spec §3.4 step 2). */
 export const ENGINE_LANGUAGES = ['zh-CN', 'en', 'vi', 'id', 'lo', 'hi', 'my', 'ms']
 
-/** 线路只决定译文风格与缓存键，真实翻译一律由本地模拟引擎完成（spec §3.4）。 */
+/** 线路清单。1-4/6 走本地模拟引擎；5=百度、7=腾讯为线上适配器，需配置密钥，
+ *  未配置或调用失败时回退模拟引擎并标 degraded（spec §3.4）。 */
 export const TRANSLATION_CHANNELS = [
   { code: '1', label: 'Google' },
   { code: '2', label: 'DeepL' },
@@ -82,6 +83,13 @@ export const TRANSLATION_CHANNELS = [
   { code: '6', label: '有道' },
   { code: '7', label: '腾讯' }
 ]
+
+/** 线上线路对应的服务商 id（与后端 translation_credential.provider 对齐）；模拟线路为 null。 */
+export function channelProvider(channel: string): 'baidu' | 'tencent' | null {
+  if (channel === '5') return 'baidu'
+  if (channel === '7') return 'tencent'
+  return null
+}
 
 export function sourceLanguagesFor(channel: string): Language[] {
   if (channel === '2') return deeplSourceLanguages
