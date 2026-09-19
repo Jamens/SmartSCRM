@@ -304,9 +304,20 @@ inject/platforms/whatsapp/index.ts             hookInput / setupPlatformListener
 
 - **节流与扫描**：请求节流 `TRANSLATE_THROTTLE_TIME=300`；扫描 = MutationObserver + `MESSAGE_SCAN_INTERVAL=500`
   兜底 interval。**只有这两个定时器**，不引入第三个轮询。
-- **消息标识与方向**：行 `[data-id]` 作 msgId；`data-id` 以 `true_` 开头或行含 `.message-out` → 自己发的。
-  两种气泡都按 `type='receive'` 请求（R1）。
-- **DOM 契约**：译文节点 `id="translation-{msgId}"`，内层 `<span class="translated-text">`；
+- **消息标识与方向**：msgId 取行容器的 `data-id`；方向标记 `[data-icon="tail-out"]`（纯表情、系统行可能没有，
+  所以只作观测线索，不作功能前提）。两种气泡都按 `type='receive'` 请求（R1）。
+- **真实 DOM 契约**（2026-09-19 桌面端核对所得，选择器一律集中在
+  `inject/platforms/whatsapp/selectors.ts`）：
+  | 语义 | 选择器 | 为什么是它 |
+  |---|---|---|
+  | 观察容器 | `div#main` | 切会话时整个面板重建，挂在行上会一换会话就失去 MutationObserver |
+  | 一条消息的行 | `#main .copyable-area [data-id]` | `data-id` 挂在外层 div；这一层铺满面板宽度，**不是**气泡 |
+  | 消息正文 | 行内 `span.copyable-text` | 外层 `div.copyable-text` 的 `textContent` 把发送时间和状态图标的字体连字（`早上8:04wds-ic-read`）一起包进来；取不到内层 span（纯表情、系统提示）就当没有文本，宁可不译 |
+  | 译文锚点 | 行内 `div.copyable-text` | 行容器满宽，译文挂在行上会跑到面板左缘、与右侧气泡脱节；锚点才是与消息同宽同侧的那一层。`PlatformAdapter.getTranslationAnchor()` 默认返回行本身，平台按需覆写 |
+  | 展开控件 | `[data-testid="caption-read-more-button"]` | 见 §4.4 |
+- **译文节点契约**：译文宿主 `id="translation-{msgId}"`，内层 `<span class="translated-text">`；
+  「手动翻译」入口复用 `CSS_CLASSES.MASK`。读取译文时只认 `.translated-text`——失败态的同一个宿主节点里
+  装的是按钮文字，按整个节点取文本会把按钮当成译文。
   样式类复用 `constants/config.ts:15-22` 的 `CSS_CLASSES`（`scrm-inject-translated` 等）。
 - **样式**：注入 bundle 目前没有 CSS 管线 → 首次渲染创建 `<style id="scrm-inject-style">` 一次性写入；
   字号/颜色跟随 WhatsApp 主题变量，不覆盖气泡本身。
@@ -325,8 +336,10 @@ inject/platforms/whatsapp/index.ts             hookInput / setupPlatformListener
 
 ### 4.4 折叠长文本
 
-WhatsApp 把长消息折叠成"阅读更多"时，DOM 里只有截断文本。P5 的处理：**行内出现展开控件就跳过不译**，
+WhatsApp 把长消息折叠时（页面控件文案为「查看更多」，`[data-testid="caption-read-more-button"]`），
+DOM 里只有截断文本。P5 的处理：**行内出现展开控件就跳过不译**，
 `MutationObserver` 在用户展开后自动补译。**宁可不译，也不译半句。**
+展开后译文只补在这一条上，其余已译消息不受影响（核对样本：1311 字符长消息折叠 → 展开 → 补译出译文）。
 
 ---
 
@@ -411,30 +424,63 @@ Git Bash 内联中文会静默失败；没有 mysql CLI，查库走 HTTP；自�
 `pnpm typecheck`（node / web / inject）+ `pnpm build` 全绿；
 `#/translation` 各控件键盘可达（radix 默认行为）；nav 第 7 项在 1280 宽下不挤压 `ModuleRail`。
 
-### 6.3 桌面端手工清单（需真实登录 WhatsApp Web）
+### 6.3 桌面端手工清单（需真实登录 WhatsApp Web）—— 2026-09-19 已核对
 
-- [ ] 打开会话 → 对方气泡下出现译文节点，`.translated-text` 有文字
-- [ ] 自己发出的气泡也被译，且语向与收到的一致（R1）
-- [ ] 关闭"接收翻译"→ 推送后新消息不再插译文（验证 §5.4 的推送链）
-- [ ] 切会话不残留旧 `translation-*`；滚出再滚回 → 译文由内存表立即重绘（Network 里无新请求）
-- [ ] 长文本折叠：未展开不译；点"阅读更多"后自动补译
-- [ ] 输入框打字 → 300ms 后浮层出译文；「用译文替换输入框」生效；关预览开关后浮层消失
-- [ ] 后端停服 → 3 次重试后出现「手动翻译」按钮而非无限重试；恢复后点一次出译文
-- [ ] 中文拦截 + 阻止发送 → 拦截一次发送并给提示
+核对方式：CDP 驱动 `tmp/p5-manual.mjs`，阶段 `setup | bubbles | fold | push | preview | chinese | offline`，
+在真实 WhatsApp Web 内嵌视图上按用户动作点，断言页面 DOM 与后端可见事实；截图在 `tmp/shots/6-3-*.png`。
+首跑暴露 3 个缺陷（译文挂到整行左缘、开关推送在重新注入后丢失、清空草稿后浮层不收），修复后 **23/23 通过**。
+
+- [x] 气泡下出现译文节点，`.translated-text` 有文字 —— 会话内的文本气泡全部渲染出译文，且落在气泡本体里；
+  纯表情行与系统提示行按 §4.3 契约不产生译文。
+  **未覆盖：对方发来的气泡。** 当前账号的会话列表里只有「自己」这一个会话，`tail-in` 形态无法观测。
+- [x] 自己发出的气泡也被译，且语向与收到的一致（R1）—— 请求插桩显示气泡一律 `type='receive'`，
+  `send` 只出现在输入框预览（且带 `input: true`）。
+- [x] 关闭"接收翻译"→ 推送后新消息不再插译文（§5.4 推送链）—— 走翻译中心保存 →
+  `toHost:translation-flags-applied` 回执 → 视图 `state` 与库一致。开关在翻译中心页改动时视图已被 uninject，
+  所以断言点放在「回工作台重新注入之后」。
+- [ ] 切会话不残留旧 `translation-*` —— **未核对**：只有一个会话可用，无从切换。
+- [x] 滚出再滚回 → 译文由内存表立即重绘、不发新请求 —— 移除 `translation-{msgId}` 节点后由重绘分支补回，
+  请求计数增量为 0。**替代说明**：会话只有 5~7 条消息，未触发虚拟列表卸载，故用同一代码分支的节点移除代替滚动。
+- [x] 长文本折叠：未展开不译；点「查看更多」后自动补译 —— 样本为 1311 字符长消息，展开后只补这一条。
+- [x] 输入框打字 → 300ms 后浮层出译文；「用译文替换输入框」生效；关预览开关后浮层消失 ——
+  浮层在草稿清空后必须收起：WhatsApp 的退格 / 全选删除**不产生 `input` 事件**，
+  所以 `inputPreview` 额外挂 `keyup` 监听与输入框 `MutationObserver`（见 §7）。
+- [x] 后端停服 → 3 次重试后出现「手动翻译」按钮而非无限重试；恢复后点一次出译文 ——
+  一次点击只救它自己那一条，其余失败消息仍各自保留按钮。
+- [x] 中文拦截 + 阻止发送 → 拦截一次发送并给提示 —— 回车后气泡数不变，浮层文案「消息含中文，已拦截发送」。
+
+**核对期间的副作用（已复位）**：向自聊天发过 3 条测试消息，核对完成后经
+右键 →「删除」→ 底栏删除 → 「从我这端删除」全部删除，会话恢复为原有 4 行；草稿框已清空；
+`translation_setting` 回到基线（`server=my`、`serverMode=manual`、`voiceEnabled=true`、
+`previewEnabled=true`、`enterToSend=false`、`disableChinese=true`、`disableChinesePreventSend=false`）。
+`translation_cache` 只增不减（无清理接口），本轮新增若干行，DEMO 种子未动。
 
 ---
 
 ## 7. 已知限制与风险
 
-- **DOM 类名随 WhatsApp 版本漂移**：`copyable-text` / `_ak1q` / `_ak1r` 这类类名会变。
+- **DOM 类名随 WhatsApp 版本漂移**：`copyable-text`、`caption-read-more-button` 这类名字会变。
   所有选择器集中在 `inject/platforms/whatsapp/selectors.ts`，坏了只改一处。
-  若 `true_` 前缀判方向失效，退化表现是"自己的消息也按 receive 语向译"——正是 R1 要求的行为，不会崩。
+  退化表现是可预期的：取不到正文 `span.copyable-text` 的行按"没有文本"跳过，最多是不译，不会把
+  时间戳和图标连字当消息送出去。
 - **模拟词典只 41 条**：真实对话会大面积 `partial: true`。这是刻意的（不假装离线能做真翻译）。
   要更好看有两条独立路径：扩词典，或在 wa-js 落地后接真实通道。
 - **`view:invoke` 是新增攻击面**：白名单 + 长度 + 速率三重限制，响应不含凭据。
 - **渲染只能在桌面端真机验证**：typecheck / build 覆盖不到 WhatsApp DOM，§6.3 未跑完前不得声明功能完成。
 - **译文与会话解耦**：缓存不含会话维度，因此"同一句话在 A 会话已译、B 会话直接命中"，
   这在按客户定制语向（P6）之后需要重新审视 key 形状。
+- **WhatsApp 删除草稿不产生 `input` 事件**：退格与全选删除由页面自己消化按键、直接改写 DOM，
+  只挂 `input` 监听的浮层会一直挂着旧译文。`inputPreview` 因此额外挂捕获阶段的 `keyup`，
+  并对输入框本体开 `MutationObserver`（覆盖"页面代改"：发送后清空、右键删除）。
+- **切路由会卸载视图**：工作台之外（含翻译中心）当前活动视图被 uninject，回到工作台才重新注入。
+  两个后果：① 设置推送不能只靠广播——广播可能发生在注入之前，那时没有接收方，
+  所以渲染层在收到页面的 `toHost:injector-ready` 报到后按 `viewId` 补发一次最新设置；
+  ② 任何"改完开关后视图里生效"的核对都必须先回工作台重新注入，否则"没有译文"只是因为注入层整个不在。
+- **「手动翻译」按钮按条独立**：一次点击只重试它自己那条消息，不会连带救回其他失败消息。
+- **注入层不改变普通回车的语义**：`enterToSend` 关闭时，注入层不拦截 Enter，草稿会照常发出去。
+  自动化核对脚本因此在按 Enter 前必须确认拦截条件已成立，跑完还要清草稿并核对会话行数。
+- **P5 核对的覆盖面**：当前 WhatsApp 账号只有「自己」一个会话，因此对方气泡形态与"切会话不残留"
+  两项未核对（见 §6.3）；消息数不足，虚拟化滚动卸载用节点移除分支代替。
 
 ---
 
