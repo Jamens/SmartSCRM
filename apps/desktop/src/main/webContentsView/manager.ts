@@ -2,6 +2,7 @@ import { WebContentsView, shell, BrowserWindow, app, type Rectangle } from 'elec
 import { join } from 'path'
 import { readFileSync, existsSync } from 'fs'
 import { getMainWindow } from '../window/mainWindow'
+import { chromeUserAgent } from './chromeUserAgent'
 
 interface ManagedView {
   view: WebContentsView
@@ -64,6 +65,9 @@ export class WebContentsViewManager {
     })
 
     this.wcToView.set(view.webContents.id, viewId)
+    // 先定好浏览器身份再加载：页面第一次读 UA 就在这之后，晚一步就会被按 Electron 拒绝。
+    const userAgent = chromeUserAgent()
+    if (userAgent) view.webContents.setUserAgent(userAgent)
 
     try {
       const host = new URL(url).hostname
