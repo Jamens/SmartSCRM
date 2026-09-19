@@ -22,6 +22,10 @@ async function injectPlatform(platform: string, config: InjectConfig): Promise<{
     return { isLogin: 'false' }
   }
 
+  // 同一个页面里只允许存在一个注入器：主进程会在页面每次就绪时重新注入，渲染层重挂载也会再注入一次。
+  // 不做这步清理的话，旧的登录轮询和消息轮询会一直留在页面里，按份数重复上报。
+  window.__SCRM_DESTROY__?.()
+
   const adapter = new AdapterClass()
   const injector = new BaseInjector(adapter, config)
   const result = await injector.inject()
