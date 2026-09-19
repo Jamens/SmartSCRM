@@ -241,15 +241,20 @@ pom.xml  + net.openhft:zero-allocation-hashing   （xxhash64）
 3. **降级**：8 语种以外的语向一律返回原文并置 `partial = true`（R8，绝不返回空白）。
 4. **匹配**：按"源 → 目标"取 `translation_phrase` 候选，对文本做**最长匹配**替换；未命中片段原样保留
    （机翻 code-switching 观感），只要有未命中片段就 `partial = true`。
+   短语按**字面量**匹配且**忽略大小写**（词典存 `Hello`，客户手打的是 `hello` / `HELLO`）；
+   无大小写概念的语种不受该标志影响。替换一律取词典的目标写法，不还原原文大小写。
    **自动检测**（`from` 为空）：对 8 个源语种各跑一遍最长匹配，取命中字符总数最大的语种作为实际源语言；
    全为 0 时按步骤 3 降级。
 5. **渠道风格**（提供可观测差异，不假装有质量差异）：
    - `1 Google`：原样输出
-   - `2 DeepL`：压缩多余空白、保留原文大小写
+   - `2 DeepL`：压缩多余空白
    - `3 ChatGPT` / `4 Gemini`：目标 `en` 时句首大写并补 `.`；目标 `zh-CN` 时句末补 `。`
 
    切渠道必然换 key，因此每次都会重译，UI 上能看到差异。
 6. **不做人为延迟**（R9）。
+7. **改匹配规则等于改译文**：`translation_cache` 存的是最终答案（连 `partial` 一起存），
+   引擎语义或词典变更后必须清掉受影响的缓存行，否则页面上仍是旧答案。缓存键含渠道与语向，
+   不含引擎版本，所以这类变更属于运维动作，不入库、不写进功能开关。
 
 ### 3.5 中文拦截
 
@@ -321,6 +326,15 @@ inject/platforms/whatsapp/index.ts             hookInput / setupPlatformListener
   样式类复用 `constants/config.ts:15-22` 的 `CSS_CLASSES`（`scrm-inject-translated` 等）。
 - **样式**：注入 bundle 目前没有 CSS 管线 → 首次渲染创建 `<style id="scrm-inject-style">` 一次性写入；
   字号/颜色跟随 WhatsApp 主题变量，不覆盖气泡本身。
+- **写回输入框的契约**（`inject/core/editorText.ts`，WhatsApp 的输入框是 ProseMirror）：
+  | 动作 | 唯一有效的写法 | 为什么 |
+  |---|---|---|
+  | 整段替换草稿 | 先 `selectNodeContents` 全选，再 `document.execCommand('insertText', false, text)` | 赋 `innerText` 只改 DOM，编辑器立刻按自己的文档状态同步回去；只有 `insertText` 产生它监听的原生 `beforeinput`。不先全选就变成在光标处追加 |
+  | 清空草稿 | `selectAll` + **可信**退格按键 | `delete` / `forwardDelete` / `insertText('')` 三条命令都返回 `true` 却什么都不删 |
+  | 空草稿判定 | `innerText.trim()` 为空 | ProseMirror 的空文档 `innerText` 是 `"\n"` |
+
+  所以 `replaceEditorText()` 的返回值语义是"是否确认写成"，传空串时是"是否确认删空"；
+  平台适配层的 `innerText` 兜底只用于有内容的情况，避免把 DOM 与编辑器文档写成两套状态。
 - **重译、复用与重试**：状态全在 `messageState.ts`（内存，页面刷新即重置）。
   文本变（消息被编辑）或语言 / 渠道变 → 移除旧节点重译；否则跳过。
   消息滚出可视区后 WhatsApp 会卸载行节点，重新进入时按 `translation-{msgId}` 从表里直接重绘，不再发请求。
@@ -429,6 +443,7 @@ Git Bash 内联中文会静默失败；没有 mysql CLI，查库走 HTTP；自�
 核对方式：CDP 驱动 `tmp/p5-manual.mjs`，阶段 `setup | bubbles | fold | push | preview | chinese | offline`，
 在真实 WhatsApp Web 内嵌视图上按用户动作点，断言页面 DOM 与后端可见事实；截图在 `tmp/shots/6-3-*.png`。
 首跑暴露 3 个缺陷（译文挂到整行左缘、开关推送在重新注入后丢失、清空草稿后浮层不收），修复后 **23/23 通过**。
+其中输入框相关的两项后经返工：见本节末「两处返工」。
 
 - [x] 气泡下出现译文节点，`.translated-text` 有文字 —— 会话内的文本气泡全部渲染出译文，且落在气泡本体里；
   纯表情行与系统提示行按 §4.3 契约不产生译文。
@@ -445,6 +460,9 @@ Git Bash 内联中文会静默失败；没有 mysql CLI，查库走 HTTP；自�
 - [x] 输入框打字 → 300ms 后浮层出译文；「用译文替换输入框」生效；关预览开关后浮层消失 ——
   浮层在草稿清空后必须收起：WhatsApp 的退格 / 全选删除**不产生 `input` 事件**，
   所以 `inputPreview` 额外挂 `keyup` 监听与输入框 `MutationObserver`（见 §7）。
+  **本项首跑是假绿**：当时的样本是 `hello`，其译文与原文相同，"草稿变成译文"无法与"什么都没发生"区分，
+  实际按钮点了不写回（§4.3 写回契约）。改用 `你好` → `Hello` 这种译文 ≠ 原文的样本重跑后才成立：
+  浮层出 `Hello` → 点「用译文替换输入框」→ 草稿变为 `Hello` → 收尾清空草稿，`tmp/p6-settext-check.mjs` 8/8。
 - [x] 后端停服 → 3 次重试后出现「手动翻译」按钮而非无限重试；恢复后点一次出译文 ——
   一次点击只救它自己那一条，其余失败消息仍各自保留按钮。
 - [x] 中文拦截 + 阻止发送 → 拦截一次发送并给提示 —— 回车后气泡数不变，浮层文案「消息含中文，已拦截发送」。
@@ -454,6 +472,11 @@ Git Bash 内联中文会静默失败；没有 mysql CLI，查库走 HTTP；自�
 `translation_setting` 回到 V5 种子默认（`server=sg`、`serverMode=auto`、`voiceEnabled=true`、
 `previewEnabled=true`、`enterToSend=false`、`disableChinese=true`、`disableChinesePreventSend=false`）。
 `translation_cache` 只增不减（无清理接口），本轮新增若干行，DEMO 种子未动。
+
+**§6.3 之后的两处返工（2026-09-19）**：上表"「用译文替换输入框」生效"一项为假绿，另有小写 `hello`
+不译的问题，两处已各自修复并重新核对（写回契约见 §4.3，匹配语义见 §3.4）。为让新匹配规则在页面上可见，
+清空过 `translation_cache`（派生表，可再生）；修复后的气泡核对为 `hello` → `你好` 共 2 条。
+本轮核对全程不按回车，未新增会话消息，草稿已确认为空。
 
 ---
 
@@ -477,6 +500,11 @@ Git Bash 内联中文会静默失败；没有 mysql CLI，查库走 HTTP；自�
   所以渲染层在收到页面的 `toHost:injector-ready` 报到后按 `viewId` 补发一次最新设置；
   ② 任何"改完开关后视图里生效"的核对都必须先回工作台重新注入，否则"没有译文"只是因为注入层整个不在。
 - **「手动翻译」按钮按条独立**：一次点击只重试它自己那条消息，不会连带救回其他失败消息。
+- **翻译链路失败时没有任何用户可见的反馈**：`requestTranslation()` 把"无 token / 非 2xx / `code != 0` /
+  5s 超时"一律收敛成 `null`（凭据不下沉到页面，这是刻意的），代价是页面上只会表现为"没有译文"。
+  其中 token 一条有确定成因：主进程磁盘 session 里的 access token 有效期 2h，只有渲染层发出鉴权请求
+  拿到 401 才会走刷新并回写；桌面端挂着不动超过 2h 后，内嵌页面的翻译会整片失效，
+  而渲染层仍显示已登录。后续要么给注入层一条"翻译不可用"的原因通道，要么让主进程自己续期。
 - **注入层不改变普通回车的语义**：`enterToSend` 关闭时，注入层不拦截 Enter，草稿会照常发出去。
   自动化核对脚本因此在按 Enter 前必须确认拦截条件已成立，跑完还要清草稿并核对会话行数。
 - **P5 核对的覆盖面**：当前 WhatsApp 账号只有「自己」一个会话，因此对方气泡形态与"切会话不残留"
