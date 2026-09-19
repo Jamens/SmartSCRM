@@ -451,7 +451,7 @@ Git Bash 内联中文会静默失败；没有 mysql CLI，查库走 HTTP；自�
 
 **核对期间的副作用（已复位）**：向自聊天发过 3 条测试消息，核对完成后经
 右键 →「删除」→ 底栏删除 → 「从我这端删除」全部删除，会话恢复为原有 4 行；草稿框已清空；
-`translation_setting` 回到基线（`server=my`、`serverMode=manual`、`voiceEnabled=true`、
+`translation_setting` 回到 V5 种子默认（`server=sg`、`serverMode=auto`、`voiceEnabled=true`、
 `previewEnabled=true`、`enterToSend=false`、`disableChinese=true`、`disableChinesePreventSend=false`）。
 `translation_cache` 只增不减（无清理接口），本轮新增若干行，DEMO 种子未动。
 
