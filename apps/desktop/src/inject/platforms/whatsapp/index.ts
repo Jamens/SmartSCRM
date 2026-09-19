@@ -49,7 +49,7 @@ export class WhatsAppAdapter extends PlatformAdapter {
   async setInputText(text: string): Promise<void> {
     const input = this.getInputElement()
     if (!input) return
-    if (replaceEditorText(input, text)) return
+    if (await replaceEditorText(input, text)) return
     // 兜底只写给有内容的情况：innerText = '' 会让页面看起来空了、编辑器却还留着原草稿。
     if (!text) return
     input.focus()

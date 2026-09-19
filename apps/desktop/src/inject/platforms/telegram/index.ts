@@ -40,7 +40,7 @@ export class TelegramAdapter extends PlatformAdapter {
   async setInputText(text: string): Promise<void> {
     const input = this.getInputElement()
     if (!input) return
-    if (replaceEditorText(input, text)) return
+    if (await replaceEditorText(input, text)) return
     // 兜底：编辑器命令不可用时仍按老办法写一次，至少不静默失败。
     input.focus()
     input.innerText = text

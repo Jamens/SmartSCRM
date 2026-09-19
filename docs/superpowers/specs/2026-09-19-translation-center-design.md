@@ -333,11 +333,11 @@ inject/platforms/whatsapp/index.ts             hookInput / setupPlatformListener
 - **写回输入框的契约**（`inject/core/editorText.ts`，WhatsApp 的输入框是 ProseMirror）：
   | 动作 | 唯一有效的写法 | 为什么 |
   |---|---|---|
-  | 整段替换草稿 | 先 `selectNodeContents` 全选，再 `document.execCommand('insertText', false, text)` | 赋 `innerText` 只改 DOM，编辑器立刻按自己的文档状态同步回去；只有 `insertText` 产生它监听的原生 `beforeinput`。不先全选就变成在光标处追加 |
+  | 整段替换草稿 | 全选后 dispatch 合成 `ClipboardEvent('paste')`（`DataTransfer` 带 `text/plain`），**轮询复核**实际内容 | 编辑器把未信任的整段 `execCommand('insertText')` 静默吞掉——含空格的文本只收前一两个字符再异步回滚，命令却返回 `true`；paste 走它自己的输入事务，整段写成且持久。文档更新是异步的，所以写完必须复核 `textContent`（`\u00a0` 归一化后再比对），不认合成 paste 的平台再兜底走 `insertText`（整段 → 逐字符，每步复核） |
   | 清空草稿 | `selectAll` + **可信**退格按键 | `delete` / `forwardDelete` / `insertText('')` 三条命令都返回 `true` 却什么都不删 |
   | 空草稿判定 | `innerText.trim()` 为空 | ProseMirror 的空文档 `innerText` 是 `"\n"` |
 
-  所以 `replaceEditorText()` 的返回值语义是"是否确认写成"，传空串时是"是否确认删空"；
+  所以 `replaceEditorText()` 是异步的，返回值语义是"是否确认写成"，传空串时是"是否确认删空"；
   平台适配层的 `innerText` 兜底只用于有内容的情况，避免把 DOM 与编辑器文档写成两套状态。
 - **重译、复用与重试**：状态全在 `messageState.ts`（内存，页面刷新即重置）。
   文本变（消息被编辑）或语言 / 渠道变 → 移除旧节点重译；否则跳过。
