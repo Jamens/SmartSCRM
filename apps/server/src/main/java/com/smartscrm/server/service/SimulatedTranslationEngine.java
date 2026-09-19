@@ -4,12 +4,17 @@ import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 import org.springframework.stereotype.Component;
 
 /**
  * Deterministic stand-in for a translation channel. Matches seeded phrases (longest
  * first) over the source text and leaves everything else verbatim, which is exactly
  * what the `partial` flag reports. It never sleeps and never hits the network.
+ *
+ * <p>Phrase lookup ignores letter case: a customer typing "hello" means the dictionary's
+ * "Hello". Chinese and other case-less scripts are unaffected by the flag.
  */
 @Component
 public class SimulatedTranslationEngine {
@@ -17,7 +22,7 @@ public class SimulatedTranslationEngine {
     public record EngineResult(String translation, boolean partial, String fromLang) {
     }
 
-    private record Pattern(String source, String target) {
+    private record Phrase(String source, String target, Pattern regex) {
     }
 
     private final PhraseDict dict;
@@ -83,34 +88,45 @@ public class SimulatedTranslationEngine {
     }
 
     private MatchResult match(String text, String sourceLang, String targetLang) {
-        List<Pattern> patterns = patterns(sourceLang, targetLang);
+        List<Phrase> phrases = phrases(sourceLang, targetLang);
         String out = text;
         int covered = 0;
-        for (Pattern p : patterns) {
-            if (!p.source().isEmpty() && out.contains(p.source())) {
-                // Compare visible chars on both sides: phrase sources carry spaces that
-                // visibleChars() strips from the denominator, so raw lengths would
-                // over-count coverage and mask unmatched punctuation.
-                covered += visibleChars(p.source()) * countOccurrences(out, p.source());
-                out = out.replace(p.source(), p.target());
+        for (Phrase p : phrases) {
+            Matcher m = p.regex().matcher(out);
+            int hits = 0;
+            while (m.find()) {
+                hits++;
             }
+            if (hits == 0) {
+                continue;
+            }
+            // Compare visible chars on both sides: phrase sources carry spaces that
+            // visibleChars() strips from the denominator, so raw lengths would
+            // over-count coverage and mask unmatched punctuation.
+            covered += visibleChars(p.source()) * hits;
+            out = m.replaceAll(Matcher.quoteReplacement(p.target()));
         }
         boolean partial = covered < visibleChars(text);
         return new MatchResult(out, partial, covered);
     }
 
-    private List<Pattern> patterns(String sourceLang, String targetLang) {
+    private List<Phrase> phrases(String sourceLang, String targetLang) {
         Map<String, String> source = dict.byLang(sourceLang);
         Map<String, String> target = dict.byLang(targetLang);
-        List<Pattern> list = new ArrayList<>();
+        List<Phrase> list = new ArrayList<>();
         for (Map.Entry<String, String> entry : source.entrySet()) {
             String replacement = target.get(entry.getKey());
             if (replacement != null && !entry.getValue().isBlank()) {
-                list.add(new Pattern(entry.getValue(), replacement));
+                list.add(new Phrase(entry.getValue(), replacement, caseInsensitive(entry.getValue())));
             }
         }
-        list.sort(Comparator.comparingInt((Pattern p) -> p.source().length()).reversed());
+        list.sort(Comparator.comparingInt((Phrase p) -> p.source().length()).reversed());
         return list;
+    }
+
+    /** Phrases are matched as literals; only the case-insensitivity is added. */
+    private Pattern caseInsensitive(String phrase) {
+        return Pattern.compile(Pattern.quote(phrase), Pattern.CASE_INSENSITIVE | Pattern.UNICODE_CASE);
     }
 
     private String style(String channel, String toLang, String text) {
@@ -130,16 +146,6 @@ public class SimulatedTranslationEngine {
             }
         }
         return text;
-    }
-
-    private int countOccurrences(String haystack, String needle) {
-        int count = 0;
-        int idx = haystack.indexOf(needle);
-        while (idx >= 0) {
-            count++;
-            idx = haystack.indexOf(needle, idx + needle.length());
-        }
-        return count;
     }
 
     private int visibleChars(String text) {

@@ -46,6 +46,23 @@ class SimulatedTranslationEngineTest {
     }
 
     @Test
+    void matchesPhraseRegardlessOfCasing() {
+        SimulatedTranslationEngine.EngineResult r = engine.translate("hello", "en", "zh-CN", "1");
+        assertEquals("你好", r.translation());
+        assertFalse(r.partial());
+
+        SimulatedTranslationEngine.EngineResult mixed =
+            engine.translate("hello your ORDER has been shipped", "en", "zh-CN", "1");
+        assertEquals("你好 订单已发货", mixed.translation());
+        assertFalse(mixed.partial());
+    }
+
+    @Test
+    void detectsSourceLanguageRegardlessOfCasing() {
+        assertEquals("en", engine.translate("HELLO", "", "zh-CN", "1").fromLang());
+    }
+
+    @Test
     void spacesInsideMatchedPhrasesDoNotHideUnmatchedPunctuation() {
         SimulatedTranslationEngine.EngineResult r =
             engine.translate("Xin chào, đơn hàng đã được gửi", "", "zh-CN", "1");
