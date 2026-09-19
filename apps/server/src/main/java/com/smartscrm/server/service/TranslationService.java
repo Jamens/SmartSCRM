@@ -4,23 +4,36 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.TranslationCache;
+import com.smartscrm.server.entity.TranslationCredential;
 import com.smartscrm.server.entity.TranslationNode;
 import com.smartscrm.server.entity.TranslationSetting;
 import com.smartscrm.server.mapper.TranslationCacheMapper;
+import com.smartscrm.server.mapper.TranslationCredentialMapper;
 import com.smartscrm.server.mapper.TranslationNodeMapper;
 import com.smartscrm.server.mapper.TranslationSettingMapper;
+import com.smartscrm.server.service.provider.Credentials;
+import com.smartscrm.server.service.provider.ProviderException;
+import com.smartscrm.server.service.provider.ProviderResult;
+import com.smartscrm.server.service.provider.TranslationProvider;
+import com.smartscrm.server.web.dto.CredentialTestDTO;
 import com.smartscrm.server.web.dto.TranslateDTO;
+import com.smartscrm.server.web.dto.TranslationCredentialInput;
 import com.smartscrm.server.web.dto.TranslationSettingInput;
+import com.smartscrm.server.web.vo.CredentialTestVO;
 import com.smartscrm.server.web.vo.ServerDelayVO;
 import com.smartscrm.server.web.vo.TranslateVO;
 import com.smartscrm.server.web.vo.TranslationCacheEntryVO;
 import com.smartscrm.server.web.vo.TranslationCacheStatsVO;
+import com.smartscrm.server.web.vo.TranslationCredentialVO;
 import com.smartscrm.server.web.vo.TranslationNodeVO;
 import com.smartscrm.server.web.vo.TranslationSettingVO;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.function.Function;
 import java.util.regex.Pattern;
+import java.util.stream.Collectors;
 import net.openhft.hashing.LongHashFunction;
 import org.springframework.stereotype.Service;
 
@@ -30,17 +43,28 @@ public class TranslationService {
     private static final Pattern CHINESE = Pattern.compile("[\\u4e00-\\u9fa5]");
     private static final Set<String> CHANNELS = Set.of("1", "2", "3", "4", "5", "6", "7");
 
+    /** Channels backed by a real vendor; every other channel stays on the simulated engine. */
+    private static final Map<String, String> CHANNEL_TO_PROVIDER = Map.of(
+        "5", "baidu",
+        "7", "tencent");
+
     private final TranslationSettingMapper settingMapper;
     private final TranslationNodeMapper nodeMapper;
     private final TranslationCacheMapper cacheMapper;
+    private final TranslationCredentialMapper credentialMapper;
     private final SimulatedTranslationEngine engine;
+    private final Map<String, TranslationProvider> providers;
 
     public TranslationService(TranslationSettingMapper settingMapper, TranslationNodeMapper nodeMapper,
-                              TranslationCacheMapper cacheMapper, SimulatedTranslationEngine engine) {
+                              TranslationCacheMapper cacheMapper, TranslationCredentialMapper credentialMapper,
+                              SimulatedTranslationEngine engine, List<TranslationProvider> providerBeans) {
         this.settingMapper = settingMapper;
         this.nodeMapper = nodeMapper;
         this.cacheMapper = cacheMapper;
+        this.credentialMapper = credentialMapper;
         this.engine = engine;
+        this.providers = providerBeans.stream()
+            .collect(Collectors.toMap(TranslationProvider::providerId, Function.identity()));
     }
 
     // ============ settings ============
@@ -146,26 +170,58 @@ public class TranslationService {
                     .setSql("hit_count = hit_count + 1"));
                 return new TranslateVO(hit.getTargetText(), true, Boolean.TRUE.equals(hit.getPartial()),
                     containsChinese(hit.getTargetText()), dto.type(), channel,
-                    displayFrom(fromLang, hit.getFromLang()), toLang, cacheKey);
+                    displayFrom(fromLang, hit.getFromLang()), toLang, cacheKey, false, null);
             }
         }
 
         // R7: same in and out language — hand back the source, and do not cache it.
         if (fromLang != null && fromLang.equals(toLang)) {
             return new TranslateVO(normalized, false, false, containsChinese(normalized), dto.type(), channel,
-                fromLang, toLang, cacheKey);
+                fromLang, toLang, cacheKey, false, null);
+        }
+
+        String providerId = CHANNEL_TO_PROVIDER.get(channel);
+        if (providerId != null) {
+            Credentials creds = loadCredentials(tenantId, providerId);
+            if (creds != null) {
+                try {
+                    ProviderResult online = providers.get(providerId).translate(creds, normalized, fromLang, toLang);
+                    if (keepInCache) {
+                        writeCache(tenantId, cacheKey, dto.type(), channel, fromLang, toLang,
+                            normalized, online.translation(), false);
+                    }
+                    return new TranslateVO(online.translation(), false, false,
+                        containsChinese(online.translation()), dto.type(), channel,
+                        displayFrom(fromLang, online.detectedFrom()), toLang, cacheKey, false, null);
+                } catch (ProviderException e) {
+                    // The request already carries a 4s timeout; one fall-through to the
+                    // simulated engine, with the vendor error surfaced instead of swallowed.
+                    SimulatedTranslationEngine.EngineResult fallback =
+                        engine.translate(normalized, fromLang, toLang, channel);
+                    return new TranslateVO(fallback.translation(), false, fallback.partial(),
+                        containsChinese(fallback.translation()), dto.type(), channel,
+                        fallback.fromLang(), toLang, cacheKey, true, e.getMessage());
+                }
+            }
+            SimulatedTranslationEngine.EngineResult fallback =
+                engine.translate(normalized, fromLang, toLang, channel);
+            return new TranslateVO(fallback.translation(), false, fallback.partial(),
+                containsChinese(fallback.translation()), dto.type(), channel,
+                fallback.fromLang(), toLang, cacheKey, true,
+                providerId + " 未配置密钥，此结果来自本地模拟引擎");
         }
 
         SimulatedTranslationEngine.EngineResult result = engine.translate(normalized, fromLang, toLang, channel);
         if (keepInCache) {
-            writeCache(tenantId, cacheKey, dto.type(), channel, fromLang, toLang, normalized, result);
+            writeCache(tenantId, cacheKey, dto.type(), channel, fromLang, toLang,
+                normalized, result.translation(), result.partial());
         }
         return new TranslateVO(result.translation(), false, result.partial(), containsChinese(result.translation()),
-            dto.type(), channel, result.fromLang(), toLang, cacheKey);
+            dto.type(), channel, result.fromLang(), toLang, cacheKey, false, null);
     }
 
     private void writeCache(Long tenantId, String cacheKey, String type, String channel, String fromLang,
-                            String toLang, String sourceText, SimulatedTranslationEngine.EngineResult result) {
+                            String toLang, String sourceText, String targetText, boolean partial) {
         TranslationCache row = new TranslationCache();
         row.setTenantId(tenantId);
         row.setCacheKey(cacheKey);
@@ -174,8 +230,8 @@ public class TranslationService {
         row.setFromLang(fromLang == null ? "" : fromLang);
         row.setToLang(toLang);
         row.setSourceText(sourceText);
-        row.setTargetText(result.translation());
-        row.setPartial(result.partial());
+        row.setTargetText(targetText);
+        row.setPartial(partial);
         row.setHitCount(0);
         try {
             cacheMapper.insert(row);
@@ -207,6 +263,88 @@ public class TranslationService {
                 c.getHitCount(), c.getPartial()))
             .toList();
         return new TranslationCacheStatsVO(cacheMapper.countKeys(tenantId), cacheMapper.sumHits(tenantId), top);
+    }
+
+    // ============ credentials ============
+
+    public List<TranslationCredentialVO> credentials(Long tenantId) {
+        return credentialMapper.selectList(new LambdaQueryWrapper<TranslationCredential>()
+                .eq(TranslationCredential::getTenantId, tenantId)
+                .orderByAsc(TranslationCredential::getProvider))
+            .stream()
+            .map(c -> new TranslationCredentialVO(c.getProvider(), c.getAppId(),
+                c.getSecretKey() != null && !c.getSecretKey().isBlank(), c.getRegion(), c.getUpdatedAt()))
+            .toList();
+    }
+
+    public TranslationCredentialVO putCredential(Long tenantId, TranslationCredentialInput input) {
+        String providerId = input.provider().trim();
+        if (!providers.containsKey(providerId)) {
+            throw new BizException(40000, "未知翻译服务商: " + providerId);
+        }
+        TranslationCredential existing = credentialMapper.selectOne(new LambdaQueryWrapper<TranslationCredential>()
+            .eq(TranslationCredential::getTenantId, tenantId)
+            .eq(TranslationCredential::getProvider, providerId));
+        String secret = input.secretKey() == null || input.secretKey().isBlank()
+            ? (existing == null ? null : existing.getSecretKey())
+            : input.secretKey().trim();
+        if (secret == null || secret.isBlank()) {
+            throw new BizException(40000, "secretKey 不能为空（首次配置必须填写密钥）");
+        }
+        TranslationCredential row = existing == null ? new TranslationCredential() : existing;
+        row.setTenantId(tenantId);
+        row.setProvider(providerId);
+        row.setAppId(input.appId().trim());
+        row.setSecretKey(secret);
+        row.setRegion(input.region() == null || input.region().isBlank() ? null : input.region().trim());
+        if (existing == null) {
+            credentialMapper.insert(row);
+        } else {
+            credentialMapper.updateById(row);
+            if (row.getRegion() == null) {
+                // updateById skips null fields; clearing the region needs an explicit set.
+                credentialMapper.update(null, new LambdaUpdateWrapper<TranslationCredential>()
+                    .eq(TranslationCredential::getId, row.getId())
+                    .set(TranslationCredential::getRegion, null));
+            }
+        }
+        TranslationCredential saved = credentialMapper.selectById(row.getId());
+        return new TranslationCredentialVO(saved.getProvider(), saved.getAppId(), true,
+            saved.getRegion(), saved.getUpdatedAt());
+    }
+
+    /** One real probe request against the vendor: zh-CN -> en, a fixed short sentence. */
+    public CredentialTestVO testCredential(Long tenantId, CredentialTestDTO dto) {
+        String providerId = dto.provider().trim();
+        TranslationProvider provider = providers.get(providerId);
+        if (provider == null) {
+            throw new BizException(40000, "未知翻译服务商: " + providerId);
+        }
+        Credentials creds = loadCredentials(tenantId, providerId);
+        if (creds == null) {
+            return new CredentialTestVO(false, null, "未配置密钥");
+        }
+        long start = System.nanoTime();
+        try {
+            ProviderResult result = provider.translate(creds, "你好，很高兴认识你", "zh-CN", "en");
+            long ms = (System.nanoTime() - start) / 1_000_000;
+            return new CredentialTestVO(true, ms, "可用 · " + ms + "ms · " + result.translation());
+        } catch (ProviderException e) {
+            long ms = (System.nanoTime() - start) / 1_000_000;
+            return new CredentialTestVO(false, ms, e.getMessage());
+        }
+    }
+
+    /** Null when the tenant has never stored a key for this provider. */
+    private Credentials loadCredentials(Long tenantId, String providerId) {
+        TranslationCredential row = credentialMapper.selectOne(new LambdaQueryWrapper<TranslationCredential>()
+            .eq(TranslationCredential::getTenantId, tenantId)
+            .eq(TranslationCredential::getProvider, providerId));
+        if (row == null || row.getAppId() == null || row.getAppId().isBlank()
+            || row.getSecretKey() == null || row.getSecretKey().isBlank()) {
+            return null;
+        }
+        return new Credentials(row.getAppId(), row.getSecretKey(), row.getRegion());
     }
 
     // ============ helpers ============

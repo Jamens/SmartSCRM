@@ -3,11 +3,15 @@ package com.smartscrm.server.web;
 import com.smartscrm.server.common.ApiResponse;
 import com.smartscrm.server.security.AuthPrincipal;
 import com.smartscrm.server.service.TranslationService;
+import com.smartscrm.server.web.dto.CredentialTestDTO;
 import com.smartscrm.server.web.dto.TranslateDTO;
+import com.smartscrm.server.web.dto.TranslationCredentialInput;
 import com.smartscrm.server.web.dto.TranslationSettingInput;
+import com.smartscrm.server.web.vo.CredentialTestVO;
 import com.smartscrm.server.web.vo.ServerDelayVO;
 import com.smartscrm.server.web.vo.TranslateVO;
 import com.smartscrm.server.web.vo.TranslationCacheStatsVO;
+import com.smartscrm.server.web.vo.TranslationCredentialVO;
 import com.smartscrm.server.web.vo.TranslationNodeVO;
 import com.smartscrm.server.web.vo.TranslationSettingVO;
 import jakarta.validation.Valid;
@@ -60,5 +64,22 @@ public class TranslationController {
     @GetMapping("/cache/stats")
     public ApiResponse<TranslationCacheStatsVO> cacheStats(@AuthenticationPrincipal AuthPrincipal principal) {
         return ApiResponse.ok(service.cacheStats(principal.tenantId()));
+    }
+
+    @GetMapping("/credentials")
+    public ApiResponse<List<TranslationCredentialVO>> credentials(@AuthenticationPrincipal AuthPrincipal principal) {
+        return ApiResponse.ok(service.credentials(principal.tenantId()));
+    }
+
+    @PutMapping("/credentials")
+    public ApiResponse<TranslationCredentialVO> putCredential(@AuthenticationPrincipal AuthPrincipal principal,
+                                                              @Valid @RequestBody TranslationCredentialInput input) {
+        return ApiResponse.ok(service.putCredential(principal.tenantId(), input));
+    }
+
+    @PostMapping("/credentials/test")
+    public ApiResponse<CredentialTestVO> testCredential(@AuthenticationPrincipal AuthPrincipal principal,
+                                                        @Valid @RequestBody CredentialTestDTO dto) {
+        return ApiResponse.ok(service.testCredential(principal.tenantId(), dto));
     }
 }
