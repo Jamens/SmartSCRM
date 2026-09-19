@@ -2,7 +2,7 @@ import { CSS_CLASSES } from '../../constants/config'
 import { removeTranslation, translationNodeId } from './renderTranslation'
 
 /** Shown after the retry budget is spent, so a dead backend stops as a button, not a loop. */
-export function renderManualButton(msgId: string, row: HTMLElement, onRetry: () => void): void {
+export function renderManualButton(msgId: string, anchor: HTMLElement, onRetry: () => void): void {
   const existing = document.getElementById(translationNodeId(msgId))
   const holder = existing ?? document.createElement('div')
   holder.id = translationNodeId(msgId)
@@ -22,5 +22,5 @@ export function renderManualButton(msgId: string, row: HTMLElement, onRetry: () 
     if (e.key === 'Enter' || e.key === ' ') run()
   })
   holder.appendChild(button)
-  if (!existing && row.isConnected) row.appendChild(holder)
+  if (!existing && anchor.isConnected) anchor.appendChild(holder)
 }

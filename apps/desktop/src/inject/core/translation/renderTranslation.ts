@@ -26,19 +26,20 @@ export function ensureTranslationStyle(): void {
   document.head.appendChild(style)
 }
 
-function node(msgId: string, row: HTMLElement): HTMLElement | null {
+/** The host element is the platform's translation anchor, not necessarily the message row. */
+function node(msgId: string, anchor: HTMLElement): HTMLElement | null {
   const existing = document.getElementById(translationNodeId(msgId))
   if (existing) return existing
-  if (!row.isConnected) return null
+  if (!anchor.isConnected) return null
   const created = document.createElement('div')
   created.id = translationNodeId(msgId)
   created.className = CSS_CLASSES.TRANSLATED
-  row.appendChild(created)
+  anchor.appendChild(created)
   return created
 }
 
-export function renderPendingTranslation(msgId: string, row: HTMLElement): void {
-  const holder = node(msgId, row)
+export function renderPendingTranslation(msgId: string, anchor: HTMLElement): void {
+  const holder = node(msgId, anchor)
   if (!holder) return
   holder.className = `${CSS_CLASSES.TRANSLATED} ${CSS_CLASSES.TRANSLATING}`
   holder.textContent = '翻译中…'
@@ -46,11 +47,11 @@ export function renderPendingTranslation(msgId: string, row: HTMLElement): void 
 
 export function renderTranslation(
   msgId: string,
-  row: HTMLElement,
+  anchor: HTMLElement,
   text: string,
   opts: { error?: boolean } = {}
 ): void {
-  const holder = node(msgId, row)
+  const holder = node(msgId, anchor)
   if (!holder) return
   holder.className = opts.error
     ? `${CSS_CLASSES.TRANSLATED} ${CSS_CLASSES.TRANSLATE_ERROR}`

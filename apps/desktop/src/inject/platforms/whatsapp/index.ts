@@ -62,9 +62,7 @@ export class WhatsAppAdapter extends PlatformAdapter {
   }
 
   getMessageElements(): HTMLElement[] {
-    const container = this.getMessageContainer()
-    if (!container) return []
-    return Array.from(container.querySelectorAll<HTMLElement>(MESSAGE.textNode))
+    return Array.from(document.querySelectorAll<HTMLElement>(MESSAGE.row))
   }
 
   getMessageId(element: HTMLElement): string | null {
@@ -72,7 +70,15 @@ export class WhatsAppAdapter extends PlatformAdapter {
   }
 
   getMessageText(element: HTMLElement): string {
-    return element.textContent?.trim() ?? ''
+    // 只认正文 span，取不到就当没有文本：整行兜底会把时间戳和状态图标的字体连字
+    // （"早上8:04wds-ic-read"）当成消息送去翻译。
+    return element.querySelector(MESSAGE.textNode)?.textContent?.trim() ?? ''
+  }
+
+  getTranslationAnchor(row: HTMLElement): HTMLElement {
+    // 行容器铺满整个面板，译文挂在行上会跑到面板左缘，和右侧气泡脱节；
+    // 气泡本体（div.copyable-text）才是和消息同宽、同侧的那一层。
+    return row.querySelector<HTMLElement>(MESSAGE.bubble) ?? row
   }
 
   getSelectors(): SelectorConfig {

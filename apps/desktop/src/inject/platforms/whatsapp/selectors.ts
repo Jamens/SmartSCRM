@@ -11,11 +11,23 @@ export const SEND_BUTTON = {
 }
 
 export const MESSAGE = {
+  /** 观察容器：整个会话面板在切会话时重建，挂在它上面才不会一换会话就失去 MutationObserver。 */
   container: 'div#main',
-  textNode: '.copyable-text',
+  /**
+   * 一条消息的行。`data-id` 挂在这一层的外层 div 上，消息标识从这里取。
+   * 用 `.copyable-area` 把范围收在消息列表内：会话面板的标题栏里也有可复制文本，那不是消息。
+   */
+  row: '#main .copyable-area [data-id]',
+  /**
+   * 行内正文。外层 `div.copyable-text` 把发送时间一起包在 textContent 里，
+   * 取内层 span 才拿得到不带时间戳的一句话；内层 span 不存在（纯表情、系统提示）就是没有正文。
+   */
+  textNode: 'span.copyable-text',
+  /** 气泡本体：与消息同宽同侧的那一层，译文挂在它下面。 */
+  bubble: 'div.copyable-text',
   focusable: 'div[role="listitem"]',
-  /** "Read more" marker on a collapsed long message; collapsed text must not be translated. */
-  expandMore: '[data-tab="10"]'
+  /** 长文本折叠后的展开控件：没展开就没有完整文本，宁可不译。 */
+  expandMore: '[data-testid="caption-read-more-button"]'
 }
 
 export const APP = {

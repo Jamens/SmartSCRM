@@ -51,6 +51,15 @@ export abstract class PlatformAdapter extends EventEmitter {
   abstract getSelectors(): SelectorConfig
   abstract hookInput(injector: BaseInjector): void
 
+  /**
+   * Where a bubble's translation gets mounted. Defaults to the row itself;
+   * platforms whose row spans the full panel width override this to hug the bubble,
+   * otherwise the translation drifts to the opposite side of an outgoing message.
+   */
+  getTranslationAnchor(row: HTMLElement): HTMLElement {
+    return row
+  }
+
   async getRecentMessages(_chatId: string, _limit = 10): Promise<unknown[]> {
     throw new Error('必须实现 getRecentMessages 方法')
   }

@@ -55,24 +55,26 @@ export function startMessageTranslation(injector: BaseInjector): () => void {
   }
 
   async function translateOne(row: HTMLElement, msgId: string, text: string): Promise<void> {
+    // 译文挂在平台给出的锚点上：行容器可能铺满整行，锚点才是贴着气泡的那一层。
+    const anchor = adapter.getTranslationAnchor(row)
     const saved = getMessageState(msgId)
     // 已有译文：只重绘，不再发请求（消息滚出可视区再回来走这条）。
     if (saved && saved.translation !== null && saved.text === text) {
       if (!hasTranslationNode(msgId)) {
-        renderTranslation(msgId, row, saved.translation)
+        renderTranslation(msgId, anchor, saved.translation)
         state.markTranslated(msgId)
       }
       return
     }
     // 重试预算花完：停成一个按钮，不是一个循环。
     if (saved && saved.text === text && saved.retryCount >= MAX_RETRY) {
-      if (!hasTranslationNode(msgId)) renderManualButton(msgId, row, () => retry(msgId, text))
+      if (!hasTranslationNode(msgId)) renderManualButton(msgId, anchor, () => retry(msgId, text))
       state.markTranslated(msgId)
       return
     }
     if (state.isTranslated(msgId)) return
 
-    renderPendingTranslation(msgId, row)
+    renderPendingTranslation(msgId, anchor)
     // R1: sent and received bubbles alike go through the receive direction.
     const result = await requestTranslate(injector, { text, type: 'receive' })
     if (stopped || !row.isConnected) return
@@ -87,7 +89,7 @@ export function startMessageTranslation(injector: BaseInjector): () => void {
         translation: result.translation,
         retryCount: 0
       })
-      renderTranslation(msgId, row, result.translation)
+      renderTranslation(msgId, anchor, result.translation)
       return
     }
 
