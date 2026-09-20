@@ -49,7 +49,7 @@
 
 | 层 | 谁来做 | 通过标准 |
 |---|---|---|
-| Java 纯函数 | scoped：`./mvnw test -Dtest='ChatKeysTest,MsgTimesTest,StatusLadderTest,SearchPatternTest'`（Task 1）、`-Dtest='CursorsTest'`（Task 4）、`-Dtest='ScopeSettingsTest'`（Task 6）；全量：`./mvnw test`（Task 19） | 三处 scoped 分别 `Tests run: 12 / 3 / 4`；P6 六个测试类共 19 条，全量跑 `Failures: 0, Errors: 0` |
+| Java 纯函数 | scoped：`./mvnw test -Dtest='ChatKeysTest,MsgTimesTest,StatusLadderTest,SearchPatternTest'`（Task 2）、`-Dtest='CursorsTest'`（Task 4）、`-Dtest='ScopeSettingsTest'`（Task 6）；全量：`./mvnw test`（Task 19） | 三处 scoped 分别 `Tests run: 12 / 3 / 4`；P6 六个测试类共 19 条，全量跑 `Failures: 0, Errors: 0` |
 | 后端契约 | `tmp/p6b-query.mjs` / `tmp/p6b-customer.mjs` / `tmp/p6b-scope-contract.mjs`（Node，打 8180）+ Task 3 Step 4/5 的 curl 探针 | 三份脚本分别 `ALL PASS (17/17)`、`(9/9)`、`(10/10)`，覆盖幂等、游标与锚点窗口、搜索转义与过滤、统计口径、link-customer 回填、客户级语向 |
 | TS 纯函数 | `pnpm --dir apps/desktop test:unit` | normalize / ackRank / CollectorHub / SendRegistry / liveTail merge / 日分组 / chatKeys / 搜索与统计 / 建客户预填与语向草稿 / 时间线分组 全绿，计数按 12 → 16 → 28 → 34 → 39 → 43 → 48 → 56 → 68 → 76 → 80 单调递增，终态 `# pass 80` / `# fail 0` |
 | 桥与真实会话 | CDP + 已登录 WhatsApp 视图 | 补底 N=5 行数与 `msg_key` 集合前后差、自聊发送→状态推进→删除、原生页手发一条也入库、断线重挂不重不漏 |
