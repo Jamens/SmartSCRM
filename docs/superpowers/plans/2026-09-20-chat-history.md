@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 把 WhatsApp / Telegram 内嵌页面里的真实会话落成可查、可搜、可统计的本地聊天记录，并在记录页里完成一条能发出去、能看到状态推进的应用内回复。
+**Goal:** 把 WhatsApp 内嵌页面里的真实会话落成可查、可搜、可统计的本地聊天记录（Telegram 本期暂缓，见 Task 0 裁定；表结构与归一化规则里的 TG 形态判定照留，不为此改列）
 
 **Architecture:** Java 后端是唯一数据层：Flyway V8 建 `chat_conversation` / `chat_message` 两张表，批量入库靠 `uk_msg` 幂等，会话头是消息流的投影。桌面端在"页面侧"再挂一条与翻译注入包互相独立的消息桥：`@wppconnect/wa-js` 注入用户正在看的 WhatsApp 视图，与原生页共用同一个 Store，页内脚本零凭据、只经 `window.ele` 与主进程通信；主进程 `services/msgBridge/` 负责挂载、心跳重挂、批量攒写（CollectorHub）、发送登记（SendRegistry），并持 JWT 与 Java 通信。渲染层 `#/messages` 双源取数：历史读库，当前会话的尾巴吃主进程广播的 live 帧，按 `msg_key` 去重。
 
@@ -119,7 +119,7 @@ apps/desktop/
     whatsapp/normalize.ts RawMessage / MsgModel → NormalizedMessage（纯函数）                        [新增]
     whatsapp/collect.ts   on 事件 + 补底批量拉取（限速）                                              [新增]
     whatsapp/send.ts      sendTextMessage + ack 变化上报                                             [新增]
-    telegram/collect.ts   仅当 Task 0 探测通过才写                                                    [条件]
+    telegram/collect.ts   本期不建（Task 0 裁定暂缓）：TG 视图不挂桥，分派点留在 index.ts            [不建]
     *.test.ts             normalize / 平台映射的 node:test 用例                                        [新增]
   src/main/services/msgBridge/
     index.ts              挂载总入口 + 登录观察接线 + 页内消息路由 + 渲染层广播                       [新增]
@@ -162,9 +162,11 @@ apps/desktop/
 
 ## P6-0 前置探测
 
-### Task 0: Telegram 页内 API 存在性探测（spec §11 的门）
+### Task 0: Telegram 页内 API 存在性探测（spec §11 的门）—— **本任务按用户裁定（2026-09-21）不做**
 
-**为什么要先做**：TG 侧的实现深度取决于 web.telegram.org 到底暴露了什么。没有探测结论就写 TG 采集代码，等于把断言建在猜测上（P5d 的教训：只有真实网关能区分对错）。本任务不产出功能代码，只产出一份结论并回写 spec。
+> **整任务暂缓，TG 这一路（采集 + 发送）P6 整体移出**：不探测、不写 `bridge/telegram/`、不给 TG 视图挂桥。下面的 Steps 原样留着，是给后续重启 TG 时的操作手册——**不要因为任务表里还挂着 Task 0 就去跑它**。承接这条裁定的改动已经落在：Task 11（TG 分支删掉）、Task 12（TG 视图没有桥，命令在挂载判定处就拒）、Task 19 Step 4 第 3 行（断言换成反向）、spec §9/§11/§12。**它是「没做」，不是「探测后判定不可行」**——两者落地的代码形状相同，依据不同；后续重启 TG 时 §11 的探测仍要照做，不能拿这次的沉默当结论。
+
+**为什么要先做**（原设计，供重启时参考）：TG 侧的实现深度取决于 web.telegram.org 到底暴露了什么。没有探测结论就写 TG 采集代码，等于把断言建在猜测上（P5d 的教训：只有真实网关能区分对错）。本任务不产出功能代码，只产出一份结论并回写 spec。
 
 **Files:**
 - Create: `tmp/p6-tg-probe.mjs`（throwaway 探测脚本，`tmp/` 已被 gitignore）
@@ -4710,14 +4712,14 @@ git commit -m "feat(P6): 消息桥挂载生命周期与主进程采集接线"
 
 ## P6d — 页内采集
 
-### Task 11: WhatsApp 消息归一化、实时事件与补底（Telegram 按 Task 0 档位）
+### Task 11: WhatsApp 消息归一化、实时事件与补底（Telegram 本期不做）
 
 **Files:**
 - Create: `apps/desktop/src/bridge/types.ts`
 - Create: `apps/desktop/src/bridge/whatsapp/normalize.ts` + `normalize.test.ts`
 - Create: `apps/desktop/src/bridge/whatsapp/collect.ts`
 - Modify: `apps/desktop/src/bridge/index.ts`（接上 `backfill` 命令与 live 订阅）
-- Create（条件）: `apps/desktop/src/bridge/telegram/collect.ts` —— 仅当 Task 0 结论为档 1 / 档 2
+- **不创建**：`apps/desktop/src/bridge/telegram/collect.ts` —— TG 本期移出（Task 0 裁定），`src/bridge/` 下只留 `whatsapp/`；平台分派的形状照留在 `index.ts` 顶部那一次判断里，TG 那一支不接
 - Modify: `apps/desktop/tsconfig.unit.json`（include 已覆盖 `src/bridge/**`，新测试自动进门）
 
 **Interfaces:**
@@ -5175,7 +5177,7 @@ export async function runBackfill(limit: number, ctx: CollectCtx): Promise<void>
 
 并在文件顶部补 `import { runBackfill, startLiveCollect, watchActiveChat, reportActiveChat } from './whatsapp/collect.ts'`、模块级 `let collectorRef: (() => void) | null = null` / `let activeRef: (() => void) | null = null`，`destroy()` 里各调一次并置空。
 
-> `platform === 'telegram'` 时上面这四个 collect 入口全部换成 `telegram/collect.ts` 的同名导出（分派在 `index.ts` 顶部按 `config.platform` 做一次，不在每个 case 里判断）。档 3 的话本步跳过 Telegram 分支，并在 §11 结论里注明"P6 不含 TG 采集"。
+> **Telegram 这一支本期不写**（Task 0 裁定暂缓）：平台分派仍在 `index.ts` 顶部做一次（不在每个 case 里判断），但清单里只有 WhatsApp 一项——TG 视图不挂桥，`activeChatOf` 对它给 null，采集与实时事件都不会发生。四入口的签名一个都不改，将来接 TG 时把 `telegram/collect.ts` 的同名导出补进那一次分派就行。不保留死的 `telegram` 分支：一条永远不挂载的代码路径会让读的人以为它已经接上了。
 
 - [ ] **Step 6: 主进程消化三种新上报**
 
@@ -5659,7 +5661,7 @@ export function requestBackfill(accountId: number): boolean {
 }
 ```
 
-> `requestBackfill` 与 `sendText` 都不判 `platform`：命令到了页内才按 `config.platform` 分派（Task 8 Step 5 的 `install` 已经把平台带进去了）。Telegram 若在 Task 0 落到档 3，页内收到 `send` 就回 `SEND_FAILED`，主进程这边不需要额外分支。
+> `requestBackfill` 与 `sendText` 都不判 `platform`：命令到了页内才按 `config.platform` 分派（Task 8 Step 5 的 `install` 已经把平台带进去了）。Telegram 本期不挂桥（Task 0 裁定），TG 视图里根本没有页内接收方，命令在「这个视图没有桥」那一步就被拒（`BRIDGE_OFFLINE`），主进程同样不需要额外分支。
 
 `handleBridgeReport` 的两处改动——`message` 分支先盖章，再加 `send_result` 分支：
 
@@ -10315,9 +10317,9 @@ git commit -m "feat(P6): 客户抽屉时间线（复用气泡 + 一次性跳回�
 - Create: `docs/notes/2026-09-20-p6-chat-history-verification.md`（逐条断言的实测结论 / blocked 原因 / 证据；形状沿用 `docs/notes/2026-09-20-tencent-online-translation-deferred.md`）
 
 **Interfaces:**
-- Consumes: Task 1–18 的全部产物；Task 0 的 TG 探测档位（决定 Step 4 的 TG 行是断言还是 n/a）。
+- Consumes: Task 1–18 与 Task 17b 的全部产物；Task 0 按裁定不做（TG 本期移出），所以 Step 4 的 TG 行是**反向**断言。
 - Produces: 一份"哪些断言真的跑过、哪些没跑、为什么"的书面结论。**没有新增生产代码是本任务的正常结果**；如果回归里发现要改代码，改完必须复跑**那个任务自己的** CDP 表（不是只补本任务这张表），并单独提一个 `fix(P6):`。
-- 不做：性能压测（本地单租户量级，spec §1 非目标）、TG 深度功能（按 Task 0 档位）、任何线上环境。
+- 不做：性能压测（本地单租户量级，spec §1 非目标）、TG 采集与发送（Task 0 裁定暂缓，**未探测**，见 spec §11）、任何线上环境。
 
 - [ ] **Step 1: 前置检查（5 道门，任一不满足就按 C11 把对应断言标 blocked）**
 
@@ -10331,7 +10333,7 @@ node -e "const{createChatSession}=0" 2>/dev/null; echo '下面几行是人工核
 1. **后端是含 P6 全部新 Controller 的构建**：`GET /api/messages/stats?accountId=<wa>&days=7` 返回 `code:0`。若 404 / `No static resource` → 8180 上跑的是旧进程，按 C8 重启（`netstat -ano | grep ':8180'` → `taskkill //PID <pid> //F` → `set -o pipefail && ./mvnw -q -DskipTests package` → 后台 `java -jar apps/server/target/scrm-server-0.1.0.jar` → 轮询 `/api/health`）。
 2. **真实登录态**：`pnpm --dir apps/desktop exec electron-vite dev --remoteDebuggingPort 9223`，先 `tmp/p5c-top.ps1` 抬窗口，再在渲染层读 `await window.scrm.msg.bridges()`，要求有一条 `{platform:'whatsapp', ready:true}`。拿不到 → Step 2、Step 3、Step 4 的登录态相关行全部 blocked，**不接受用 `POST /api/messages/batch` 自造数据冒充端到端**（C11）。
 3. **种子完好 + 行数分母**：`GET /api/customers` total=5、`/api/label-groups`=2、`/api/audiences`=2、`/api/material-groups`=3、`/api/materials`=4、`/api/quick-reply-groups`=3、`/api/quick-replies`=3；`GET /api/messages/stats?days=30` 的 `total` 与 `GET /api/conversations?accountId=<wa>&size=1` 的 `total` 各记一次，作为本轮增量的基线。
-4. **Task 0 的 TG 档位结论已写进 spec §1**（没有就先补，Step 4 的 TG 行由它决定）。
+4. **Task 0 按裁定不做**（TG 本期移出）：Step 4 第 3 行因此是反向断言，不需要任何探测结论。
 5. **前面任务的 `tmp/*.mjs` 脚本还在**（`p6-tg-probe` / `p6b-query` / `p6b-customer` / `p6b-scope-contract` / `p6c-mount` / `p6c-chatkey-direction` / `p6c-page-direction` / `p6d-collect` / `p6e-send` / `p6f-page` / `p6f-tail` / `p6-task17-seed`）。`tmp/` 不入库，被清掉就按对应任务的 Step 原样重写——**不要在本任务里另造一套数据口径**，那会让两轮结论没法对照。
 
 - [ ] **Step 2: 采集链端到端（复跑 Task 12 的断言，一次跑完）**
@@ -10368,7 +10370,7 @@ node -e "const{createChatSession}=0" 2>/dev/null; echo '下面几行是人工核
 |---|---|---|---|
 | 1 | 补底 + live 同时来（一边点「同步历史」一边在手机发一条） | `[data-msg-key]` 集合无重复；尾巴不出现同一条的两个副本 | 单跑 Task 12（只有 live）与 Task 14（只有库）都碰不到这个交叉 |
 | 2 | 陌生会话 → 建客户 → 立刻在记录页搜该会话正文 | 命中行的 `customerId` 已是新客户；切「只看当前客户」能筛出它 | link-customer 的回填与搜索读的是同一份归属，中间没有缓存死角 |
-| 3 | TG 账号（若 Task 0 档位 1/2） | 按 Task 0 回写后的档位出断言：档 1 走与 WA 同形的一组，档 2 只断"可见采集"，档 3 整段标 n/a 并写明原因 | 不把未探测通过的能力说成可用 |
+| 3 | **TG 账号（本期不采集，做反向断言）**：`GET /api/conversations?accountId=<tg>&size=50`，再加一次按 `platform` 计数的读法 | 空列表，且 `chat_message` 里 `platform='telegram'` 的行数为 **0** | 这一行说清「没有 TG 数据」是**本期没做**，不是「做了没采到」。反过来它若不为 0 就是真故障：桥挂载或平台反查漏了分支，把 WA 的会话写进了 TG 账号名下，而 `uk_msg` 会把它们当成不同行、永远查不出重复（Task 3 那条 `chat_key 与平台不匹配` 整批拒就是为这个设的） |
 | 4 | 一轮结束后重跑五份后端契约脚本（`tmp/p6a-contract.mjs` + `tmp/p6b-query.mjs` / `tmp/p6b-customer.mjs` / `tmp/p6b-scope-contract.mjs` + `tmp/p6c-chatkey-direction.mjs`）与 `pnpm run test:unit` + `pnpm run typecheck` | 全部原样绿（`16/16`、`17/17`、`9/9`、`10/10`、`8/8`、`# pass 83`、四个 tsconfig 无输出） | 端到端过程中若有手工改库/改设置，这里会暴露（Task 6 第 10 步的全局值回滚也在这一条里复确认）。`tmp/` 不在版本控制里，这五份驱动是本阶段**唯一**覆盖 `MessageService.accept/applyStatus` 的可执行断言（Task 3 的落库探针按口径跑完即删），所以这一条不是"顺手再跑一遍"，是它们唯一的复现机会 |
 
 - [ ] **Step 5: P5 回归（P6 动过 P5 的三个地方）**

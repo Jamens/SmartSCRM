@@ -19,7 +19,7 @@
 | 决策 | 选法 |
 |---|---|
 | WhatsApp 消息通道 | **页内 wa-js**：`@wppconnect/wa-js` 注入到用户正在看的内嵌 WhatsApp 视图，与原生页共用同一个 Store；不建隐藏第二会话 |
-| Telegram 消息通道 | **页内 API 钩子**：封装 web.telegram.org 页面自身暴露的全局 API（`window.sendMessage` / update 事件流）；动手前先做存在性探测（§11） |
+| Telegram 消息通道 | **页内 API 钩子**：封装 web.telegram.org 页面自身暴露的全局 API（`window.sendMessage` / update 事件流）；动手前先做存在性探测（§11）。**P6 裁定（2026-09-21）：暂缓，TG 这一路整体移出本期**（§11） |
 | 代码归属 | **主进程直挂桥**：桥脚本独立于翻译注入 bundle，由 `main/services/msgBridge/` 构建与挂载；两链只共用登录观察 |
 | 记录页数据源 | **DB + 页内 live 双源**：历史读库；live 尾由同一事件流推送（不做逐条页内 pull 查询），渲染层按 msg_key 去重 |
 | 历史补底 | 每会话最近 N 条（默认 200，可配置），限速批量；之后事件流增量 |
@@ -123,7 +123,7 @@ CREATE TABLE chat_message (
 scrm:msg:send  {accountId, chatKey, text, localId}
   → 回执 {localId, ok, msgKey?, error?}
   错误码：BRIDGE_OFFLINE(会话未在线，不排队) | SEND_FAILED | CHAT_NOT_FOUND
-状态推进：pending → (桥回msgKey) sent → delivered/read（WA 事件驱动）；TG 只到 sent/failed
+状态推进：pending → (桥回msgKey) sent → delivered/read（WA 事件驱动）；TG 本期不接入，其档位（只到 sent/failed）留待后续
 ```
 
 - 渲染层乐观展示 `pending` 气泡（localId 为 key），事件/回执到达后与库内行合并（msg_key 落地后以库为准）。
@@ -166,7 +166,7 @@ scrm:msg:send  {accountId, chatKey, text, localId}
 | Java 不可用 | Hub 重试 3 次后落主进程日志、丢弃；恢复后不追历史缺口，页内提供「同步历史」按钮触发补底 |
 | 单会话补底失败 | 记录跳过；「同步历史」可重试 |
 | msg_time 异常（0/未来值） | 钳制为接收时刻 UTC，标记 `unknown` 精度（列不存，日志记录） |
-| TG 全局 API 缺失 | §11 探测失败 → TG 降级为"仅打开会话可见采集"（domScan 级）或整块移出 P6，按实测结论定，不猜 |
+| TG 全局 API 缺失 | §11 探测失败 → TG 降级为"仅打开会话可见采集"（domScan 级）或整块移出 P6，按实测结论定，不猜。**P6 走的是"整块移出"这一支，原因是本期裁定暂缓（未探测），不是探测失败**——两者结论相同、依据不同，后续重启 TG 时 §11 的探测仍要照做 |
 
 ## 10. 安全
 
@@ -178,13 +178,15 @@ scrm:msg:send  {accountId, chatKey, text, localId}
 
 在应用内嵌的 web.telegram.org 里探测既定全局 API（`sendMessage`/`getMessage`/update 事件源）是否存在、版本形态如何，**先出探测报告再决定 TG 侧实现深度**；结论回写本 spec §1 表格附注。未探测通过前不得声称 TG 链路可用。
 
+**P6 裁定（2026-09-21）：本节探测不做，TG 采集与 TG 发送整体移出本期。** 落地的口径不是"档 3 的降级实现"，而是**根本不挂 TG 桥**：TG 账号在视图里照常能看（P2a 的内嵌能力，与本阶段无关），但不会有任何 `platform='telegram'` 的采集行；`chat_key`/`ChatKeys`/DTO 里的 TG 形态判定全部保留（它们是纯函数与列形状，不是采集实现），将来接 TG 时不必改表、不必改归一化规则。这一裁定只影响 P6 的采集面与断言面，不影响 §3 的 `platform` 取值域（`'whatsapp' | 'telegram'`）。
+
 ## 12. 验证方案（每条都要能区分"生效 / 没动"）
 
 | 层 | 手段 |
 |---|---|
 | 后端 | JUnit：batch 幂等（重发同批→duplicated 计数）、游标、搜索过滤、stats、link-customer 回填；curl 契约 8 条全过 |
 | 桥/WA | 真实登录态：小参数补底（N=5）前后 DB 行数与 msg_key 集合比对；发送自聊一条→状态推进到 delivered→**删除测试消息**；native 页手发一条→事件流入库（证明双入口同源）；断线重挂后增量续采不重不漏 |
-| TG | 以 §11 探测结论为准出对应断言 |
+| TG | 本期不做（§11 未探测，用户裁定暂缓）：断言整段撤下，改成一条反向断言——跑完 WA 补底与发送后，`GET /api/conversations?accountId=<tg>` 返回空列表、`chat_message` 里 `platform<>'telegram'` 的行数为 0。"没有 TG 数据"要说清是没做，不是做了没采到 |
 | 渲染层 | CDP 回归：列表/翻页/live 尾去重/回复（先译再发开、关两态）/语向弹层/陌生建客户闭环/搜索跳转/统计卡数字与库内 COUNT 一致 |
 | 输入路径 | 涉及页内交互的断言一律真实鼠标/键盘事件（P5e 教训），不接受 `element.click()` 独证 |
 
