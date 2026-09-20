@@ -49,7 +49,7 @@ class ChatKeysTest {
         assertTrue(ChatKeys.matchesPlatform("whatsapp", "15533445566778899@lid"));
         assertFalse(ChatKeys.matchesPlatform("whatsapp", "-1001234567890"));
         assertFalse(ChatKeys.matchesPlatform("whatsapp", "8613800001001"));
-        // 群号里的 '-' 只允许当分隔符：1234-5678@g.us 是 chat_key 列注释自己举的例子，必须继续放过；
+        // 群号里的 '-' 只允许当分隔符：1234-5678@g.us 是 chat_conversation.chat_key 列注释自己举的例子，必须继续放过；
         // 全标点形状正是本方法要挡的脏数据，收紧前它是 true。
         assertTrue(ChatKeys.matchesPlatform("whatsapp", "1234-5678@g.us"));
         assertFalse(ChatKeys.matchesPlatform("whatsapp", "-----@g.us"));
@@ -64,7 +64,7 @@ class ChatKeysTest {
     }
 
     /**
-     * TG 的 chat_key 形态当前只认数字，与 chat_message.chat_key 的列注释同口径；
+     * TG 的 chat_key 形态当前只认数字，与 chat_conversation.chat_key 的列注释同口径；
      * 'tg_' 前缀只出现在 platform_type=4 的 customer.open_id 种子里，两边形态未决，
      * 以 Task 0 的真实探测为准。
      * <p>

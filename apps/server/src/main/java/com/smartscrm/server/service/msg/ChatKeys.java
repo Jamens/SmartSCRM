@@ -6,7 +6,7 @@ import java.util.regex.Pattern;
  * chat_key 语义的唯一解释处：WhatsApp 的 <digits>@c.us 单聊与 <digits>[-<digits>]@g.us 群，
  * Telegram 的纯数字（可带负号，超级群是 -100… 前缀）。
  * <p>
- * TG 的 chat_key 当前只认数字，与 chat_message / chat_conversation 的 chat_key 列注释
+ * TG 的 chat_key 当前只认数字，与 chat_conversation.chat_key 的列注释
  * "TG: numeric chat id" 同口径。'tg_' 前缀只出现在 customer.open_id 的种子数据里
  * （platform_type=4 的 'tg_10002003' / 'tg_10002004'），与列注释不是同一形态：
  * 该形态未决，以 Task 0 的真实探测为准，探测结论落地时本类的 TG_CHAT 与种子口径必须同一次改动。
