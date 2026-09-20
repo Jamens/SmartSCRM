@@ -162,7 +162,7 @@ export default function TranslationPage(): React.JSX.Element {
           />
           <DirectionCard
             title="接收翻译"
-            description="会话气泡下的译文（含自己发出的消息，R1）"
+            description="对方发来的气泡下的译文（R1）"
             enabled={settings.receiveEnabled}
             onToggle={(v) => void patch({ receiveEnabled: v })}
             from={settings.receiveFromLang}
@@ -181,7 +181,7 @@ export default function TranslationPage(): React.JSX.Element {
           />
           <DirectionCard
             title="发送翻译"
-            description="输入框的发送前预览语向"
+            description="输入框的发送前预览语向；自己发出的气泡也按这个语向译（R1）"
             enabled={settings.sendEnabled}
             onToggle={(v) => void patch({ sendEnabled: v })}
             from={settings.sendFromLang}

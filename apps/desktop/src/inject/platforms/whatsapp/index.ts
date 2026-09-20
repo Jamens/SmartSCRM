@@ -5,6 +5,7 @@ import { WHATSAPP } from '../../constants/channels'
 import { INPUT, MESSAGE, APP } from './selectors'
 import { mountBadge } from '../../shared/ui/badge'
 import { replaceEditorText } from '../../core/editorText'
+import { sideFromGaps } from '../../core/translation/bubbleDirection'
 import { startMessageTranslation } from '../../core/translation/domScan'
 import { mountInputPreview } from '../../core/translation/inputPreview'
 
@@ -83,6 +84,23 @@ export class WhatsAppAdapter extends PlatformAdapter {
     // 行容器铺满整个面板，译文挂在行上会跑到面板左缘，和右侧气泡脱节；
     // 气泡本体（div.copyable-text）才是和消息同宽、同侧的那一层。
     return row.querySelector<HTMLElement>(MESSAGE.bubble) ?? row
+  }
+
+  /**
+   * 气泡归属（规格 R1 的语向判据）：先看尾巴图标——分组末条才有，但语义确定；
+   * 没有尾巴时比气泡在 `[role="row"]` 里的左右留空，贴哪一侧就是哪一侧发的。
+   * 两者都给不出方向时返回 null，由扫描侧按收到的兜底，不猜。
+   */
+  isOutgoingMessage(row: HTMLElement): boolean | null {
+    if (row.querySelector(MESSAGE.tailOut)) return true
+    if (row.querySelector(MESSAGE.tailIn)) return false
+    const host = row.closest<HTMLElement>(MESSAGE.rowHost)
+    const bubble = row.querySelector<HTMLElement>(MESSAGE.bubble)
+    if (!host || !bubble) return null
+    const b = bubble.getBoundingClientRect()
+    const h = host.getBoundingClientRect()
+    const side = sideFromGaps(b.left - h.left, h.right - b.right)
+    return side === null ? null : side === 'out'
   }
 
   getSelectors(): SelectorConfig {

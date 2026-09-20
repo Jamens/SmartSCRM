@@ -1,5 +1,6 @@
 import { MESSAGE_SCAN_INTERVAL } from '../../constants/config'
 import type { BaseInjector } from '../BaseInjector'
+import { isNoopTranslation } from './bubbleDirection'
 import { clearMessageStates, getMessageState, saveMessageState } from './messageState'
 import { requestTranslate } from './translationQueue'
 import {
@@ -34,7 +35,8 @@ export function startMessageTranslation(injector: BaseInjector): () => void {
   }
 
   async function scan(): Promise<void> {
-    if (!state.receiveLangSetting.enabled) return
+    // 两条语向各自管一侧气泡：都关了才整轮跳过；单边关在 translateOne 里按气泡处理。
+    if (!state.receiveLangSetting.enabled && !state.sendLangSetting.enabled) return
     if (state.translationRevision !== lastRevision) {
       lastRevision = state.translationRevision
       clearMessageStates()
@@ -55,28 +57,39 @@ export function startMessageTranslation(injector: BaseInjector): () => void {
   }
 
   async function translateOne(row: HTMLElement, msgId: string, text: string): Promise<void> {
+    // R1：语向按气泡归属分流——本端发出的气泡走 send 语向（把要发出去/已发出的话译成对方语言），
+    // 对方发来的走 receive 语向。平台给不出归属判据时（null）按收到的处理。
+    const type: 'send' | 'receive' = adapter.isOutgoingMessage(row) === true ? 'send' : 'receive'
+    const setting = type === 'send' ? state.sendLangSetting : state.receiveLangSetting
+    if (!setting.enabled) {
+      if (hasTranslationNode(msgId)) removeTranslation(msgId)
+      return
+    }
     // 译文挂在平台给出的锚点上：行容器可能铺满整行，锚点才是贴着气泡的那一层。
     const anchor = adapter.getTranslationAnchor(row)
     const saved = getMessageState(msgId)
     // 已有译文：只重绘，不再发请求（消息滚出可视区再回来走这条）。
-    if (saved && saved.translation !== null && saved.text === text) {
-      if (!hasTranslationNode(msgId)) {
+    // 语向也是命中条件之一——首屏布局未定时归属判据可能先给不出答案，等它给出正确答案的下一轮要重译。
+    if (saved && saved.translation !== null && saved.text === text && saved.type === type) {
+      if (!hasTranslationNode(msgId) && !isNoopTranslation(text, saved.translation)) {
         renderTranslation(msgId, anchor, saved.translation)
         state.markTranslated(msgId)
       }
       return
     }
-    // 重试预算花完：停成一个按钮，不是一个循环。
-    if (saved && saved.text === text && saved.retryCount >= MAX_RETRY) {
-      if (!hasTranslationNode(msgId)) renderManualButton(msgId, anchor, () => retry(msgId, text))
+    // 重试预算花完：停成一个按钮，不是一个循环（同一语向才作数）。
+    if (saved && saved.text === text && saved.type === type && saved.retryCount >= MAX_RETRY) {
+      if (!hasTranslationNode(msgId))
+        renderManualButton(msgId, anchor, () => retry(msgId, text, type))
       state.markTranslated(msgId)
       return
     }
-    if (state.isTranslated(msgId)) return
+    // 去重闸门只管「同一语向」的重复请求：语向换了必须放行重译，
+    // 否则首屏布局未定时按 receive 译完的那批，等判据稳定下来后就再也翻不过来。
+    if (state.isTranslated(msgId) && (!saved || saved.type === type)) return
 
     renderPendingTranslation(msgId, anchor)
-    // R1: sent and received bubbles alike go through the receive direction.
-    const result = await requestTranslate(injector, { text, type: 'receive' })
+    const result = await requestTranslate(injector, { text, type })
     if (stopped || !row.isConnected) return
 
     if (result) {
@@ -84,12 +97,15 @@ export function startMessageTranslation(injector: BaseInjector): () => void {
       saveMessageState({
         msgId,
         text,
+        type,
         channel: result.channel,
         toLang: result.toLangCode,
         translation: result.translation,
         retryCount: 0
       })
-      renderTranslation(msgId, anchor, result.translation)
+      // 同语言气泡（R7 直接返回原文）撤掉「翻译中…」占位，只留原文不留重复行（R10）。
+      if (isNoopTranslation(text, result.translation)) removeTranslation(msgId)
+      else renderTranslation(msgId, anchor, result.translation)
       return
     }
 
@@ -98,6 +114,7 @@ export function startMessageTranslation(injector: BaseInjector): () => void {
     saveMessageState({
       msgId,
       text,
+      type,
       channel: '',
       toLang: '',
       translation: null,
@@ -105,8 +122,16 @@ export function startMessageTranslation(injector: BaseInjector): () => void {
     })
   }
 
-  function retry(msgId: string, text: string): void {
-    saveMessageState({ msgId, text, channel: '', toLang: '', translation: null, retryCount: 0 })
+  function retry(msgId: string, text: string, type: 'send' | 'receive'): void {
+    saveMessageState({
+      msgId,
+      text,
+      type,
+      channel: '',
+      toLang: '',
+      translation: null,
+      retryCount: 0
+    })
     // 手动按钮那条分支已经 markTranslated，这里必须放行一次，否则点击无效。
     state.translatedMsgIds.delete(msgId)
     queue()

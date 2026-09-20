@@ -25,6 +25,14 @@ export const MESSAGE = {
   textNode: 'span.copyable-text',
   /** 气泡本体：与消息同宽同侧的那一层，译文挂在它下面。 */
   bubble: 'div.copyable-text',
+  /**
+   * 发出/收到的分组容器：`[data-id]` 行自己铺满整宽（实测 502px），方向只体现在
+   * 气泡在这一层里靠左还是靠右。
+   */
+  rowHost: '[role="row"]',
+  /** 气泡尾巴：分组末条才有，`tail-out` 是本端发出、`tail-in` 是对方发来，语义确定。 */
+  tailOut: '[data-icon="tail-out"]',
+  tailIn: '[data-icon="tail-in"]',
   focusable: 'div[role="listitem"]',
   /** 长文本折叠后的展开控件：没展开就没有完整文本，宁可不译。 */
   expandMore: '[data-testid="caption-read-more-button"]'

@@ -60,6 +60,15 @@ export abstract class PlatformAdapter extends EventEmitter {
     return row
   }
 
+  /**
+   * 这条气泡是不是本端发出的。注入层按归属分流语向：自己发出的走 `send` 语向，
+   * 对方发来的走 `receive` 语向（规格 R1）。
+   * 基类默认给不出判据（null），未实现检测的平台一律按收到的处理，行为与旧版一致。
+   */
+  isOutgoingMessage(_row: HTMLElement): boolean | null {
+    return null
+  }
+
   async getRecentMessages(_chatId: string, _limit = 10): Promise<unknown[]> {
     throw new Error('必须实现 getRecentMessages 方法')
   }

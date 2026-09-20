@@ -21,7 +21,7 @@
 
 | # | 规则 |
 |---|---|
-| R1 | **所有气泡译文（收到的与自己发出的）都用 `receive` 语向**；`send` 语向只服务输入框发送前预览 |
+| R1 | **气泡译文按归属选语向**：本端发出的气泡走 `send` 语向，对方发来的气泡走 `receive` 语向；输入框发送前预览同样走 `send` |
 | R2 | 语向、渠道、生效节点一律由**后端按 JWT 定位设置行**解析；页面与注入层都不下发语言参数 |
 | R3 | 缓存单层、按租户隔离，key **不含会话维度** |
 | R4 | 渠道 2（DeepL）的源语言与目标语言是两张不同的候选清单 |
@@ -30,6 +30,7 @@
 | R7 | `from == to` 时直接返回原文，且不写缓存 |
 | R8 | 任何情况下不返回空白译文；无法处理时返回原文并标 `partial` |
 | R9 | 测速不拖慢接口：接口绝不 `sleep` 去模拟网络延迟 |
+| R10 | 译文与原文一致时**不挂译文行**（`from == to` 的那类气泡只留原文一行） |
 
 ---
 
@@ -303,7 +304,8 @@ P5 改为引用常量，并补 `update-preview-setting` 常量与接收端。
 
 ```
 inject/core/translation/translationQueue.ts    请求节流 + 在途去重
-inject/core/translation/messageState.ts        Map<msgId, {text, toLang, channel, translation?, retryCount}>
+inject/core/translation/bubbleDirection.ts     气泡归属算术（左右留空判边）+ 同语言不挂行判定
+inject/core/translation/messageState.ts        Map<msgId, {text, type, toLang, channel, translation?, retryCount}>
 inject/core/translation/domScan.ts             #main 内消息扫描（MutationObserver + 兜底 interval）
 inject/core/translation/renderTranslation.ts   插入 / 更新 / 移除译文节点
 inject/core/translation/manualButton.ts        重试耗尽 → 「手动翻译」按钮
@@ -313,8 +315,15 @@ inject/platforms/whatsapp/index.ts             hookInput / setupPlatformListener
 
 - **节流与扫描**：请求节流 `TRANSLATE_THROTTLE_TIME=300`；扫描 = MutationObserver + `MESSAGE_SCAN_INTERVAL=500`
   兜底 interval。**只有这两个定时器**，不引入第三个轮询。
-- **消息标识与方向**：msgId 取行容器的 `data-id`；方向标记 `[data-icon="tail-out"]`（纯表情、系统行可能没有，
-  所以只作观测线索，不作功能前提）。两种气泡都按 `type='receive'` 请求（R1）。
+- **消息标识与归属语向**：msgId 取行容器的 `data-id`。归属由平台适配器 `isOutgoingMessage(row): boolean | null`
+  给出（基类返回 `null`，未实现检测的平台一律按收到的处理），WhatsApp 按两级判据：
+  ① 行内 `[data-icon="tail-out"] / [data-icon="tail-in"]`（语义确定，但只有分组末条才有）；
+  ② 气泡在 `[role="row"]` 里的左右留空比对，贴右缘是发出、贴左缘是收到，差值不足 `MIN_SIDE_GAP_DIFF=24` 判不出。
+  实测（2026-09-20 桌面端核对）：当前 WhatsApp Web 的 `data-id` 已不带 `true_/false_` 前缀，祖先链上也没有
+  `message-in / message-out` class，所以这两级判据之外没有更可靠的信号。
+  语向随译文一起存进 `messageState`，下一轮扫描发现判据变了就重译——首屏布局未定时判据可能先给不出答案，
+  这一条让页面在无人改设置的情况下自己翻回正确语向（`tmp/p6-r1-selfheal.mjs`）。
+  译文与原文一致时撤掉占位、不挂译文行（R10）。
 - **真实 DOM 契约**（2026-09-19 桌面端核对所得，选择器一律集中在
   `inject/platforms/whatsapp/selectors.ts`）：
   | 语义 | 选择器 | 为什么是它 |
@@ -457,19 +466,35 @@ Git Bash 内联中文会静默失败；没有 mysql CLI，查库走 HTTP；自�
 在真实 WhatsApp Web 内嵌视图上按用户动作点，断言页面 DOM 与后端可见事实；截图在 `tmp/shots/6-3-*.png`。
 首跑暴露 3 个缺陷（译文挂到整行左缘、开关推送在重新注入后丢失、清空草稿后浮层不收），修复后 **23/23 通过**。
 其中输入框相关的两项后经返工：见本节末「两处返工」。
+R1 更正后于 2026-09-20 复跑 `bubbles` 阶段：**8/8 通过**（新增两条：归属判据的独立几何对照、R10 的"要么挂行要么原文已是目标语言"）。
+该阶段的会话点开改成 `ensureChatOpen()` 轮询 —— 只点一次 + 固定 sleep 时，页面刚重载会读到 0 行气泡，整套断言一起红。
 
-- [x] 气泡下出现译文节点，`.translated-text` 有文字 —— 会话内的文本气泡全部渲染出译文，且落在气泡本体里；
+- [x] 气泡下出现译文节点，`.translated-text` 有文字 —— 会话内的文本气泡要么渲染出译文、要么原文已是该语向的目标语言
+  （R10，2026-09-20 复跑读数：15 条有正文不折叠的气泡，7 条挂行、8 条原文已是英文故不挂）；译文落在气泡本体里；
   纯表情行与系统提示行按 §4.3 契约不产生译文。
   **未覆盖：对方发来的气泡。** 当前账号的会话列表里只有「自己」这一个会话，`tail-in` 形态无法观测。
-- [x] 自己发出的气泡也被译，且语向与收到的一致（R1）—— 请求插桩显示气泡一律 `type='receive'`，
-  `send` 只出现在输入框预览（且带 `input: true`）。
+- [x] 气泡按归属选语向（R1，2026-09-20 更正后重核）—— 自己发出的气泡请求 `type='send'`，中文气泡渲染出英文行
+  （你好 → Hello、你在干嘛 → What are you doing?、你今年几岁 → How old are you this year?），
+  已是目标语言的气泡不再挂重复行（R10）；判据与请求 type 逐条对照见 `tmp/p6-r1-verify.mjs`、`tmp/p6-r1-snapshot.mjs`。
+  **更正记录**：本项首版按旧 R1 核对的是「气泡一律 `type='receive'`」，那条规则会让中文气泡译成中文自己，已作废。
+- [x] 归属判据失效后自愈（首屏布局未定的等价场景）—— 页内把 `isOutgoingMessage` 打桩成判不出，重译一轮：
+  中文气泡 5 条全部不挂行、外文气泡 10 条挂中文译文；只撤打桩、不改任何设置，中文气泡重新长出英文行。
+  `tmp/p6-r1-selfheal.mjs` 记 PASS。
+- [x] 语向开关各管一侧 —— 页内关「发送翻译」后自己发出的气泡译文全部撤下，恢复后重新出译文（`tmp/p6-r1-toggle.mjs`）。
+  本会话全是发出侧，故「关接收翻译只影响对方气泡」这半句仍无从观测。
 - [x] 关闭"接收翻译"→ 推送后新消息不再插译文（§5.4 推送链）—— 走翻译中心保存 →
   `toHost:translation-flags-applied` 回执 → 视图 `state` 与库一致。开关在翻译中心页改动时视图已被 uninject，
   所以断言点放在「回工作台重新注入之后」。
 - [ ] 切会话不残留旧 `translation-*` —— **未核对**：只有一个会话可用，无从切换。
 - [x] 滚出再滚回 → 译文由内存表立即重绘、不发新请求 —— 移除 `translation-{msgId}` 节点后由重绘分支补回，
   请求计数增量为 0。**替代说明**：会话只有 5~7 条消息，未触发虚拟列表卸载，故用同一代码分支的节点移除代替滚动。
+  **R1 之后这条要等语向落定再测**：归属判据从判不出翻成判得出时，按自愈规则会合法地重发一次；
+  首扫跑完（请求日志里 type 全一致、无「翻译中…」占位）之后再抹节点，测出的才是纯重绘。
+  2026-09-20 复跑：`tmp/p5-manual.mjs bubbles` 8/8，该项读数 译文节点 7→7、新增请求 0 条。
 - [x] 长文本折叠：未展开不译；点「查看更多」后自动补译 —— 样本为 1311 字符长消息，展开后只补这一条。
+  **2026-09-20 未复跑**：那条长消息已不在自聊天里（当前会话 17 行，滚到顶也没有带「查看更多」的行），
+  本项沿用首跑结论。R1 之后该阶段的请求筛选从 `type='receive'` 改为「非输入框预览的气泡请求」，
+  否则自聊天全为发出侧时会筛出空集 —— 改后的口径未在真页上验证过。
 - [x] 输入框打字 → 300ms 后浮层出译文；「用译文替换输入框」生效；关预览开关后浮层消失 ——
   浮层在草稿清空后必须收起：WhatsApp 的退格 / 全选删除**不产生 `input` 事件**，
   所以 `inputPreview` 额外挂 `keyup` 监听与输入框 `MutationObserver`（见 §7）。
