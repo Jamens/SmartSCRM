@@ -16,6 +16,8 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
      * 采集链的唯一写入口。uk_msg 命中即忽略：重复事件、补底与实时交叠、重挂后的
      * 尾巴重放，全都靠这一条消解，所以调用方不需要先查后插。
      * 返回值 = 真正插入的行数；duplicated = 提交条数 - 返回值。
+     * 2026-09-20 一次性探针实测过这四种形态：单行新增 1、单行重复 0、两行里一条重复 1、
+     * 两行全重复 0 —— 也就是整批调用给的是"插进去几行"，不是"整批成没成"。
      */
     @Insert({"<script>",
         "INSERT IGNORE INTO chat_message",

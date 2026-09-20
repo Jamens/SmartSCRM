@@ -1227,6 +1227,9 @@ public class MessageService {
         for (ChatMessage row : rows) {
             // "是否新行"交给 SQL 的 affected rows：1 = 插入，0 = 被 uk_msg 忽略。
             // 会话头只由新行推动，重复行不能再加一次未读。
+            // 2026-09-20 一次性 @SpringBootTest 探针实测（跑完已删）：单行新增 1、单行重复 0、
+            // 两行里一条重复 1、两行全重复 0 —— 逐行调用与整批调用都成立，
+            // 所以将来若改回"整批一次 insert"，duplicated 只能按 `提交条数 - affected rows` 算。
             if (messageMapper.insertIgnoreBatch(List.of(row)) != 1) {
                 duplicated++;
                 continue;
@@ -1424,11 +1427,9 @@ curl -s -X POST http://127.0.0.1:8180/api/messages/batch -H "authorization: Bear
 
 > **"账号不存在"与"该平台不支持采集"必须是两个 code。** 用 Facebook / Messenger 那条账号（`platformType` 5 / 6，`ChatKeys.platformOfAccountType` 返回 null）重发同一批 → `40000 该平台暂不支持消息采集`；用一个不存在的 id → `40404 账号不存在`。两条各打一次，把两个 message 原文贴进报告。合在一起的话，前端只能把"这台号还没接"显示成"号没了"。
 
-> **认不出的媒体类型降级成 `unknown`，且必须看得见降级发生了。** 往批里加第三条 `mediaType:"group_participant_add"`（21 字符，页内系统消息的真实原名）：预期它**照样 accepted**（媒体类型不是身份，不该为它丢正文），而探针里那一行的 `media_type` 是 `unknown` 而不是 `group_participa`。这一条区分的是两种"看起来都成功了"：有 `normalizeMediaType` 时读到 `unknown`，没有时 `INSERT IGNORE` 把超长值静默截成 16 字符照样返回成功 —— 少这道闸，Task 11 的图标映射会对上一个库里谁也没写过的半截类型名。
+> **认不出的媒体类型降级成 `unknown`，且必须看得见降级发生了。** **另发一批**（别混进上面那两行：混进去 `accepted` 就从 2 变 3，幂等那一对读数的口径就糊了）里放一条 `mediaType:"group_participant_add"`（21 字符，页内系统消息的真实原名）：预期它**照样 accepted**（媒体类型不是身份，不该为它丢正文），而探针里那一行的 `media_type` 是 `unknown` 而不是 `group_participa`。这一条区分的是两种"看起来都成功了"：有 `normalizeMediaType` 时读到 `unknown`，没有时 `INSERT IGNORE` 把超长值静默截成 16 字符照样返回成功 —— 少这道闸，Task 11 的图标映射会对上一个库里谁也没写过的半截类型名。
 
-> `accountId` 与 `platform` 的一致性也在这里验：把 `accountId` 换成 TG 账号 id 再发一次同批，预期 `accepted:0` 且会话头 `platform='telegram'`（platform 由账号反查，不受请求里的字段影响）。
-
-> **chat_key 与平台不匹配要整条拒掉，不是入库后再发现。** 把 `accountId` 换成 TG 账号 id 再发同一批，预期 `{"accepted":0,"duplicated":0,"rejected":2,"reasons":[...chat_key 与平台不匹配...]}`：`86…@c.us` 是 WhatsApp 形态，Telegram 的 chat id 是纯数字（群是 `-100…`）。没有这条判定，一个错配的 viewId→accountId 映射会把 WA 会话写进 TG 账号名下，而 `uk_msg` 会把它们当成不同行，永远查不出重复。
+> **chat_key 与平台不匹配要整条拒掉，不是入库后再发现。** 把 `accountId` 换成 TG 账号 id 再发同一批，预期 `{"accepted":0,"duplicated":0,"rejected":2,"reasons":[...chat_key 与平台不匹配...]}`：`86…@c.us` 是 WhatsApp 形态，Telegram 的 chat id 是纯数字（群是 `-100…`）。没有这条判定，一个错配的 viewId→accountId 映射会把 WA 会话写进 TG 账号名下，而 `uk_msg` 会把它们当成不同行，永远查不出重复。这一条同时也是"`platform` 由账号反查、不信任请求字段"的证据：整批被拒后库里不该出现任何 `platform='telegram'` 且 `chat_key='86…@c.us'` 的行。
 
 - [ ] **Step 5: 状态推进契约**
 
