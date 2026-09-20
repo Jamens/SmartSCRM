@@ -2198,7 +2198,7 @@ public record CustomerCreateRequest(
 ```java
     /**
      * open_id 是"这个人在这个平台上的 id"，聊天记录里的 chat_key 就是它。
-     * 撞唯一键时报 40900 而不是让 MySQL 异常冒到 50000：前端要能区分"重名"和"已经存在"。
+     * 撞唯一键时报 40901 而不是让 MySQL 异常冒到 50000：前端要能区分"重名"和"已经存在"。
      */
     @Transactional
     public CustomerVO create(Long tenantId, CustomerCreateRequest req) {
@@ -2214,7 +2214,7 @@ public record CustomerCreateRequest(
             .eq(Customer::getPlatformType, req.platformType())
             .eq(Customer::getOpenId, openId));
         if (dup > 0) {
-            throw new BizException(40900, "该平台下此客户已存在: " + openId);
+            throw new BizException(40901, "该平台下此客户已存在: " + openId);
         }
         Customer customer = new Customer();
         customer.setTenantId(tenantId);
@@ -2371,7 +2371,7 @@ public record CustomerTimelineVO(List<MessageVO> messages, List<ConversationVO> 
 | # | 断言 | 期望 |
 |---|---|---|
 | 1 | `POST /api/customers`（openId=`8613800001002@c.us`, platformType=1, nickname=`Bob 李`） | `code:0`，返回 `id`，`openId` 原样 |
-| 2 | 同一 body 再发一次 | `code:40900`（区分"字段校验没过"与"唯一键冲突"） |
+| 2 | 同一 body 再发一次 | `code:40901`（区分"字段校验没过"与"唯一键冲突"） |
 | 3 | `GET /api/customers?keyword=Bob` | `records` 含第 1 步创建的那条 |
 | 4 | `POST /api/conversations/{Bob会话}/link-customer` | `messagesLinked >= 1`；响应里的 `customerId` 等于第 1 步的 id |
 | 5 | `GET /api/customers/{id}/timeline` | `messageCount === messages.length`（未超 size 时）、`conversations` 含该会话、`messages` 按时间正序 |
@@ -8778,7 +8778,7 @@ git commit -m "feat(P6): 记录页全局搜索视图与统计卡（搜索结果�
 - Modify: `apps/desktop/src/renderer/src/pages/MessagesPage.tsx`（接线 + 关联成功后的状态修正）
 
 **Interfaces:**
-- Consumes: Task 6 的后端契约（`PUT /api/translation/settings` 带 `scope`/`scopeKey`、`DELETE /api/translation/settings/customer/{id}`、`GET /settings?customerId=` 的 `inherited`）；Task 5 的后端契约（`POST /api/customers` → `CustomerVO`、`POST /api/conversations/{id}/link-customer` → `{conversationId, customerId, messagesLinked}`，撞唯一键回 `40900`）；Task 13 的 `useCreateCustomer` / `useLinkCustomer` / `CreateCustomerInput` / `ConversationVO` / `queryKeys`；Task 15 的 `useTranslationSettings(customerId?)` / `settingsInputOf` / `TranslationSettingVO.scope|scopeKey|inherited`；Task 16 的 `isGroupChatKey` / `peerPhoneOfChatKey` / `MessageThread`；Task 7 的 `@shared/chatPlatform`（`accountTypeOfPlatform`）；P5 既有的 `sourceLanguagesFor` / `targetLanguagesFor` / `languageName`、`Switch`、`Dialog*`、`useCustomer`、`platformOf`、`http.del`。
+- Consumes: Task 6 的后端契约（`PUT /api/translation/settings` 带 `scope`/`scopeKey`、`DELETE /api/translation/settings/customer/{id}`、`GET /settings?customerId=` 的 `inherited`）；Task 5 的后端契约（`POST /api/customers` → `CustomerVO`、`POST /api/conversations/{id}/link-customer` → `{conversationId, customerId, messagesLinked}`，撞唯一键回 `40901`）；Task 13 的 `useCreateCustomer` / `useLinkCustomer` / `CreateCustomerInput` / `ConversationVO` / `queryKeys`；Task 15 的 `useTranslationSettings(customerId?)` / `settingsInputOf` / `TranslationSettingVO.scope|scopeKey|inherited`；Task 16 的 `isGroupChatKey` / `peerPhoneOfChatKey` / `MessageThread`；Task 7 的 `@shared/chatPlatform`（`accountTypeOfPlatform`）；P5 既有的 `sourceLanguagesFor` / `targetLanguagesFor` / `languageName`、`Switch`、`Dialog*`、`useCustomer`、`platformOf`、`http.del`。
 - Produces（Task 18–19 只认这些）：
   - `lib/createCustomerPrefill`：`interface Prefill { platformType: number; openId: string; nickname: string | null; phone: string | null }`、`interface PrefillSource`（`ConversationVO` 的五个字段）、`canCreateCustomer(c): boolean`、`prefillOfConversation(c): Prefill | null`
   - `lib/directionDraft`：`interface DirectionDraft`（收发各「启用 + 源 + 目标」六字段）、`type DirectionSource = DirectionDraft`、`draftOf(s): DirectionDraft`、`dirtyCount(base, next): number`、`directionSummary(s, kind: 'receive' | 'send'): string`
@@ -9390,7 +9390,7 @@ export default function CreateCustomerDialog({ conversation, open, onOpenChange,
     )
   }
 
-  const duplicate = create.error instanceof ApiError && create.error.code === 40900
+  const duplicate = create.error instanceof ApiError && create.error.code === 40901
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -9448,7 +9448,7 @@ export default function CreateCustomerDialog({ conversation, open, onOpenChange,
               客户 #{createdId} 已经创建成功，但历史消息关联失败（会话头还没挂上）。
             </p>
             <p className="text-[11px] text-muted-foreground">
-              重试只会补"关联"这一步，不会再建一位重复客户——重复的 open_id 会被后端挡在 40900。
+              重试只会补"关联"这一步，不会再建一位重复客户——重复的 open_id 会被后端挡在 40901。
             </p>
           </div>
         )}
@@ -9478,7 +9478,7 @@ export default function CreateCustomerDialog({ conversation, open, onOpenChange,
 }
 ```
 
-> **为什么第一步成功、第二步失败要单独一个 phase，而不是笼统报"失败"**：客户行已经落库了，报"创建失败"会让用户再点一次、然后撞上 40900，得到一个前后矛盾的错误串。分开之后界面说的是事实：客户在，归属没挂上，重试只走第二步（`doLink(createdId)`）。这也是 spec §6"两个原子步骤、不隐式耦合"在界面上的落点——后端本来就没把两步包成一个事务。
+> **为什么第一步成功、第二步失败要单独一个 phase，而不是笼统报"失败"**：客户行已经落库了，报"创建失败"会让用户再点一次、然后撞上 40901，得到一个前后矛盾的错误串。分开之后界面说的是事实：客户在，归属没挂上，重试只走第二步（`doLink(createdId)`）。这也是 spec §6"两个原子步骤、不隐式耦合"在界面上的落点——后端本来就没把两步包成一个事务。
 >
 > **`useCreateCustomer` 在 `api/customers.ts`、`useLinkCustomer` 在 `api/messages.ts`**（Task 13 按域分的：一个改客户表，一个改会话头与消息归属）。两个 import 路径写反不会编译失败在语义上，只会让人下次找不到。
 
@@ -9600,7 +9600,7 @@ interface Props {
   /**
    * 关联成功的三件收尾事，少一件界面就开始说谎：
    * 1) 本地 `picked.customerId` 必须立刻改——它是「建为客户」按钮的显示条件。
-   *    不改的后果是按钮还在原地，再点一次就给同一个 open_id 建出第二个客户（撞 40900）。
+   *    不改的后果是按钮还在原地，再点一次就给同一个 open_id 建出第二个客户（撞 40901）。
    * 2) 会话列表要重取（标题旁的归属标记、`customerId` 过滤都变了）。
    * 3) 消息与搜索命中要重取（link-customer 把消息行的 customer_id 补上了，
    *    Task 16 的「只看当前客户」过滤拿的就是这个字段）。
@@ -9650,7 +9650,7 @@ CDP（C9 抬窗口、`visibilityState === 'visible'` 再动手；C10 点与键�
 | 3 | 真实鼠标点「建为客户」 | 弹层里 open_id 输入框是 `readOnly` 且值 === 该会话 `chatKey`；昵称预填会话 title；手机号预填裸号码（无 `@c.us`） | 预填真的来自 `prefillOfConversation`，不是空白表单 |
 | 4 | 填昵称、点「建为客户并关联历史」 | 弹层自动关闭；`[data-p6-customer-name]` 出现该昵称；`[data-p6-action="create"]` 消失；`[data-p6-action="direction"]` 出现 | 两步真的连着走完（只看客户名会漏掉"link 没跑"），且 `picked` 的本地修正生效 |
 | 5 | `curl` 该会话与它的消息 | `GET /api/conversations` 里这条 `customerId` 非空；`GET /api/messages` 里旧消息 `customerId` 全等于新客户 id | 历史回填发生在库里，不是前端 state 的错觉 |
-| 6 | 再点一次「建为客户」（先手动把会话切走再切回，或用同号码的第二条会话） | 后端回 40900，弹层里出现「该平台下这个 open_id 已经有客户了」而不是笼统的 50000 | 撞唯一键与服务器崩溃在界面上必须可分 |
+| 6 | 再点一次「建为客户」（先手动把会话切走再切回，或用同号码的第二条会话） | 后端回 40901，弹层里出现「该平台下这个 open_id 已经有客户了」而不是笼统的 50000 | 撞唯一键与服务器崩溃在界面上必须可分 |
 | 7 | 点「语向」 | Badge 文案是「沿用全局」；`[data-p6-direction-save]` 的 `disabled === true` | `dirtyCount` 的同义值归一在真数据上成立（全局行无论是 `''` 还是 `'auto'` 都不该谎报改动） |
 | 8 | 真实鼠标改发信目标语言 | 按钮文案变成「保存（1 处改动）」且可点；点保存 → 弹层关闭；重开 → Badge 变「该客户专属」、「恢复全局」从 disabled 变可点 | PUT 带 `scope/scopeKey` 生效，`inherited` 真的翻转；第 7 行与这行合起来证明按钮不是恒灰也不是恒亮 |
 | 9 | `curl` 两次 `GET /api/translation/settings`（带与不带 `customerId`） | 带 customerId → `scope:'customer'`、`inherited:false`、发信目标是刚选的语言；不带 → 全局值一字未变 | 覆盖行没顺手改掉全局（Task 6 契约第 10 行的前端对应物） |
