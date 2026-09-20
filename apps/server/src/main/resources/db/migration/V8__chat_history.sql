@@ -2,6 +2,11 @@
 -- Content is stored in plaintext inside the local database on purpose (privacy model
 -- shared with the customer domain). Nothing here is seeded: both tables only ever
 -- contain rows that a real embedded session produced.
+-- The key columns (chat_key / msg_key) carry an explicit COLLATE utf8mb4_bin while the
+-- rest of the table stays utf8mb4_unicode_ci: the platform serialised ids are
+-- case-sensitive, and uk_msg is the idempotency contract — under a case-insensitive
+-- collation two ids differing only in letter case compare equal and INSERT IGNORE drops
+-- one of them without a trace. Display text (title, body) keeps the human collation.
 
 CREATE TABLE `chat_conversation`
 (
@@ -9,7 +14,7 @@ CREATE TABLE `chat_conversation`
     `tenant_id`     BIGINT       NOT NULL,
     `account_id`    BIGINT       NOT NULL COMMENT 'platform_account.id',
     `platform`      VARCHAR(16)  NOT NULL COMMENT 'whatsapp | telegram',
-    `chat_key`      VARCHAR(128) NOT NULL COMMENT 'WA: 8613...@c.us / 1234-5678@g.us; TG: numeric chat id',
+    `chat_key`      VARCHAR(128) COLLATE utf8mb4_bin NOT NULL COMMENT 'WA: 8613...@c.us / 1234-5678@g.us; TG: numeric chat id',
     `title`         VARCHAR(256) NULL COMMENT 'peer name snapshot at ingest time',
     `is_group`      TINYINT(1)   NOT NULL DEFAULT 0,
     `customer_id`   BIGINT       NULL COMMENT 'filled when the chat matches a customer (Task 3 matching rules)',
@@ -32,8 +37,8 @@ CREATE TABLE `chat_message`
     `tenant_id`     BIGINT       NOT NULL,
     `account_id`    BIGINT       NOT NULL,
     `platform`      VARCHAR(16)  NOT NULL COMMENT 'whatsapp | telegram',
-    `chat_key`      VARCHAR(128) NOT NULL,
-    `msg_key`       VARCHAR(128) NOT NULL COMMENT 'WA: message.id._serialized; TG: platform message id',
+    `chat_key`      VARCHAR(128) COLLATE utf8mb4_bin NOT NULL,
+    `msg_key`       VARCHAR(128) COLLATE utf8mb4_bin NOT NULL COMMENT 'WA: message.id._serialized; TG: platform message id',
     `direction`     VARCHAR(8)   NOT NULL COMMENT 'in | out',
     `customer_id`   BIGINT       NULL,
     `sender_key`    VARCHAR(128) NULL COMMENT 'group sender id; NULL for 1:1 chats',
