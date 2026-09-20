@@ -21,8 +21,10 @@ import com.smartscrm.server.web.vo.BatchAcceptVO;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.ArrayList;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -76,6 +78,11 @@ public class MessageService {
         Set<String> seenInBatch = new HashSet<>();
         List<String> reasons = new ArrayList<>();
         int rejected = 0;
+        // 一批里同一会话的归属只算一次：绝大多数批次只有两三个 chatKey，
+        // 而手机号兜底那条分支是"读全租户客户再比"，每条都跑一遍就是把补底变成扫库。
+        // containsKey 那一步不能省成 computeIfAbsent：匹配不到客户时值是 null，而
+        // computeIfAbsent 把"映射到 null"当成"没有映射"，未命中的会话每条还是会重算一次。
+        Map<String, Long> customerByChat = new HashMap<>();
 
         for (MessageItemDTO item : items) {
             if (!DIRECTIONS.contains(item.direction()) || !SOURCES.contains(item.source())) {
@@ -105,7 +112,11 @@ public class MessageService {
             row.setChatKey(item.chatKey());
             row.setMsgKey(item.msgKey());
             row.setDirection(item.direction());
-            row.setCustomerId(matchCustomer(tenantId, account.platformType(), item.chatKey()));
+            String ck = item.chatKey();
+            if (!customerByChat.containsKey(ck)) {
+                customerByChat.put(ck, matchCustomer(tenantId, account.platformType(), ck));
+            }
+            row.setCustomerId(customerByChat.get(ck));
             row.setSenderKey(item.senderKey());
             row.setSenderName(item.senderName());
             row.setBody(item.body() == null || item.body().isBlank() ? null : item.body());
