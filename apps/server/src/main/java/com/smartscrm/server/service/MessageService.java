@@ -150,6 +150,12 @@ public class MessageService {
     /**
      * 状态推进不查当前行：阶梯守卫整条放在 SQL 里（advanceStatus），affected rows 就是
      * 真正推进的条数。被挡住的乱序 ack 计不进 updated，也不报错——它是常态。
+     *
+     * 这里刻意不做入库那条 `chat_key 与平台不匹配` 的校验：本方法的 UPDATE 已经把
+     * `platform + account_id + chat_key + msg_key` 四列一起钉在 WHERE 上，一个错配的
+     * accountId 只会让 WHERE 一行也匹配不上（`updated:0`），写不进别人的行；
+     * 而批量入库那条是 INSERT，错配会真的造出一行脏数据，所以它必须先拒。
+     * 两处的不对称是后果决定的，不是漏了。
      */
     @Transactional
     public int applyStatus(Long tenantId, MessageStatusDTO dto) {
