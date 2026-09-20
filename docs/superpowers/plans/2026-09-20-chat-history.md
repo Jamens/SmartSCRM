@@ -725,8 +725,8 @@ class MsgTimesTest {
 
     @Test
     void convertsEpochSecondsInAsiaShanghaiBecauseThatIsTheJdbcSessionZone() {
-        // 1_700_000_000 = 2023-11-15 06:33:20 UTC = 14:33:20 Asia/Shanghai
-        assertEquals(LocalDateTime.of(2023, 11, 15, 14, 33, 20),
+        // 1_700_000_000 = 2023-11-14 22:13:20 UTC = 2023-11-15 06:13:20 Asia/Shanghai
+        assertEquals(LocalDateTime.of(2023, 11, 15, 6, 13, 20),
             MsgTimes.toDbTime(1_700_000_000L, RECEIVED));
     }
 
@@ -746,6 +746,8 @@ class MsgTimesTest {
     }
 }
 ```
+
+> **`pastTimestampsAreKeptAsIs` 只断年份，`convertsEpochSeconds…` 断到秒 —— 但开发机系统时区就是 +8，实现里误用 `ZoneId.systemDefault()` 两条都照样绿。**要把 Asia/Shanghai 真钉住，得让默认时区不等于它：在换区断言里临时 `TimeZone.setDefault(TimeZone.getTimeZone("UTC"))`、`@AfterEach` 还原，再断同一个 `06:13:20`。没有这条，"用了哪个时区"在本机是不可证的。
 
 `StatusLadderTest.java`：
 
