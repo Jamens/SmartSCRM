@@ -34,6 +34,13 @@ public class ConversationController {
         return ApiResponse.ok(query.conversations(principal.tenantId(), accountId, platform, q, cursor, size));
     }
 
+    /**
+     * 清零该会话未读。
+     * <p>
+     * `cleared` 是**匹配行数**而不是**改变行数**（Connector/J 默认 `useAffectedRows=false`，
+     * 命中 WHERE 的行即计数，值没变也算）：对一条本来就未读为 0 的会话再打这里仍回 `{cleared:1}`。
+     * 读侧不要拿它当"确实清掉了什么"来分支，要判断状态就重新读列表里的 `unreadCount`。
+     */
     @PostMapping("/{id}/read")
     public ApiResponse<Map<String, Integer>> read(@AuthenticationPrincipal AuthPrincipal principal,
                                                  @PathVariable Long id) {
