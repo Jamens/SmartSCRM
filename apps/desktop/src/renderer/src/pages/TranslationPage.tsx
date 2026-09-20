@@ -43,6 +43,7 @@ import {
   type ServerDelayVO,
   type TranslateType,
   type TranslationCredentialVO,
+  type TranslationSettingInput,
   type TranslationSettingVO
 } from '@/api/translation'
 import {
@@ -102,15 +103,21 @@ export default function TranslationPage(): React.JSX.Element {
     setTimeout(() => setMeasureOn(true), 0)
   }
 
-  async function patch(next: Partial<TranslationSettingVO>): Promise<void> {
+  /**
+   * 只把改动的那几个字段发给后端（PUT 是局部提交，不传的字段保留库里现值）。
+   * 整表回写等于拿"打开页面时的那份快照"去覆盖别人在这之后写进库的值。
+   */
+  async function patch(next: TranslationSettingInput): Promise<void> {
     if (!settings) return
     const merged = { ...settings, ...next }
+    const input: TranslationSettingInput = { ...next }
     // 自动模式下换线路，要用「新线路」重算推荐；本帧的 choice 还是旧线路的，用了就选错节点
     if (merged.serverMode === AUTO && next.channel !== undefined) {
       merged.server = pickBestNode(delays, settings.server, merged.channel).server
+      input.server = merged.server
     }
     setDraft(merged)
-    const saved = await updateSettings.mutateAsync(toInput(merged))
+    const saved = await updateSettings.mutateAsync(input)
     setDraft(saved)
     await broadcastTranslationFlags(saved)
     remeasure()
@@ -529,25 +536,6 @@ function DirectionCard({
       </CardContent>
     </Card>
   )
-}
-
-function toInput(s: TranslationSettingVO) {
-  return {
-    server: s.server,
-    serverMode: s.serverMode,
-    channel: s.channel,
-    receiveEnabled: s.receiveEnabled,
-    receiveFromLang: s.receiveFromLang,
-    receiveToLang: s.receiveToLang,
-    sendEnabled: s.sendEnabled,
-    sendFromLang: s.sendFromLang,
-    sendToLang: s.sendToLang,
-    voiceEnabled: s.voiceEnabled,
-    previewEnabled: s.previewEnabled,
-    enterToSend: s.enterToSend,
-    disableChinese: s.disableChinese,
-    disableChinesePreventSend: s.disableChinesePreventSend
-  }
 }
 
 function CacheStatsCard({

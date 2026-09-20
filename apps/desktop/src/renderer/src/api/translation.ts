@@ -21,16 +21,21 @@ export interface TranslationSettingVO {
   disableChinesePreventSend: boolean
 }
 
+/**
+ * PUT /api/translation/settings 是**局部提交**：每个字段不传就保留库里现值。
+ * 所以调用方只带自己改动的那几个字段——整表回写会把别人（或另一个窗口）
+ * 在这之后写进库的值盖回去，因为表单手里攥的是打开页面时的那份快照。
+ */
 export interface TranslationSettingInput {
   server?: string
   serverMode?: string
   channel?: string
   receiveEnabled?: boolean
   receiveFromLang?: string
-  receiveToLang: string
+  receiveToLang?: string
   sendEnabled?: boolean
   sendFromLang?: string
-  sendToLang: string
+  sendToLang?: string
   voiceEnabled?: boolean
   previewEnabled?: boolean
   enterToSend?: boolean

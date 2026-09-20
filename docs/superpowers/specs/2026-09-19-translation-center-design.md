@@ -210,7 +210,7 @@ pom.xml  + net.openhft:zero-allocation-hashing   （xxhash64）
 | 方法 | 路径 | 语义 |
 |---|---|---|
 | GET | `/api/translation/settings` | 读全局设置；缺行则插入默认行后返回 |
-| PUT | `/api/translation/settings` | 全量覆盖；校验 `channel ∈ 1..4`、`server ∈ translation_node.name`、`toLang` 非空 |
+| PUT | `/api/translation/settings` | **局部提交**：字段不传即保留库里现值，只校验传进来的那些（`channel ∈ 1..7`、`server ∈ translation_node.name`、`toLang` 传了就不能是空白）。DTO 上不设 `@NotBlank` —— 参数校验挡在方法之前，会把只带改动字段的请求整个否掉，页面被迫整表回写；整表回写拿的是打开页面时的那份快照，会盖掉之后别的写入 |
 | GET | `/api/translation/nodes` | 节点元数据（`name / label / url / baseDelayMs / reachable`） |
 | GET | `/api/translation/nodes/delays` | `[{name, delay}]`；`delay = base_delay_ms + jitter(0..30)`，`reachable = 0` → `delay = null` |
 | POST | `/api/translation/translate` | 见 §3.3 |

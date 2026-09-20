@@ -93,10 +93,10 @@ public class TranslationService {
         current.setServerMode(defaultIfBlank(input.serverMode(), current.getServerMode()));
         current.setReceiveEnabled(input.receiveEnabled() == null ? current.getReceiveEnabled() : input.receiveEnabled());
         current.setReceiveFromLang(input.receiveFromLang() == null ? current.getReceiveFromLang() : input.receiveFromLang().trim());
-        current.setReceiveToLang(input.receiveToLang().trim());
+        current.setReceiveToLang(langOrKeep(input.receiveToLang(), current.getReceiveToLang(), "receiveToLang"));
         current.setSendEnabled(input.sendEnabled() == null ? current.getSendEnabled() : input.sendEnabled());
         current.setSendFromLang(input.sendFromLang() == null ? current.getSendFromLang() : input.sendFromLang().trim());
-        current.setSendToLang(input.sendToLang().trim());
+        current.setSendToLang(langOrKeep(input.sendToLang(), current.getSendToLang(), "sendToLang"));
         current.setVoiceEnabled(input.voiceEnabled() == null ? current.getVoiceEnabled() : input.voiceEnabled());
         current.setPreviewEnabled(input.previewEnabled() == null ? current.getPreviewEnabled() : input.previewEnabled());
         current.setEnterToSend(input.enterToSend() == null ? current.getEnterToSend() : input.enterToSend());
@@ -105,6 +105,22 @@ public class TranslationService {
             ? current.getDisableChinesePreventSend() : input.disableChinesePreventSend());
         settingMapper.updateById(current);
         return toVO(settingMapper.selectById(current.getId()));
+    }
+
+    /**
+     * 目标语言的局部提交语义：不传就保留库里现值（PUT 因此可以只带改动的那一个字段），
+     * 传了就不能是空白 —— 目标语言没有 auto，空串会一路带到厂商再失败，
+     * 表面看着像"线路降级"，实际是配置写坏了。
+     */
+    private static String langOrKeep(String incoming, String current, String field) {
+        if (incoming == null) {
+            return current;
+        }
+        String trimmed = incoming.trim();
+        if (trimmed.isEmpty()) {
+            throw new BizException(40000, field + " 不能为空白");
+        }
+        return trimmed;
     }
 
     private TranslationSetting requireSettings(Long tenantId) {
