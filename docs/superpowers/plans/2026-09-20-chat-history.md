@@ -25,6 +25,7 @@
 - **C9 渲染层验证只走 CDP**：`pnpm --dir apps/desktop exec electron-vite dev --remoteDebuggingPort 9223` + `tmp/cdp.mjs`（`openPage(9223)` / `openViewByUrl('web.whatsapp.com')` / `ev()` / `send()`），跑前先 `tmp/p5c-top.ps1` 抬起窗口并断言 `document.visibilityState === 'visible'`，否则 Radix 的出场动画不结束、`pointer-events` 永久卡在 `<body>` 上，所有点击静默失效。脚本结尾必须 `process.exit()`。
 - **C10 输入路径口径（P5e 教训）**：凡涉及页内交互的断言一律用 CDP `Input.dispatchMouseEvent` / `Input.dispatchKeyEvent` / `Input.insertText`。合成 `element.click()` 不经过 `mousedown` 的默认焦点行为，会把焦点与选区竞态全部掩盖成"通过"。
 - **C11 不得越权声称验证**：没有真实登录态就跑不了的项目（补底、发送、TG 探测）要么标 blocked 要么如实报告"未验证"，不接受用桩数据冒充端到端。
+- **C12 业务错误码沿用既有词表**：`40000` 参数/取值非法、`40100` 未鉴权、`40404` 目标行不存在、`40901` 冲突、`50000` 未预期异常（`apps/server` 现有 service 就是这套，如 `PlatformAccountService:69` 的"账号不存在"用 `40404`）。本计划所有"找不到这一行"的断言一律写 `40404`，不新造 `40400` —— 两个近邻数字并存，前后端与契约表都会抄错。
 - **本项目桌面端从本计划起有 JS 单测闸门**：`pnpm --dir apps/desktop test:unit`（Node 24 原生跑 `.test.ts`）。约束：被测模块必须只用**可擦除 TS 语法**（无 `enum` / `namespace` / 参数属性），import 必须带 `.ts` 后缀；由 `tsconfig.unit.json` 的 `erasableSyntaxOnly` 把这条钉死。DOM 与 IPC 行为仍靠 CDP 脚本，`node --test` 不碰。
 
 ## 对 spec 的十三处收敛
@@ -1157,7 +1158,7 @@ public class MessageService {
     public ResolvedAccount resolveAccount(Long tenantId, Long accountId) {
         PlatformAccount account = accountMapper.selectById(accountId);
         if (account == null || !tenantId.equals(account.getTenantId())) {
-            throw new BizException(40400, "账号不存在: " + accountId);
+            throw new BizException(40404, "账号不存在: " + accountId);
         }
         String platform = ChatKeys.platformOfAccountType(account.getPlatformType());
         if (platform == null) {
@@ -1801,9 +1802,9 @@ public class MessageQueryService {
             .eq(ChatMessage::getChatKey, chatKey)
             .eq(ChatMessage::getId, around));
         if (anchorRow == null) {
-            // 40400 而不是退回默认窗口：静默退回去会让前端把"锚定失败"当成"消息不存在"，
+            // 40404 而不是退回默认窗口：静默退回去会让前端把"锚定失败"当成"消息不存在"，
             // 而真实原因多半是 chatKey 与 accountId 传串了（跨账号搜索结果点了错误的锚点）。
-            throw new BizException(40400, "around 指向的消息不在该会话内");
+            throw new BizException(40404, "around 指向的消息不在该会话内");
         }
         return new Cursors.Pos(anchorRow.getMsgTime().plusNanos(1_000_000L), 0L);
     }
@@ -1939,7 +1940,7 @@ public class MessageQueryService {
             .eq(ChatConversation::getId, conversationId)
             .last("LIMIT 1"));
         if (head == null) {
-            throw new BizException(40400, "会话不存在: " + conversationId);
+            throw new BizException(40404, "会话不存在: " + conversationId);
         }
         return head;
     }
@@ -2073,7 +2074,7 @@ public class ConversationController {
 | 4 | `GET /api/conversations?q=8613800001001` | 命中 1 条（chat_key 前缀匹配） |
 | 5 | `GET /api/messages?accountId&chatKey=8613800001001@c.us&size=10` | `records` 正序（`msgTime` 单调不减），`hasMore:false` |
 | 6 | 同一 chat 连翻 `before` 两页（size=1） | 两页不重不漏，第二页的 `msgTime` 严格早于第一页 |
-| 6b | 先向第 5 行那个会话（`chatKey=8613800001001@c.us`，即种子客户 Alice 张）`batch` 写 5 条时间递增、`source:'live'` 的消息（正文 `p6b-anchor-1..5`），取第 3 条的**行 id** 打 `GET /api/messages?accountId&chatKey&around=<该 id>&size=2` | `records` 末条 `id` 等于 `around`（锚点自己必须进窗口，而不是被"严格早于"排除掉），`records[0]` 是第 2 条；`hasMore:true` 且用 `nextCursor` 续翻恰好得到第 1 条——两页不重不漏；`around=999999` → `code:40400`（不静默退回默认窗口） |
+| 6b | 先向第 5 行那个会话（`chatKey=8613800001001@c.us`，即种子客户 Alice 张）`batch` 写 5 条时间递增、`source:'live'` 的消息（正文 `p6b-anchor-1..5`），取第 3 条的**行 id** 打 `GET /api/messages?accountId&chatKey&around=<该 id>&size=2` | `records` 末条 `id` 等于 `around`（锚点自己必须进窗口，而不是被"严格早于"排除掉），`records[0]` 是第 2 条；`hasMore:true` 且用 `nextCursor` 续翻恰好得到第 1 条——两页不重不漏；`around=999999` → `code:40404`（不静默退回默认窗口） |
 | 7 | `GET /api/messages/search?q=%E8%AE%A2%E5%8D%95` | ≥1 条，`records[0].conversationId` 非空、`chatTitle` 与会话头一致 |
 | 8 | `search?q=100%25_off`（原文 `100%_off`） | 0 条且不报 500：转义生效，通配符没被当成模式 |
 | 9 | `search?q=%` | `records:[]`（收敛 12：纯通配符返回空而不是全表） |
@@ -2083,7 +2084,7 @@ public class ConversationController {
 | 13 | `days=30` | `perDay.length === 30`，且前 7 天的逐日值与 `days=7` 完全一致（窗口是右对齐的） |
 | 14 | `POST /api/conversations/{id}/read` | `{cleared:1}`；紧接着列表里该会话 `unreadCount === 0`，另一个会话未读不变（区分"清零"与"把整列抹了"） |
 | 15 | `POST /api/conversations/{id}/replay-head` | 返回的 `lastMsgTime` 等于该会话最新消息的 `msgTime`；先向该会话补写一条**更旧**的消息再重算，`lastMsgTime` 必须不变（投影 + 重算两条规则同时成立） |
-| 16 | 用 `id=999999` 打 read | `code:40400` |
+| 16 | 用 `id=999999` 打 read | `code:40404` |
 
 ```bash
 node tmp/p6b-query.mjs
@@ -2215,7 +2216,7 @@ public record CustomerCreateRequest(
             .eq(Customer::getId, customerId)
             .last("LIMIT 1"));
         if (customer == null) {
-            throw new BizException(40400, "客户不存在: " + customerId);
+            throw new BizException(40404, "客户不存在: " + customerId);
         }
         int messages = messageMapper.update(null, new LambdaUpdateWrapper<ChatMessage>()
             .eq(ChatMessage::getTenantId, tenantId)
@@ -2278,7 +2279,7 @@ public record CustomerTimelineVO(List<MessageVO> messages, List<ConversationVO> 
         long owned = customerMapper.selectCount(new LambdaQueryWrapper<Customer>()
             .eq(Customer::getTenantId, tenantId).eq(Customer::getId, customerId));
         if (owned == 0) {
-            throw new BizException(40400, "客户不存在: " + customerId);
+            throw new BizException(40404, "客户不存在: " + customerId);
         }
         int limit = sizeOf(size);
         List<ChatMessage> rows = messageMapper.selectList(new LambdaQueryWrapper<ChatMessage>()
@@ -2325,8 +2326,8 @@ public record CustomerTimelineVO(List<MessageVO> messages, List<ConversationVO> 
 | 5 | `GET /api/customers/{id}/timeline` | `messageCount === messages.length`（未超 size 时）、`conversations` 含该会话、`messages` 按时间正序 |
 | 6 | `GET /api/messages/search?customerId=<id>&q=<该会话正文>` | ≥1 条；换一个 `customerId` 查同一条正文 → 0 条（回填真的把归属写上了，不是搜索碰巧） |
 | 7 | 对 Task 3 写入的 **Alice** 会话（`customer_id` 已被 open_id 自动命中）做 `link-customer` 到**新**客户 | 返回 `messagesLinked:0`（已有归属的行不被改走），但会话头 `customerId` 变成新客户 |
-| 8 | `link-customer` 一个不存在的 `customerId` | `code:40400` |
-| 9 | 用第二个租户 token 打 `POST /api/customers` 同 openId | `code:0`（跨租户允许同 openId）；再用它的 `conversationId` 打 link → `40400`（租户隔离） |
+| 8 | `link-customer` 一个不存在的 `customerId` | `code:40404` |
+| 9 | 用第二个租户 token 打 `POST /api/customers` 同 openId | `code:0`（跨租户允许同 openId）；再用它的 `conversationId` 打 link → `40404`（租户隔离） |
 
 第 7 条是整个任务的关键断言：它区分"无条件覆盖"与"消息保历史、会话头听手动"。
 
@@ -2514,7 +2515,7 @@ cd apps/server && set -o pipefail && ./mvnw -q test -Dtest='ScopeSettingsTest' 2
         Customer customer = customerMapper.selectOne(new LambdaQueryWrapper<Customer>()
             .eq(Customer::getTenantId, tenantId).eq(Customer::getId, scopeKey).last("LIMIT 1"));
         if (customer == null) {
-            throw new BizException(40400, "客户不存在: " + scopeKey);
+            throw new BizException(40404, "客户不存在: " + scopeKey);
         }
         TranslationSetting existing = customerRow(tenantId, scopeKey);
         if (existing == null) {
@@ -2572,7 +2573,7 @@ cd apps/server && set -o pipefail && ./mvnw -q test -Dtest='ScopeSettingsTest' 2
 | 6 | 第 4 条重发一次 | `cached:true`（客户行确实参与了缓存命中，不是每次都重算） |
 | 7 | `DELETE /api/translation/settings/customer/<id>` 后 `GET ?customerId=<id>` | `inherited:true`、值回到全局 |
 | 8 | `PUT /settings` 带 `scope:'customer'` 但不带 `scopeKey` | `code:40000` |
-| 9 | `PUT /settings` 带 `scope:'customer'`, `scopeKey:999999` | `code:40400` |
+| 9 | `PUT /settings` 带 `scope:'customer'`, `scopeKey:999999` | `code:40404` |
 | 10 | 第 2 步之后 `PUT /settings`（无 scope，改全局 `receiveToLang:'en'`）再 `GET ?customerId=<id>` | 客户行仍是 `vi`（改全局不能顺手改掉覆盖行） |
 
 ```bash
@@ -8490,7 +8491,7 @@ export default function MessagesPage(): React.JSX.Element {
         picked={picked}
         onPick={(c) => {
           // 从列表选会话 = 看最新，锚点要一起清掉。MessageThread 里还有一道 chatKey 校验：
-          // 两处各管一半——这里管"用户意图"，那里管"别拿旧 around 去打新会话"（后端会回 40400，右列整个空掉）。
+          // 两处各管一半——这里管"用户意图"，那里管"别拿旧 around 去打新会话"（后端会回 40404，右列整个空掉）。
           setAnchor(null)
           setPicked(c)
         }}
@@ -8555,7 +8556,7 @@ interface Props {
   conversation: ConversationVO
   /** Task 15 的回复框从这里进来。 */
   footer?: ReactNode
-  /** 搜索跳转带进来的锚点；`chatKey` 不匹配时一律忽略（陈旧锚点会让后端回 40400，整列空掉）。 */
+  /** 搜索跳转带进来的锚点；`chatKey` 不匹配时一律忽略（陈旧锚点会让后端回 40404，整列空掉）。 */
   anchor?: JumpTarget['anchor'] | null
   onClearAnchor?: () => void
 }
@@ -8684,7 +8685,7 @@ CDP（C9 抬窗口；C10 输入走真实键盘与真实鼠标；后端在 8180�
 | 3 | 真实鼠标点第一条结果 | 视图切回「会话」；`GET /api/messages` 带 `around=<该条 id>`；`[data-msg-key]` 序列的**最后一条**等于命中的 msgKey；该节点带 `ring` class | 锚点进了窗口且滚到了它。只看"切回会话"区分不出跳的是哪一条 |
 | 4 | 等 2.2s | 同一节点的 `ring`/高亮 class 消失，节点仍在原位（`data-msg-key` 不变） | 高亮是 2 秒，不是永久停留也不是瞬间闪掉 |
 | 5 | 点「回到最新」 | 定位条消失；下一次 `/api/messages` **不带** `around`；右列末条是该会话最新消息 | 窗口退回默认，锚点没粘住 |
-| 6 | 重做一次第 3 步，然后从左列点另一个会话 | 定位条自动消失、请求不带 `around`、右列正常出消息且没有「无法读取历史消息」 | 陈旧锚点会被后端 40400 打成空白右列。Step 6 与 Step 7 的两处清理各管一半，缺一条这一行就露 |
+| 6 | 重做一次第 3 步，然后从左列点另一个会话 | 定位条自动消失、请求不带 `around`、右列正常出消息且没有「无法读取历史消息」 | 陈旧锚点会被后端 40404 打成空白右列。Step 6 与 Step 7 的两处清理各管一半，缺一条这一行就露 |
 | 7 | 方向=发出 + 一个只出现在收到消息里的词 | 0 结果；方向改回「全部方向」→ ≥1 结果 | 过滤条真的接到请求上（看 Network 里的 `direction=`） |
 | 8 | 起=明天、止留空 | 0 结果；点「清除过滤」后恢复 | 时间窗接上了；同时验证「清除」不会把关键词一起抹掉 |
 | 9 | 右列先选中一位已关联客户的会话，再点「只看当前客户」 | 请求带 `customerId=<该会话客户 id>`；未选中客户会话时按钮 `disabled === true` | 客户维度只挂在会话上，不会静默过滤成空结果 |
