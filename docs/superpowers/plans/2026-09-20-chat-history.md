@@ -26,6 +26,7 @@
 - **C10 输入路径口径（P5e 教训）**：凡涉及页内交互的断言一律用 CDP `Input.dispatchMouseEvent` / `Input.dispatchKeyEvent` / `Input.insertText`。合成 `element.click()` 不经过 `mousedown` 的默认焦点行为，会把焦点与选区竞态全部掩盖成"通过"。
 - **C11 不得越权声称验证**：没有真实登录态就跑不了的项目（补底、发送、TG 探测）要么标 blocked 要么如实报告"未验证"，不接受用桩数据冒充端到端。
 - **C12 业务错误码沿用既有词表**：`40000` 参数/取值非法、`40100` 未鉴权、`40404` 目标行不存在、`40901` 冲突、`50000` 未预期异常（`apps/server` 现有 service 就是这套，如 `PlatformAccountService:69` 的"账号不存在"用 `40404`）。本计划所有"找不到这一行"的断言一律写 `40404`，不新造 `40400` —— 两个近邻数字并存，前后端与契约表都会抄错。
+- **C13 主进程发往后端的请求一律走 `apps/desktop/src/main/services/authedFetch.ts`**：不要在调用点手写 `getSession()?.accessToken` + `fetch`。内嵌页的生命周期远长于 access token 的 7200 秒，无刷新的请求会在两小时后整齐地变成 401，而页内只会看到"结果忽然没了"。`authedFetch` 的口径是：附带会话令牌 → 遇 401 刷新一次（并发共享同一次刷新）→ 把新令牌写回 session 文件 → 重放一次 → 仍失败才把响应原样交回调用方。Task 9 的 `createMsgApi`、Task 10 的 `accountDirectory` 与 Task 12 的发送链都按这条接。
 - **本项目桌面端从本计划起有 JS 单测闸门**：`pnpm --dir apps/desktop test:unit`（Node 24 原生跑 `.test.ts`）。约束：被测模块必须只用**可擦除 TS 语法**（无 `enum` / `namespace` / 参数属性），import 必须带 `.ts` 后缀；由 `tsconfig.unit.json` 的 `erasableSyntaxOnly` 把这条钉死。DOM 与 IPC 行为仍靠 CDP 脚本，`node --test` 不碰。
 
 ## 对 spec 的十三处收敛
