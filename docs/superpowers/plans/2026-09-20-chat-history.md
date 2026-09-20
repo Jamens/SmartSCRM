@@ -4504,8 +4504,12 @@ export function activeChatOf(viewId: string): string | null {
 }
 
 function mountOne(entry: AccountEntry, viewId: string): void {
+  // 本期只挂 WhatsApp：TG 的采集实现随 Task 0 一起移出（Task 0 顶部 2026-09-21 的裁定）。
+  // 这里不能写成 `if (!platform) return`——`platformOfAccountType` 认得 telegram，那样 TG
+  // 视图会挂上一条没有 collect 实现的桥：握手会 ready、心跳会 pong，却永远采不到东西，
+  // 比"压根没挂"难查得多。Facebook / Messenger 靠"映射不到采集平台"被同一条闸一起拦下。
   const platform = platformOfAccountType(entry.platformType)
-  if (!platform) return
+  if (platform !== 'whatsapp') return
   const existing = mounts.get(viewId)
   if (existing) {
     void existing.mount()
@@ -4698,8 +4702,9 @@ pnpm --dir apps/desktop exec electron-vite dev --remoteDebuggingPort 9223
 | 3 | 页内执行 `location.href='https://web.whatsapp.com/'`（真重载） | `waLoadedOn` 被清（第二次挂载日志里 wa 那段确实重跑了一次），桥重新 ready |
 | 4 | 打开一个**未登录**的视图 | 一条 `[msgBridge]` 挂载日志都没有；`msg:state` 里没有该 viewId（未登录不挂桥，而不是挂了但采不到） |
 | 5 | 未 ready 时调 `pushToBridge(viewId, {kind:'ping'})` | 返回 `false`，页内收不到任何命令 |
+| 6 | 打开一个**已登录但不是 WhatsApp** 的视图（当前真实可用的是 Facebook，`platformType=5`） | 同样一条挂载日志都没有、`msg:state` 里没有该 viewId。这一档与第 4 档现象相同、**被拦的原因不同**：第 4 档倒在登录观察，第 6 档倒在 `mountOne` 里那道 `platform !== 'whatsapp'`。判据要能分开两者：先在 dev 终端确认该视图的 `login-status` 观察确实到了（`viewManager` 那侧的在线日志或账号行 `isLogin` 已为真），再确认桥仍零挂载——只写"没日志"会把"登录观察没触发"误当成闸门生效 |
 
-第 2、3 条需要真实登录态；拿不到时按 C11 如实标 blocked，不要用"看起来没报错"代替。
+第 2、3 条需要真实登录态；拿不到时按 C11 如实标 blocked，不要用"看起来没报错"代替。第 6 条需要一个真实登录的非 WhatsApp 视图（Facebook 已可用），它验证的是 Telegram 移出本期之后**新挂进来的平台不会拿到一条空桥**——空桥会握手 `ready`、心跳 `pong`，却永远采不到东西，比"压根没挂"难查得多。
 
 - [ ] **Step 7: 提交**
 
