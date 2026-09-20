@@ -45,16 +45,16 @@
 10. **JS 侧单测落点**：新建 `apps/desktop/src/shared/`（可擦除 TS 的纯模型与纯函数：桥、主进程、渲染层三处共用）与 `apps/desktop/src/bridge/`（页内桥），配 `tsconfig.unit.json`（`allowImportingTsExtensions` + `erasableSyntaxOnly` + `types:["node"]`，均已在本机 tsc 5.9.3 验证可用）与脚本 `test:unit: node --test "src/shared/**/*.test.ts" "src/bridge/**/*.test.ts"`（Node 24 的多 glob 实测可展开；若某条 glob 匹配不到文件，Node 24 会打印 `Could not find` 并以非 0 退出——`src/bridge/` 在 Task 8 才有第一个测试，Task 7 先只写 `src/shared` 那条，Task 8 补齐）。`@shared` 别名要同时加进 `electron.vite.config.ts` 的 `main` / `renderer` 与 `tsconfig.web.json` / `tsconfig.node.json` 的 `paths`。
 11. **未读数是尽力值**：live 收到 `in` 消息且该视图的 `activeChat != chat_key` 时 +1；记录页打开会话即调 `POST /api/conversations/{id}/read` 清零。不追求与 WhatsApp 侧栏一致。
 12. **搜索用 `LIKE`，不建 FTS**（spec §1 非目标）；`q` 里的 `%` `_` `\` 必须转义，空串与纯通配符返回空结果而不是全表。
-13. **spec §8 的「按客户语向」在 P6 只落生效面 ①（记录页回复框）。** 生效面 ②（内嵌页气泡按客户取语向）要三段目前都不存在的东西：主进程持有「视图 → chatKey → customerId」、注入层的翻译请求带上 `customerId`、后端按 chatKey 查归属（或主进程缓存这张表）。缺任何一段 ② 都不成立，而补齐全套是独立一期（1 个后端端点 + 1 份主进程目录 + 桥的请求字段 + 各自的契约与回归），塞进本计划末尾只会让前 18 个任务的验收一起变模糊。**本计划不做 ②**：内嵌页气泡在 P6 始终按全局语向翻译。Task 17 的弹层照后端既有语义把该客户的语向写成 `scope='customer'` 覆盖行，②落地时直接读得到，不需要数据迁移；记录页回复框（先译再发）已经带 `customerId`，是①的完整兑现。
+13. **spec §8 的「按客户语向」两处生效面都落在 P6：① 记录页回复框由 Task 6 兑现，② 内嵌页气泡由 Task 17b 兑现。** ② 需要的三段东西在计划里都各有承接点，不另起一期：主进程那份「视图 → 账号 / 会话」的目录在 Task 10 的 `accountOfView` 与 Task 11 的 `activeChatOf` 里已经有了（采集链本来就靠它给批次盖章），后端按 `(tenantId, accountId, chatKey)` 查 `chat_conversation.customer_id` 是一行投影查询（17b Step 1），页内的翻译请求只需要把会话并进 inflight 去重键（17b Step 3）。落地后的边界：**页面说不出账号与会话**——上报到 `view:invoke` 的字段仍只有 `text/type/input/noCache`，`accountId` 与 `chatKey` 由主进程按 `viewId` 重新盖。记录页回复框（①）继续显式带 `customerId`，且它压过 ② 的会话投影。
 
 ## 验收口径速览（对应 spec §12）
 
 | 层 | 谁来做 | 通过标准 |
 |---|---|---|
 | Java 纯函数 | scoped：`./mvnw test -Dtest='ChatKeysTest,MsgTimesTest,StatusLadderTest,SearchPatternTest'`（Task 2）、`-Dtest='CursorsTest'`（Task 4）、`-Dtest='ScopeSettingsTest'`（Task 6）；全量：`./mvnw test`（Task 19） | 三处 scoped 分别 `Tests run: 15 / 3 / 4`（Task 2 的 15 = ChatKeys 6 + MsgTimes 5 + StatusLadder 2 + SearchPattern 2，2026-09-20 实跑）；P6 六个测试类共 22 条，全量跑 `Failures: 0, Errors: 0` |
-| 后端契约 | `tmp/p6b-query.mjs` / `tmp/p6b-customer.mjs` / `tmp/p6b-scope-contract.mjs`（Node，打 8180）+ Task 3 Step 4/5 的 curl 探针 | 三份脚本分别 `ALL PASS (17/17)`、`(9/9)`、`(10/10)`，覆盖幂等、游标与锚点窗口、搜索转义与过滤、统计口径、link-customer 回填、客户级语向 |
-| TS 纯函数 | `pnpm --dir apps/desktop test:unit` | normalize / ackRank / CollectorHub / SendRegistry / liveTail merge / 日分组 / chatKeys / 搜索与统计 / 建客户预填与语向草稿 / 时间线分组 全绿，计数按 12 → 16 → 28 → 34 → 39 → 43 → 48 → 56 → 68 → 76 → 80 单调递增，终态 `# pass 80` / `# fail 0` |
-| 桥与真实会话 | CDP + 已登录 WhatsApp 视图 | 补底 N=5 行数与 `msg_key` 集合前后差、自聊发送→状态推进→删除、原生页手发一条也入库、断线重挂不重不漏 |
+| 后端契约 | `tmp/p6b-query.mjs` / `tmp/p6b-customer.mjs` / `tmp/p6b-scope-contract.mjs` / `tmp/p6c-chatkey-direction.mjs`（Node，打 8180）+ Task 3 Step 4/5 的 curl 探针 | 四份脚本分别 `ALL PASS (17/17)`、`(9/9)`、`(10/10)`、`(8/8)`，覆盖幂等、游标与锚点窗口、搜索转义与过滤、统计口径、link-customer 回填、客户级语向、按会话投影取语向与缓存分键 |
+| TS 纯函数 | `pnpm --dir apps/desktop test:unit` | normalize / ackRank / CollectorHub / SendRegistry / liveTail merge / 日分组 / chatKeys / 搜索与统计 / 建客户预填与语向草稿 / 时间线分组 / 翻译请求去重键 全绿，计数按 12 → 16 → 28 → 34 → 39 → 43 → 48 → 56 → 68 → 76 → 79 → 83 单调递增，终态 `# pass 83` / `# fail 0` |
+| 桥与真实会话 | CDP + 已登录 WhatsApp 视图 | 补底 N=5 行数与 `msg_key` 集合前后差、自聊发送→状态推进→删除、原生页手发一条也入库、断线重挂不重不漏、**内嵌页气泡跟随客户语向**（Task 17b Step 6，含"陌生会话仍走全局"的并存对照） |
 | 渲染层 | CDP 真实鼠标/键盘（C10） | 列表 / 翻页 / live 去重 / 回复（先译再发开关两态）/ 语向弹层 / 陌生建客户闭环 / 搜索跳转 / 统计卡数字等于库内 COUNT |
 
 ## 与后续阶段的三条硬缝（spec §13）
@@ -63,7 +63,7 @@
 
 1. **发送契约必须无会话内状态**（P7 群发要复用）。`scrm:msg:send` 的入参是 `{accountId, chatKey, text, localId}`，`localId` 由渲染层生成，主进程 `SendRegistry` 只按 `localId` 登记回执（Task 9 的 `add(localId, viewId)` / `settle(receipt)`），**不读也不写"当前会话""上一条消息"这类会话级变量**。节流与看门狗留在渲染层排队（Task 15）与主进程超时（Task 12），不在契约里塞批次语义。可查断言：Task 19 Step 3 第 6 行——同一 `chatKey` 连发两条不同 `localId`，两条各自拿到独立回执、状态互不覆盖。
 2. **`chat_message` 就是事实源，P6 不预建任何聚合表**（P8 群统计 / P13 报表要读它）。会话头 `chat_conversation` 只是投影，且只承担列表页展示；跨会话/跨时间段的统计一律走 `GET /api/messages/stats` 的实时聚合（Task 4）。V8 迁移里出现第三张表即为违约。可查断言：Task 19 Step 6 的 `grep -c 'CREATE TABLE' ... V8__chat_history.sql` 必须是 `2`；两表行数与 `stats` 的对照口径在 Step 1 第 3 条（分母）与 Step 2（增量）里。
-3. **客户级语向的数据形状已经落到位**（生效面 ② 落地时不需迁移）。Task 6 与 Task 17 写入的就是后端既有语义的 `scope='customer'` / `scope_key=<customerId>` 覆盖行；②要补的是"视图 → chatKey → customerId"的传递链（见收敛第 13 条），不改这张表、不加列、不改写入方。可查断言：Task 17 Step 7 的 CDP 第 7、8 行（成对读）确认覆盖行可写可读、第 11 行确认可清；Task 19 Step 7 第 3 条把它落成书面已知限制——"写入侧已经是客户级，读取侧只有记录页回复框"。
+3. **客户级语向的数据形状在 Task 6/17 就落到位**，生效面 ② 由 Task 17b 接上，不改这张表、不加列、不改写入方。Task 6 与 Task 17 写入的就是后端既有语义的 `scope='customer'` / `scope_key=<customerId>` 覆盖行；17b 补的是"读取侧的第二条入口"——主进程盖 `accountId`+`chatKey`、后端按 `chat_conversation` 投影出 `customer_id`（见收敛第 13 条）。可查断言：Task 17 Step 7 的 CDP 第 7、8 行（成对读）确认覆盖行可写可读、第 11 行确认可清；17b Step 2 的契约表确认「② 按会话投影取语向」与「① 显式 customerId 压过 ②」两条同时成立；Step 6 的真实页面确认语种只能由主进程那条盖章链得出。
 
 ---
 
@@ -109,6 +109,7 @@ apps/desktop/
     chatTypes.ts          NormalizedMessage · LiveFrame · BridgeState · SendReceipt 形状            [新增]
     chatStatus.ts         页内 ack → 状态词 + 阶梯秩与可否推进                                      [新增]
     chatKeys.ts           chat_key 形态解释：群判定与对端裸号码（Java `ChatKeys` 的 TS 镜像）        [新增]
+    translateKey.ts       翻译请求的 inflight 去重键：语种之外还要分会话提示（Task 17b）                  [新增]
     liveTail.ts           live 帧并入已取列表的纯函数（去重 / 尾部补 / 乐观气泡销账）              [新增]
     *.test.ts             上述纯函数的 node:test 用例                                               [新增]
   src/bridge/
@@ -127,7 +128,10 @@ apps/desktop/
     sendRegistry.ts       localId → pending 回执登记 + 超时清理；同上                                  [新增]
     msgApi.ts             批量入库 / 状态推进 / 账号列表的 HTTP hop（token 与 fetch 都注入）；同上      [新增]
     accountDirectory.ts   viewId ⇄ accountId 目录（5min TTL）                                          [新增]
-  src/main/webContentsView/ipc.ts    routePageMessage 改道 msg-*                                        [改]
+  src/main/services/translationBridge.ts  requestTranslation 多一个 TranslateContext 形参（Task 17b）  [改]
+  src/inject/core/translation/ · core/PlatformAdapter.ts · platforms/whatsapp/index.ts
+                          页内请求带上会话提示（只进去重键，不进请求体；Task 17b）                        [改]
+  src/main/webContentsView/ipc.ts    routePageMessage 改道 msg-*；view:invoke 按 viewId 盖会话（17b）  [改]
   src/main/ipc.ts                    注册 msg:send / msg:sync-history / msg:bridges                    [改]
   src/preload/index.ts               scrm.msg 五个成员                                                  [改]
   src/renderer/src/
@@ -1441,9 +1445,13 @@ curl -s -X POST http://127.0.0.1:8180/api/messages/status -H "authorization: Bea
 
 预期：`{"updated":1}` —— 两条更新里只有 `delivered` 落地，随后那条 `sent` 被 `advanceStatus` 的阶梯守卫挡成 0 行受影响。（若打印 2，说明守卫里的 `FIELD()` 比较反了或 `direction='out'` 条件丢了。）
 
-> **再加一组：已落定的 `failed` 不得被迟到 ack 翻案。** 同一条 msgKey 先 `{"status":"failed"}`（预期 `updated:1`），再依次发 `sent` / `delivered`（预期各 `updated:0`），最后 GET 该会话消息，库里状态仍为 `failed`。这条不在这里守住，Task 12 的"重试"就会对着一条已经变成 delivered 的气泡。
+（本步三条 curl 里的 `accountId` 与 `chatKey` 都沿用 Step 4 现取到的 WA 账号 id 和 Bob 那条会话，占位的 `1` 会直接吃 `40404`。）
 
-再打一次终态断言：
+> **再加一组：已落定的 `failed` 不得被迟到 ack 翻案。** 这一组**必须换一条自己的 msgKey**，不能接着用 `ABC2`：上面那条 curl 已经把 `ABC2` 推到 `delivered`，而 `failed` 只允许从 `pending`/`sent` 落定——同一条 msgKey 上"`failed` 能落地"与"`delivered` 不被 `failed` 翻案"两个期望永远不可能同时成立，写在一起就是一次自相矛盾的空跑。
+>
+> 落法：用 Write 工具另落 `tmp/p6a-abc3.json`（与 Step 4 同一形状，`accountId` 用现取值），里面只放一条 out 行——`chatKey:"8613800001002@c.us"`、`msgKey:"true_8613800001002@c.us_ABC3"`、`status:"pending"`、`body:"retry-me"`、`msgTimeEpochSec` 比 `ABC2` 早（顺带压一次 `upsertHead` 的时间守卫：会话头的预览不该被这条更晚入库、更早发生的行顶掉）。`POST /api/messages/batch` 它，预期 `{"accepted":1,"duplicated":0,"rejected":0}`。然后在这条**新的 `pending` 行**上按顺序打三次 `/api/messages/status`：`{"msgKey":"…ABC3","status":"failed"}` → `updated:1`；再 `sent` → `updated:0`；再 `delivered` → `updated:0`。终态用 Step 4 那个一次性探针读（本任务还没有读接口，`GET /api/messages` 是 Task 4），期望库里 `ABC3` 的 `status` 仍是 `failed`。这一组区分的是"回头路一律挡住"与"`sent`/`delivered` 数字比 `failed` 大所以能覆盖失败"——少了它，Task 12 的"重试"会对着一条已经变成 delivered 的气泡显示"发送失败请重试"。
+
+再打一次终态断言（回到 `ABC2`，它现在是 `delivered`）：
 
 ```bash
 curl -s -X POST http://127.0.0.1:8180/api/messages/status -H "authorization: Bearer $tok" \
@@ -1477,6 +1485,7 @@ git commit -m "feat(P6): 批量入库与会话头投影 + 发送状态单调推�
 - Create: `apps/server/src/main/java/com/smartscrm/server/web/vo/DayCountVO.java`
 - Create: `apps/server/src/main/java/com/smartscrm/server/web/ConversationController.java`
 - Modify: `apps/server/src/main/java/com/smartscrm/server/web/MessageController.java`（补 GET 三个端点）
+- Modify: `apps/server/src/main/java/com/smartscrm/server/service/MessageService.java`（只动一处：客户匹配按批复用，见下面那条口径）
 - Modify: `apps/server/src/main/java/com/smartscrm/server/mapper/ChatMessageMapper.java`（补 `linkCustomer` 用的批量回填由服务层用 wrapper 完成，本任务不新增 SQL；若 Step 4 需要按 chat_key 批量取 customerId 再加）
 
 **Interfaces:**
@@ -1491,6 +1500,22 @@ git commit -m "feat(P6): 批量入库与会话头投影 + 发送状态单调推�
   - `ConversationVO(Long id, Long accountId, String platform, String chatKey, String title, Boolean isGroup, Long customerId, LocalDateTime lastMsgTime, String lastMsgBody, Integer unreadCount)`
   - `MessageVO(Long id, Long accountId, String platform, String chatKey, String msgKey, String direction, Long customerId, String senderKey, String senderName, String body, String mediaType, String mediaSummary, LocalDateTime msgTime, String status, String source, String sendLocalId)`
   - `Cursors.encode(LocalDateTime time, long id) -> String`（`"<epochMillis>:<id>"`）、`Cursors.decode(String) -> Pos(LocalDateTime time, long id) | null`
+
+> **顺手收掉 Task 3 评审带出的一条：入库侧的客户匹配要按批复用。** `MessageService:108` 现在是**每条消息**调一次 `matchCustomer`，而它内部的手机号兜底那条分支要 `selectList` 全租户该平台客户再在内存里比（`MessageService.java:231-239`）。补底一批的上限是 500 条，同一会话的消息占绝大多数——不改，Task 11 点一次「同步历史」就是几百次重复点查加若干次全表扫。落法（就在 `accept` 的行构造循环里，不新增类）：
+>
+> ```java
+>         // 一批里同一会话的归属只算一次：绝大多数批次只有两三个 chatKey，
+>         // 而手机号兜底那条分支是"读全租户客户再比"，每条都跑一遍就是把补底变成扫库。
+>         Map<String, Long> customerByChat = new HashMap<>();
+>     // 循环内替换原来的 row.setCustomerId(matchCustomer(...))：
+>         String ck = item.chatKey();
+>         if (!customerByChat.containsKey(ck)) {
+>             customerByChat.put(ck, matchCustomer(tenantId, account.platformType(), ck));
+>         }
+>         row.setCustomerId(customerByChat.get(ck));
+> ```
+>
+> `containsKey` 那一步不能省成 `computeIfAbsent`：匹配不到客户时值是 `null`，而 `computeIfAbsent` 把"映射到 null"当成"没有映射"，未命中的会话每条还是会重算一次——恰好是这里要防的那种批次。验证不需要新脚本：本任务的 `tmp/p6b-query.mjs` 里"会话行的 `customerId` 非空"那几条断言跑的就是这条路径，改坏了它们会红；再把 `tmp/p6a-contract.mjs` 复跑一遍确认幂等那一对读数没变（`16/16`）。
 
 - [ ] **Step 1: 先写游标的失败测试**
 
@@ -8754,7 +8779,7 @@ git commit -m "feat(P6): 记录页全局搜索视图与统计卡（搜索结果�
   - `api/translation`：`useResetCustomerTranslationSettings()` → `useMutation<number, …, { cleared: number }>`
   - `ConversationActions`：props `{ conversation: ConversationVO; onLinked: (customerId: number) => void }`，DOM 上带 `data-p6-actions="header"`、`data-p6-action="direction|create"`、`data-p6-direction-summary`、`data-p6-customer-name`
   - `MessageThread` 的 props 增加 `headerExtra?: ReactNode`
-- 不做（留给后面）：客户抽屉时间线（Task 18）、真实登录态端到端（Task 19）、内嵌页气泡的客户级语向（收敛 13）。
+- 不做（留给后面）：内嵌页气泡的客户级语向（下一个任务 Task 17b）、客户抽屉时间线（Task 18）、真实登录态端到端（Task 19）。
 
 > 两个纯模块为什么要抽出来：`createCustomerPrefill` 决定"给谁建客户"——判错就是把一个群建成一个人，或者把已关联的会话再建一遍；`directionDraft` 决定"有没有改动"——`''` 与 `'auto'` 这一对同义值在库里都真实存在，直接用 `JSON.stringify` 比较会让弹层一打开就谎称有 3 处改动、把「保存」按钮错误地亮着。两个都是能在 node 里断死、在浏览器里却要先凑数据的判断。
 >
@@ -9638,6 +9663,289 @@ git commit -m "feat(P6): 会话头语向弹层与陌生建客户闭环（覆盖�
 
 ---
 
+### Task 17b: 内嵌页气泡按客户取语向（spec §8 生效面 ②）
+
+**执行顺序**：紧跟 Task 17、在 Task 18 之前跑。编号取 `17b` 是为了不重排 Task 18/19 与它们身上的全部交叉引用（"Task 18 的时间线""Task 19 的端到端"在计划里出现二十多次，重排一次就要复核二十多次）。
+
+**Files:**
+- Modify: `apps/server/src/main/java/com/smartscrm/server/web/dto/TranslateDTO.java`（尾部 +`chatKey`、+`accountId`）
+- Modify: `apps/server/src/main/java/com/smartscrm/server/service/TranslationService.java`（+`customerOfChat`，`translate()` 顶部改走"显式 customerId → 会话投影 → 全局"）
+- Modify: `apps/desktop/src/main/services/translationBridge.ts`（`requestTranslation(req, ctx, apiBase?)`）
+- Modify: `apps/desktop/src/main/webContentsView/ipc.ts:77-98`（`view:invoke` 按 `viewId` 盖章）
+- Modify: `apps/desktop/src/inject/core/translation/translationQueue.ts`（请求 +`chatHint`，去重键改走 `translateKey`）
+- Create: `apps/desktop/src/shared/translateKey.ts` · `translateKey.test.ts`
+- Modify: `apps/desktop/src/inject/core/translation/domScan.ts`、`apps/desktop/src/inject/core/translation/inputPreview.ts`（请求带上页内会话提示）
+- Modify: `apps/desktop/src/inject/core/PlatformAdapter.ts`（+`chatHint(): string | null`，基类返回 null）、`apps/desktop/src/inject/platforms/whatsapp/index.ts`（实现：读 `document.title`）
+
+**Interfaces:**
+- Consumes: Task 6 的 `ScopeSettings.resolve(customerId, customer, global)` 与 `customerRow(tenantId, customerId)`、Task 1 的 `ChatConversation`（`uk_conv = (tenant_id, platform, account_id, chat_key)`）、Task 10 的 `accountOfView(viewId): AccountEntry | null`、Task 10/11 的 `activeChatOf(viewId): string | null`。
+- Produces:
+  - `POST /api/translation/translate` 的 body 多两个可空字段：`accountId?: number`、`chatKey?: string`。生效语向的解析顺序固定为 **① 显式 `customerId` → ② `(tenantId, accountId, chatKey)` 命中的 `chat_conversation.customer_id` → ③ 全局**，② 是 ① 的缺省填充而不是覆盖它的另一条通道。
+  - `src/shared/translateKey.ts`：`interface TranslateKeyInput { type: 'send' | 'receive'; input?: boolean; chatHint?: string | null; text: string }`、`function translateKey(req: TranslateKeyInput): string`。
+  - `PlatformAdapter.chatHint(): string | null`（与 `isOutgoingMessage` 同族的"平台给不出就返回 null"口径）。**它只进本页的 inflight 去重键，永远不出页、不进请求体**——注入层保持 P5 §4 的 DOM-only 边界，不读 `window.WPP`（那是桥 bundle 的地盘），所以页内拿不到也拿不准真正的 `chatKey`，这不是缺口。
+
+**三条口径（写进对应文件的注释，不要只留在这里）**
+
+1. **后端只认主进程盖的章。** `ipc.ts` 从 `arg.data` 里只挑 `text / type / input / noCache`，页面上报的其它字段一律丢弃；`accountId` 与 `chatKey` 由主进程按 `event.sender` 反查出的 `viewId` 自己填。于是页面永远说不出"我属于哪个账号的哪个会话"，一个错映射最多让语向选错，不会让它读到别人的客户行（查询还额外带 `tenant_id`）。
+2. **投影即时效。** `activeChatOf(viewId)` 是主进程手里"这个视图正在看哪个会话"的最后一份已知值（桥的 `active_chat` 事件 + 命令驱动上报）。切了会话而事件没到时，气泡会按上一个会话的客户语向多译一次；下一轮扫描 msgId 变了自然纠正。不为此加页内轮询，也不加"会话切换"专属的失效广播。
+3. **不新增缓存失效逻辑。** `buildCacheKey(type, channel, fromLang, toLang, normalized)` 里已经含两侧语种，客户语向天然分键（Task 6 契约第 5 条已核过一次，本任务第 7、8 行再按 ② 的路径核一次）。
+
+- [ ] **Step 1: 后端接受 `accountId` / `chatKey` 并按会话投影解析客户**
+
+```java
+// TranslateDTO.java —— 尾部追加，都可空：不带即按全局译，P5 的调用方一字不改
+    @Size(max = 128) String chatKey,
+    Long accountId
+```
+
+```java
+    /**
+     * 生效面 ②：把"当前会话"换成客户 id。三种情况一律返回 null 回落全局——
+     * 请求没带齐 accountId/chatKey、查不到会话行、行上没挂客户。
+     * 只按 uk_conv 的三列精确匹配，不做前缀模糊：猜错语向译出的是别人家的语言，
+     * 比"没译"更难排查。
+     */
+    private Long customerOfChat(Long tenantId, Long accountId, String chatKey) {
+        if (accountId == null || chatKey == null || chatKey.isBlank()) {
+            return null;
+        }
+        ChatConversation conv = conversationMapper.selectOne(new LambdaQueryWrapper<ChatConversation>()
+            .eq(ChatConversation::getTenantId, tenantId)
+            .eq(ChatConversation::getAccountId, accountId)
+            .eq(ChatConversation::getChatKey, chatKey)
+            .last("LIMIT 1"));
+        return conv == null ? null : conv.getCustomerId();
+    }
+```
+
+`translate()` 顶部把 Task 6 写下的那两行的入参换掉（其余逻辑一律不动）：
+
+```java
+        Long customerId = dto.customerId() != null
+            ? dto.customerId()
+            : customerOfChat(tenantId, dto.accountId(), dto.chatKey());
+        TranslationSetting customer = customerId == null ? null : customerRow(tenantId, customerId);
+        ScopeSettings.Resolved resolved = ScopeSettings.resolve(customerId, customer, requireSettings(tenantId));
+        TranslationSetting s = resolved.setting();
+```
+
+构造函数注入 `ChatConversationMapper conversationMapper`（`TranslationService` 已经直接持有 setting / cache / node 三张 mapper，多一张同族）。
+
+> **本步不写 JUnit**：`显式 customerId 优先，否则查投影` 的判定要连着 MyBatis 查询与 HTTP 才有意义，把那个三元表达式抽成纯函数再测一遍是不可能失败的检查（项目里已有教训：断言"传 null 返回 null"这种同义反复，红了绿了都不说明任何事）。判定全部落在 Step 2 的契约表上。
+
+- [ ] **Step 2: 编译 + 重启 + 后端契约 `tmp/p6c-chatkey-direction.mjs`**
+
+`set -o pipefail && MAVEN_OPTS="-Duser.language=en -Duser.country=US" ./mvnw -o -DskipTests package`，按 C8 重启 :8180。脚本用 Write 落成 UTF-8 文件，一次跑完打印 PASS/FAIL 表（`login()` → `check(name, cond, detail)`）。
+
+**前置（先探再断）**：`GET /api/platform-accounts` 现取一个 WA 账号 id；`GET /api/conversations?accountId=<wa>&size=50` 里找 `chatKey === '8613800001001@c.us'` 的那一行，读出它的 `customerId`（Task 3/4 的 open_id 自动匹配应当已经把它挂上 Alice）。**读不到这一行就整批判 blocked 并退出**（C11）——契约脚本里不许顺手 `batch` 补数据来凑前置，那是 Task 3 的活。
+
+| # | 断言 | 期望 |
+|---|---|---|
+| 1 | `PUT /api/translation/settings` body `{scope:'customer', scopeKey:<aliceId>, receiveFromLang:'en', receiveToLang:'vi'}` | `code:0`、`scope:'customer'`、`inherited:false` |
+| 2 | `POST /api/translation/translate` `{text:'Good morning', type:'receive', accountId:<wa>, chatKey:'8613800001001@c.us'}` | `toLangCode === 'vi'` |
+| 3 | 同 `text`/`type`，**不带** `accountId`/`chatKey` | `toLangCode` 等于全局接收目标语种（V5 种子 `zh-CN`）——与第 2 行必须不同，否则 ② 与"字段被忽略"无从区分 |
+| 4 | `accountId` 换成 TG 账号 id，`chatKey` 仍是那个 `86…@c.us` | `code:0` 且 `toLangCode` 回到全局：平台错配的 chatKey 既不该 400，也不该串到别的客户（`(tenant, tg, '86…@c.us')` 在 `uk_conv` 上没有行） |
+| 5 | `chatKey:'8613800009999@c.us'`（库里没有的会话）+ 正确 `accountId` | 全局语向（陌生会话跟全局，spec §8 的默认） |
+| 6 | 同一请求里同时给 `customerId:<bobId>` 与 Alice 的 `chatKey` | 走 **Bob** 的语向。前置：先给 Bob 也建一条覆盖行且 `receiveToLang` 与 Alice 的 `vi` 不同（两行写成同一种语言就是一条空断言） |
+| 7 | 第 2 行原样重发 | `cached === true` 且 `toLangCode === 'vi'`（客户语向进了缓存键，不是每次重算） |
+| 8 | `DELETE /api/translation/settings/customer/<aliceId>` 之后重发第 2 行 | `toLangCode` 回到全局，且**不是**第 7 行那条 `vi` 缓存的命中（缓存分键的反证：删行即回落，同时证明第 7 行的 `cached` 来自客户键而非全局键） |
+
+```bash
+node tmp/p6c-chatkey-direction.mjs
+```
+
+收尾（C4）：脚本最后打印 `GET /api/translation/settings?customerId=<aliceId>` 的 `inherited:true`（覆盖行确清），并打印本轮 `translation_cache` 的行数增量——该表只增不减，新增若干行属预期；DEMO 种子计数不受影响（本任务不碰 `customer` 表）。
+
+- [ ] **Step 3: 注入层的请求去重键按会话分开（先写失败测试）**
+
+```ts
+// apps/desktop/src/shared/translateKey.ts
+export interface TranslateKeyInput {
+  type: 'send' | 'receive'
+  input?: boolean
+  chatHint?: string | null
+  text: string
+}
+
+/**
+ * 同一段原文在两个会话里可能走两个语向（生效面 ②）。inflight 去重键必须把会话算进去：
+ * 少了它，切会话时后到的那次会复用前一会话的 promise，把上一个会话客户的语种画到
+ * 这个会话的气泡上，而 `isTranslated` 会把画错的那一行一直留着。
+ *
+ * `chatHint` 是页内能给出的**会话提示**（平台自己给的名字/标题一类），不是 `chatKey`：
+ * 注入层不读平台内部对象，真正的 `chatKey` 由主进程盖章、只有主进程那份进后端。
+ * 提示撞车（两个会话同名）时最多退化成今天的共用一次 promise，不会比现状更坏。
+ */
+export function translateKey(req: TranslateKeyInput): string {
+  return `${req.type}|${req.input === true ? 'i' : 'f'}|${req.chatHint ?? ''}|${req.text}`
+}
+```
+
+```ts
+// apps/desktop/src/shared/translateKey.test.ts
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+
+import { translateKey } from './translateKey.ts'
+
+test('same text in two chats are two requests', () => {
+  const a = translateKey({ type: 'receive', chatHint: 'Alice', text: 'Good morning' })
+  const b = translateKey({ type: 'receive', chatHint: 'Bob', text: 'Good morning' })
+  assert.notEqual(a, b)
+})
+
+test('chat hint changes nothing else about the key', () => {
+  assert.equal(
+    translateKey({ type: 'receive', chatHint: null, text: 'x' }),
+    translateKey({ type: 'receive', text: 'x' }),
+    'null 与不带提示都是"没有会话上下文"，不该分两次请求'
+  )
+})
+
+test('input preview never shares a slot with a bubble', () => {
+  assert.notEqual(
+    translateKey({ type: 'send', input: true, chatHint: 'Alice', text: '你好' }),
+    translateKey({ type: 'send', chatHint: 'Alice', text: '你好' })
+  )
+})
+```
+
+```bash
+pnpm --dir apps/desktop test:unit
+```
+
+预期：`Cannot find module './translateKey.ts'`（RED，实现文件还没建）；建完文件后 `# pass 79` / `# fail 0`（Task 17 结束的 76 + 本任务 3）。
+
+`translationQueue.ts` 两处改动：
+
+```ts
+import { translateKey } from '../../../shared/translateKey'
+
+export interface TranslateRequest {
+  text: string
+  type: 'receive' | 'send'
+  input?: boolean
+  noCache?: boolean
+  /** 页内此刻看的会话提示。只用于本页 inflight 去重；到后端的那份由主进程重新盖章。 */
+  chatHint?: string | null
+}
+```
+
+并把 `const key = \`${req.type}|${req.input === true ? 'i' : 'f'}|${req.text}\`` 换成 `const key = translateKey(req)`。
+
+> 两处 import 后缀写法不同是有原因的：闸门那侧 `tsconfig.unit.json` 开了 `allowImportingTsExtensions`，必须写 `./translateKey.ts`；注入层走 `tsconfig.inject.json`（没开那条），写无后缀的相对路径，esbuild 按字面解析。给注入层补一条 `.ts` 后缀会让 `pnpm --dir apps/desktop run typecheck:inject` 直接红。
+
+- [ ] **Step 4: 页内给自己一个"这是哪个会话"的提示**
+
+注入层是 DOM-only 的（P5 §4 的既定边界：它不读平台内部对象，也不 import 桥 bundle 的任何东西）。所以这一步要的**不是**真正的 `chatKey`——真正的 `chatKey` 只有主进程那份算数（Step 5）——页内只需要一个"这次请求属于哪一个会话画面"的提示串，用来把 inflight 去重键分开。
+
+```ts
+// PlatformAdapter.ts —— 与 isOutgoingMessage 同一族口径：平台给不出就是 null
+  /**
+   * 页内此刻在跟谁说话的一个提示串。只用于本页的请求去重，不进请求体、不参与任何语种判定。
+   * 名字故意不叫 chatKey：那是主进程盖章的字段，两者不是一个东西。
+   */
+  chatHint(): string | null {
+    return null
+  }
+```
+
+```ts
+// platforms/whatsapp/index.ts
+  /**
+   * WhatsApp 打开某个会话时把会话名写进 `document.title`（P5 的 `getUserInfo` 已经在读它，
+   * 连未读后缀 `(...)` 都是它剥的）。这是一条纯 DOM 事实，不需要平台内部对象。
+   */
+  chatHint(): string | null {
+    return document.title.trim() || null
+  }
+```
+
+两个已知退化，都写明在注释里、不额外修补：① 两个会话同名 → 提示撞车，退化成今天这样共用一次 promise；② 未读后缀会让同一会话在不同时刻给出不同提示 → 多一次请求，后端缓存仍然分键挡住。**都不影响正确性，只影响多问一次**。
+
+调用点各一行（`domScan.ts` 的 `requestTranslate(injector, { text, type })`、`inputPreview.ts` 的 preview 与回车前两处 `requestTranslate(...)`）：
+
+```ts
+    const result = await requestTranslate(injector, { text, type, chatHint: adapter.chatHint() })
+```
+
+`inputPreview.ts` 里两处同理带上 `chatHint: adapter.chatHint()`——输入框里的草稿就是发给此刻这个会话的，② 对它同样成立（记录页回复框那条走的是 ①，与本任务无关）。
+
+`TranslateRequest` 新增的 `chatHint?: string | null` 只活在页内：`ipc.ts` 的 `view:invoke` 是从 `arg.data` 里**挑**字段重组 body 的（`text / type / input / noCache`），没进清单的字段天然到不了后端——**不要为了"顺手"把 `chatHint` 加进那份清单**，那等于把语种判定权交回页面。
+
+- [ ] **Step 5: 主进程盖章**
+
+```ts
+// translationBridge.ts
+export interface TranslateContext {
+  accountId?: number
+  chatKey?: string
+}
+```
+
+`requestTranslation(req, ctx: TranslateContext = {}, apiBase?: string)`——body 换成 `JSON.stringify({ ...req, ...ctx })`。全仓只有 `ipc.ts:87` 一个调用点，直接把参数顺序改掉，不留兼容重载。
+
+```ts
+// webContentsView/ipc.ts，view:invoke 里 requestTranslation 之前
+      const entry = accountOfView(viewId)
+      const activeChat = activeChatOf(viewId)
+      // 后端那列是 VARCHAR(128)，超长会让整次翻译 400、页内只看得见"没译文"，所以在盖章处就丢掉。
+      const chatKey = activeChat && activeChat.length <= 128 ? activeChat : undefined
+      return requestTranslation(
+        {
+          text,
+          type,
+          ...(req?.input === true ? { input: true } : {}),
+          ...(req?.noCache === true ? { noCache: true } : {})
+        },
+        {
+          ...(entry ? { accountId: entry.accountId } : {}),
+          ...(chatKey ? { chatKey } : {})
+        },
+        typeof apiBase === 'string' ? apiBase : undefined
+      )
+```
+
+> 桥还没挂上（Task 10 之前、未登录、或 `activeChatOf` 还是 null）时两个字段都不带——后端那三档解析自然落到全局语向，P5 的行为一字不变。这条回落路径不是"没做完"，是 ② 的默认态。
+
+- [ ] **Step 6: 真实内嵌页端到端 `tmp/p6c-page-direction.mjs`（需真实登录态）**
+
+前置按 C9/C10：`pnpm --dir apps/desktop exec electron-vite dev --remoteDebuggingPort 9223`、`tmp/p5c-top.ps1` 抬窗、断言 `document.visibilityState === 'visible'`；页内插桩沿用 P5 §6.3 的既有口径——`window.__SCRM_INJECTOR__` 是 contextBridge 对象，直接赋值会被吞，必须用属性 setter 预装后再包 `injector.invoke`，把每笔 `{ channel, req, res }` 记进 `window.__REQS__`。
+
+| # | 动作 | 断言 |
+|---|---|---|
+| 1 | 找出此刻页内会话：`GET /api/conversations?accountId=<wa>&size=50` 的第一行（自聊），记下它的 `conversationId` 与 `customerId` 原值 | 拿到行（拿不到 = 采集没跑通，本步整块 blocked，先回 Task 11 而不是在这里造数据） |
+| 2 | `POST /api/customers {platformType:1, openId:<该会话 chatKey>}` → `POST /api/conversations/<id>/link-customer` | `code:0`、`messagesLinked` 打印出来；这个客户就是"这个会话的人" |
+| 3 | `PUT /api/translation/settings` 给该客户 `sendFromLang:'zh-CN'`, `sendToLang:'vi'`（全局发送向保持种子 `en`） | `inherited:false` |
+| 4 | 回工作台重新注入、等首扫落定 | 同一条**中文发出气泡**（R1 走 send）：`res.toLangCode === 'vi'` 且页面挂出的译文行与第 6 行那次不同 —— 这一行是 ② 的端到端证据：语种只能由"主进程盖的 chatKey → 后端查到的 customer_id"这条路得出，页面上报不了 |
+| 5 | 顺带核对陌生会话：`GET /api/conversations?accountId=<wa>` 里挑一条 `customerId` 为空的会话（自聊没有第二条就标 `n/a`），它的气泡 `res.toLangCode` | 仍是全局 `en`（同一次注入里两种语向并存，才算"按客户"而不是"按最后一次设置"） |
+| 6 | `DELETE /api/translation/settings/customer/<id>` → 触发一次重新扫描（`translationRevision` 递增那条例外路径） | 中文气泡的译文行回到英文；`res.toLangCode === 'en'` |
+| 7 | 收尾（C4）：`DELETE /api/translation/settings/customer/<id>` + `DELETE /api/customers/<id>`；**若第 1 行读到的 `customerId` 原本非空，先 `link-customer` 回那个原值**；打印 `GET /api/customers` 的总数回到 5、`chat_conversation` 该行 `customerId` 的落点（原本为空时它仍指向已删 id——Task 17 第 13 行钉过的既有语义）、`translation_setting` 里 `scope='customer'` 的行数回到本轮开始前、草稿框为空 | 三个计数逐一打印，不静默 |
+
+```bash
+node tmp/p6c-page-direction.mjs
+```
+
+无真实登录态时本步整块标 blocked（C11），并写明"生效面 ② 的页内端到端未验证；Step 2 的 HTTP 面已验"。不接受用 curl 的结果冒充这一步。
+
+- [ ] **Step 7: 文档回填**
+
+- spec `docs/superpowers/specs/2026-09-20-chat-history-design.md` §8"按客户语向"那一行：生效面 ② 的落地口径写成"主进程按 `viewId` 盖 `accountId`+`chatKey`，后端按 `chat_conversation` 投影出 `customer_id`；页面上报的会话不进后端"。
+- 本计划"对 spec 的十三处收敛"第 13 条与"与后续阶段的三条硬缝"第 3 条：从"本计划不做 ②"改为"② 由 Task 17b 落地"，并把当时写的三段缺口各自指到承接点（`activeChatOf` / `accountOfView` 在 Task 10/11、后端投影在 17b Step 1、页内去重键在 Step 3）。
+- Task 19 Step 7 第 1、3 条：已知限制清单里"内嵌页气泡不跟客户语向"那一条删掉，换成实测结论；`docs/notes/…-verification.md` 的 ② 段落指到本任务两张表。
+- P5 spec `docs/superpowers/specs/2026-09-19-translation-center-design.md` §4.2 的"页面说不出语种/渠道/令牌"那句旁边补一行：它同样说不出账号与会话——② 之后这两个字段由主进程注入。
+
+- [ ] **Step 8: 提交**
+
+```bash
+cd /d/SmartSCRM && git add apps/server/src/main/java/com/smartscrm/server/web/dto/TranslateDTO.java apps/server/src/main/java/com/smartscrm/server/service/TranslationService.java apps/desktop/src/shared/translateKey.ts apps/desktop/src/shared/translateKey.test.ts apps/desktop/src/inject/core/translation/translationQueue.ts apps/desktop/src/inject/core/translation/domScan.ts apps/desktop/src/inject/core/translation/inputPreview.ts apps/desktop/src/inject/core/PlatformAdapter.ts apps/desktop/src/inject/platforms/whatsapp/index.ts apps/desktop/src/main/services/translationBridge.ts apps/desktop/src/main/webContentsView/ipc.ts docs/superpowers/specs/2026-09-20-chat-history-design.md docs/superpowers/specs/2026-09-19-translation-center-design.md docs/superpowers/plans/2026-09-20-chat-history.md
+git commit -m "feat(P6): 内嵌页气泡按客户取语向（生效面 ②：主进程盖会话，后端按投影解析）"
+```
+
+`tmp/p6c-chatkey-direction.mjs` / `tmp/p6c-page-direction.mjs` 不入库。提交前跑一遍全量闸门：`./mvnw -o test`、`pnpm --dir apps/desktop test:unit`、`pnpm --dir apps/desktop run typecheck`，并把 `node tmp/p5-manual.mjs bubbles` 复跑一次——Step 3/4 动了 P5 那条链的请求构造，8/8 不退化才算完。
+
+---
+
 ### Task 18: 客户抽屉时间线与「跳回记录页」
 
 **Files:**
@@ -9802,7 +10110,7 @@ export function groupByConversation<T extends { chatKey: string; ts: number }>(
 cd apps/desktop && pnpm run test:unit 2>&1 | tail -6 && pnpm run typecheck
 ```
 
-预期：`# pass 80` / `# fail 0`（Task 17 结束的 76 + 本任务 4）；typecheck 全绿。
+预期：`# pass 83` / `# fail 0`（Task 17b 结束的 79 + 本任务 4）；typecheck 全绿。
 
 - [ ] **Step 2: `stores/chatJump.ts` 与线程根节点的选择器**
 
@@ -9972,7 +10280,7 @@ export default function CustomerTimeline({ customerId }: { customerId: number })
 cd apps/desktop && pnpm run test:unit 2>&1 | tail -6 && pnpm run typecheck
 ```
 
-预期：`# pass 80` / `# fail 0`；四个 tsconfig 全绿。
+预期：`# pass 83` / `# fail 0`；四个 tsconfig 全绿。
 
 CDP（C9 抬窗口 + `visibilityState === 'visible'`；C10 真实鼠标）。本任务全程只读，不需要真实登录态，也不写库。前置：库里要有某位种子客户的消息——`node tmp/p6b-query.mjs` 跑过就有了（它往 Alice 张的会话 `8613800001001@c.us` 写过 `p6b-anchor-1..5` 与 `你好，我想问下订单` 那批行，Task 4 第 6b 行）。挑客户时挑 Alice，第 1 行的 `conversationCount` 才是非 0。
 
@@ -10003,7 +10311,7 @@ git commit -m "feat(P6): 客户抽屉时间线（复用气泡 + 一次性跳回�
 
 **Files:**
 - Create: `tmp/p6g-e2e.mjs`（CDP 端到端脚本；`tmp/` 已被 gitignore，不进提交）
-- Modify: `docs/superpowers/specs/2026-09-20-chat-history-design.md`（§8 补一行"客户级语向在 P6 只落生效面 ①"；§12 验收表加一列实测结论）
+- Modify: `docs/superpowers/specs/2026-09-20-chat-history-design.md`（§8 的"客户级语向"一行写成两处的实际口径：① 记录页回复框、② 内嵌页气泡，各指到兑现它的任务；§12 验收表加一列实测结论）
 - Create: `docs/notes/2026-09-20-p6-chat-history-verification.md`（逐条断言的实测结论 / blocked 原因 / 证据；形状沿用 `docs/notes/2026-09-20-tencent-online-translation-deferred.md`）
 
 **Interfaces:**
@@ -10024,7 +10332,7 @@ node -e "const{createChatSession}=0" 2>/dev/null; echo '下面几行是人工核
 2. **真实登录态**：`pnpm --dir apps/desktop exec electron-vite dev --remoteDebuggingPort 9223`，先 `tmp/p5c-top.ps1` 抬窗口，再在渲染层读 `await window.scrm.msg.bridges()`，要求有一条 `{platform:'whatsapp', ready:true}`。拿不到 → Step 2、Step 3、Step 4 的登录态相关行全部 blocked，**不接受用 `POST /api/messages/batch` 自造数据冒充端到端**（C11）。
 3. **种子完好 + 行数分母**：`GET /api/customers` total=5、`/api/label-groups`=2、`/api/audiences`=2、`/api/material-groups`=3、`/api/materials`=4、`/api/quick-reply-groups`=3、`/api/quick-replies`=3；`GET /api/messages/stats?days=30` 的 `total` 与 `GET /api/conversations?accountId=<wa>&size=1` 的 `total` 各记一次，作为本轮增量的基线。
 4. **Task 0 的 TG 档位结论已写进 spec §1**（没有就先补，Step 4 的 TG 行由它决定）。
-5. **前面任务的 `tmp/*.mjs` 脚本还在**（`p6-tg-probe` / `p6b-query` / `p6b-customer` / `p6b-scope-contract` / `p6c-mount` / `p6d-collect` / `p6e-send` / `p6f-page` / `p6f-tail` / `p6-task17-seed`）。`tmp/` 不入库，被清掉就按对应任务的 Step 原样重写——**不要在本任务里另造一套数据口径**，那会让两轮结论没法对照。
+5. **前面任务的 `tmp/*.mjs` 脚本还在**（`p6-tg-probe` / `p6b-query` / `p6b-customer` / `p6b-scope-contract` / `p6c-mount` / `p6c-chatkey-direction` / `p6c-page-direction` / `p6d-collect` / `p6e-send` / `p6f-page` / `p6f-tail` / `p6-task17-seed`）。`tmp/` 不入库，被清掉就按对应任务的 Step 原样重写——**不要在本任务里另造一套数据口径**，那会让两轮结论没法对照。
 
 - [ ] **Step 2: 采集链端到端（复跑 Task 12 的断言，一次跑完）**
 
@@ -10061,7 +10369,7 @@ node -e "const{createChatSession}=0" 2>/dev/null; echo '下面几行是人工核
 | 1 | 补底 + live 同时来（一边点「同步历史」一边在手机发一条） | `[data-msg-key]` 集合无重复；尾巴不出现同一条的两个副本 | 单跑 Task 12（只有 live）与 Task 14（只有库）都碰不到这个交叉 |
 | 2 | 陌生会话 → 建客户 → 立刻在记录页搜该会话正文 | 命中行的 `customerId` 已是新客户；切「只看当前客户」能筛出它 | link-customer 的回填与搜索读的是同一份归属，中间没有缓存死角 |
 | 3 | TG 账号（若 Task 0 档位 1/2） | 按 Task 0 回写后的档位出断言：档 1 走与 WA 同形的一组，档 2 只断"可见采集"，档 3 整段标 n/a 并写明原因 | 不把未探测通过的能力说成可用 |
-| 4 | 一轮结束后重跑三份后端契约脚本 + `pnpm run test:unit` + `pnpm run typecheck` | 全部原样绿（`17/17`、`9/9`、`10/10`、`# pass 80`、四个 tsconfig 无输出） | 端到端过程中若有手工改库/改设置，这里会暴露（Task 6 第 10 步的全局值回滚也在这一条里复确认） |
+| 4 | 一轮结束后重跑五份后端契约脚本（`tmp/p6a-contract.mjs` + `tmp/p6b-query.mjs` / `tmp/p6b-customer.mjs` / `tmp/p6b-scope-contract.mjs` + `tmp/p6c-chatkey-direction.mjs`）与 `pnpm run test:unit` + `pnpm run typecheck` | 全部原样绿（`16/16`、`17/17`、`9/9`、`10/10`、`8/8`、`# pass 83`、四个 tsconfig 无输出） | 端到端过程中若有手工改库/改设置，这里会暴露（Task 6 第 10 步的全局值回滚也在这一条里复确认）。`tmp/` 不在版本控制里，这五份驱动是本阶段**唯一**覆盖 `MessageService.accept/applyStatus` 的可执行断言（Task 3 的落库探针按口径跑完即删），所以这一条不是"顺手再跑一遍"，是它们唯一的复现机会 |
 
 - [ ] **Step 5: P5 回归（P6 动过 P5 的三个地方）**
 
@@ -10087,7 +10395,7 @@ cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.
 cd /d/SmartSCRM/apps/desktop && pnpm run test:unit 2>&1 | tail -6 && pnpm run typecheck && pnpm run build:bridge && pnpm run build 2>&1 | tail -15
 ```
 
-预期：`# pass 80` / `# fail 0`；四个 typecheck 全绿；`resources/msg-bridge.bundle.js` 与 `resources/wa-js.bundle.js` 都在；`electron-vite build` 成功产出 `out/`。
+预期：`# pass 83` / `# fail 0`；四个 typecheck 全绿；`resources/msg-bridge.bundle.js` 与 `resources/wa-js.bundle.js` 都在；`electron-vite build` 成功产出 `out/`。
 
 ```bash
 cd /d/SmartSCRM && node tmp/p6b-query.mjs && node tmp/p6b-customer.mjs && node tmp/p6b-scope-contract.mjs
@@ -10103,9 +10411,9 @@ cd /d/SmartSCRM && grep -c 'CREATE TABLE' apps/server/src/main/resources/db/migr
 
 - [ ] **Step 7: 结论回填**
 
-1. **spec §8**：在"按客户语向"那一行落到本阶段实际口径——生效面 ①（记录页回复框）已兑现，生效面 ②（内嵌页气泡）按收敛 13 不在 P6，气泡仍按全局语向翻译。
+1. **spec §8**：在"按客户语向"那一行落到本阶段实际口径——生效面 ①（记录页回复框）由 Task 6 兑现、生效面 ②（内嵌页气泡）由 Task 17b 兑现；两处都以 `ScopeSettings.resolve` 为唯一解析口，② 的 `customerId` 来自会话投影而不是页面声明。
 2. **spec §12** 验收表加"实测（2026-09-20）"一列：逐行写 `PASS` / `FAIL→已修 <commit>` / `blocked（原因）` / `n/a（档位）`。
-3. **`docs/notes/2026-09-20-p6-chat-history-verification.md`**：前置数据（Step 1 的分母）、每步的实测数字、blocked 清单与原因、已知限制（至少三条：内嵌页气泡不跟客户语向；删除客户后 `chat_*` 两表的 `customer_id` 仍指向已删 id，记录页显示为「客户 #<id>」；`stats`/会话头计数是尽力值，与 WhatsApp 侧栏不保证一致）。
+3. **`docs/notes/2026-09-20-p6-chat-history-verification.md`**：前置数据（Step 1 的分母）、每步的实测数字、blocked 清单与原因、已知限制（至少三条：删除客户后 `chat_*` 两表的 `customer_id` 仍指向已删 id，记录页显示为「客户 #<id>」；`stats`/会话头计数是尽力值，与 WhatsApp 侧栏不保证一致；会话切换事件没到位的那一拍上，气泡可能按上一个会话的客户语向多译一次——17b 口径第 2 条，下一轮扫描自然纠正）。客户级语向的两处实测结论分别指到 Task 6/17 与 Task 17b 的表。
 4. **不写"全部通过"除非它真的全部通过**。哪一行没跑，就在那一行留下没跑的原因。
 
 - [ ] **Step 8: 提交**
@@ -10120,4 +10428,4 @@ cd /d/SmartSCRM && git status --short
 cd /d/SmartSCRM && git add docs/superpowers/specs/2026-09-20-chat-history-design.md docs/notes/2026-09-20-p6-chat-history-verification.md && git commit -m "update(P6): 聊天记录端到端验收结论回填与已知限制记录"
 ```
 
-提交完即本阶段结束：**push 由用户手动执行（C5），助手不 push**。交付说明里要带上：19 个任务的 commit 列表、Step 6 的四组机械验证数字、blocked 清单、以及"本轮在自聊删掉的测试消息条数"（C4 的回执）。
+提交完即本阶段结束：**push 由用户手动执行（C5），助手不 push**。交付说明里要带上：Task 0–19 与 17b 共 21 个任务的 commit 列表、Step 6 的四组机械验证数字、blocked 清单、以及"本轮在自聊删掉的测试消息条数"（C4 的回执）。
