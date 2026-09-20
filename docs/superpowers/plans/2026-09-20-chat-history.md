@@ -1138,6 +1138,9 @@ public class MessageService {
         Set.of("live", "backfill", "app_send", "native_send");
     /** 通知类系统行不进聊天记录，它们既不可回复也没有正文。 */
     private static final Set<String> SKIPPED_TYPES = Set.of("gp2", "e2e_notification", "revoked");
+    /** media_type 是 VARCHAR(16)，取值就是列注释那九个；清单外的一律降级，不让原样字符串碰 SQL。 */
+    private static final Set<String> MEDIA_TYPES = Set.of(
+        "text", "image", "audio", "video", "document", "sticker", "contact", "location", "unknown");
 
     private final ChatMessageMapper messageMapper;
     private final ChatConversationMapper conversationMapper;
@@ -1209,7 +1212,7 @@ public class MessageService {
             row.setSenderKey(item.senderKey());
             row.setSenderName(item.senderName());
             row.setBody(item.body() == null || item.body().isBlank() ? null : item.body());
-            row.setMediaType(item.mediaType() == null || item.mediaType().isBlank() ? "text" : item.mediaType());
+            row.setMediaType(normalizeMediaType(item.mediaType()));
             row.setMediaSummary(item.mediaSummary());
             row.setMsgTime(MsgTimes.toDbTime(item.msgTimeEpochSec(), receivedAt));
             row.setStatus(normalizeStatus(item.status(), item.direction()));
@@ -1275,6 +1278,19 @@ public class MessageService {
             return status;
         }
         return "pending";
+    }
+
+    /**
+     * 媒体类型是展示元数据，不是身份：认不出来的值降级成 unknown，让这条消息照样入库
+     * （正文可能仍然有价值），而不是整行丢掉。但不能原样透传 —— 该列只有 16 个字符，
+     * 而 INSERT IGNORE 会把超长值静默截成前 16 个字符：既没有报错也没有日志，
+     * 事后从库里读出一个谁也对不上的半截类型名。降级至少是可解释的。
+     */
+    private String normalizeMediaType(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return "text";
+        }
+        return MEDIA_TYPES.contains(raw) ? raw : "unknown";
     }
 
     /** open_id 与 chat_key 同形（种子里就是 8613800001001@c.us），手机号只做兜底。 */
@@ -1389,7 +1405,7 @@ cd apps/server && set -o pipefail && ./mvnw -q -DskipTests package
 }
 ```
 
-（`accountId` 用 `GET /api/platform-accounts` 里真实存在的 WhatsApp 账号 id；若种子账号 id 不是 1，取实际值。）
+（`accountId` 不写死：**先登录、再 `GET /api/platform-accounts` 拿当次真实的 id**，把上面 JSON 里的 `accountId` 换成 WhatsApp 那条（`platformType:1`）。种子那两条 id 是 1/2，但演示账号会被删被建，按 1 发会直接吃 `40404 账号不存在`，那是一次空跑而不是被测行为。2026-09-20 实测：WA=7、TG=2、Facebook=6、Messenger=9。同一份输出里的 TG id 留给下面"平台反查"那一条用。）
 
 ```bash
 tok=$(curl -s -X POST http://127.0.0.1:8180/api/auth/login -H 'content-type: application/json' \
@@ -1402,6 +1418,12 @@ curl -s -X POST http://127.0.0.1:8180/api/messages/batch -H "authorization: Bear
 ```
 
 预期（顺序敏感，这一对就是幂等的区分性证据）：第一次 `{"accepted":2,"duplicated":0,"rejected":0,...}`；第二次 `{"accepted":0,"duplicated":2,"rejected":0}`。若第二次仍是 `accepted:2`，说明 `uk_msg` 没生效或 `insertIgnoreBatch` 被改成了普通 insert——回去读 Task 1 的 DDL。
+
+> **两行的落库结果都要读出来，不能只看计数。** 本任务还没有读接口（`GET /api/messages`、会话列表都是 Task 4），所以这一步用一次性探针看库里两行：临时 `@SpringBootTest`（autowire `ChatConversationMapper` 或直接 `JdbcTemplate`，跑完即删、不进 `src/test`，与 Task 1 那次阶梯探针同一个口径）打印两条会话头的 `customer_id / unread_count / last_msg_body / title`。期望 Alice 那条 `customer_id` **非空且等于种子里 Alice 的客户 id**、`unread_count=1`；Bob 那条因为正是 `activeChatKey` → `unread_count=0`；`title` 落在各自会话上（证明 `titleOf` 按 chatKey 取，而不是"批内第一个非空"）。`customer_id` 是这一节唯一能区分"匹配规则真在跑"和"整批默默不匹配"的字段——只看 `accepted` 两种情况长得一样。Task 4 的契约矩阵会把这些字段改从 HTTP 再断一次，那时探针不必存在。
+
+> **"账号不存在"与"该平台不支持采集"必须是两个 code。** 用 Facebook / Messenger 那条账号（`platformType` 5 / 6，`ChatKeys.platformOfAccountType` 返回 null）重发同一批 → `40000 该平台暂不支持消息采集`；用一个不存在的 id → `40404 账号不存在`。两条各打一次，把两个 message 原文贴进报告。合在一起的话，前端只能把"这台号还没接"显示成"号没了"。
+
+> **认不出的媒体类型降级成 `unknown`，且必须看得见降级发生了。** 往批里加第三条 `mediaType:"group_participant_add"`（21 字符，页内系统消息的真实原名）：预期它**照样 accepted**（媒体类型不是身份，不该为它丢正文），而探针里那一行的 `media_type` 是 `unknown` 而不是 `group_participa`。这一条区分的是两种"看起来都成功了"：有 `normalizeMediaType` 时读到 `unknown`，没有时 `INSERT IGNORE` 把超长值静默截成 16 字符照样返回成功 —— 少这道闸，Task 11 的图标映射会对上一个库里谁也没写过的半截类型名。
 
 > `accountId` 与 `platform` 的一致性也在这里验：把 `accountId` 换成 TG 账号 id 再发一次同批，预期 `accepted:0` 且会话头 `platform='telegram'`（platform 由账号反查，不受请求里的字段影响）。
 
