@@ -50,7 +50,7 @@
 
 | 层 | 谁来做 | 通过标准 |
 |---|---|---|
-| Java 纯函数 | scoped：`./mvnw test -Dtest='ChatKeysTest,MsgTimesTest,StatusLadderTest,SearchPatternTest'`（Task 2）、`-Dtest='CursorsTest'`（Task 4）、`-Dtest='ScopeSettingsTest'`（Task 6）；全量：`./mvnw test`（Task 19） | 三处 scoped 分别 `Tests run: 12 / 3 / 4`；P6 六个测试类共 19 条，全量跑 `Failures: 0, Errors: 0` |
+| Java 纯函数 | scoped：`./mvnw test -Dtest='ChatKeysTest,MsgTimesTest,StatusLadderTest,SearchPatternTest'`（Task 2）、`-Dtest='CursorsTest'`（Task 4）、`-Dtest='ScopeSettingsTest'`（Task 6）；全量：`./mvnw test`（Task 19） | 三处 scoped 分别 `Tests run: 15 / 3 / 4`（Task 2 的 15 = ChatKeys 6 + MsgTimes 5 + StatusLadder 2 + SearchPattern 2，2026-09-20 实跑）；P6 六个测试类共 22 条，全量跑 `Failures: 0, Errors: 0` |
 | 后端契约 | `tmp/p6b-query.mjs` / `tmp/p6b-customer.mjs` / `tmp/p6b-scope-contract.mjs`（Node，打 8180）+ Task 3 Step 4/5 的 curl 探针 | 三份脚本分别 `ALL PASS (17/17)`、`(9/9)`、`(10/10)`，覆盖幂等、游标与锚点窗口、搜索转义与过滤、统计口径、link-customer 回填、客户级语向 |
 | TS 纯函数 | `pnpm --dir apps/desktop test:unit` | normalize / ackRank / CollectorHub / SendRegistry / liveTail merge / 日分组 / chatKeys / 搜索与统计 / 建客户预填与语向草稿 / 时间线分组 全绿，计数按 12 → 16 → 28 → 34 → 39 → 43 → 48 → 56 → 68 → 76 → 80 单调递增，终态 `# pass 80` / `# fail 0` |
 | 桥与真实会话 | CDP + 已登录 WhatsApp 视图 | 补底 N=5 行数与 `msg_key` 集合前后差、自聊发送→状态推进→删除、原生页手发一条也入库、断线重挂不重不漏 |
@@ -10079,7 +10079,7 @@ P6 对 P5 的改动面只有三处，逐条复跑 `docs/superpowers/specs/2026-0
 cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.18" && set -o pipefail && ./mvnw test 2>&1 | tail -25
 ```
 
-预期：`Tests run: 49, Failures: 0, Errors: 0` = 本机既有基线 30（`SimulatedTranslationEngineTest` 15 + `TencentProviderTest` 8 + `BaiduProviderTest` 7）+ P6 的 19（Task 1 的 12 + Task 4 的 3 + Task 6 的 4）。**跑之前先记一次基线**：若 P6 代码合入前 `./mvnw test` 不是 30，就按实测基线改写这个总数并在验收文档里写差值，不要为了凑 49 去动断言。P6 那 19 条可以单独看：`./mvnw -q test -Dtest='ChatKeysTest,MsgTimesTest,StatusLadderTest,SearchPatternTest,CursorsTest,ScopeSettingsTest'` → `Tests run: 19`。
+预期：`Tests run: 52, Failures: 0, Errors: 0` = 本机既有基线 30（`SimulatedTranslationEngineTest` 15 + `TencentProviderTest` 8 + `BaiduProviderTest` 7）+ P6 的 22（Task 2 的 15 + Task 4 的 3 + Task 6 的 4）。计数归属更正：这 15 条属 **Task 2**，Task 1 交付的是迁移与 mapper，没有 JUnit 用例（原先写成"Task 1 的 12"）。2026-09-20 Task 2 收口时实跑 `./mvnw test` = **`Tests run: 45, Failures: 0, Errors: 0`**，与这里的推演一致。**跑之前先记一次基线**：若合入前 `./mvnw test` 不是 30，就按实测基线改写这个总数并在验收文档里写差值，不要为了凑 52 去动断言。P6 那 22 条可以单独看：`./mvnw test -Dtest='ChatKeysTest,MsgTimesTest,StatusLadderTest,SearchPatternTest,CursorsTest,ScopeSettingsTest'` → `Tests run: 22`（别加 `-q`，surefire 的 `Tests run:` 摘要是 INFO 级，`-q` 会把它连同失败明细一起吞掉）。
 
 ```bash
 cd /d/SmartSCRM/apps/desktop && pnpm run test:unit 2>&1 | tail -6 && pnpm run typecheck && pnpm run build:bridge && pnpm run build 2>&1 | tail -15
