@@ -31,17 +31,16 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
 
     /**
      * 发送状态的单调推进，一条 SQL 自己把关（不做"先查后改"，省一次往返也避免竞态）：
-     * pending→sent→delivered→read 只能往上走；failed 只能从 pending/sent 落定。
-     * FIELD() 对不在清单里的值返回 0，所以 'received' 与 'failed' 都排在 'pending' 之前。
-     * 'received' 不是被这条 SQL 挡住的：0 小于任何一阶，真有一条出站行停在 'received'，
-     * 它照样会被推进 —— 它出现不了，因为本应用发出的消息一律以 'pending' 入库（采集规则），
-     * 而 'received' 只属于入站行，那些行被 WHERE 里的 direction='out' 过滤掉。
-     * 'failed' 才真的由 status IN ('pending','sent') 这一关挡住：它自己既不在阶梯清单里、
-     * 也进不了这一关，一旦落定两个分支都不成立 —— 它是终态。
+     * 出站行只能沿 pending→sent→delivered→read 往上走；failed 只能从 pending/sent 落定，
+     * 落定即终态 —— 迟到的 ack 不能把一条已经失败的消息翻回成功，页面上它已经带重试按钮了。
+     * 第一条分支显式要求 status 也在阶梯上：FIELD() 对清单外的值返回 0，
+     * 只比大小会把 'failed'/'received'/脏值当成最低的一阶，让 0 < FIELD('sent') 成立而把它们顶上去。
+     * 与页内 chatStatus.ts 的 canAdvance 同形（Task 7），两边必须一致。
      */
     @Update("UPDATE chat_message SET status = #{toStatus} WHERE tenant_id = #{tenantId} AND platform = #{platform}"
         + " AND account_id = #{accountId} AND chat_key = #{chatKey} AND msg_key = #{msgKey} AND direction = 'out'"
         + " AND ((#{toStatus} IN ('sent', 'delivered', 'read')"
+        + "       AND status IN ('pending', 'sent', 'delivered', 'read')"
         + "       AND FIELD(status, 'pending', 'sent', 'delivered', 'read')"
         + "           < FIELD(#{toStatus}, 'pending', 'sent', 'delivered', 'read'))"
         + "      OR (#{toStatus} = 'failed' AND status IN ('pending', 'sent')))")

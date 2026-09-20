@@ -473,14 +473,16 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
 
     /**
      * 发送状态的单调推进，一条 SQL 自己把关（不做"先查后改"，省一次往返也避免竞态）：
-     * pending→sent→delivered→read 只能往上走；failed 只能从 pending/sent 落定。
-     * FIELD() 找不到值返回 0，所以 'received' 与 'failed' 都排在阶梯之外：
-     * 前者由 direction='out' 挡住，后者由 status IN ('pending','sent') 挡住，
-     * 而一旦是 failed，两个分支都不成立 —— 它是终态。
+     * 出站行只能沿 pending→sent→delivered→read 往上走；failed 只能从 pending/sent 落定，
+     * 落定即终态 —— 迟到的 ack 不能把一条已经失败的消息翻回成功，页面上它已经带重试按钮了。
+     * 第一条分支显式要求 status 也在阶梯上：FIELD() 对清单外的值返回 0，
+     * 只比大小会把 'failed'/'received'/脏值当成最低的一阶，让 0 < FIELD('sent') 成立而把它们顶上去。
+     * 与页内 chatStatus.ts 的 canAdvance 同形（Task 7），两边必须一致。
      */
     @Update("UPDATE chat_message SET status = #{toStatus} WHERE tenant_id = #{tenantId} AND platform = #{platform}"
         + " AND account_id = #{accountId} AND chat_key = #{chatKey} AND msg_key = #{msgKey} AND direction = 'out'"
         + " AND ((#{toStatus} IN ('sent', 'delivered', 'read')"
+        + "       AND status IN ('pending', 'sent', 'delivered', 'read')"
         + "       AND FIELD(status, 'pending', 'sent', 'delivered', 'read')"
         + "           < FIELD(#{toStatus}, 'pending', 'sent', 'delivered', 'read'))"
         + "      OR (#{toStatus} = 'failed' AND status IN ('pending', 'sent')))")
@@ -1411,6 +1413,8 @@ curl -s -X POST http://127.0.0.1:8180/api/messages/status -H "authorization: Bea
 ```
 
 预期：`{"updated":1}` —— 两条更新里只有 `delivered` 落地，随后那条 `sent` 被 `advanceStatus` 的阶梯守卫挡成 0 行受影响。（若打印 2，说明守卫里的 `FIELD()` 比较反了或 `direction='out'` 条件丢了。）
+
+> **再加一组：已落定的 `failed` 不得被迟到 ack 翻案。** 同一条 msgKey 先 `{"status":"failed"}`（预期 `updated:1`），再依次发 `sent` / `delivered`（预期各 `updated:0`），最后 GET 该会话消息，库里状态仍为 `failed`。这条不在这里守住，Task 12 的"重试"就会对着一条已经变成 delivered 的气泡。
 
 再打一次终态断言：
 
