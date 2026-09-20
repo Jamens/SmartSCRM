@@ -49,10 +49,32 @@ class ChatKeysTest {
         assertTrue(ChatKeys.matchesPlatform("whatsapp", "15533445566778899@lid"));
         assertFalse(ChatKeys.matchesPlatform("whatsapp", "-1001234567890"));
         assertFalse(ChatKeys.matchesPlatform("whatsapp", "8613800001001"));
+        // 群号里的 '-' 只允许当分隔符：1234-5678@g.us 是 chat_key 列注释自己举的例子，必须继续放过；
+        // 全标点形状正是本方法要挡的脏数据，收紧前它是 true。
+        assertTrue(ChatKeys.matchesPlatform("whatsapp", "1234-5678@g.us"));
+        assertFalse(ChatKeys.matchesPlatform("whatsapp", "-----@g.us"));
         assertTrue(ChatKeys.matchesPlatform("telegram", "-1001234567890"));
         assertTrue(ChatKeys.matchesPlatform("telegram", "123456789"));
         assertFalse(ChatKeys.matchesPlatform("telegram", "8613800001001@c.us"));
+        // telegram 分支等价于"纯数字即放过"，所以丢了 @c.us 后缀的 WA 号码在这条闸上是 true：
+        // 形状歧义不由本闸负责，见 matchesPlatform 的 javadoc（钉住它是为了别被当 bug 顺手收紧）。
+        assertTrue(ChatKeys.matchesPlatform("telegram", "8613800001001"));
         assertFalse(ChatKeys.matchesPlatform("whatsapp", null));
         assertFalse(ChatKeys.matchesPlatform(null, "8613800001001@c.us"));
+    }
+
+    /**
+     * TG 的 chat_key 形态当前只认数字，与 chat_message.chat_key 的列注释同口径；
+     * 'tg_' 前缀只出现在 platform_type=4 的 customer.open_id 种子里，两边形态未决，
+     * 以 Task 0 的真实探测为准。
+     * <p>
+     * 这两条是故意钉住当前闸行为的反向闸：探测结论一旦要求收 'tg_'，放宽 TG_CHAT 会先把这里改红，
+     * 逼那一次提交同时改掉种子口径与页内的 chatKeys.ts，而不是让两侧悄悄分叉。
+     */
+    @Test
+    void telegramGateCurrentlyAcceptsNumericChatKeysOnly() {
+        assertFalse(ChatKeys.matchesPlatform("telegram", "tg_10002003"),
+            "tg_ 前缀当前不过闸；要收它，就得连 customer.open_id 的种子口径一起改");
+        assertTrue(ChatKeys.matchesPlatform("telegram", "123456789"));
     }
 }
