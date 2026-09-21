@@ -11,6 +11,7 @@ import com.smartscrm.server.entity.Label;
 import com.smartscrm.server.mapper.CustomerLabelMapper;
 import com.smartscrm.server.mapper.CustomerMapper;
 import com.smartscrm.server.mapper.LabelMapper;
+import com.smartscrm.server.service.msg.MsgTimes;
 import com.smartscrm.server.web.dto.CustomerCreateRequest;
 import com.smartscrm.server.web.dto.CustomerEditRequest;
 import com.smartscrm.server.web.vo.CustomerVO;
@@ -25,6 +26,7 @@ import java.util.Map;
 import java.util.Objects;
 import java.util.Set;
 import java.util.stream.Collectors;
+import org.springframework.dao.DuplicateKeyException;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.util.StringUtils;
@@ -65,14 +67,10 @@ public class CustomerService {
 
     /**
      * open_id 是"这个人在这个平台上的 id"，聊天记录里的 chat_key 就是它。
-     * 撞唯一键时报 40901 而不是让 MySQL 异常冒到 50000：前端要能区分"重名"和"已经存在"。
      */
     @Transactional
     public CustomerVO create(Long tenantId, CustomerCreateRequest req) {
         String openId = req.openId().trim();
-        if (openId.isEmpty()) {
-            throw new BizException(40000, "openId 不能为空白");
-        }
         if (req.platformType() == null || req.platformType() < 1 || req.platformType() > 7) {
             throw new BizException(40000, "platformType 只能是 1..7");
         }
@@ -92,9 +90,16 @@ public class CustomerService {
         customer.setEmail(trimToNull(req.email()));
         customer.setCountry(trimToNull(req.country()));
         customer.setRemark(trimToNull(req.remark()));
-        customer.setSex(req.sex() == null ? 0 : req.sex());
-        customer.setFirstSeenAt(LocalDateTime.now());
-        customerMapper.insert(customer);
+        customer.setSex(req.sex() == null ? 0 : requireSex(req.sex()));
+        customer.setFirstSeenAt(LocalDateTime.now(MsgTimes.CHAT_ZONE));
+        try {
+            customerMapper.insert(customer);
+        } catch (DuplicateKeyException raced) {
+            // 上面的 dup 检查与 insert 之间有时间窗：两个并发请求（"建为客户"按钮被连点）会同时读到
+            // dup==0，后落库的那个撞 uk_customer_tenant_platform_openid。不在这儿兜住，它会以
+            // 50000 + MySQL 约束原文冒到前端——而 40901 才是前端能区分"已经存在"的那个码。
+            throw new BizException(40901, "该平台下此客户已存在: " + openId);
+        }
         return detail(tenantId, customer.getId());
     }
 
@@ -106,11 +111,19 @@ public class CustomerService {
         return t.isEmpty() ? null : t;
     }
 
+    /** sex 只有 0/1/2 三值（V3 的列注释），越界值能写进 TINYINT，然后在抽屉里渲染成"谁都没选中"。 */
+    private static int requireSex(Integer sex) {
+        if (sex == null || sex < 0 || sex > 2) {
+            throw new BizException(40000, "sex 只能是 0..2");
+        }
+        return sex;
+    }
+
     public CustomerVO update(Long tenantId, Long id, CustomerEditRequest req) {
         Customer customer = requireOwned(tenantId, id);
         customer.setNickname(req.nickname());
         if (req.sex() != null) {
-            customer.setSex(req.sex());
+            customer.setSex(requireSex(req.sex()));
         }
         customer.setCountry(req.country());
         customer.setEmail(req.email());

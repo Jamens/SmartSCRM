@@ -9,6 +9,7 @@ import com.smartscrm.server.entity.Customer;
 import com.smartscrm.server.mapper.ChatConversationMapper;
 import com.smartscrm.server.mapper.ChatMessageMapper;
 import com.smartscrm.server.mapper.CustomerMapper;
+import com.smartscrm.server.service.msg.ChatKeys;
 import com.smartscrm.server.service.msg.Cursors;
 import com.smartscrm.server.service.msg.MsgTimes;
 import com.smartscrm.server.service.msg.SearchPattern;
@@ -140,10 +141,9 @@ public class MessageQueryService {
         String next = hasMore && !page.isEmpty()
             ? Cursors.encode(page.get(page.size() - 1).getMsgTime(), page.get(page.size() - 1).getId())
             : null;
-        page.sort((a, b) -> a.getMsgTime().isEqual(b.getMsgTime())
-            ? Long.compare(a.getId(), b.getId())
-            : a.getMsgTime().compareTo(b.getMsgTime()));
-        return new MessagePageVO(page.stream().map(MessageVO::of).toList(), next, hasMore);
+        List<MessageVO> ordered = page.stream().map(MessageVO::of)
+            .sorted(MessageVO.CHRONOLOGICAL).toList();
+        return new MessagePageVO(ordered, next, hasMore);
     }
 
     /**
@@ -320,10 +320,18 @@ public class MessageQueryService {
     /**
      * 回填的是这个会话的历史消息：新客户在被"建为联系人"之前，聊天早就照规则入库了
      * （customer_id 为空）。这里只补那一段，范围严格限定在单个会话。
+     * <p>
+     * 群会话直接拒绝：一次回填覆盖整个 chat_key，而群里的消息来自许多人，回填等于把陌生人的
+     * 发言也算作这位客户说的——之后该客户的时间线、按客户筛的搜索与统计都会读到别人的话。
+     * 前端的「建为联系人」按钮对群已经置灰，但那是可见性而不是约束：这个端点单被调用时，
+     * 脏归属要人手工 UPDATE 才能清掉，所以守卫放在这里。
      */
     @Transactional
     public Map<String, Object> linkCustomer(Long tenantId, Long conversationId, Long customerId) {
         ChatConversation head = requireOwned(tenantId, conversationId);
+        if (isGroupHead(head)) {
+            throw new BizException(40000, "群会话不能整体归属到一位客户: " + conversationId);
+        }
         Customer customer = customerMapper.selectOne(new LambdaQueryWrapper<Customer>()
             .eq(Customer::getTenantId, tenantId)
             .eq(Customer::getId, customerId)
@@ -370,14 +378,17 @@ public class MessageQueryService {
             .eq(ChatConversation::getTenantId, tenantId)
             .eq(ChatConversation::getCustomerId, customerId)
             .orderByDesc(ChatConversation::getLastMsgTime));
-        List<MessageVO> messages = new ArrayList<>(rows.stream().map(MessageVO::of).toList());
-        // 正序，且同一毫秒内按 id 递增：DATETIME(3) 允许同一毫秒两条，只按 msgTime 排会不稳定，
-        // 而 P6 的键集游标就是按 (time, id) 这一对定序的——时间线的顺序必须与翻页口径一致。
-        messages.sort((a, b) -> a.msgTime().isEqual(b.msgTime())
-            ? Long.compare(a.id(), b.id())
-            : a.msgTime().compareTo(b.msgTime()));
+        List<MessageVO> messages = rows.stream().map(MessageVO::of).sorted(MessageVO.CHRONOLOGICAL).toList();
         return new CustomerTimelineVO(messages, heads.stream().map(ConversationVO::of).toList(),
             messageCount, heads.size());
+    }
+
+    /**
+     * 群判定看两处：会话头的 `is_group` 标与 `chat_key` 的形态，任一处判成群就拒——这两个信号
+     * 是"投影出来的标"与"数据自己带的形状"，前者可能因一次错映射而失真，后者不会。
+     */
+    private static boolean isGroupHead(ChatConversation head) {
+        return (head.getIsGroup() != null && head.getIsGroup() == 1) || ChatKeys.isGroup(head.getChatKey());
     }
 
     /**
