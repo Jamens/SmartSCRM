@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** 把 WhatsApp 内嵌页面里的真实会话落成可查、可搜、可统计的本地聊天记录；Telegram 走 spec §11 的页内 store 契约（Task 12c/12d），验证基线是本地 fixture 页，真实登录那一档无账号、永久如实标"未验证"
+**Goal:** 把 WhatsApp 内嵌页面里的真实会话落成可查、可搜、可统计的本地聊天记录；Telegram 走 spec §11 的**官方 K 版 DOM 契约**（Task 12a 探针 → 12b 译文注入 → 12c 采集 → 12d 发送），验证基线是由真机快照裁出来的本地 fixture 页，真实站点那一档以"用户扫码登录 `/k/`"为前置（未扫码就是未验证，不预先假设已验证）
 
 **Architecture:** Java 后端是唯一数据层：Flyway V8 建 `chat_conversation` / `chat_message` 两张表，批量入库靠 `uk_msg` 幂等，会话头是消息流的投影。桌面端在"页面侧"再挂一条与翻译注入包互相独立的消息桥：`@wppconnect/wa-js` 注入用户正在看的 WhatsApp 视图，与原生页共用同一个 Store，页内脚本零凭据、只经 `window.ele` 与主进程通信；主进程 `services/msgBridge/` 负责挂载、心跳重挂、批量攒写（CollectorHub）、发送登记（SendRegistry），并持 JWT 与 Java 通信。渲染层 `#/messages` 双源取数：历史读库，当前会话的尾巴吃主进程广播的 live 帧，按 `msg_key` 去重。
 
@@ -24,7 +24,7 @@
 - **C8 重启口径**：新 Controller 404 且报 "No static resource" = 8180 上跑的是旧进程。`netstat -ano | grep ':8180'` → `taskkill //PID <pid> //F` → `./mvnw -q -DskipTests package` → `java -jar apps/server/target/scrm-server-0.1.0.jar`（后台），下一次命令前轮询 `/api/health`。
 - **C9 渲染层验证只走 CDP**：`pnpm --dir apps/desktop exec electron-vite dev --remoteDebuggingPort 9223` + `tmp/cdp.mjs`（`openPage(9223)` / `openViewByUrl('web.whatsapp.com')` / `ev()` / `send()`），跑前先 `tmp/p5c-top.ps1` 抬起窗口并断言 `document.visibilityState === 'visible'`，否则 Radix 的出场动画不结束、`pointer-events` 永久卡在 `<body>` 上，所有点击静默失效。脚本结尾必须 `process.exit()`。
 - **C10 输入路径口径（P5e 教训）**：凡涉及页内交互的断言一律用 CDP `Input.dispatchMouseEvent` / `Input.dispatchKeyEvent` / `Input.insertText`。合成 `element.click()` 不经过 `mousedown` 的默认焦点行为，会把焦点与选区竞态全部掩盖成"通过"。
-- **C11 不得越权声称验证**：没有真实登录态就跑不了的项目（补底、发送、Telegram 真实站点的收发）要么标 blocked 要么如实报告"未验证"，不接受用桩数据冒充端到端。TG 的本地契约假页面（`apps/desktop/test/tg-fixture.html`，spec §11）只证明"我们这侧的实现照契约接得上"，**不**等于"TG 真实站点验证过"——两档结论在报告里永远分开写。
+- **C11 不得越权声称验证**：没有真实登录态就跑不了的项目（补底、发送、Telegram 真实站点的收发）要么标 blocked 要么如实报告"未验证"，不接受用桩数据冒充端到端。TG 的本地 fixture 页（`apps/desktop/test/tg-fixture.html`，spec §12）只证明"我们这侧的 DOM 读取照清单接得上"，**不**等于"TG 真实站点验证过"——两档结论在报告里永远分开写。TG 真机那一档的前置是**用户在 `/k/` 扫一次码**（K 与 A 不共用会话登录态），没扫就是没跑。
 - **C12 业务错误码沿用既有词表**：`40000` 参数/取值非法、`40100` 未鉴权、`40404` 目标行不存在、`40901` 冲突、`50000` 未预期异常（`apps/server` 现有 service 就是这套，如 `PlatformAccountService:69` 的"账号不存在"用 `40404`）。本计划所有"找不到这一行"的断言一律写 `40404`，不新造 `40400` —— 两个近邻数字并存，前后端与契约表都会抄错。
 - **C13 主进程发往后端的请求一律走 `apps/desktop/src/main/services/authedFetch.ts`**：不要在调用点手写 `getSession()?.accessToken` + `fetch`。内嵌页的生命周期远长于 access token 的 7200 秒，无刷新的请求会在两小时后整齐地变成 401，而页内只会看到"结果忽然没了"。`authedFetch` 的口径是：附带会话令牌 → 遇 401 刷新一次（并发共享同一次刷新）→ 把新令牌写回 session 文件 → 重放一次 → 仍失败才把响应原样交回调用方。Task 9 的 `createMsgApi`、Task 10 的 `accountDirectory` 与 Task 12 的发送链都按这条接。
 - **本项目桌面端从本计划起有 JS 单测闸门**：`pnpm --dir apps/desktop test:unit`（Node 24 原生跑 `.test.ts`）。约束：被测模块必须只用**可擦除 TS 语法**（无 `enum` / `namespace` / 参数属性），import 必须带 `.ts` 后缀；由 `tsconfig.unit.json` 的 `erasableSyntaxOnly` 把这条钉死。DOM 与 IPC 行为仍靠 CDP 脚本，`node --test` 不碰。
@@ -54,8 +54,8 @@
 |---|---|---|
 | Java 纯函数 | scoped：`./mvnw test -Dtest='ChatKeysTest,MsgTimesTest,StatusLadderTest,SearchPatternTest'`（Task 2）、`-Dtest='CursorsTest'`（Task 4）、`-Dtest='ScopeSettingsTest'`（Task 6）；全量：`./mvnw test`（Task 19） | 三处 scoped 分别 `Tests run: 15 / 3 / 4`（Task 2 的 15 = ChatKeys 6 + MsgTimes 5 + StatusLadder 2 + SearchPattern 2，2026-09-20 实跑）；P6 六个测试类共 22 条，全量跑 `Failures: 0, Errors: 0` |
 | 后端契约 | `tmp/p6b-query.mjs` / `tmp/p6b-customer.mjs` / `tmp/p6b-scope-contract.mjs` / `tmp/p6c-chatkey-direction.mjs`（Node，打 8180）+ Task 3 Step 4/5 的 curl 探针 | 四份脚本分别 `ALL PASS (17/17)`、`(9/9)`、`(10/10)`、`(8/8)`，覆盖幂等、游标与锚点窗口、搜索转义与过滤、统计口径、link-customer 回填、客户级语向、按会话投影取语向与缓存分键 |
-| TS 纯函数 | `pnpm --dir apps/desktop test:unit` | normalize / ackRank / CollectorHub / SendRegistry / liveTail merge / 日分组 / chatKeys / 搜索与统计 / 建客户预填与语向草稿 / 时间线分组 / 翻译请求去重键 / TG store 读与归一化与发送结清 全绿，计数按 12 → 16 → 28 → 34 → 39 → 43 → 48 → 56 → 68 → 76 → 79 → 83 → 97 → 103 单调递增（12c/12d 接在 Task 18 之后跑，各 +14 / +6），终态 `# pass 103` / `# fail 0` |
-| 桥与真实会话 | CDP + 已登录 WhatsApp 视图；TG 走本地契约假页面（A 档） | 补底 N=5 行数与 `msg_key` 集合前后差、自聊发送→状态推进→删除、原生页手发一条也入库、断线重挂不重不漏、**内嵌页气泡跟随客户语向**（Task 17b Step 6，含"陌生会话仍走全局"的并存对照）；TG：`tmp/p6-tg-fixture.mjs` 第 0～9 行（补底/会话头/open_id 挂客户/live 幂等/无服务端 id 挡门外）+ 12d 第 10～14 行（localId 结清、app_send、同文本连发、不可关联按 TIMEOUT） |
+| TS 纯函数 | `pnpm --dir apps/desktop test:unit` | normalize / ackRank / CollectorHub / SendRegistry / liveTail merge / 日分组 / chatKeys / 搜索与统计 / 建客户预填与语向草稿 / 时间线分组 / 翻译请求去重键 / TG DOM 读取与归一化与发送结清 全绿，计数按 12 → 16 → 28 → 34 → 39 → 43 → 48 → 56 → 68 → 76 → 79 → 83 → 85 → 99 → 105 单调递增（TG 四档里 12a +2 条清单校验、12c +14、12d +6；12b 不加用例，`src/inject/**` 不在闸门白名单里），终态 `# pass 105` / `# fail 0`（C14：这些是评审前推演值，真实基线以闸门输出为准） |
+| 桥与真实会话 | CDP + 已登录 WhatsApp 视图；TG 由 Task 12a 的探针产清单，A 档走真机快照裁出的 fixture 页（B 档需用户扫码，见 C11） | 补底 N=5 行数与 `msg_key` 集合前后差、自聊发送→状态推进→删除、原生页手发一条也入库、断线重挂不重不漏、**内嵌页气泡跟随客户语向**（Task 17b Step 6，含"陌生会话仍走全局"的并存对照）；TG：`tmp/p6-tg-fixture.mjs` 第 0～9 行（补底/会话头/open_id 挂客户/live 幂等/无服务端 id 挡门外）+ 12d 第 10～14 行（`out` 行认领、app_send、同文本连发、认领不上按 TIMEOUT） |
 | 渲染层 | CDP 真实鼠标/键盘（C10） | 列表 / 翻页 / live 去重 / 回复（先译再发开关两态）/ 语向弹层 / 陌生建客户闭环 / 搜索跳转 / 统计卡数字等于库内 COUNT |
 
 ## 与后续阶段的三条硬缝（spec §13）
@@ -112,6 +112,7 @@ apps/desktop/
     chatKeys.ts           chat_key 形态解释：群判定与对端裸号码（Java `ChatKeys` 的 TS 镜像）        [新增]
     translateKey.ts       翻译请求的 inflight 去重键：语种之外还要分会话提示（Task 17b）                  [新增]
     liveTail.ts           live 帧并入已取列表的纯函数（去重 / 尾部补 / 乐观气泡销账）              [新增]
+    tgDomContract.ts      §11.1 那份清单 + assertTgContract：TG 三条链唯一的类名来源，值由探针写回  [新增 · Task 12a]
     *.test.ts             上述纯函数的 node:test 用例                                               [新增]
   src/bridge/
     index.ts              window.__SCRM_BRIDGE__ 入口：握手、心跳应答、模式分派、__SCRM_BRIDGE_DESTROY__ [新增]
@@ -120,13 +121,16 @@ apps/desktop/
     whatsapp/normalize.ts RawMessage / MsgModel → NormalizedMessage（纯函数）                        [新增]
     whatsapp/collect.ts   on 事件 + 补底批量拉取（限速）                                              [新增]
     whatsapp/send.ts      sendTextMessage + ack 变化上报                                             [新增]
-    telegram/tgStore.ts   §11.1 契约的最小环境声明 + 就绪/登录判定（纯函数，进单测闸门）        [新增 · Task 12c]
-    telegram/normalize.ts TgMessage → NormalizedMessage（纯函数，spec §11.2 映射）              [新增 · Task 12c]
-    telegram/collect.ts   apiUpdate 单通道订阅 + 活动会话逐条读消息补底                              [新增 · Task 12c]
-    telegram/send.ts      getActions().sendMessage + localId 回执上桥（共用 SendRegistry）        [新增 · Task 12d]
+    telegram/tgParse.ts   hash→chatKey / 合成 msgKey / 时间与未读解析（纯函数，进单测闸门）        [新增 · Task 12c]
+    telegram/tgDom.ts     清单 → 节点读取（会话行 / 消息行 / 滚动到顶），TG 侧唯一碰 document 处    [新增 · Task 12c]
+    telegram/normalize.ts 行快照 → NormalizedMessage（纯函数，spec §11.2 映射）                  [新增 · Task 12c]
+    telegram/collect.ts   MutationObserver 实时 + 滚动补底（滚到顶或到 N 条）                    [新增 · Task 12c]
+    telegram/claim.ts     "这条 out 是哪次发送"的认领纯函数（FIFO + 已认领集合）                  [新增 · Task 12d]
+    telegram/send.ts      切会话 → 写 composer → 真实点发送 → 认领 out 行上桥（共用 SendRegistry） [新增 · Task 12d]
     *.test.ts             normalize / 平台映射的 node:test 用例                                        [新增]
   test/
-    tg-fixture.html       假 Telegram Web：按 §11.1 在 window 上挂状态/动作 API，脚本化抛事件    [新增 · Task 12c]
+    tg-probe/             Task 12a 产物：探针输出的 manifest.json + 打码后的 snapshots.md          [新增 · Task 12a]
+    tg-fixture.html       由上面那份快照裁出来的假 Telegram Web：同一批类名与嵌套，脚本化抛变更      [新增 · Task 12c]
   src/main/services/msgBridge/
     index.ts              挂载总入口 + 登录观察接线 + 页内消息路由 + 渲染层广播                       [新增]
     bridgeMount.ts        两段 executeJavaScript、ready 握手、心跳与指数退避重挂                      [新增]
@@ -168,13 +172,15 @@ apps/desktop/
 
 ## P6-0 前置定档（TG 实现深度，spec §11 的门）
 
-### Task 0: Telegram 实现深度的定档（spec §11 的门）—— **已定档为"档 1：页内 store 契约"，本任务无步骤要跑**
+### Task 0: Telegram 实现深度的定档（spec §11 的门）—— **已定档为"官方 K 版 DOM 契约"，本任务无步骤要跑**
 
-> **裁定史（两次，按时间读）**：2026-09-21 一次裁定"本期不做 TG"，把 TG 采集/发送整体移出 P6；同日二次裁定**推翻它**——TG 回归本期，走 store 契约。本任务原本是"先探测公网 Telegram Web 暴露了什么，再决定实现深度"，二次裁定把这个问题变成了**规格**而不是**探测结论**：本项目自己定义承载页必须满足 §11.1 的契约（见 spec），符合契约的页面就能接，不符合的停在"未验证"。
+> **裁定史（三次，按时间读）**：2026-09-21 一次裁定"本期不做 TG"，把 TG 采集/发送整体移出 P6；同日二次裁定推翻它，但把读取面定成"页内 store 契约"——要求承载页自己在 `window` 上挂出状态与动作 API；2026-09-22 三次裁定**再推翻二次**：那次的前提是"内嵌自建 Telegram Web"，而本期用的是官方站点，实测 `https://web.telegram.org/k/` 上 `"getGlobal" in window === false`、`apiManagerProxy` 上没有 `invokeApi`（完整观察见 spec §11.0）——读取面在要用的站点上根本不存在。三次裁定后的口径：**内嵌官方 K 版、路径钉死 `/k/`、采集与发送都读 DOM、类名集中在一份由真机探针产出的清单里**（spec §11.1）。
 >
-> **定档结果：档 1**（页内 API 钩子 + 事件订阅，与 WhatsApp 同构）。落地的任务：**Task 12c**（`bridge/telegram/` 的契约层 + 归一化 + 实时采集入库 + 本地 fixture 页 + TG 客户 `open_id` 形态收敛）、**Task 12d**（TG 发送链，与 Task 12 共用 `SendRegistry` 与状态阶梯）、**Task 10**（桥挂载闸门从 WhatsApp-only 放开为 WhatsApp + Telegram）。**Task 19 的 TG 那一档永久标"无账号未验证"**，不计绿也不计红。
+> **定档结果**：DOM 契约档（与 WhatsApp 不同构：WA 有 store 可钩，TG 只有渲染结果）。落地的任务：**Task 12a**（真登录态探针 → `tgSelectors.ts` 清单 + `test/tg-probe/` 快照，这一步之前不写 TG 代码）、**Task 12b**（注入层 TG 适配器换成清单真值，译文与 WA 同形）、**Task 12c**（DOM 读取 + 归一化 + 实时/补底入库 + 由快照裁出的 fixture 页 + TG 客户 `open_id` 形态收敛）、**Task 12d**（TG 发送链，与 Task 12 共用 `SendRegistry` 与状态阶梯）、**Task 10**（桥挂载闸门从 WhatsApp-only 放开为 WhatsApp + Telegram）。
 >
-> **执行者注意**：不要因为任务表里挂着 Task 0 去找步骤跑。原探测脚本（`tmp/p6-tg-probe.mjs`，探公网站点的 A/K 版形状）随二次裁定作废，需要时在 git 历史里取，不留在计划正文里——它的判定表已经被 §11.1 的契约取代。
+> **B 档不再是"永久未验证"**，但前置条件写在 C11 里：**TG 视图指到 `/k/` 后要重新扫一次码**（不钉路径会落到 `/a/`，两条路径不共用会话）。没扫码那一档就是没跑，报告里如实标未验证，不计绿也不计红。
+>
+> **执行者注意**：不要因为任务表里挂着 Task 0 去找步骤跑。Task 12a 之前任何人不得在 `bridge/telegram/` 或 `inject/platforms/telegram/` 里新增类名字符串——清单没落地之前，猜出来的类名与真值在测试里长得一模一样，只有真机能区分。
 
 ---
 
@@ -5796,1289 +5802,789 @@ git commit -m "feat(P6): 应用内回复发送链与发送归属登记"
 
 ---
 
-## P6f — 渲染层：记录页
+## P6f — Telegram 链（官方 K 版 DOM 契约：探针 → 译文 → 采集 → 发送）
 
-### Task 12c: Telegram 采集链（页内 store 契约 + 本地 fixture 验证）
+四档任务按 **12a → 12b → 12c → 12d** 顺序跑，整节接在 **Task 18 之后、Task 19 之前**（编号取 12x 是为了不给 Task 13～18 重排单测计数——那六个任务步骤里写死的预期 `# pass` 值是评审前的推演值，见 C14）。TG 这一节往闸门加的条数：**12a +2**（清单校验）、**12c +14**（DOM 解析与归一化）、**12d +6**（`out` 行认领的六条纯函数用例）、**12b +0**（`src/inject/**` 不在闸门白名单里，它的结论只有 CDP 那一档）。
 
-**Goal：** 把 spec §11 的契约基线落成一能跑的实现——桥读承载页自己在 `window` 上暴露的状态与变更事件（不抓 DOM），把 TG 消息归一化进 Task 3 的批量入库形状；并用一个本地契约假页面把整条链验到绿（spec §12 的 A 档）。
+**整节的硬前置是 Task 12a 的那一次扫码**：清单没有真值之前，12b/12c/12d 全部如实标 blocked。**不接受"先按猜测类名写代码、等扫码后再改"**——spec §11.0 的实测结论就是这条禁令的理由：猜出来的类名与真值在单测里长得一模一样，只有真机能区分，先写出来的代码只会把"没采到"伪装成"采到了 0 条"。
 
-**执行顺序**：本任务与 Task 12d 成对接在 **Task 18 之后、Task 19 之前**跑。编号取 12c/12d 是为了不给 Task 13～18 重排单测计数——那六个任务的预期 `# pass` 值（43 → 48 → 56 → 68 → 76 → 79 → 83）已在各自步骤里写死，中途插进 20 条新用例就要改七处绝对值；放最后则链条保持单调：83 →（12c +14）97 →（12d +6）103。
+---
+
+### Task 12a: Telegram 真机 DOM 探针（产出 spec §11.1 清单 + 脱敏快照）
+
+**Goal：** 把"官方 K 版的 DOM 长什么样"从推测变成仓库里的两份产物——一份机器可读的选择器清单（`src/shared/tgDomContract.ts`，采集/发送/译文三处唯一的类名来源），一份脱敏的真机 DOM 快照（`apps/desktop/test/tg-probe/`，Task 12c 裁 fixture 的原料）。本任务不写任何采集逻辑。
+
+**前置（不满足就 blocked，不要绕）**：
+1. `pnpm --dir apps/desktop run dev -- --remoteDebuggingPort 9223` 起着，窗口抬起且 `visibilityState === 'visible'`（C9/C10）；
+2. TG 账号视图已加载本任务 Step 1 钉好的 `/k/` 地址，且**用户用手机 Telegram 扫过一次码**（K 与 A 不共用会话登录态，spec §11.0 第 1 行）。
 
 **Files:**
-- Create: `apps/server/src/main/resources/db/migration/V9__tg_openid_shape.sql`
-- Modify: `apps/server/src/main/java/com/smartscrm/server/service/msg/ChatKeys.java`（类注释里"形态未决 / 以探测为准"改成既定口径）
-- Create: `apps/desktop/src/bridge/telegram/types.ts`
-- Create: `apps/desktop/src/bridge/telegram/tgStore.ts` + `tgStore.test.ts`（6 条）
-- Create: `apps/desktop/src/bridge/telegram/normalize.ts` + `normalize.test.ts`（8 条）
-- Create: `apps/desktop/src/bridge/telegram/collect.ts`
-- Modify: `apps/desktop/src/bridge/index.ts`（`COLLECT` 表加 telegram 一项）
-- Modify: `apps/desktop/src/main/services/msgBridge/index.ts`（挂载闸门放开 telegram）
-- Modify: `apps/desktop/src/inject/platforms/telegram/index.ts`（登录判定改成契约优先）
-- Create: `apps/desktop/test/tg-fixture.html`（验证用，不进包）
-- Create: `tmp/p6-tg-fixture.mjs`（A 档端到端驱动；`tmp/` 不入库）
+- Modify: `apps/desktop/src/renderer/src/lib/platform.ts`（Telegram 那一项的 `embedUrl` 与 `hint`）
+- Create: `apps/desktop/src/shared/tgDomContract.ts`（`TgDomContract` 类型 + `TG_DOM` 清单 + `assertTgContract`）
+- Test: `apps/desktop/src/shared/tgDomContract.test.ts`（2 条）
+- Create: `tmp/p6-tg-probe.mjs`（探针；`tmp/` 在 gitignore 里，不入库）
+- Create: `apps/desktop/test/tg-probe/manifest.json`、`apps/desktop/test/tg-probe/snapshots.md`（探针产物，入库）
 
 **Interfaces:**
-- Consumes: Task 11 的 `CollectCtx` / `CollectImpl`（`src/bridge/types.ts`）、Task 3 的 `POST /api/messages/batch` 形状（由主进程 `collectorHub` 组装，页内不直连后端）、Task 10 的挂载闸门与 `observeLoginStatus`。
+- Consumes: `tmp/cdp.mjs` 的 `openViewByUrl(urlPart, port)`（P5/P6 一直在用的宿主通道，attach 到内嵌视图本体）。
 - Produces:
-  - `isTgReady(): boolean`、`tgGlobal(): TgGlobal | null`、`tgActions(): TgActions | null`、`isTgLoggedIn(g?): boolean`、`activeChatIds(g): string[]`、`messagesOf(g, chatId): TgMessage[]`、`chatTitleOf(g, chatId): string | undefined`、`activeChatIdOf(g): string | null`、`onTgUpdate(cb): () => void`
-  - `normalizeTg(msg: TgMessage, ctx: NormalizeTgCtx): NormalizedMessage | null`、`tgMediaTypeOf(content)`、`tgSummaryOf(type, content)`、`tgStatusOf(msg)`
-  - `telegram/collect.ts` 的 `CollectImpl` 四入口（与 WhatsApp 同名同形）
-  - 库侧：`customer.open_id` 在 `platform_type=4` 上与 `chat_key` 同形（纯数字，群含负号）
+  - `interface TgDomContract`（字段见 Step 2）、`const TG_DOM: TgDomContract`、`assertTgContract(c: TgDomContract): string[]`（返回缺项列表，空数组=清单可用）
+  - `test/tg-probe/manifest.json`：探针原样输出的 `{ probedAt, build, candidates, attrs, hashes, times, snapshot }`
+  - Task 12c/12d/12b 只 `import { TG_DOM } from '@shared/tgDomContract'`（inject 侧用相对路径 `../../../shared/tgDomContract`），**不得自带任何类名字符串**
 
-- [ ] **Step 1: 先把后端那侧的形状收敛钉住（V9）**
+- [ ] **Step 1: 钉住内嵌地址（这一处代码改动是本任务的前置，不是可选优化）**
 
-`apps/server/src/main/resources/db/migration/V9__tg_openid_shape.sql`：
-
-```sql
--- Telegram 客户的 open_id 收敛成与 chat_key 同形的纯数字串。
--- 自动匹配按 (tenant_id, platform_type, open_id = chat_key) 命中，'tg_' 前缀与桥上报的
--- 数字 chat_key 不同形 ⇒ 对 Telegram 永不命中：采集到了消息却认不出是人，而这种"永远命不中"
--- 在界面上没有任何报错，只会表现成"客户一直是空的"。
-UPDATE customer
-SET open_id = SUBSTRING(open_id, 4)
-WHERE platform_type = 4
-  AND open_id LIKE 'tg\\_%';
-```
-
-`ChatKeys.java` 的类注释第三段整段替换（原文说"形态未决 / 以真实探测为准"，探测这件事已经不存在了——契约是本项目自己定的，见 spec §11.1）：
-
-```java
- * TG 的 chat_key 认纯数字（超级群带 -100 前缀），与 chat_conversation.chat_key 的列注释
- * "TG: numeric chat id" 同口径。customer.open_id 在 platform_type=4 上与之**同形**（V9 收敛），
- * 因为自动匹配是 open_id = chat_key 的等值命中；两种形状并存会让 Telegram 永远命不中，
- * 且界面上不报错。改这一处形态必须与 V9 同批，理由见该迁移文件首行注释。
-```
-
-`matchesPlatform` 里那行 `// tg_ 前缀形态未决，见类注释；这里的宽松度是当前的既定口径` 改成：
-
-```java
-            // 纯数字即放过：负号是超级群的既定形状，不能在这里收紧掉
-```
-
-验证（先杀 :8180，C8）：
-
-```bash
-cd apps/server && netstat -ano | grep ':8180'
-export JAVA_HOME="C:/Program Files/Java/jdk-17.0.18"; set -o pipefail
-MAVEN_OPTS="-Duser.language=en -Duser.country=US" ./mvnw -DskipTests package
-```
-
-后台起 `java -jar apps/server/target/scrm-server-0.1.0.jar`，等 `/api/health` 通，然后：
-
-```bash
-node tmp/p6c-count.mjs            # 记下 customer.total 基线（应为 5）
-curl -s -X POST http://127.0.0.1:8180/api/auth/login -H 'content-type: application/json' \
-  -d '{"inviteCode":"DEMO0001","username":"admin","password":"***","deviceId":"v9-probe"}' | head -c 200
-```
-
-拿到 token 后 `GET /api/customers?keyword=Carol` 必须给 `"openId":"10002003"`，`keyword=Dave` 给 `"10002004"`，且 `GET /api/customers` 的 `total` 仍是 **5**（V9 只改两行的形状，不多不少）。`total` 变了就是 `LIKE` 的转义写错了（`'tg_%'` 不加 `\\` 会把下划线当单字符通配）。
-
-- [ ] **Step 2: 页内契约声明 `telegram/types.ts`**
+`apps/desktop/src/renderer/src/lib/platform.ts` 里 `PlatformType.Telegram` 那一项：
 
 ```ts
-// src/bridge/telegram/types.ts
-/**
- * 承载页在 `window` 上暴露的状态与动作 API 的最小声明（spec §11.1 的形状）。
- * 只声明桥真正读到的字段：站点内部形状变了，编译不会假绿，而运行期探测
- * （`isTgReady` + 登录判定）会把它打成"这个视图没挂上"，比采出一堆空行好查。
- * `window.ele` 的声明在 `bridge/host.ts`（Task 8），这里不重复声明。
- */
-export interface TgChat {
-  id?: number | string
-  title?: string
-  display?: { title?: string }
-}
-
-export interface TgMessageContent {
-  text?: { text?: string }
-  photo?: unknown
-  video?: unknown
-  document?: unknown
-  sticker?: unknown
-}
-
-export interface TgMessage {
-  /** 服务端消息 id。缺它就不能参与 `uk_msg` 幂等，整条不入库（normalizeTg 返回 null）。 */
-  id?: number | string
-  /** 客户端 localId：发送回执的唯一关联键（spec §11.3）。 */
-  localId?: number | string
-  /** unix 秒。0 / 缺失 / 未来值都不在这里钳制，交给后端 MsgTimes（收敛 #9）。 */
-  date?: number
-  isOutgoing?: boolean
-  /** 已提交但尚未落定：有 id 也还不能当"发出去了"。 */
-  pending?: boolean
-  content?: TgMessageContent
-  /** 群/频道里"谁说的"；单聊不填，让会话标题去承担"是谁"。 */
-  fromId?: number | string
-  senderName?: string
-}
-
-export interface TgGlobal {
-  isInited?: boolean
-  currentUserId?: number | string
-  chats?: {
-    byId?: Record<string, TgChat>
-    listIds?: { active?: Array<number | string>; archived?: Array<number | string> }
-  }
-  messages?: { byChatId?: Record<string, TgMessage[]> }
-  byTabId?: Record<string, { activeChatId?: number | string }>
-  getCurrentTabId?: () => string
-}
-
-export interface TgActions {
-  sendMessage(options: {
-    messageList: { chatId: string; threadId: number; type: string }
-    text: string
-  }): unknown
-}
-
-/**
- * `apiUpdate` 的 detail 里桥读得懂的那几种（spec §11.1 的订阅面）：
- * `newMessage {chatId, message}` / `updateMessageSendSucceeded {chatId, message, localId}`
- * / `updateChatOpened {chatId}`。会话 id 的字段名各版本有漂移，所以读取走 `chatIdOfUpdate`。
- */
-export interface TgUpdate {
-  type?: string
-  chatId?: number | string
-  id?: number | string
-  receiverId?: number | string
-  localId?: number | string
-  message?: TgMessage
-}
-
-declare global {
-  interface Window {
-    getGlobal?: () => TgGlobal
-    getActions?: () => TgActions
-  }
-}
-```
-
-- [ ] **Step 3: `tgStore.test.ts` 先写红（6 条）**
-
-这一层被测的只有"取形状"：没有 `window` 时不炸、有 `window` 时取对、形状漂移到哪都不误判成"已登录"。
-
-```ts
-// src/bridge/telegram/tgStore.test.ts
-import { test } from 'node:test'
-import assert from 'node:assert/strict'
-import {
-  activeChatIdOf, activeChatIds, chatTitleOf, isTgLoggedIn, isTgReady, messagesOf, tgGlobal
-} from './tgStore.ts'
-import type { TgGlobal } from './types.ts'
-
-/** 装一个假 window 跑一段，跑完复原：Node 里没有 window，不注入就只能测"全都返回空"这一半。 */
-function withWindow<T>(value: unknown, run: () => T): T {
-  const g = globalThis as { window?: unknown }
-  const prev = g.window
-  g.window = value
-  try {
-    return run()
-  } finally {
-    g.window = prev
-  }
-}
-
-const store = (over: Partial<TgGlobal> = {}): TgGlobal => ({
-  isInited: true,
-  currentUserId: 1_000_001,
-  chats: {
-    byId: {
-      '10002003': { id: 10002003, title: 'Carol 王' },
-      '-1001234567890': { id: -1001234567890, display: { title: 'TG 产品群' } }
-    },
-    listIds: { active: [10002003, -1001234567890, 777], archived: [777] }
+  [PlatformType.Telegram]: {
+    type: PlatformType.Telegram,
+    label: 'Telegram',
+    ...
+    channel: 'Telegram',
+    // 根地址会被页面自己的路由带到 /a/（2026-09-22 实测 location.href 停在 /a/），
+    // 而本期整套 TG 契约是按 K 版定的——路径必须钉死，不钉就不是同一份 DOM。
+    embedUrl: 'https://web.telegram.org/k/',
+    hint: '手机 Telegram 扫码登录（设置 > 设备 > 登录网页版）'
   },
-  messages: {
-    byChatId: {
-      '10002003': [
-        { id: 2, date: 1_700_000_200, content: { text: { text: 'later' } } },
-        { id: 1, date: 1_700_000_100, content: { text: { text: 'earlier' } } }
-      ]
-    }
-  },
-  ...over
-})
-
-test('没有 window / 页面没暴露 getGlobal：一律判"未就绪"，而不是抛出去', () => {
-  assert.equal(withWindow(undefined, isTgReady), false)
-  assert.equal(withWindow({}, isTgReady), false)
-  assert.equal(withWindow({}, () => tgGlobal()), null)
-  assert.equal(withWindow({ getGlobal: () => { throw new Error('store 还没建好') } }, () => tgGlobal()), null)
-})
-
-test('登录判定要 isInited 且有当前用户；任一缺失都不算（缺了就永久不采）', () => {
-  assert.equal(isTgLoggedIn(store()), true)
-  assert.equal(isTgLoggedIn(store({ isInited: false })), false)
-  assert.equal(isTgLoggedIn(store({ currentUserId: undefined })), false)
-  assert.equal(isTgLoggedIn(store({ currentUserId: 0 })), false, '0 是"还没有用户"的默认值，不是登录态')
-  assert.equal(isTgLoggedIn(null), false)
-})
-
-test('会话列表只取 active，存档的剔掉：存档会话被采一遍会把用户已归档的内容重新顶回列表', () => {
-  assert.deepEqual(activeChatIds(store()), ['10002003', '-1001234567890'])
-  assert.deepEqual(activeChatIds(store({ chats: {} })), [])
-  assert.deepEqual(activeChatIds(null), [])
-})
-
-test('消息按 date 显式排序：不假定页面数组是新→旧还是旧→新，猜错会静默采成"最旧 N 条"', () => {
-  const s = store()
-  const ids = messagesOf(s, '10002003').map((m) => m.id)
-  assert.deepEqual(ids, [1, 2])
-  assert.deepEqual(messagesOf(s, '99999'), [], '没有这个会话就是空数组，不是 undefined')
-  assert.equal(messagesOf(s, '10002003') === s.messages?.byChatId?.['10002003'], false,
-    '必须返回副本：调用方原地排序会改到页面自己的状态')
-})
-
-test('会话标题两处都认（title / display.title），空串不算标题', () => {
-  assert.equal(chatTitleOf(store(), '10002003'), 'Carol 王')
-  assert.equal(chatTitleOf(store(), '-1001234567890'), 'TG 产品群')
-  assert.equal(chatTitleOf(store(), '10009999'), undefined)
-})
-
-test('活动会话取自 byTabId[getCurrentTabId()]；取不到给 null（未读数按"没有活动会话"处理）', () => {
-  const withTab = store({ byTabId: { t1: { activeChatId: 10002003 } }, getCurrentTabId: () => 't1' })
-  assert.equal(activeChatIdOf(withTab), '10002003')
-  assert.equal(activeChatIdOf(store({ byTabId: { t2: { activeChatId: 1 } }, getCurrentTabId: () => 't1' })), null)
-  assert.equal(activeChatIdOf(store()), null)
-})
 ```
 
-```bash
-cd apps/desktop && pnpm run test:unit 2>&1 | tail -15
+改完跑 `pnpm --dir apps/desktop run typecheck`（预期 4/4 绿），再在 dev 实例里打开 TG 账号，用 CDP 断言落在 K 版而不是 A 版：
+
+```js
+// tmp/p6-tg-kurl.mjs
+import { openViewByUrl } from './cdp.mjs'
+const v = await openViewByUrl('web.telegram.org', 9223)
+console.log(await v.ev('({ href: location.href, path: location.pathname, hasGetGlobal: "getGlobal" in window })'))
+await v.close(); process.exit(0)
 ```
 
-预期：FAIL —— `Cannot find module './tgStore.ts'`。
+预期 `path === '/k/'`、`hasGetGlobal === false`。**`hasGetGlobal` 这一项必须是 false**：它是 spec §11.0 那条推翻旧裁定的观察，留在这一档的产出里，后续任何人想改回 store 路线时先要让它变 true。（2026-09-22 已在未登录态实测过这两条；本步是在**登录态 + 我们自己的视图分区**里再取一次，两者都算 A/B 档分开写。）
 
-- [ ] **Step 4: 实现 `tgStore.ts`**
+- [ ] **Step 2: `tgDomContract.ts` 的类型 + `assertTgContract` 先写红**
+
+`apps/desktop/src/shared/tgDomContract.test.ts`（2 条，**必须能区分"清单填好了"和"清单是个空壳"**）：
 
 ```ts
-// src/bridge/telegram/tgStore.ts
-import type { TgActions, TgChat, TgGlobal, TgMessage, TgUpdate } from './types.ts'
-
-/**
- * 契约读取层：桥对页面的一切认知都从这一层出去。
- * 单拆一层的理由不是好看——normalize / collect 只吃普通对象，`node --test` 才能不造页面就把
- * 归一化规则测干净；这一层自己只被测"取形状"，靠上面那组装假 window 的用例兜。
- */
-
-/** 页面是否暴露了那层 API。不满足就什么都别做（spec §11.1 就绪判定）。 */
-export function isTgReady(): boolean {
-  return typeof window !== 'undefined' && typeof window.getGlobal === 'function'
-}
-
-export function tgGlobal(): TgGlobal | null {
-  if (!isTgReady()) return null
-  try {
-    return window.getGlobal?.() ?? null
-  } catch {
-    return null
-  }
-}
-
-export function tgActions(): TgActions | null {
-  if (!isTgReady()) return null
-  try {
-    return window.getActions?.() ?? null
-  } catch {
-    return null
-  }
-}
-
-/** 登录判定（spec §11.1）：状态已初始化且确有当前用户。`currentUserId: 0` 是没登录时的默认值。 */
-export function isTgLoggedIn(g: TgGlobal | null | undefined = tgGlobal()): boolean {
-  return !!g && g.isInited === true && g.currentUserId != null && g.currentUserId !== '' && g.currentUserId !== 0
-}
-
-/** 待补底的会话：只走 active 列表，存档不采（与 WhatsApp 那一支同口径）。 */
-export function activeChatIds(g: TgGlobal | null): string[] {
-  const list = g?.chats?.listIds?.active
-  if (!Array.isArray(list)) return []
-  const archived = new Set((Array.isArray(g?.chats?.listIds?.archived) ? g?.chats?.listIds?.archived : []).map((id) => String(id)))
-  const ids: string[] = []
-  for (const id of list) {
-    const key = String(id)
-    if (key && key !== 'undefined' && !archived.has(key)) ids.push(key)
-  }
-  return ids
-}
-
-/** 一个会话里的消息，一律按 date 升序返回副本（不改页面自己的状态）。 */
-export function messagesOf(g: TgGlobal | null, chatId: string): TgMessage[] {
-  const list = g?.messages?.byChatId?.[chatId]
-  if (!Array.isArray(list)) return []
-  return [...list].sort((a, b) => (a?.date ?? 0) - (b?.date ?? 0))
-}
-
-export function chatTitleOf(g: TgGlobal | null, chatId: string): string | undefined {
-  const chat: TgChat | undefined = g?.chats?.byId?.[chatId]
-  const title = chat?.title ?? chat?.display?.title
-  return typeof title === 'string' && title.length > 0 ? title : undefined
-}
-
-/** 当前打开的会话——未读数加不加全靠它（收敛 #11）。 */
-export function activeChatIdOf(g: TgGlobal | null): string | null {
-  if (!g) return null
-  let tabKey: string | undefined
-  try {
-    tabKey = typeof g.getCurrentTabId === 'function' ? g.getCurrentTabId() : undefined
-  } catch {
-    tabKey = undefined
-  }
-  const id = tabKey ? g.byTabId?.[tabKey]?.activeChatId : undefined
-  return id == null ? null : String(id)
-}
-
-/**
- * 订阅 `apiUpdate`。`tgAction` 是动作事件，本期不订阅：两个都读会让同一条更新进两次采集队列，
- * 入库有 `uk_msg` 兜住，但 live 尾巴会闪出两个副本。
- */
-export function onTgUpdate(cb: (update: TgUpdate) => void): () => void {
-  if (typeof window === 'undefined' || typeof window.addEventListener !== 'function') return () => undefined
-  const handler = (event: Event): void => {
-    const detail = (event as CustomEvent).detail as TgUpdate | undefined
-    if (detail && typeof detail === 'object' && typeof detail.type === 'string') cb(detail)
-  }
-  window.addEventListener('apiUpdate', handler)
-  return () => window.removeEventListener('apiUpdate', handler)
-}
-
-/** 更新载荷里会话 id 的字段名各版本有漂移，三处都认一遍。 */
-export function chatIdOfUpdate(u: TgUpdate): string {
-  const v = u.chatId ?? u.id ?? u.receiverId
-  return v == null ? '' : String(v)
-}
-```
-
-```bash
-cd apps/desktop && pnpm run test:unit 2>&1 | tail -8
-```
-
-预期：`# pass 97` / `# fail 0`（Task 18 终态 83 + tgStore 6 + normalize 8 = 97；normalize 在下一步）。
-
-- [ ] **Step 5: `normalize.test.ts` 先写红（8 条）**
-
-```ts
-// src/bridge/telegram/normalize.test.ts
-import { test } from 'node:test'
+import test from 'node:test'
 import assert from 'node:assert/strict'
-import { normalizeTg, tgMediaTypeOf, tgStatusOf, tgSummaryOf } from './normalize.ts'
-import type { TgMessage } from './types.ts'
+import { TG_DOM, REQUIRED_KEYS, assertTgContract } from './tgDomContract.ts'
 
-const ctx = { source: 'live' as const, chatId: '10002003' }
-
-test('收进的普通消息：in / received / 正文取 content.text.text', () => {
-  const row = normalizeTg({ id: 501, date: 1_700_000_000, content: { text: { text: 'hola' } } }, ctx)
-  assert.equal(row?.chatKey, '10002003')
-  assert.equal(row?.msgKey, '501')
-  assert.equal(row?.direction, 'in')
-  assert.equal(row?.status, 'received')
-  assert.equal(row?.body, 'hola')
-  assert.equal(row?.mediaType, 'text')
-  assert.equal(row?.mediaSummary, undefined)
+test('清单里必填项都已填（Task 12a 没跑完就红在这里，而不是让 12c 拿空串去 querySelector）', () => {
+  const missing = assertTgContract(TG_DOM)
+  assert.deepEqual(missing, [], `选择器清单未落地，缺：${missing.join(', ')}`)
 })
 
-test('发出的一律如实报 live，归属由主进程盖（与 WhatsApp 那支同一口径）', () => {
-  const row = normalizeTg({ id: 502, date: 1_700_000_010, isOutgoing: true, content: { text: { text: 'hi' } } }, ctx)
-  assert.equal(row?.direction, 'out')
-  assert.equal(row?.source, 'live')
-  assert.equal(normalizeTg({ id: 502, date: 1, content: {} }, { source: 'backfill', chatId: '10002003' })?.source, 'backfill')
-})
-
-test('没有服务端 id 的消息不入库：它无法参与 uk_msg 幂等，收下就是脏数据', () => {
-  assert.equal(normalizeTg({ date: 1, content: { text: { text: 'x' } } }, ctx), null)
-  // id 为 0 是"还没有服务端 id"的占位：String(0) 会造出一条永远匹配不上的键
-  assert.equal(normalizeTg({ id: 0, date: 1 }, ctx), null)
-})
-
-test('chatId 缺失时返回 null，而不是把空串写进 NOT NULL 的 chat_key', () => {
-  assert.equal(normalizeTg({ id: 1, date: 1 }, { source: 'live', chatId: '' }), null)
-})
-
-test('群聊：chatKey 保留负号，senderKey/senderName 才有意义；单聊不填 senderKey', () => {
-  const group = normalizeTg(
-    { id: 601, date: 1_700_000_020, fromId: 10002003, senderName: 'Carol', content: { text: { text: '在吗' } } },
-    { source: 'live', chatId: '-1001234567890' }
-  )
-  assert.equal(group?.chatKey, '-1001234567890')
-  assert.equal(group?.senderKey, '10002003')
-  assert.equal(group?.senderName, 'Carol')
-  assert.equal(normalizeTg({ id: 602, date: 1, fromId: 9, content: {} }, ctx)?.senderKey, undefined)
-})
-
-test('媒体：body 落 null，摘要带说明文字；未知内容类型不冒充 text', () => {
-  assert.equal(tgMediaTypeOf({ photo: {} }), 'image')
-  assert.equal(tgMediaTypeOf({ video: {} }), 'video')
-  assert.equal(tgMediaTypeOf({ document: {} }), 'document')
-  assert.equal(tgMediaTypeOf({ sticker: {} }), 'sticker')
-  assert.equal(tgMediaTypeOf({}), 'text')
-  assert.equal(tgSummaryOf('image', { text: { text: '报价单' } }), '[图片] 报价单')
-  assert.equal(tgSummaryOf('document'), '[文件]')
-  assert.equal(tgSummaryOf('text'), null)
-  const row = normalizeTg({ id: 701, date: 5, content: { photo: {}, text: { text: '看这张' } } }, ctx)
-  assert.equal(row?.body, null)
-  assert.equal(row?.mediaSummary, '[图片] 看这张')
-})
-
-test('发出的状态只到 sent：平台的已读是会话级事件，不能拿来推消息级状态', () => {
-  assert.equal(tgStatusOf({ pending: true }), 'pending')
-  assert.equal(tgStatusOf({ id: 1 }), 'sent')
-  assert.equal(tgStatusOf({ id: 1, pending: false }), 'sent')
-})
-
-test('date 缺失给 0，由后端钳成接收时刻（收敛 #9，页内不做第二次钳制）', () => {
-  assert.equal(normalizeTg({ id: 801, content: { text: { text: 'x' } } }, ctx)?.msgTimeEpochSec, 0)
-  assert.equal(normalizeTg({ id: 802, date: 1_700_000_000, content: {} }, ctx)?.msgTimeEpochSec, 1_700_000_000)
+test('id 来源两条路都判过：hash 与 attr 至少各有一条明确结论', () => {
+  // 'none' 是合法结论（探针确实拿不到时就该写 none，采集侧据此降级），
+  // 但空串/undefined 不是——那意味着这一档压根没跑。
+  assert.ok(['hash', 'attr', 'none'].includes(TG_DOM.chatIdSource), `chatIdSource=${TG_DOM.chatIdSource}`)
+  assert.ok(['attr', 'none'].includes(TG_DOM.msgIdSource), `msgIdSource=${TG_DOM.msgIdSource}`)
+  if (TG_DOM.chatIdSource === 'attr') assert.ok(TG_DOM.chatIdAttr, 'chatIdSource=attr 却没记属性名')
+  if (TG_DOM.msgIdSource === 'attr') assert.ok(TG_DOM.msgIdAttr, 'msgIdSource=attr 却没记属性名')
 })
 ```
 
-```bash
-cd apps/desktop && pnpm run test:unit 2>&1 | tail -15
-```
+`assertTgContract` 的必填集合 = 除 `chatIdAttr` / `msgIdAttr`（条件必填，Step 2 第 2 条用例管）之外的全部字符串字段；`build` 与 `probedAt` 也在内（**没有探针时间戳的清单等同于没有清单**）。
 
-预期：FAIL —— `Cannot find module './normalize.ts'`。
-
-- [ ] **Step 6: 实现 `normalize.ts`**
+- [ ] **Step 3: 实现类型与校验，让两条用例绿**
 
 ```ts
-// src/bridge/telegram/normalize.ts
-import type { MediaType, MsgSource, NormalizedMessage } from '../../shared/chatTypes.ts'
-import type { TgMessage, TgMessageContent } from './types.ts'
-
-export interface NormalizeTgCtx {
-  source: MsgSource
-  /** TG 的消息对象不带会话 id，chatKey 只能由调用方给（事件载荷或补底循环）。 */
-  chatId: string
-  chatTitle?: string
+// apps/desktop/src/shared/tgDomContract.ts
+/**
+ * Telegram 官方 K 版页面（`https://web.telegram.org/k/`）的 DOM 契约。
+ *
+ * 这份清单是 TG 三条链（采集 / 发送 / 译文注入）**唯一**的类名来源：代码里不许出现第二个
+ * Telegram 类名字符串。值不来自推测——由 `tmp/p6-tg-probe.mjs` 在真登录态跑出来的
+ * `apps/desktop/test/tg-probe/manifest.json` 誊回，`probedAt` 与 `build` 就是那次运行的凭证。
+ *
+ * 为什么集中成一份配置：K 版是构建产物，类名跟着版本变（spec §11.0）。散布在三个文件里的
+ * 字符串改版时会"坏一半"——译文还在、采集已经空了。集中一处，改版时的失效是一整块，
+ * 且 `assertTgContract` 那两条闸门用例会替我们守着"清单没落地就别往下写"。
+ */
+export interface TgDomContract {
+  /** 探针当次的构建标识：`localStorage.k_build` 优先，取不到时用主 chunk 文件名。 */
+  build: string
+  /** ISO 时间，探针跑的那一刻。 */
+  probedAt: string
+  /** 登录页容器（负判定）。 */
+  loginForm: string
+  /** 已登录才出现的节点（正判定）。与 loginForm 都不命中 = 未知态，不采不发（spec §9）。 */
+  loggedIn: string
+  chatList: string
+  chatRow: string
+  chatRowActive: string
+  chatRowTitle: string
+  chatRowUnread: string
+  chatRowTime: string
+  /** 打开会话后的消息滚动容器：补底靠滚它到顶（spec §11.2）。 */
+  messageList: string
+  messageRow: string
+  incoming: string
+  outgoing: string
+  messageBody: string
+  messageTime: string
+  messageMedia: string
+  /** 日期分组头：`messageTime` 只有 `HH:MM` 时，日期从这个节点的文本补。 */
+  dateSeparator: string
+  composerInput: string
+  sendButton: string
+  /** 会话 id 来源：`location.hash` / 行属性 / 两处都没有。 */
+  chatIdSource: 'hash' | 'attr' | 'none'
+  chatIdAttr?: string
+  /** 消息 id 来源：行（或其后代）上的属性 / 没有。没有就走合成键，代价写死在 §11.2。 */
+  msgIdSource: 'attr' | 'none'
+  msgIdAttr?: string
 }
 
-/** 内容里哪一种媒体在场。顺序即优先级：带说明文字的图片仍然是图片。 */
-export function tgMediaTypeOf(content: TgMessageContent | undefined): MediaType {
-  if (!content) return 'text'
-  if (content.photo) return 'image'
-  if (content.video) return 'video'
-  if (content.document) return 'document'
-  if (content.sticker) return 'sticker'
-  return 'text'
-}
+/** 条件必填（两个 `*Attr`）之外的全部字段：缺一个都算清单没落地。 */
+export const REQUIRED_KEYS: readonly (keyof TgDomContract)[] = [
+  'build', 'probedAt', 'loginForm', 'loggedIn', 'chatList', 'chatRow', 'chatRowActive', 'chatRowTitle',
+  'chatRowUnread', 'chatRowTime', 'messageList', 'messageRow', 'incoming', 'outgoing', 'messageBody',
+  'messageTime', 'messageMedia', 'dateSeparator', 'composerInput', 'sendButton'
+]
 
-/** 摘要是记录页与搜索命中的唯一可见文本（媒体本体不在 P6，spec §1 非目标）。 */
-export function tgSummaryOf(type: MediaType, content?: TgMessageContent): string | null {
-  const label =
-    type === 'image' ? '[图片]'
-      : type === 'video' ? '[视频]'
-        : type === 'document' ? '[文件]'
-          : type === 'sticker' ? '[贴纸]'
-            : null
-  if (!label) return null
-  const caption = content?.text?.text
-  return caption ? `${label} ${caption}` : label
+export function assertTgContract(c: TgDomContract): string[] {
+  const missing: string[] = []
+  for (const k of REQUIRED_KEYS) {
+    const v = c[k]
+    if (typeof v !== 'string' || v.trim() === '') missing.push(k)
+  }
+  return missing
 }
 
 /**
- * 发出侧的状态阶梯在 TG 这一路只到 `sent`：平台的已读语义是"对方读到哪条"（会话级），
- * 不是"这一条已读"（消息级），拿会话级事件推消息级状态会把猜测写成事实（spec §7）。
+ * 占位清单：**Task 12a 的探针跑完才能填真值**，闸门第一条用例在此之前是红的。
+ * 这是有意的——把"清单还没落地"暴露成一条会失败的检查，而不是让后续任务静默对着空串写代码。
+ * 评审时若看到本对象仍是占位形状，说明 Task 12a 没跑，TG 后续三档不得开工。
  */
-export function tgStatusOf(msg: TgMessage): MsgStatus {
-  return msg.pending === true || msg.id == null || msg.id === 0 ? 'pending' : 'sent'
-}
-
-export function normalizeTg(msg: TgMessage, ctx: NormalizeTgCtx): NormalizedMessage | null {
-  if (!msg || typeof msg !== 'object') return null
-  if (msg.id == null || msg.id === 0) return null
-  const chatKey = typeof ctx.chatId === 'string' ? ctx.chatId : ''
-  if (!chatKey) return null
-
-  const direction = msg.isOutgoing ? 'out' : 'in'
-  const type = tgMediaTypeOf(msg.content)
-  const media = type !== 'text'
-  const summary = media ? tgSummaryOf(type, msg.content) : null
-  // 群判定只看形态（负号 = 超级群/频道），与后端 ChatKeys.isGroup 同口径；
-  // 这里不用后端那个函数是跨语言，两处同形由 Step 8 的会话头 is_group 断言兜住。
-  const group = chatKey.startsWith('-')
-
-  return {
-    chatKey,
-    msgKey: String(msg.id),
-    direction,
-    ...(group && msg.fromId != null ? { senderKey: String(msg.fromId) } : {}),
-    ...(group && msg.senderName ? { senderName: msg.senderName } : {}),
-    body: media ? null : msg.content?.text?.text ?? '',
-    mediaType: type,
-    ...(summary ? { mediaSummary: summary } : {}),
-    msgTimeEpochSec: typeof msg.date === 'number' ? msg.date : 0,
-    status: direction === 'in' ? 'received' : tgStatusOf(msg),
-    source: ctx.source,
-    ...(ctx.chatTitle ? { chatTitle: ctx.chatTitle } : {})
-  }
+export const TG_DOM: TgDomContract = {
+  build: '',
+  probedAt: '',
+  loginForm: '',
+  loggedIn: '',
+  chatList: '',
+  chatRow: '',
+  chatRowActive: '',
+  chatRowTitle: '',
+  chatRowUnread: '',
+  chatRowTime: '',
+  messageList: '',
+  messageRow: '',
+  incoming: '',
+  outgoing: '',
+  messageBody: '',
+  messageTime: '',
+  messageMedia: '',
+  dateSeparator: '',
+  composerInput: '',
+  sendButton: '',
+  chatIdSource: 'none',
+  msgIdSource: 'none'
 }
 ```
 
-补一行 import：`MsgStatus` 被 `tgStatusOf` 的返回类型用到，第二行的 `import type { MediaType, MsgSource, NormalizedMessage }` 改成 `import type { MediaType, MsgSource, MsgStatus, NormalizedMessage } from '../../shared/chatTypes.ts'`。
+跑 `pnpm --dir apps/desktop run test:unit`：Step 2 那两条在实现前红（模块不存在），实现后第一条**仍然红**（占位清单就是没填），第二条绿。第一条转绿的条件是 Step 6 把真值誊进来——**这一档不接受为了让它绿而填假值**，宁可让 `# fail 1` 跟着提交并在报告里写明"清单未落地"。基线：闸门条数 = 真实基线 + 2（C14：不抄本文件里的绝对数）。
 
-```bash
-cd apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run typecheck:unit
-```
+- [ ] **Step 4: 写探针 `tmp/p6-tg-probe.mjs`**
 
-预期：`# pass 97` / `# fail 0`，typecheck 无输出。
+探针不猜类名：它把页面上"结构上像什么"的候选**统计**出来，再把判定需要的原始材料一次取全。正文一律不进产物（C3）——快照里的文字全部替换成占位符，时间文本允许留（它是解析规则的输入，不是客户内容）。
 
-- [ ] **Step 7: `collect.ts`——四入口的 Telegram 实现**
+```js
+// tmp/p6-tg-probe.mjs —— Task 12a：官方 K 版真登录态 DOM 探针
+// 用法：node tmp/p6-tg-probe.mjs            （需要 dev 起着 + TG 视图已扫码登录）
+//       node tmp/p6-tg-probe.mjs --open 2   （额外点开前 2 个会话，取消息行与 hash）
+import { mkdirSync, writeFileSync } from 'node:fs'
+import path from 'node:path'
+import { openViewByUrl } from './cdp.mjs'
 
-```ts
-// src/bridge/telegram/collect.ts
-import type { CollectCtx } from '../types.ts'
-import { normalizeTg } from './normalize.ts'
-import {
-  activeChatIdOf, activeChatIds, chatIdOfUpdate, chatTitleOf, isTgLoggedIn, messagesOf,
-  onTgUpdate, tgGlobal
-} from './tgStore.ts'
-import type { TgUpdate } from './types.ts'
+const OUT_DIR = 'apps/desktop/test/tg-probe'
+const OPEN_CHATS = (() => {
+  const i = process.argv.indexOf('--open')
+  return i > 0 ? Number(process.argv[i + 1] || 1) : 0
+})()
 
-/** 单次补底的会话数上限：先近后远，一次跑不完就等下一次按钮。 */
-const MAX_CHATS_PER_RUN = 100
-
-/**
- * 实时事件。三件事：收进的新消息、本端发出的落定、活动会话切换。
- * 与 WhatsApp 那一支的差别只有一处：这里没有 ack 事件——TG 的已读是会话级的，
- * 消息状态在 `updateMessageSendSucceeded` 那一刻就已经落定（tgStatusOf 的天花板是 sent）。
- */
-export function startLiveCollect(ctx: CollectCtx): () => void {
-  return onTgUpdate((u: TgUpdate) => {
-    const chatId = chatIdOfUpdate(u)
-    if (!chatId) return
-    const title = chatTitleOf(tgGlobal(), chatId)
-    if (u.type === 'newMessage') {
-      const msg = u.message
-      if (!msg || msg.isOutgoing) return
-      const row = normalizeTg(msg, { source: 'live', chatId, ...(title ? { chatTitle: title } : {}) })
-      if (row) ctx.emit({ kind: 'message', message: row })
-      return
-    }
-    if (u.type === 'updateMessageSendSucceeded') {
-      const msg = u.message
-      if (!msg) return
-      const row = normalizeTg(
-        { ...msg, isOutgoing: true, pending: false, id: msg.id ?? u.localId },
-        { source: 'live', chatId, ...(title ? { chatTitle: title } : {}) }
-      )
-      // Task 12d 在这里之前先结清发送回执：本应用自己发的那一条由主进程补写，这里不再上报。
-      if (row) ctx.emit({ kind: 'message', message: row })
-      return
-    }
-    if (u.type === 'updateChatOpened') {
-      ctx.emit({ kind: 'active_chat', chatKey: chatId })
-    }
-  })
-}
-
-/**
- * 活动会话切换与消息更新共用 `apiUpdate` 这一条通道（上面的 handler 已经订阅过一次）。
- * 这里再 addEventListener 一遍会让每一条更新被处理两次——入库有 uk_msg 兜住，
- * live 尾巴却会闪出副本，所以这一格留空是刻意的，不是漏写。
- */
-export function watchActiveChat(): () => void {
-  return () => undefined
-}
-
-export function reportActiveChat(ctx: CollectCtx): void {
-  ctx.emit({ kind: 'active_chat', chatKey: activeChatIdOf(tgGlobal()) })
-}
-
-/**
- * 补底：读内存 store，一次遍历完，不需要 WhatsApp 那种逐会话 sleep 节流
- * （那条是为了不卡住页面主线程，这里压根没有网络请求）。
- * 单个会话读失败只报 `backfill_gap`，不让一个坏会话停掉整轮（spec §9）。
- */
-export async function runBackfill(limit: number, ctx: CollectCtx): Promise<void> {
-  const g = tgGlobal()
-  if (!isTgLoggedIn(g)) {
-    ctx.emit({ kind: 'backfill_gap', chatKey: '*', reason: 'Telegram store 未就绪或未登录' })
-    return
+/** 页内执行的一段：把类名频次、行属性、hash、时间文本一次取回来。正文一律打码。 */
+const PROBE = `(async () => {
+  const redact = (s) => String(s ?? '').replace(/\\S/g, '·').slice(0, 12)
+  const attrsOf = (el) => {
+    const o = {}
+    for (const a of el?.attributes ?? []) if (/^data-/i.test(a.name) || a.name === 'id') o[a.name] = /^data-(text|content|message|msg)/i.test(a.name) ? redact(a.value) : a.value
+    return o
   }
-  const ids = activeChatIds(g)
-  if (!ids.length) {
-    ctx.emit({ kind: 'backfill_gap', chatKey: '*', reason: 'Telegram 会话列表为空' })
-    return
-  }
-  const targets = ids.slice(0, MAX_CHATS_PER_RUN)
-  let messages = 0
-  let done = 0
-  for (const chatId of targets) {
-    try {
-      const title = chatTitleOf(g, chatId)
-      for (const msg of messagesOf(g, chatId).slice(-limit)) {
-        const row = normalizeTg(msg, { source: 'backfill', chatId, ...(title ? { chatTitle: title } : {}) })
-        if (!row) continue
-        ctx.emit({ kind: 'message', message: row })
-        messages += 1
+  /** 从某类容器里按"自身 + 直接子层"统计候选选择器：命中数、方向分布、是否含正文。 */
+  const scan = (rootSel) => {
+    const freq = new Map()
+    const roots = [...document.querySelectorAll(rootSel)]
+    for (const r of roots) {
+      for (const el of [r, ...r.children, ...r.querySelectorAll('*')].slice(0, 400)) {
+        if (typeof el.className !== 'string') continue
+        for (const c of el.className.trim().split(/\\s+/)) {
+          if (!c || c.length > 60) continue
+          const cur = freq.get(c) || { n: 0, sample: null, textLen: 0, hasImg: false }
+          cur.n++
+          const t = (el.textContent || '').trim()
+          cur.textLen = Math.max(cur.textLen, t.length)
+          cur.hasImg = cur.hasImg || !!el.querySelector('img,video,svg')
+          if (!cur.sample) cur.sample = { tag: el.tagName, attrs: attrsOf(el), cls: String(el.className).slice(0, 160) }
+          freq.set(c, cur)
+        }
       }
-    } catch (e) {
-      ctx.emit({ kind: 'backfill_gap', chatKey: chatId, reason: e instanceof Error ? e.message : String(e) })
     }
-    done += 1
-    ctx.emit({ kind: 'backfill_progress', chatsDone: done, chatsTotal: targets.length, messages })
+    return [...freq.entries()]
+      .sort((a, b) => b[1].n - a[1].n)
+      .slice(0, 40)
+      .map(([cls, v]) => ({ cls, n: v.n, maxTextLen: v.textLen, hasMedia: v.hasImg, sample: v.sample }))
   }
-}
-```
-
-`collect.ts` 不写单测：它是纯组装，四条判断分别由 normalize 的 8 条、tgStore 的 6 条和 Step 9 的整链断言覆盖。**给它写"mock 掉 tgStore 只验调用次数"的测试是负收益**——那种测试只能证明代码长这样，改一行就得改测试。
-
-- [ ] **Step 8: 登记进桥、放开闸门、注入层登录判定改成契约优先**
-
-三处改动同批，缺任一条 TG 链就是断的（挂不上 / 挂上了采不到）。
-
-`src/bridge/index.ts`：
-
-```ts
-import * as telegramCollect from './telegram/collect.ts'
-
-const COLLECT: Partial<Record<ChatPlatform, CollectImpl>> = {
-  whatsapp: whatsappCollect,
-  telegram: telegramCollect
-}
-```
-
-`src/main/services/msgBridge/index.ts` 的 `mountOne` 闸门那一行改成：
-
-```ts
-  const platform = platformOfAccountType(entry.platformType)
-  if (platform !== 'whatsapp' && platform !== 'telegram') return
-```
-
-并把紧跟其上的注释里"所以 telegram 进这一行必须与 Task 12c 的那次分派同批落地"改成"telegram 已在 Task 12c 与 `bridge/index.ts` 的 `COLLECT` 同批登记"——注释与代码不同步比注释难查。
-
-`src/inject/platforms/telegram/index.ts` 的 `checkLogin`：
-
-```ts
-  async checkLogin(): Promise<boolean> {
-    // 契约口径优先（spec §11.1）：页面自己暴露状态 API 时，登录与否由它说。
-    // DOM 选择器只是没有那层 API 时的兜底——兜底不能反过来当主判，否则页面一改类名，
-    // 已登录的会话就被永久判成未登录：桥不挂、采集为零，而界面上看不出任何异常。
-    if (isTgStoreLoggedIn()) return true
-    return !!document.querySelector(MESSAGE.box) || !!document.querySelector(INPUT.box)
+  return {
+    href: location.href, path: location.pathname, title: document.title,
+    build: localStorage.getItem('k_build') || localStorage.getItem('build') || '',
+    lsKeys: Object.keys(localStorage).sort(),
+    hasGetGlobal: 'getGlobal' in window,
+    hasInvokeApi: typeof window.apiManagerProxy?.invokeApi,
+    bodyClasses: [...document.body.children].map((e) => e.className || e.id || e.tagName),
+    counts: {
+      messages: document.querySelectorAll('.Message').length,
+      composer: document.querySelectorAll('.composer').length,
+      inputs: document.querySelectorAll('input,textarea,[contenteditable]').length,
+      dialogs: document.querySelectorAll('.dialog-wrapper').length
+    },
+    shell: scan('body > *'),
+    chatRows: scan('.sidebar, .chatlist-container, .tabs-container, .content-wrapper').slice(0, 25),
+    msgRows: scan('.MessageList, .message-list, .middle-column, #page-chats').slice(0, 25),
+    // 会话 id 来源之一：hash。逐个点开会话后这里会跟着变（--open 时重取）。
+    hash: location.hash,
+    timeSamples: [...document.querySelectorAll('.Message')].slice(0, 6).map((el) => {
+      const cand = [...el.querySelectorAll('*')].filter((e) => /^\\s*\\d{1,2}[:.]\\d{2}\\s*$/.test(e.textContent || ''))
+      return { n: cand.length, cls: cand.map((e) => String(e.className).slice(0, 60)), txt: cand.map((e) => e.textContent.trim()) }
+    })
   }
+})()`
+
+/** 点开会话：用探针回来的候选行选择器试，直到 location.hash 变为止。 */
+const CLICK_CHAT = `(async (sel) => {
+  const row = document.querySelector(sel)
+  if (!row) return { ok: false, why: 'no-row' }
+  const before = location.hash
+  ;['pointerdown', 'mousedown', 'pointerup', 'mouseup', 'click'].forEach((t) =>
+    row.dispatchEvent(new MouseEvent(t, { bubbles: true, cancelable: true, view: window })))
+  await new Promise((r) => setTimeout(r, 1200))
+  return { ok: location.hash !== before, before, after: location.hash, rowAttrs: JSON.stringify(row.attributes ? [...row.attributes].map((a) => [a.name, a.value]) : []) }
+})`
+
+const v = await openViewByUrl('web.telegram.org', 9223)
+const first = await v.ev(PROBE)
+const results = [first]
+
+for (let i = 0; i < OPEN_CHATS; i++) {
+  const cand = (first.chatRows.find((c) => c.n > 3 && c.sample?.tag === 'DIV')?.cls) || ''
+  const r = await v.ev(`${CLICK_CHAT}(${JSON.stringify(`.${cand}`)})`)
+  console.log('点开会话', i, r)
+  results.push(await v.ev(PROBE))
+}
+
+mkdirSync(OUT_DIR, { recursive: true })
+writeFileSync(path.join(OUT_DIR, 'manifest.json'), JSON.stringify(results, null, 2))
+
+// 人读的那一份：每个候选一段，配"它是不是消息行/正文/时间"的判断依据。
+const md = results.map((r, i) => [
+  `## 采样 ${i} — \`${r.path}${r.hash}\`（build ${r.build}，${r.href}）`,
+  `- 顶层窗口标记：\`getGlobal\` ${r.hasGetGlobal}，\`apiManagerProxy.invokeApi\` ${r.hasInvokeApi}`,
+  `- 计数：messages=${r.counts.messages} composer=${r.counts.composer} inputs=${r.counts.inputs} dialogs=${r.counts.dialogs}`,
+  `- localStorage：${r.lsKeys.join(' ')}`,
+  '',
+  '### 会话列表候选（class / 命中数 / 最大文本长度 / 是否含媒体 / 样例属性）',
+  ...r.chatRows.map((c) => `- \`.${c.cls}\` n=${c.n} maxTextLen=${c.maxTextLen} media=${c.hasMedia} ${JSON.stringify(c.sample)}`),
+  '',
+  '### 消息区候选',
+  ...r.msgRows.map((c) => `- \`.${c.cls}\` n=${c.n} maxTextLen=${c.maxTextLen} media=${c.hasMedia} ${JSON.stringify(c.sample)}`),
+  '',
+  '### 时间形态样本（正文已打码）',
+  ...r.timeSamples.map((s, j) => `- 第 ${j} 行：候选节点 ${s.n} 个，class=${JSON.stringify(s.cls)}，文本=${JSON.stringify(s.txt)}`),
+  ''
+].join('\n')).join('\n')
+writeFileSync(path.join(OUT_DIR, 'snapshots.md'), `# TG 官方 K 版 DOM 探针产物（正文打码）\n\n${md}`)
+console.log('写入', path.join(OUT_DIR, 'manifest.json'), '与 snapshots.md；采样次数', results.length)
+await v.close()
+process.exit(0)
 ```
 
-同文件顶部加：
+- [ ] **Step 5: 跑探针，核对产物**
+
+```bash
+node tmp/p6-tg-probe.mjs --open 2
+```
+
+看三件事，缺一不可：
+1. `counts.messages > 0` 且 `counts.inputs > 0` —— 这是"确实登录进去、确实打开会话了"的证据。全是 0 就说明停在空壳态（spec §11.0 第 6 行那条），**产物不能用**，先解决登录态再重跑；
+2. `hash` 在两次采样之间变了 —— 变了就是 `chatIdSource: 'hash'` 成立，`snapshots.md` 里要留那两次 `path#hash` 的原文；两次都一样则判 `'none'`；
+3. `snapshots.md` 全文没有可读正文（打码生效）。有正文就不提交，回去改 `redact`。
+
+- [ ] **Step 6: 把 manifest 誊进 `TG_DOM`，逐字段核对**
+
+规则：**每一处取值都必须能在 `manifest.json` 或 `snapshots.md` 里指到一条证据**（哪个候选、命中数多少）。指不到的字段写 `''`（必填项）或 `'none'`（两个 `*Source`），并在 `TG_DOM` 上方加一行注释写明"该字段探针未定，12c 的降级口径是……"。禁止"看着像就填"。
+
+- [ ] **Step 7: 回归 + 提交**
+
+`pnpm --dir apps/desktop run typecheck && pnpm --dir apps/desktop run test:unit`（第一条清单校验用例此时应转绿；仍红就是 Step 6 有字段没落地，如实写进报告）。
+
+```bash
+git add apps/desktop/src/renderer/src/lib/platform.ts apps/desktop/src/shared/tgDomContract.ts \
+  apps/desktop/src/shared/tgDomContract.test.ts apps/desktop/test/tg-probe
+git commit -m "feat(P6): Telegram 官方 K 版真机 DOM 探针与选择器清单"
+```
+
+（`tmp/` 在 gitignore 里，探针脚本不入库；它的完整文本在本计划正文里，需要重建时直接取。）
+
+---
+
+### Task 12b: 注入层 TG 适配器接清单（译文与 WA 同形）
+
+**Goal：** P5 的注入层 TG 适配器里的类名全部是**未验证的猜测**（`.Imgs` 判登录、`.message-list-item`、`.text-content`、`#editable-message-text`、`.Transition_slide.Transition_slide-active>.MessageList`）。本任务把它们换成 Task 12a 清单里的真值，让 TG 内嵌页的**气泡译文**与**输入框预览**和 WhatsApp 一样能用。这一步排在采集之前：它只依赖登录态，不依赖采集链，且与 12c 共用同一份产物。
+
+**Files:**
+- Modify: `apps/desktop/src/inject/platforms/telegram/selectors.ts`（删掉猜测常量，改成从 `TG_DOM` 派生）
+- Modify: `apps/desktop/src/inject/platforms/telegram/index.ts`（`checkLogin` 正/负双判定、`getInputElement`、`getMessageContainer`、`getMessageElements`、`getMessageId`、`getMessageText`）
+- Modify: `apps/desktop/src/inject/core/translation/domScan.ts`（**只在需要新增"方向判定"注入点时**才动；`sideFromGaps` 那套按几何判方向的逻辑如果 K 版适用就不改，见 Step 1）
+
+**Interfaces:**
+- Consumes: `TG_DOM`（`../../../shared/tgDomContract`，esbuild 的 `bundle: true` 会把它并进 `resources/inject.bundle.js`，不新增构建步骤）
+- Produces: `TelegramAdapter` 的 `checkLogin(): boolean`（三态收两态：`'in' | 'out' | 'unknown'` 里 unknown 一律按未登录处理，见 Step 2）与既有 `PlatformAdapter` 契约不变——Task 17b 的"气泡跟随客户语向"在 TG 上的生效面就是这一档给的
+
+- [ ] **Step 1: 先确认哪些猜测值真的错了（不跑不写）**
+
+dev 起着、TG 视图在 `/k/` 且已登录（Task 12a 的前置复用），逐个查现有选择器在真页面上的命中数：
+
+```js
+// tmp/p6-tg-oldsel.mjs
+import { openViewByUrl } from './cdp.mjs'
+const v = await openViewByUrl('web.telegram.org', 9223)
+const sels = ['.Imgs', '.middle-column-footer', '#editable-message-text', '.message-list-item',
+  '.text-content', '.Message', '.MessageList.custom-scroll',
+  '.Transition_slide.Transition_slide_active>.MessageList']
+console.log(await v.ev(`(${JSON.stringify(sels)}.map((s) => [s, document.querySelectorAll(s).length]))`))
+await v.close(); process.exit(0)
+```
+
+命中数为 0 的就是要替换的；命中数>0 的也**不代表对**——比如 `.Imgs` 如果在登录页上也在，判登录就是错的。把这一条的输出贴进报告，作为"哪些字段被动过"的证据。
+
+- [ ] **Step 2: 改 `selectors.ts` 与适配器**
+
+`selectors.ts` 不再持有字符串，只做映射（保留导出名是为了不牵动 `PlatformAdapter` 的调用点）：
 
 ```ts
+import { TG_DOM } from '../../../shared/tgDomContract'
+
 /**
- * 页内 store 契约的登录判定。桥那一侧有完整的 tgStore（`src/bridge/telegram/`），
- * 这里刻意只读三个字段：注入层与消息桥是两个独立 bundle，共用一份声明就要把桥的
- * 依赖拖进注入层，而这一处要回答的只有"这一页算不算已登录"。
+ * Telegram 侧的 DOM 触点全部来自 `TG_DOM`（Task 12a 探针产物）。这里**只映射不新增**：
+ * 出现第二个 Telegram 类名字符串就说明清单不管用了，那是 12a 该修的，不是这里该补的。
  */
-function isTgStoreLoggedIn(): boolean {
-  const getGlobal = (window as unknown as { getGlobal?: () => { isInited?: boolean; currentUserId?: unknown } })
-    .getGlobal
-  if (typeof getGlobal !== 'function') return false
-  try {
-    const g = getGlobal()
-    return !!g && g.isInited === true && g.currentUserId != null && g.currentUserId !== '' && g.currentUserId !== 0
-  } catch {
-    return false
+export const INPUT = { box: TG_DOM.composerInput, editInputId: TG_DOM.composerInput }
+export const MESSAGE = {
+  box: TG_DOM.messageList,
+  container: TG_DOM.messageRow,
+  item: TG_DOM.messageRow,
+  text: TG_DOM.messageBody,
+  scroll: TG_DOM.messageList
+}
+export const APP = { loggedIn: TG_DOM.loggedIn, loginForm: TG_DOM.loginForm }
+export default { INPUT, MESSAGE, APP }
+```
+
+`index.ts` 里三处按清单改写：
+
+```ts
+  /**
+   * 正反双判定（spec §11.0 第 6 行）：未登录态可能既没有会话也没有登录表单——那既不是
+   * "已登录"也不是"未登录"，是"这一档别动"。返回 unknown 让上层不采不注，
+   * 而不是猜一个方向把空壳页当成登录成功去扫消息。
+   */
+  async checkLogin(): Promise<boolean> {
+    if (TG_DOM.loginForm && document.querySelector(TG_DOM.loginForm)) return false
+    return !!(TG_DOM.loggedIn && document.querySelector(TG_DOM.loggedIn))
   }
-}
+
+  getMessageElements(): HTMLElement[] {
+    if (!this.checkLoginSync()) return []
+    return Array.from(document.querySelectorAll<HTMLElement>(TG_DOM.messageRow))
+  }
+
+  getMessageText(element: HTMLElement): string {
+    // 只认清单点名的正文节点：整行兜底会把时间戳与状态图标的字体连字当正文送去翻译。
+    return element.querySelector(TG_DOM.messageBody)?.textContent?.trim() ?? ''
+  }
 ```
 
-> 登录判定的三处字面（`tgStore.isTgLoggedIn` / 这里 / fixture 页）形状一致而代码各写一份，是因为它们分属三个编译单元；真正同形的只有"取那三个字段"这一件事，Step 9 第 2 行的 `ready:true` 就是这三处同时成立的证据。
+（`checkLoginSync()` 是适配器里加的一个同步小函数，包一次上面两个查询；`PlatformAdapter` 的异步 `checkLogin()` 保留原签名。）
+
+- [ ] **Step 3: B 档真机验证（这一档没有 A 档，如实写）**
+
+注入层不在 `tsconfig.unit.json` 白名单里，本任务的结论**只有真机那一档**。跑法：把翻译中心的双向设置设成 `en→zh`，TG 会话里让对端发一条英文消息（自聊：从"已保存消息"那个会话发），然后核对：
+
+1. 气泡下方出现译文行（与 WA 同形）；
+2. 输入框里敲一条英文 → 预览卡出现"用译文替换输入框"（复用 P5 的 `inputPreview`，TG 的 `composerInput` 是 contenteditable 时 `replaceEditorText` 已验证过同一条路径）；
+3. 停后端（杀 `:8180`）后译文不出、原文照渲染，重启后**刷新视图**恢复。
+
+三条各自要在报告里写"观察到 / 未观察"，不接受"代码改了所以应该生效"。若 Step 1 显示 `TG_DOM.messageBody` 与行内正文节点不符（译文注在错误节点上），停下报 DONE_WITH_CONCERNS——那说明清单粒度不够，回 12a 加字段，不在这里打补丁。
+
+- [ ] **Step 4: 回归 + 提交**
+
+`pnpm --dir apps/desktop run typecheck && pnpm --dir apps/desktop run build:inject`（注入 bundle 要重新构建；dev 不热更 `resources/*.js`，验完重启 dev）。闸门条数不变（本任务不加用例）。
 
 ```bash
-cd apps/desktop && pnpm run typecheck && pnpm run build:bridge && pnpm run build:inject
-```
-
-预期：四个 tsconfig 无输出，两个 bundle 重新产出。
-
-- [ ] **Step 9: 契约假页面 `apps/desktop/test/tg-fixture.html`**
-
-它是 spec §11.1 那张表的**可执行版本**：真实站点什么时候能提供同样形状，把第 10 步的 URL 换掉就行，实现一行都不用改。放在 `test/` 下，`electron-builder.yml` 的 `files` 不含这个目录（本步骤顺手 `grep -n "files:" -A6 apps/desktop/electron-builder.yml` 确认一次，确实不含就把结论写进验收文档，含了就要补 `!test/**`）。
-
-```html
-<!doctype html>
-<!-- Telegram 契约假页面：只服务 P6 Task 12c/12d 的验证，不进产品包。
-     它实现的是 spec §11.1 的契约形状（getGlobal / getActions / apiUpdate 事件），
-     不实现任何 Telegram 业务，也不带任何凭据。 -->
-<html lang="zh">
-  <body>
-    <pre id="tg-fixture" data-stage="ready"></pre>
-    <script>
-      (() => {
-        const CHAT_DM = '10002003'
-        const CHAT_GROUP = '-1001234567890'
-        // 本轮唯一：msgKey 是 String(id)，固定 id 只会让第二轮全部撞 uk_msg。
-        const BASE = Math.floor(Date.now() / 1000)
-        const m = (id, text, over = {}) => ({
-          id, date: BASE - 600 + (id % 100), content: { text: { text } }, ...over
-        })
-        const store = {
-          isInited: true,
-          currentUserId: 1000001,
-          chats: {
-            byId: {
-              [CHAT_DM]: { id: Number(CHAT_DM), title: 'Carol 王' },
-              [CHAT_GROUP]: { id: Number(CHAT_GROUP), display: { title: 'TG 产品群' } }
-            },
-            listIds: { active: [Number(CHAT_DM), Number(CHAT_GROUP)], archived: [] }
-          },
-          messages: {
-            byChatId: {
-              [CHAT_DM]: [m(BASE * 10 + 1, 'fixture-早'), m(BASE * 10 + 2, 'fixture-晚')],
-              [CHAT_GROUP]: [
-                m(BASE * 10 + 3, 'fixture-群里早', { fromId: 10002003, senderName: 'Carol' }),
-                m(BASE * 10 + 4, 'fixture-群里晚', { fromId: 10002004, senderName: 'Dave' })
-              ]
-            }
-          },
-          byTabId: { 'tab-1': { activeChatId: Number(CHAT_GROUP) } },
-          getCurrentTabId: () => 'tab-1'
-        }
-        let sendMode = 'async'
-        let sendCount = 0
-        const calls = []
-
-        window.getGlobal = () => store
-        window.getActions = () => ({
-          sendMessage: (opts) => {
-            sendCount += 1
-            calls.push(opts)
-            const chatId = String(opts.messageList.chatId)
-            const localId = BASE * 100 + sendCount
-            const serverId = BASE * 10 + 50 + sendCount
-            const settled = { id: serverId, date: Math.floor(Date.now() / 1000), isOutgoing: true,
-              content: { text: { text: opts.text } } }
-            // 默认形状：只回 localId，服务端 id 走 updateMessageSendSucceeded 事件。
-            // Task 12d 用 __tgfx.setSendMode 切另外两种漂移形状（同步就带 id / 什么都不给）。
-            if (sendMode === 'sync') return { localId, id: serverId }
-            if (sendMode === 'none') return {}
-            window.setTimeout(() => fire({ type: 'updateMessageSendSucceeded', chatId, localId, message: settled }), 250)
-            return { localId }
-          }
-        })
-
-        const fire = (detail) => window.dispatchEvent(new CustomEvent('apiUpdate', { detail }))
-
-        // 驱动脚本的把手：只有"抛事件 / 改档位 / 报清单"，没有任何状态读捷径——
-        // 采集一律靠桥自己订阅事件与读 store，这样这一页改坏了会立刻在断言里露出来。
-        window.__tgfx = {
-          fire,
-          setSendMode: (mode) => { sendMode = mode },
-          sendCalls: () => JSON.parse(JSON.stringify(calls)),
-          setLoggedIn: (v) => { store.isInited = !!v },
-          addInbound: (chatId, text, withId = true) => {
-            const id = BASE * 10 + 70 + Math.floor(Math.random() * 1000)
-            const msg = withId ? m(id, text) : { date: Math.floor(Date.now() / 1000), content: { text: { text } } }
-            store.messages.byChatId[String(chatId)] = [...(store.messages.byChatId[String(chatId)] ?? []), msg]
-            fire({ type: 'newMessage', chatId, message: msg })
-            return withId ? String(id) : null
-          },
-          manifest: () => ({
-            chatIds: [CHAT_DM, CHAT_GROUP],
-            msgKeys: [BASE * 10 + 1, BASE * 10 + 2, BASE * 10 + 3, BASE * 10 + 4].map(String)
-          })
-        }
-      })()
-    </script>
-  </body>
-</html>
-```
-
-- [ ] **Step 10: 失败先跑——A 档整链驱动 `tmp/p6-tg-fixture.mjs`**
-
-沿用 `tmp/cdp.mjs` 的把手（`openPage(9223)` / `openViewByUrl` / `ev` / 真实鼠标点击那套），跑前按 C9 抬窗口。三条既定口径：条数一律相对**开跑前读到的基线**；要"真的新增"的东西用每轮唯一 key（fixture 的 id 由加载时刻派生，天然唯一）；每条断言都要能区分"它成功了"与"它什么都没做"。
-
-```js
-// tmp/p6-tg-fixture.mjs — Task 12c A 档：TG 采集链在契约假页面上的整链验证
-// 用法：node tmp/p6-tg-fixture.mjs（后端 :8180 跑本轮构建；dev 带 --remoteDebuggingPort 9223）
-import { openPage, ev, clickText } from './cdp.mjs'
-
-const BASE = 'http://127.0.0.1:8180'
-const FIXTURE = 'file:///D:/SmartSCRM/apps/desktop/test/tg-fixture.html'
-const rows = []
-const check = (name, pass, expected, actual) => { rows.push({ name, pass, expected, actual }); if (!pass) console.log(`FAIL ${name}\n  expected: ${expected}\n  actual:   ${actual}`) }
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-const tok = (await (await fetch(BASE + '/api/auth/login', { method: 'POST', headers: { 'content-type': 'application/json' },
-  body: JSON.stringify({ inviteCode: 'DEMO0001', username: 'admin', password: 'admin123', deviceId: 'p6tg-' + Date.now() }) })).json())?.data?.accessToken
-if (!tok) { console.log('login failed'); process.exit(1) }
-const api = async (p) => (await (await fetch(BASE + p, { headers: { authorization: 'Bearer ' + tok } })).json()).data
-
-const page = await openPage(9223)
-const accounts = await api('/api/platform-accounts')
-const tg = accounts.find((a) => a.platformType === 4)
-const viewId = tg ? 'demo-tg-' + tg.tenantId : null
-check('0 前置：TG 账号在', !!tg && !!viewId, 'platform_type=4 的账号存在且 viewId 可推', JSON.stringify({ tg: tg?.id, viewId }))
-if (!tg) { process.exit(1) }
-
-const stats0 = await api(`/api/messages/stats?accountId=${tg.id}&days=30`)
-const custCarol = (await api('/api/customers?keyword=Carol&page=1&size=20').catch(() => ({})))?.records?.[0]
-console.log(`基线 stats.total=${stats0?.total} Carol customerId=${custCarol?.id}`)
-
-// 真实点击开账号 → 把视图指到 fixture → 等桥 ready（内嵌视图的原生层由 useWebContentsView 挂）
-await clickText(page, tg.name ?? 'Telegram 演示号')
-await sleep(2500)
-await ev(page, `window.scrm.view.navigate(${JSON.stringify(viewId)}, ${JSON.stringify(FIXTURE)})`)
-await sleep(1500)
-const view = await openViewByUrl('tg-fixture.html', 9223)
-const preloadOk = await ev(view, `typeof window.ele?.sendToHost === 'function'`)
-const contractOk = await ev(view, `typeof window.getGlobal === 'function' && typeof window.getActions === 'function'`)
-const manifest = JSON.parse(await ev(view, `JSON.stringify(window.__tgfx.manifest())`))
-check('1 假页面就位：preload 通道与契约 API 都在', preloadOk === true && contractOk === true,
-  "window.ele.sendToHost 与 getGlobal/getActions 均为 function", JSON.stringify({ preloadOk, contractOk }))
-check('2 fixture 清单可用：两个会话 + 四条预置消息', manifest.chatIds.length === 2 && manifest.msgKeys.length === 4,
-  '含一个负号群 id', JSON.stringify(manifest))
-
-let ready = null
-for (let i = 0; i < 24 && !ready; i++) {
-  await sleep(1000)
-  const bridges = await ev(page, `JSON.stringify(await window.scrm.msg.bridges())`)
-  const list = JSON.parse(bridges ?? '[]')
-  const mine = list.find((b) => b.viewId === viewId)
-  if (mine?.ready) ready = mine
-}
-check('3 桥在 TG 视图上 ready：契约登录判定 + 挂载闸门 + COLLECT 三处同批生效', !!ready,
-  `{platform:'telegram', ready:true}`, JSON.stringify(ready ?? '24s 内没等到'))
-```
-
-（`tmp/cdp.mjs` 若还没有 `clickText`，按 `tmp/p5c-sel.mjs` 里那段真实鼠标点击的写法补一个导出：找 `button` 文本包含目标串 → 取中心坐标 → `Input.dispatchMouseEvent` 的 `mousePressed`/`mouseReleased` 两下。**不接受 `element.click()` 独证**（C10）：侧栏那条点击要走焦点与 hover 的真实路径。）
-
-后半段（同文件续写，第 4～9 行）：
-
-```js
-const stats1 = await api(`/api/messages/stats?accountId=${tg.id}&days=30`)
-check('4 补底真的入库', (stats1?.total ?? 0) - (stats0?.total ?? 0) >= 4,
-  '相对基线至少 +4（fixture 预置四条）', `基线=${stats0?.total} 现在=${stats1?.total}`)
-
-const convs = await api(`/api/conversations?accountId=${tg.id}&size=50`)
-const byKey = Object.fromEntries((convs?.records ?? []).map((c) => [c.chatKey, c]))
-const dm = byKey[manifest.chatIds[0]]
-const group = byKey[manifest.chatIds[1]]
-check('5 会话头：单聊与负号群都在，且群判定按形态成立', !!dm && !!group && group.isGroup === true && dm.isGroup === false,
-  "chat_key '-100…' 的 isGroup 为 true", JSON.stringify({ dm: !!dm, group: !!group, gIsGroup: group?.isGroup, dmIsGroup: dm?.isGroup }))
-check('6 open_id 收敛生效：TG 会话自动挂上 Carol（V9 不改形状就永远命不中）',
-  !!custCarol?.id && dm?.customerId === custCarol.id,
-  `customerId === ${custCarol?.id}（keyword=Carol 读到的那条）`, `dm.customerId=${dm?.customerId} 基线读到=${custCarol?.id}`)
-
-const token = 'P6TG-LIVE-' + Date.now().toString(36)
-const liveKey = JSON.parse(await ev(view, `JSON.stringify(window.__tgfx.addInbound(${JSON.stringify(manifest.chatIds[0])}, ${JSON.stringify(token)}))`))
-await sleep(4500)
-const hit = await api(`/api/messages/search?q=${encodeURIComponent(token)}&size=20`)
-check('7 live 事件入库且方向对', (hit?.records ?? []).length >= 1 && hit.records.every((r) => r.message.direction === 'in'),
-  '命中 >=1 条且都是 in', JSON.stringify({ n: (hit?.records ?? []).length, dirs: (hit?.records ?? []).map((r) => r.message.direction) }))
-
-const stats2 = await api(`/api/messages/stats?accountId=${tg.id}&days=30`)
-await ev(view, `window.__tgfx.fire(${JSON.stringify({ type: 'newMessage', chatId: manifest.chatIds[0], message: { id: Number(liveKey), date: Math.floor(Date.now() / 1000), content: { text: { text: token } } } })})`)
-await sleep(4500)
-const stats3 = await api(`/api/messages/stats?accountId=${tg.id}&days=30`)
-check('8 同一条重复上报不再增加行数（uk_msg 幂等）', stats3?.total === stats2?.total,
-  `total 不变（${stats2?.total}）`, `重复后=${stats3?.total}`)
-
-const before = (await api(`/api/messages/stats?accountId=${tg.id}&days=30`))?.total ?? 0
-await ev(view, `window.__tgfx.addInbound(${JSON.stringify(manifest.chatIds[0])}, 'P6TG-NOID-${Date.now()}', false)`)
-await sleep(4500)
-const after = (await api(`/api/messages/stats?accountId=${tg.id}&days=30`))?.total ?? 0
-check('9 没有服务端 id 的行真的被挡在门外', after === before, `total 不变（${before}）`, `现在=${after}`)
-```
-
-第 9 行是这一轮里唯一"必须什么都不发生"的断言：`addInbound(…, false)` 抛的是一条**没有 id** 的消息，事件真的发了、桥真的收到了，只有归一化那一步把它判掉——所以它同时证明"通路是通的"和"守卫在挡"。第 7/8 行成对：只跑第 7 行无法区分"live 入库生效"与"补底顺手把它带进来了"，第 8 行钉住重复不增行。
-
-```bash
-node tmp/p6-tg-fixture.mjs
-```
-
-预期：`9/9 PASS`。第 3 行挂了的排查顺序（照序查，不要跳）：`document.visibilityState` 是否 visible（C9）→ fixture 里 `window.__tgfx` 在不在 → 页内 `getGlobal()` 手读一次是否 `isInited` → 注入层有没有跑（页内 `typeof window.__SCRM_INJECTOR__`）→ dev 终端有没有 `msgBridge` 的挂载日志。
-
-- [ ] **Step 11: 回归 + 提交**
-
-```bash
-cd apps/desktop && pnpm run test:unit 2>&1 | tail -6 && pnpm run typecheck
-cd apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.18" && set -o pipefail && MAVEN_OPTS="-Duser.language=en -Duser.country=US" ./mvnw test 2>&1 | grep -E "Tests run|BUILD" | tail -5
-node tmp/p6b-query.mjs && node tmp/p6b-customer.mjs
-```
-
-预期：`# pass 97` / `# fail 0`、四个 tsconfig 无输出、Java `Failures: 0, Errors: 0`、两份后端契约 `17/17` 与 `13/13`。跑完把 `GET /api/customers` 的 `total` 再读一次（仍是 5，V9 没造出第 6 个客户），并把本轮 `chat_message` 增量报出来（C4）。
-
-```bash
-git add apps/desktop/src/bridge apps/desktop/src/inject apps/desktop/src/main apps/desktop/test \
-  apps/server/src/main/resources/db/migration/V9__tg_openid_shape.sql \
-  apps/server/src/main/java/com/smartscrm/server/service/msg/ChatKeys.java \
-  docs/superpowers/plans/2026-09-20-chat-history.md docs/superpowers/specs/2026-09-20-chat-history-design.md
-git commit -m "feat(P6): Telegram 采集链接上页内 store 契约（假页面整链验证）"
+git add apps/desktop/src/inject
+git commit -m "feat(P6): Telegram 注入层改接探针清单，译文与 WhatsApp 同形"
 ```
 
 ---
 
-### Task 12d: Telegram 发送链（`sendMessage` + 按 `localId` 结清回执）
+### Task 12c: Telegram 采集链（DOM 读取 + 归一化 + 实时与滚动补底）
 
-**Goal：** 让 TG 视图上的回复框真能把消息发出去，并且回执**只按 `localId` 关联**——同一会话连发同一条文本时两条各归各的（spec §11.3）。
+**Goal：** 按 `TG_DOM` 读官方 K 版页面，把消息归一化进 Task 3 的 `POST /api/messages/batch` 形状（经主进程 `collectorHub`，页内零凭据），并登记进 Task 11 留好的平台分派表；用一份从真机快照裁出的 fixture 页把整条链验到绿（A 档）。
+
+**执行顺序**：接在 Task 12b 之后。编号仍取 12c，是为了不重排 Task 13～18 步骤里写死的 `# pass` 值（C14）。
 
 **Files:**
-- Create: `apps/desktop/src/bridge/sendError.ts`（把 `classify` 从 `whatsapp/send.ts` 挪过来，词表补 TG 那几种文案）
-- Create: `apps/desktop/src/bridge/telegram/send.ts` + `send.test.ts`（6 条）
-- Modify: `apps/desktop/src/bridge/whatsapp/send.ts` + `send.test.ts`（`classify` 改从 `sendError.ts` 引，第 4 条用例只动 import 路径、断言一条不改）
-- Modify: `apps/desktop/src/bridge/index.ts`（`SEND` 表 + 安装期完整性检查）
-- Modify: `apps/desktop/src/bridge/telegram/collect.ts`（`updateMessageSendSucceeded` 先结清发送，再决定是否上报 message 帧）
-- Modify: `apps/desktop/test/tg-fixture.html`（`__tgfx.setSendMode` 已经在那儿，本任务补 `__tgfx.fire` 之外的发送观测）
+- Create: `apps/desktop/src/bridge/telegram/tgParse.ts` + `tgParse.test.ts`（8 条，纯函数）
+- Create: `apps/desktop/src/bridge/telegram/tgDom.ts`（清单 → `TgRowSnapshot[]` 的唯一 impure 读取处）
+- Create: `apps/desktop/src/bridge/telegram/normalize.ts` + `normalize.test.ts`（6 条，纯函数）
+- Create: `apps/desktop/src/bridge/telegram/collect.ts`（`CollectImpl` 四入口）
+- Modify: `apps/desktop/src/bridge/index.ts`（`COLLECT` 表加 telegram 一项）
+- Modify: `apps/desktop/src/main/services/msgBridge/index.ts`（挂载闸门放开 telegram）
+- Create: `apps/desktop/test/tg-fixture.html`（由 `test/tg-probe/snapshots.md` 同源快照裁出，不进包）
+- Create: `tmp/p6-tg-fixture.mjs`（A 档整链驱动，第 0～9 行）
+- Create: `apps/server/src/main/resources/db/migration/V9__tg_openid_shape.sql`（**条件产物**，见 Step 7）
+- Modify: `apps/server/src/main/java/com/smartscrm/server/service/msg/ChatKeys.java`（类注释里"形态未决 / 以探测为准"改成既定口径）
+
+**Interfaces:**
+- Consumes: Task 11 的 `CollectCtx` / `CollectImpl`（`src/bridge/types.ts`）、Task 7 的 `@shared/chatTypes` 的 `NormalizedMessage` / `BridgeReport`、Task 3 的 batch 形状（主进程组装）、Task 10 的挂载闸门、Task 12a 的 `TG_DOM`
+- Produces:
+  - `chatKeyFromHash(hash: string, src: TgDomContract['chatIdSource']): string | null`
+  - `synthTgMsgKey(input: { chatKey: string; epochSec: number; dir: 'in' | 'out'; body: string }): string`
+  - `parseTgTime(timeText: string | null, separatorText: string | null, nowSec: number): { t: number; precise: boolean }`
+  - `parseTgUnread(text: string | null): number`、`mediaTypeOfTg(row: TgRowSnapshot): { mediaType: string; summary: string }`
+  - `normalizeTg(row: TgRowSnapshot, ctx: NormalizeTgCtx): NormalizedMessage | null`
+  - `tgDom.ts`：`readChatRows(): TgChatRow[]`、`readMessageRows(chatKey: string): TgRowSnapshot[]`、`scrollMessageListToTop(budget: { steps: number; ms: number }): Promise<{ reachedTop: boolean; steps: number }>`
+  - `telegram/collect.ts` 的 `CollectImpl` 四入口（与 WhatsApp 同名同形）
+
+**为什么切两层**：Node 24 的 strip-only TS 闸门里没有 DOM（没有 jsdom，也不引）。所以"从节点取字段"是 impure 的 `tgDom.ts`，"从字段推语义"是 pure 的 `tgParse.ts`/`normalize.ts`——单测跑后者，fixture 的 CDP 跑前者。这条切分同时是 WA 那一支已有的形状（`whatsapp/normalize.ts` 吃的是 plain object）。
+
+- [ ] **Step 1: `tgParse.test.ts` 先写红（8 条）**
+
+```ts
+// apps/desktop/src/bridge/telegram/tgParse.test.ts
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import { chatKeyFromHash, synthTgMsgKey, parseTgTime, parseTgUnread } from './tgParse.ts'
+
+test('hash 里的会话 id：单聊是正数、群与频道带负号，两种都要能取出来', () => {
+  assert.equal(chatKeyFromHash('#123456789', 'hash'), '123456789')
+  assert.equal(chatKeyFromHash('#-1001234567890', 'hash'), '-1001234567890')
+  assert.equal(chatKeyFromHash('#-1001234567890/123', 'hash'), '-1001234567890')  // 话题/线程后缀丢掉
+})
+
+test('hash 里没有 id 时返回 null，不返回空串（空串会被后端当成合法 chatKey）', () => {
+  assert.equal(chatKeyFromHash('#', 'hash'), null)
+  assert.equal(chatKeyFromHash('#/settings', 'hash'), null)
+  assert.equal(chatKeyFromHash('#anything', 'hash'), null)
+})
+
+test('探针判 none 时不解释 hash：宁可不采，也不要把路由名当成会话 id', () => {
+  assert.equal(chatKeyFromHash('#123456789', 'none'), null)
+})
+
+test('合成键：同输入同键（幂等靠 uk_msg，键不稳就会重复入库）', () => {
+  const a = synthTgMsgKey({ chatKey: '123', epochSec: 1700000000, dir: 'in', body: 'hello' })
+  assert.equal(a, synthTgMsgKey({ chatKey: '123', epochSec: 1700000000, dir: 'in', body: 'hello' }))
+  assert.ok(a.length <= 128, `uk_msg 一侧 msgKey 上限 128，超长会被整批 400`)
+})
+
+test('合成键：方向、正文、时间任一变化都要换键', () => {
+  const base = { chatKey: '123', epochSec: 1700000000, dir: 'in' as const, body: 'hello' }
+  const k = (p: Partial<typeof base>) => synthTgMsgKey({ ...base, ...p })
+  assert.notEqual(k({ dir: 'out' }), k({}))
+  assert.notEqual(k({ body: 'hello!' }), k({}))
+  assert.notEqual(k({ epochSec: 1700000001 }), k({}))
+  assert.notEqual(k({ chatKey: '124' }), k({}))
+})
+
+test('时间：只有 HH:MM 时靠日期分组头补日期', () => {
+  const r = parseTgTime('14:03', '2026年9月20日 星期日', 1759000000)
+  assert.equal(r.precise, true)
+  const d = new Date(r.t * 1000)
+  assert.equal(d.getHours(), 14)
+  assert.equal(d.getMinutes(), 3)
+})
+
+test('时间：解析不出来时钳制为接收时刻并标 not precise（后端据此打 unknown 精度）', () => {
+  const r = parseTgTime('', null, 1759000000)
+  assert.equal(r.t, 1759000000)
+  assert.equal(r.precise, false)
+  assert.equal(parseTgTime(null, null, 1759000000).precise, false)
+})
+
+test('未读角标："3"→3、"99+"→99、"•"与 null→0（脏值不许变 NaN）', () => {
+  assert.equal(parseTgUnread('3'), 3)
+  assert.equal(parseTgUnread('99+'), 99)
+  assert.equal(parseTgUnread('•'), 0)
+  assert.equal(parseTgUnread(null), 0)
+})
+```
+
+跑 `pnpm --dir apps/desktop run test:unit` 预期：8 条红（模块不存在）。
+
+- [ ] **Step 2: 实现 `tgParse.ts`（让 8 条绿）**
+
+要点（实现时按这段写，注释照抄）：
+
+```ts
+// apps/desktop/src/bridge/telegram/tgParse.ts
+import type { TgDomContract } from '../../shared/tgDomContract.ts'
+
+/** K 版的路由 hash：`#<peerId>` 或 `#-100…<threadId>`，`-100` 前缀就是群/频道。 */
+const HASH_CHAT = /^#(-?\d{4,20})(?:\/.*)?$/
+
+export function chatKeyFromHash(hash: string | null | undefined, src: TgDomContract['chatIdSource']): string | null {
+  // 探针判 none 时**连 hash 都不解释**：路由形状是页面的自由，猜对了是运气，猜错了一个
+  // 路由名（`#/settings`）就能被当成会话 id 写进 chat_key，脏数据无法自愈。
+  if (src !== 'hash') return null
+  const m = HASH_CHAT.exec(String(hash ?? ''))
+  return m ? m[1] : null
+}
+
+/** FNV-1a：只要一个稳定散列，不引依赖。 */
+function fnv1a(s: string): string {
+  let h = 0x811c9dc5
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i)
+    h = Math.imul(h, 0x01000193) >>> 0
+  }
+  return h.toString(16).padStart(8, '0')
+}
+
+/**
+ * 清单判 `msgIdSource === 'none'` 时的合成键。**已知并接受的两个代价**（spec §11.2）：
+ * 1) 消息被编辑过 → 正文变 → 新键 → 库里多一行历史（旧的不会被撤回，本期不接撤回）；
+ * 2) 同一秒内同正文的两条真消息 → 同键 → `uk_msg` 吃掉第二条。
+ * 这两条不是 bug，是 DOM 路线上拿不到平台 id 时付的代价；写在这里是为了让读代码的人
+ * 不必从"为什么没有 msgId"反推行为。
+ */
+export function synthTgMsgKey(input: { chatKey: string; epochSec: number; dir: 'in' | 'out'; body: string }): string {
+  const digits = input.chatKey.replace(/-/g, '').replace(/\D/g, '') || '0'
+  return `tg${digits}_${input.epochSec}_${input.dir}_${fnv1a(input.body)}`
+}
+
+/** `2026年9月20日` / `9月20日` / `September 20, 2026` / `昨天` 四类分组头。 */
+export function parseTgTime(timeText: string | null, separatorText: string | null, nowSec: number): { t: number; precise: boolean } {
+  const hm = /(\d{1,2})[:.](\d{2})/.exec(String(timeText ?? ''))
+  if (!hm) return { t: nowSec, precise: false }                    // 钳制交给 §9 的接收时刻
+  const day = dayFromSeparator(separatorText, nowSec)               // 'YYYY-MM-DD' | null
+  if (!day) return { t: nowSec, precise: false }                   // 有钟点没日期 = 不可信，别造一个"今天"
+  const [Y, M, D] = day.split('-').map(Number)
+  const t = new Date(Y, M - 1, D, Number(hm[1]), Number(hm[2])).getTime() / 1000
+  if (!Number.isFinite(t)) return { t: nowSec, precise: false }
+  return { t: Math.floor(t), precise: true }
+}
+
+export function parseTgUnread(text: string | null): number {
+  const m = /(\d+)/.exec(String(text ?? ''))
+  if (!m) return 0
+  return Math.min(Number(m[1]), 99)
+}
+```
+
+`dayFromSeparator` 的实现按 Step 5 在真机上采到的分组头文本写死分支（**它的输入样例来自 `snapshots.md`，不许凭印象造**）：解析不出返回 `null`。
+
+- [ ] **Step 3: `normalize.test.ts` 先写红（6 条）**
+
+固定输入（`chatKey: '123456789'`、`src: 'hash'`、`msgIdSource: 'none'`），六条断言分别是：
+1. 纯文本行 → `{ direction:'in', body:'hi', mediaType:'text', msgTime 精确 }`；
+2. `outgoing` 命中 → `direction:'out'`，`senderKey` 为空；
+3. 正文空、但有媒体容器 → `body:''`、`mediaType` 判成 `photo|video|document` 之一、`summary` 非空（**证明"没采到"与"采到但没正文"可区分**）；
+4. `messageBody` 取不到节点 → 返回 `null`（这一行不落，别让一行装饰性 DOM 变成空消息）；
+5. 群聊：行里有发送者名节点 → `senderKey` 是该名字的 FNV-1a、`sender_name` 是原文；
+6. `msgKey` 长于 128 时**截断并保留哈希后缀**（与主进程 `MSG_KEY_MAX` 同一条约束，不靠后端 400 才被发现）。
+
+- [ ] **Step 4: 实现 `normalize.ts` + `tgDom.ts`**
+
+`normalize.ts` 吃 `TgRowSnapshot`（plain object，字段就是 `tgDom.ts` 从节点上取出来的文本与标志位），按 §11.2 出 `NormalizedMessage`。`tgDom.ts` 是**唯一**碰 `document` 的 TG 文件，整体只有三个导出函数，每个都只做"按 `TG_DOM` 取节点、把字段抄成 plain object"：
+
+```ts
+// apps/desktop/src/bridge/telegram/tgDom.ts（骨架，字段按清单取全）
+import { TG_DOM } from '../../shared/tgDomContract.ts'
+import { chatKeyFromHash, parseTgUnread } from './tgParse.ts'
+
+export interface TgRowSnapshot {
+  chatKey: string
+  msgKey: string | null        // 清单判 attr 时取属性；none 时留 null，交给 normalize 合成
+  domIdAttr?: string
+  timeText: string | null
+  separatorText: string | null
+  bodyText: string | null
+  senderText: string | null
+  outgoing: boolean
+  mediaKind: 'photo' | 'video' | 'document' | null
+}
+```
+
+`collect.ts` 的四入口（与 WhatsApp 同名同形，`COLLECT` 表按 `platform` 查表，Task 11 已留好结构）：
+
+```ts
+  /** 实时：只观察 `TG_DOM.messageList` 这一棵子树的新增/变更行，同一批 mutation 里的同一行按 msgKey 去重。 */
+  export function startLiveCollect(ctx: CollectCtx): () => void {
+    const root = document.querySelector(TG_DOM.messageList)
+    if (!root) return () => {}                     // 未登录/未打开会话：只挂不调（spec §11.2）
+    const seen = new Set<string>()
+    const mo = new MutationObserver(() => {
+      const now = Math.floor(Date.now() / 1000)
+      for (const row of readMessageRows(currentChatKey())) {
+        const n = normalizeTg(row, { nowSec: now })
+        if (!n || seen.has(n.msgKey)) continue
+        seen.add(n.msgKey)
+        ctx.emit({ kind: 'message', ...n })
+      }
+    })
+    mo.observe(root, { childList: true, subtree: true, characterData: true })
+    return () => mo.disconnect()
+  }
+```
+
+`runBackfill(limit, ctx)`：当前会话滚到顶（`scrollMessageListToTop({ steps: 20, ms: 250 })`）分步采，采满 `limit` 或到顶即停；`reachedTop === false` 时 `ctx.emit({ kind: 'backfill_gap', chatKey, reason: 'not-top' })`。**列表若虚拟化，"滚到顶"是唯一的补底手段**，所以这条必须真跑一次 A 档才能知道它有没有把行数堆到 `limit`（Step 6 的第 3 行断言）。
+
+- [ ] **Step 5: 登记进桥、放开挂载闸门**
+
+`bridge/index.ts` 的 `COLLECT` 表加 `telegram: { startLiveCollect, watchActiveChat, reportActiveChat, runBackfill }`；`main/services/msgBridge/index.ts` 的平台闸门从 `whatsapp`-only 放开到 `whatsapp | telegram`（Task 10 Step 里那条注释就是给这一步留的：telegram 进闸门必须与"有 collect 实现"同批落地，否则挂一条永远采不到的空桥）。`reportActiveChat` / `watchActiveChat` 在 TG 侧都只干一件事：把 `chatKeyFromHash(location.hash)` 报成 `active_chat`，主进程据此算未读。
+
+- [ ] **Step 6: fixture 页 `apps/desktop/test/tg-fixture.html`（原料必须是快照，不是记忆）**
+
+做法：把 `tg-probe/manifest.json` 采样里那 2～3 个真实节点的 `outerHTML` **原样**贴进 fixture（正文换成 `A1`/`B2` 这种可断言的短串，class 与嵌套一个字符都不改），再加上一个"脚本化时间线"小面板：`window.__scrmTgFixture.openChat(id)`（改 `location.hash` + 换 messageList 内容）、`.pushIn(n)`、`.pushOut(text)`、`.addDateSeparator(text)`。**结构照抄的价值**就在这：12c 的代码只认清单，fixture 只要类名一致就能替真页面作证；反过来，如果 fixture 是手写的，这条绿灯什么也不证明。
+
+fixture 不进构建产物（`build-bridge.mjs` 的 entryPoints 只有 `src/bridge/index.ts`，`test/` 也不在 electron-builder 的 files 里）。
+
+- [ ] **Step 7: `tmp/p6-tg-fixture.mjs` A 档整链（第 0～9 行）**
+
+| # | 动作 | 断言（必须能区分"生效/没动"） |
+|---|---|---|
+| 0 | 打开 fixture 并挂桥 | `ready` 握手回 `bridgeVersion`；`chat_message` 里 `platform='telegram'` 行数 = 起点值 |
+| 1 | `openChat('123456789')` + 预置 3 行 in | 补底后行数 +3，`msg_key` 集合与页内 `data-scrm-key` 一致 |
+| 2 | 同一批再灌一次（同一组行） | 行数不变、`duplicated` 计数 >0 —— **证明 `uk_msg` 生效**而不是"第二次没跑" |
+| 3 | `pushIn()` 一条新消息 | 2s 内行数 +1（live 通道），且 `chat_conversation.unread_count` 在**非活动会话**下 +1、活动会话下 +0 |
+| 4 | `addDateSeparator('2026年9月20日 星期日')` + 一行 `14:03` | 该行 `msg_time` 落在 2026-09-20 14:03 的 ±60s 内（时间解析生效；不精确时钳制到接收时刻会让这条红） |
+| 5 | 一行只有媒体、无正文 | 该行 `media_type != 'text'`、`body` 为空、`summary` 非空 |
+| 6 | 打开一个 `-1001234567890` 群会话并采一条 | 会话出现且 `is_group=1`（**群与频道不跳过上报**），`platform` 仍是 telegram |
+| 7 | 该会话对端已在 `customer` 里且 `open_id='123456789'` | 入库后 `customer_id` 被填上（自动匹配对 TG 命中，前提见 Step 8 的 V9） |
+| 8 | 滚到底仍取不到顶部（fixture 里把 `scrollMessageListToTop` 的 steps 设 0） | 报出一条 `backfill_gap`（只进主进程日志，不含正文） |
+| 9 | 清单判 `msgIdSource:'none'` 时，同秒同正文造两行 | 库里只有 1 行 —— **把 §11.2 那条代价变成断言而不是文档** |
+
+第 0～9 行全绿才允许写"A 档绿"。B 档另跑：把 fixture 的 URL 换成 `/k/` 真页面，第 1、3、6 行各出一条真机证据（行数、`msg_key` 差集、群会话出现），其余如实未验证。
+
+- [ ] **Step 8: 后端那侧的形态收敛（条件产物）**
+
+**仅当** `TG_DOM.chatIdSource !== 'none'`（会话 id 是真数字串）时才写 `V9__tg_openid_shape.sql`，把 V3 里 `platform_type=4` 那两条种子的 `open_id` 改成 `chat_key` 同形的纯数字串（群含负号），并同步改 `ChatKeys.java` 的类注释。判据、SQL 与"改完前后各查一次"的口径沿用旧版正文，一字未增：
+
+```bash
+# 改前：过 :8180 查两条 TG 客户的 open_id（C7：不走 mysql CLI）
+node tmp/p6t-openid.mjs     # GET /api/customers?platformType=4，打印 id/open_id
+# 跑 V9：重启后端让 Flyway 应用，再查一次
+node tmp/p6t-openid.mjs
+```
+
+两次输出必须不同，且第二次是纯数字串——**这一条就是"V9 生效了 vs 没动"的区分**（`tmp/p6t-openid.mjs` 由 `tmp/p11-*.mjs` 那批现成驱动改 20 行，不入库）。若 Step 6 的 fixture 或真机探针任一没过，跳过本步并在报告里写"TG open_id 形态未收敛，Task 19 的 TG 自动匹配档不成立"。
+
+- [ ] **Step 9: 回归 + 提交**
+
+`pnpm --dir apps/desktop run typecheck && pnpm --dir apps/desktop run test:unit`（闸门 +14）、`./mvnw -o -pl apps/server test`（V9 那档若跑了）；A 档 0～9 行全绿。C4：fixture 只打本地库，`chat_*` 行数打印前后差，DEMO 种子不动。
+
+```bash
+git add apps/desktop/src/bridge apps/desktop/src/main/services/msgBridge apps/desktop/test \
+  docs/superpowers/plans/2026-09-20-chat-history.md
+git commit -m "feat(P6): Telegram 采集链按官方 K 版 DOM 契约落地"
+```
+
+（V9 若存在，一并 `git add apps/server/src/main/resources/db/migration/V9__tg_openid_shape.sql`。）
+
+---
+
+### Task 12d: Telegram 发送链（切会话 → 写框 → 点发送 → 认领 `out` 行）
+
+**Goal：** 让记录页的应用内回复在 TG 账号上真发出去，并把"发出去"这件事结清成 `sent`。DOM 路线没有 `localId`，结清靠认领（spec §11.3），这一步的全部难点都在认领上。
+
+**Files:**
+- Move: `classify()` 从 `apps/desktop/src/bridge/whatsapp/send.ts` 移到 `apps/desktop/src/bridge/sharedSend.ts`（两平台共用，WhatsApp 调用点改 import；旧版 Task 12d Step 1 的同一条安排沿用）
+- Create: `apps/desktop/src/bridge/telegram/claim.ts` + `claim.test.ts`（6 条，纯函数）
+- Create: `apps/desktop/src/bridge/telegram/send.ts`
+- Modify: `apps/desktop/src/bridge/index.ts`（`SEND` 表加 telegram 一项）
+- Modify: `apps/desktop/test/tg-fixture.html`（加 `.pushOut(text)` 与发送按钮的点击响应）
 - Modify: `tmp/p6-tg-fixture.mjs`（第 10～14 行）
 
 **Interfaces:**
-- Consumes: Task 12 的 `SendReceipt` / `SendError` / `SendRegistry`（主进程那张表按我们的 `localId` 等回执，与平台无关）、Task 12c 的 `tgActions()` 与 `apiUpdate` 订阅、Task 11 的 `receiptFrom`/`classify` 语义。
-- Produces:
-  - `sendViaTg(cmd: SendCmd, actions: TgActions | null, opts?: { settleTimeoutMs?: number }): Promise<SendReceipt>`
-  - `settleSend(tgLocalId: string | null | undefined, msgKey: string): string | null`（命中返回我们的 `localId`；未命中返回 `null`）
-  - `dropSends(): void`（桥 destroy 时清关联表）
-  - `sentCandidate(result): TgMessage | null`、`classify(err): SendError`（两平台共用一份）
+- Consumes: Task 12 的 `SendRegistry`（主进程那侧不改语义）、Task 12 的 `msg:send` 通道与回执形状 `{ localId, ok, msgKey?, error? }`、Task 12a 的 `TG_DOM`、Task 12c 的 `readMessageRows` / `normalizeTg`
+- Produces: `claimPending(input: ClaimInput): ClaimResult`（纯函数）、`telegram/send.ts` 的 `sendTextMessage({ chatKey, text, localId })` → `SendResult`
 
-- [ ] **Step 1: 把 `classify` 挪到两平台共用的位置**
+- [ ] **Step 1: 把 `classify` 挪到两平台共用**
 
-新建 `apps/desktop/src/bridge/sendError.ts`：
+纯搬运 + 改 import，行为一字不改（放最前面是为了让 Step 2 的红是"认领逻辑红"，不是"找不到函数"）。跑一遍闸门确认条数不变、全绿。
+
+- [ ] **Step 2: `claim.test.ts` 先写红（6 条）**
+
+1. 目标会话里出现一条正文完全相同、时间 ≥ 提交时刻的 `out` 行 → 认领成功，返回它的 `msgKey`；
+2. 正文不同 → 不认领（返回 `pending`，让主进程按 TIMEOUT 收，而不是乱点别的 pending）；
+3. 只有 `in` 行相同正文（对端回了一句一模一样的）→ **不认领**（方向的这一条断言就是"结果分类没写反"的证据）；
+4. 同会话连发同一条文本两次 → 按提交 FIFO：第一个候选行归第一个 pending，第二个归第二个；两次认领的 `msgKey` 不同；
+5. 一行被认领后再来一次观察 → 不重复认领（`claimed` 集合生效）；
+6. 目标会话不是当前活动会话（hash 里是别的 id）→ 立即返回 `wrong_chat`，**不消费候选行**（发送侧据此报 `CHAT_NOT_FOUND`）。
+
+- [ ] **Step 3: 实现 `claim.ts`**
 
 ```ts
-// src/bridge/sendError.ts
-import type { SendError } from '../shared/chatTypes.ts'
+// apps/desktop/src/bridge/telegram/claim.ts
+export interface ClaimCandidate { msgKey: string; body: string; dir: 'in' | 'out'; t: number }
+export interface ClaimPending { localId: string; chatKey: string; body: string; submittedAtSec: number }
+export interface ClaimInput { chatKey: string; candidates: ClaimCandidate[]; pendings: ClaimPending[]; claimed: Set<string> }
+export type ClaimResult = { kind: 'claimed'; localId: string; msgKey: string }[] | { kind: 'none' }
 
 /**
- * 发送失败归类。平台抛的都是普通 Error，文案随版本漂移，所以这里只做尽力归类：
- * 认不出一律 SEND_FAILED。词表是两平台的并集——`peer`/`channel`/`group` 来自 Telegram 那侧的
- * "会话不存在"文案，`recipient`/`participant` 来自 WhatsApp 那侧，合在一张表里比各写一份
- * 更稳：分平台两张表会让一边新增措辞时另一边静默漏判。
+ * DOM 路线没有 localId，"这条 out 是哪次发送"只能认：**同会话 + 正文完全相同 + 时间不早于提交 + 未被认领过**。
+ * 已知代价（spec §11.3 第 3 条）：同会话连发同一条文本时靠提交 FIFO 排序，若对端也在同一时间窗内
+ * 回了同文本的入向消息，方向判定（`dir === 'out'`）会把它挡住；但**同文本连发的两条本端消息**谁先落
+ * DOM 不保证与提交顺序一致，认领就会串。认领不上或串了的都不静默：调用方要出一条
+ * `send_attribution_ambiguous` 日志，宁可刷日志也不假装回执存在。
  */
-const CHAT_NOT_FOUND = /chat|peer|channel|group|recipient|participant|user|not found|invalid|404|cannot send/i
-
-export function classify(err: unknown): SendError {
-  return CHAT_NOT_FOUND.test(err instanceof Error ? err.message : String(err)) ? 'CHAT_NOT_FOUND' : 'SEND_FAILED'
-}
-
-export function errText(err: unknown): string {
-  return err instanceof Error ? err.message : String(err)
-}
+export function claimPending(input: ClaimInput): ClaimResult { /* 按 Step 2 六条实现 */ }
 ```
 
-`whatsapp/send.ts` 删掉本地的 `classify` 实现与那条正则，改成 `import { classify } from '../sendError.ts'`；**不**在原导出位置加 `export { classify } from '../sendError.ts'` 再导出——多一行再导出只为少改一行 import，会把"两个平台共用"这件事藏起来。测试里 `classify` 的 import 路径直接改到新文件：`whatsapp/send.test.ts` 的第 4 条改成从 `'../sendError.ts'` 引 `classify`、从 `'./send.ts'` 引 `receiptFrom` 与 `sendViaWa`。
+- [ ] **Step 4: 实现 `send.ts`（三步 + 结清）**
 
-- [ ] **Step 2: 写失败的 `telegram/send.test.ts`（6 条）**
-
-```ts
-// src/bridge/telegram/send.test.ts
-import { test } from 'node:test'
-import assert from 'node:assert/strict'
-import { dropSends, sendViaTg, sentCandidate, settleSend } from './send.ts'
-import type { TgActions } from './types.ts'
-
-const cmd = { kind: 'send' as const, localId: 'L1', chatKey: '10002003', text: 'hi' }
-const fast = { settleTimeoutMs: 5 }
-
-test('返回体只给 localId：回执必须等 updateMessageSendSucceeded，不在调用时刻造假成功', async () => {
-  dropSends()
-  const actions = { sendMessage: () => ({ localId: 900 }) } as unknown as TgActions
-  let settled = false
-  const p = sendViaTg(cmd, actions, fast).then((r) => { settled = true; return r })
-  await new Promise((r) => setImmediate(r))
-  assert.equal(settled, false, '调用完成不等于发送落定')
-  assert.equal(settleSend('900', '555'), 'L1', 'settleSend 命中要交回我们的 localId')
-  assert.deepEqual(await p, { localId: 'L1', ok: true, msgKey: '555' })
-})
-
-test('同一会话连发两条同文本：两条各按自己的 localId 结清，互不覆盖（拼 chatId+正文做不到）', async () => {
-  dropSends()
-  let n = 0
-  const actions = { sendMessage: () => ({ localId: 900 + ++n }) } as unknown as TgActions
-  const a = sendViaTg({ ...cmd, localId: 'LA' }, actions, fast)
-  const b = sendViaTg({ ...cmd, localId: 'LB' }, actions, fast)
-  settleSend('901', 'M1')
-  settleSend('902', 'M2')
-  assert.deepEqual(await a, { localId: 'LA', ok: true, msgKey: 'M1' })
-  assert.deepEqual(await b, { localId: 'LB', ok: true, msgKey: 'M2' })
-})
-
-test('未登记 localId、没带 localId、空 msgKey：一律未命中，调用方继续按普通 out 消息上报', async () => {
-  dropSends()
-  assert.equal(settleSend('999', 'M'), null)
-  assert.equal(settleSend(undefined, 'M'), null, '事件没带 localId 也算未命中，不能顺手结掉最早那条 pending')
-  const actions = { sendMessage: () => ({ localId: 960 }) } as unknown as TgActions
-  const p = sendViaTg(cmd, actions, fast)
-  assert.equal(settleSend('960', ''), null, '空 key = 未命中：不能拿假键把 waiter 消费掉')
-  assert.equal(settleSend('960', '555'), 'L1', '真键随后仍能结清——证明上一行空 key 调用什么都没做')
-  await p
-})
-
-test('超时是"结果未知"，不是"失败"：明细要能读出"可能已发出"，UI 据此不自动重发', async () => {
-  dropSends()
-  const actions = { sendMessage: () => ({ localId: 950 }) } as unknown as TgActions
-  const r = await sendViaTg(cmd, actions, fast)
-  assert.equal(r.ok, false)
-  assert.equal(r.error, 'TIMEOUT')
-  assert.match(r.detail ?? '', /结果未知|没有.*updateMessageSendSucceeded/)
-  assert.equal(settleSend('950', 'LATE'), null, '超时后不再二次结清：同一条发送不能既 TIMEOUT 又 sent')
-})
-
-test('返回形状漂移：同步就带服务端 id 的直接成功；候选从三种落点里取', async () => {
-  dropSends()
-  assert.deepEqual(await sendViaTg(cmd, { sendMessage: () => ({ localId: 1, id: 77 }) } as unknown as TgActions, fast),
-    { localId: 'L1', ok: true, msgKey: '77' })
-  assert.equal(sentCandidate({ sentContent: { message: { id: 5 } } })?.id, 5)
-  assert.equal(sentCandidate({ messages: [{ id: 6 }, { id: 7 }] })?.id, 7, '多条时取最后一条（页面顺序是新→旧/旧→新都可能，最后写入的是刚发的那条）')
-  assert.equal(sentCandidate(undefined), null)
-})
-
-test('什么都没回：按结果未知处理，不发假成功也不静默；actions 不在 = BRIDGE_OFFLINE；文案认得出的算 CHAT_NOT_FOUND', async () => {
-  dropSends()
-  const unknown = await sendViaTg(cmd, { sendMessage: () => ({}) } as unknown as TgActions, fast)
-  assert.equal(unknown.ok, false)
-  assert.equal(unknown.error, 'TIMEOUT')
-  assert.match(unknown.detail ?? '', /可关联/)
-  assert.deepEqual(await sendViaTg(cmd, null, fast), { localId: 'L1', ok: false, error: 'BRIDGE_OFFLINE', detail: 'Telegram actions 不可用' })
-  const peer = await sendViaTg(cmd, {
-    sendMessage: () => { throw new Error('Peer id invalid') }
-  } as unknown as TgActions, fast)
-  assert.equal(peer.error, 'CHAT_NOT_FOUND')
-})
-```
-
-```bash
-cd apps/desktop && pnpm run test:unit 2>&1 | tail -20
-```
-
-预期：FAIL —— `Cannot find module './send.ts'`。
-
-- [ ] **Step 3: 实现 `telegram/send.ts`**
-
-```ts
-// src/bridge/telegram/send.ts
-import type { BridgeCommand, MsgStatus, SendReceipt } from '../../shared/chatTypes.ts'
-import { classify, errText } from '../sendError.ts'
-import type { TgActions, TgMessage } from './types.ts'
-
-export type SendCmd = Extract<BridgeCommand, { kind: 'send' }>
-
-/**
- * 页内等回执的超时。必须短于主进程 SendRegistry 的 20s：先到期的那个说话，
- * 页内先报就能带上"平台没回哪个事件"这种只有页面知道的明细；
- * 让主进程先超时只会得到一句干巴巴的 TIMEOUT。
- */
-const SETTLE_TIMEOUT_MS = 15_000
-
-/** TG 的 localId → 我们生成的 localId + 结清它的那一步。桥 destroy 时整表丢弃。 */
-const waiters = new Map<string, { localId: string; finish: (r: SendReceipt) => void }>()
-
-export function dropSends(): void {
-  waiters.clear()
-}
-
-/** 候选消息：`sendMessage` 的返回形状在各版本间漂移，三种落点都读一遍。 */
-export function sentCandidate(result: unknown): TgMessage | null {
-  if (!result || typeof result !== 'object') return null
-  const r = result as { sentContent?: { message?: TgMessage }; message?: TgMessage; messages?: TgMessage[] }
-  if (r.sentContent?.message) return r.sentContent.message
-  if (r.message) return r.message
-  if (Array.isArray(r.messages) && r.messages.length) return r.messages[r.messages.length - 1] ?? null
-  return result as TgMessage
-}
-
-function asId(v: unknown): string | null {
-  return v == null || v === '' || v === 0 ? null : String(v)
-}
-
-/**
- * 结清一条等待中的发送。命中返回我们那一侧的 localId —— 采集侧据此**不再**上报这条 message 帧：
- * 同一条发出消息写两遍只是给 `uk_msg` 添压，且第二条的 `source` 归属已经是错的（主进程在
- * send_result 那一跳按 `app_send` 补写）。未命中返回 null，那就是用户在页面上自己发的一条。
- */
-export function settleSend(tgLocalId: string | null | undefined, msgKey: string): string | null {
-  if (!tgLocalId || !msgKey) return null
-  const w = waiters.get(tgLocalId)
-  if (!w) return null
-  waiters.delete(tgLocalId)
-  w.finish({ localId: w.localId, ok: true, msgKey })
-  return w.localId
-}
-
-export async function sendViaTg(
-  cmd: SendCmd,
-  actions: TgActions | null,
-  opts: { settleTimeoutMs?: number } = {}
-): Promise<SendReceipt> {
-  const settleTimeoutMs = opts.settleTimeoutMs ?? SETTLE_TIMEOUT_MS
-  if (!actions) return { localId: cmd.localId, ok: false, error: 'BRIDGE_OFFLINE', detail: 'Telegram actions 不可用' }
-
-  let result: unknown
-  try {
-    result = await actions.sendMessage({
-      messageList: { chatId: cmd.chatKey, threadId: -1, type: 'thread' },
-      text: cmd.text
-    })
-  } catch (e) {
-    return { localId: cmd.localId, ok: false, error: classify(e), detail: errText(e) }
-  }
-
-  const candidate = sentCandidate(result)
-  const immediate = asId(candidate?.id)
-  if (immediate && candidate?.pending !== true) return { localId: cmd.localId, ok: true, msgKey: immediate }
-
-  const tgLocalId = asId(candidate?.localId ?? (result as { localId?: unknown })?.localId)
-  if (!tgLocalId) {
-    // 连 localId 都拿不到就没法关联。报 TIMEOUT（结果未知）而不是 SEND_FAILED：
-    // 消息很可能已经出去了，标成"失败"会把用户推向手动重发，那才是真重复。
-    return {
-      localId: cmd.localId, ok: false, error: 'TIMEOUT',
-      detail: 'Telegram 未返回可关联的 localId，发送结果未知'
-    }
-  }
-
-  return await new Promise<SendReceipt>((resolve) => {
-    let done = false
-    const finish = (r: SendReceipt): void => {
-      if (done) return
-      done = true
-      waiters.delete(tgLocalId as string)
-      resolve(r)
-    }
-    waiters.set(tgLocalId, { localId: cmd.localId, finish })
-    const timer = setTimeout(() => finish({
-      localId: cmd.localId, ok: false, error: 'TIMEOUT',
-      detail: `Telegram ${Math.round(settleTimeoutMs / 1000)}s 内没有回 updateMessageSendSucceeded，发送结果未知`
-    }), settleTimeoutMs)
-    ;(timer as unknown as { unref?: () => void }).unref?.()
-  })
-}
-```
-
-> `MsgStatus` 这一支没用到（状态只到 `sent`，判定在 `tgStatusOf`），第二行 import 里不要带上它——`typecheck:unit` 对未使用 import 不报错，但留着会让下一个人以为 TG 有消息级状态推进。
-
-- [ ] **Step 4: 采集侧把"落定"交出去，桥装第二张表**
-
-`telegram/collect.ts` 的 `updateMessageSendSucceeded` 分支整体替换：
-
-```ts
-    if (u.type === 'updateMessageSendSucceeded') {
-      const msg = u.message
-      if (!msg) return
-      // 先结清发送：本应用发的那一条由主进程按 app_send 补写，这里就不再上报，避免同一条写两遍。
-      if (settleSend(asId(u.localId ?? msg.localId), String(msg.id ?? ''))) return
-      const row = normalizeTg(
-        { ...msg, isOutgoing: true, pending: false },
-        { source: 'live', chatId, ...(title ? { chatTitle: title } : {}) }
-      )
-      if (row) ctx.emit({ kind: 'message', message: row })
-      return
-    }
-```
-
-`asId` 是 send.ts 里那个私有函数——把它 `export`，collect.ts 从 `'./send.ts'` 引。`settleSend` 的第二个参数就是主进程补写 `app_send` 行要用的 `msgKey`（库里 NOT NULL），所以缺 `msg.id` 时第二个参数给空串：Step 2 的 `settleSend` 对空 `msgKey` 按未命中返回 null，这一支就不结清、照常按 out 消息上报，发送侧那头的回执由 15s 超时落成 TIMEOUT"结果未知"——宁可结果未知，也不拿 `u.localId`（发送侧临时 id，不是服务端消息 id）冒充 `msgKey` 写库。
-
-`src/bridge/index.ts`：
-
-```ts
-import { sendViaTg } from './telegram/send.ts'
-import { tgActions } from './telegram/tgStore.ts'
-import type { SendReceipt } from '../shared/chatTypes.ts'
-
-type SendCmd = Extract<BridgeCommand, { kind: 'send' }>
-
-/**
- * 发送实现按平台查表，与 COLLECT 同批登记。两张表分开写是因为它们确实是两套代码
- * （采集读状态、发送调动作），但它们必须覆盖同一批平台：一半有采集、一半没发送的桥
- * 在界面上表现为"消息进得来、回复框永远灰"，比装桥时就炸难查得多。
- */
-const SEND: Partial<Record<ChatPlatform, (cmd: SendCmd) => Promise<SendReceipt>>> = {
-  whatsapp: (cmd) => sendViaWa(cmd, wppChat()),
-  telegram: (cmd) => sendViaTg(cmd, tgActions())
-}
-```
-
-`install()` 开头那段（Task 11 写的 `const impl = COLLECT[config.platform]` + `if (!impl) throw`）替换为：
-
-```ts
-  const impl = COLLECT[config.platform]
-  const send = SEND[config.platform]
-  if (!impl || !send) {
-    // 挂载闸门（Task 10）是第一道，这里是第二道：走到来说明两张表与闸门有一处不同步。
-    // 抛出去让握手失败，主进程按 retry → offline 收敛。
-    throw new Error(`bridge: 平台实现不完整 ${config.platform}`)
-  }
-```
-
-`case 'send'` 换成（Task 12 那一行的平台直连版本被这张表取代）：
-
-```ts
-      case 'send':
-        // 不 await：命令回路是同步的。TG 的回执可能几百毫秒之后才到，
-        // 那条 Promise 结掉时再上行，主进程 SendRegistry 那边一直等着同一个 localId。
-        void send(cmd).then((receipt) => push({ kind: 'send_result', ...receipt }))
-        return
-```
-
-`destroy()` 里补 `dropSends()`，并在注释里说清为什么：桥拆了，事件不会再进来，那些等待里的 Promise 只有靠超时才会自己结掉——主动清空让主进程那侧的 pending 早一步由 `failView` 收敛（Task 12 的 `broadcastState`）。
-
-```bash
-cd apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run typecheck && pnpm run build:bridge
-```
-
-预期：`# pass 103` / `# fail 0`，typecheck 无输出。
+1. `chatKeyFromHash(location.hash) !== chatKey` → 先点会话行（`readChatRows()` 里找 `chatKey` 匹配那行），等 hash 变化，最多 3 次 ×400ms；仍不等就返回 `CHAT_NOT_FOUND`，**不写框**（写进别人会话是比发不出去严重得多的错）。
+2. `replaceEditorText(document.querySelector(TG_DOM.composerInput), text)`（复用 P5 已验证的 contenteditable 写入路径，含 `execCommand('insertText')`）；写不进或写完读回来不等于 `text` → `SEND_FAILED`（这条判据是 P5 那次"只写进首字母"教训的正面形态：写完必须回读比对）。
+3. 真实点击 `document.querySelector(TG_DOM.sendButton)`（`InputEvent`/`click()` 合成事件在 K 版上会不会触发发送，属于 B 档观察项，A 档只证明"我们这侧按了按钮"）。
+4. 点完立刻 `claimPending(...)` 一次，并在随后的 live 观察里再试（`collect.ts` 的 MutationObserver 之后串一段认领，认领成功就 `ctx.emit({ kind: 'send_receipt', localId, msgKey, status: 'sent' })`）；`watch` 上限 15s，超时按 `TIMEOUT` 结清（状态留 `pending`，与 WA 同口径）。
 
 - [ ] **Step 5: A 档整链补发送段（`tmp/p6-tg-fixture.mjs` 第 10～14 行）**
 
-TG 账号的回复链在假页面上跑通。这一段的重点不是"发出去了"，而是**归属与结清**：`app_send` 那行只能由 send_result 那一跳写出来，`pending` 只能靠 `updateMessageSendSucceeded` 推到 `sent`。
+| # | 动作 | 断言 |
+|---|---|---|
+| 10 | 对活动会话回复一条 | 页内出现 `out` 行 → 回执 `ok:true` 带 `msgKey`，库里那行 `status='sent'`、`app_send=1`、`customer_id` 命中 |
+| 11 | 对**非**活动会话回复 | 先切会话（fixture 里 hash 变了）再发；若 fixture 造"切不过去"，回执 `CHAT_NOT_FOUND` 且库里 0 新行 |
+| 12 | 同会话连发同一条文本两次 | 两条 pending 各拿一个不同 `msgKey`，库里两行 `app_send=1`（**证明 FIFO 认领没串**） |
+| 13 | 造一条对端同文本的 `in` 行 + 本端无 `out` 行 | 两个 pending 都收 TIMEOUT，且库里 `status` 停在 `pending`（不被入向行误推进） |
+| 14 | 认领不上时 | 主进程日志出现一行 `send_attribution_ambiguous`（不含正文） |
 
-```js
-// —— 发送段（接在第 9 行之后）——
-const reply = 'P6TG-SEND-' + Date.now().toString(36)
-const beforeSend = await api(`/api/messages/stats?accountId=${tg.id}&days=30`)
-// 主进程入口：scrm.msg.send 由渲染层调用，驱动脚本直接打同一个 invoke
-const sendInvoke = await ev(page, `window.scrm.msg.send({accountId: ${tg.id}, chatKey: ${JSON.stringify(manifest.chatIds[0])}, text: ${JSON.stringify(reply)}, localId: ${JSON.stringify('p6tg-' + Date.now())}}`).then(r => JSON.stringify(r))`)
-const receipt = JSON.parse(sendInvoke)
-check('10 应用内回复真的结清', receipt.ok === true && !!receipt.msgKey,
-  '{ok:true, msgKey:"…"}', sendInvoke)
-await sleep(1500)
-const sent = await api(`/api/messages/search?q=${encodeURIComponent(reply)}&size=20`)
-const sentRow = sent?.records?.[0]?.message
-check('11 发出的行归属是 app_send，且状态已推进到 sent',
-  sentRow?.direction === 'out' && sentRow?.source === 'app_send' && sentRow?.status === 'sent',
-  'direction=out / source=app_send / status=sent', JSON.stringify(sentRow && { d: sentRow.direction, s: sentRow.source, st: sentRow.status }))
-check('12 行数只增一条（回执与事件没有写两遍）',
-  ((await api(`/api/messages/stats?accountId=${tg.id}&days=30`))?.total ?? 0) === (beforeSend?.total ?? 0) + 1,
-  `total = ${beforeSend?.total} + 1`, JSON.stringify(receipt))
-
-// 连发两条同文本：证明按 localId 结清不是"碰巧配上了第一条"
-const twice = 'P6TG-TWICE-' + Date.now().toString(36)
-const r1 = JSON.parse(await ev(page, `window.scrm.msg.send({accountId: ${tg.id}, chatKey: ${JSON.stringify(manifest.chatIds[1])}, text: ${JSON.stringify(twice)}, localId: 'p6tg-a'}).then(r=>JSON.stringify(r))`))
-const r2 = JSON.parse(await ev(page, `window.scrm.msg.send({accountId: ${tg.id}, chatKey: ${JSON.stringify(manifest.chatIds[1])}, text: ${JSON.stringify(twice)}, localId: 'p6tg-b'}).then(r=>JSON.stringify(r))`))
-check('13 同会话连发同文本：两条各自拿到不同 msgKey、都 ok', r1.ok && r2.ok && r1.msgKey && r2.msgKey && r1.msgKey !== r2.msgKey,
-  '两个 msgKey 不相等', JSON.stringify({ r1, r2 }))
-
-// 形状漂移那一档：平台什么都不回 → 结果未知，且 UI 侧不会自动重发
-await ev(view, `window.__tgfx.setSendMode('none')`)
-const r3 = JSON.parse(await ev(page, `window.scrm.msg.send({accountId: ${tg.id}, chatKey: ${JSON.stringify(manifest.chatIds[0])}, text: 'P6TG-NONE', localId: 'p6tg-n'}).then(r=>JSON.stringify(r))`))
-await ev(view, `window.__tgfx.setSendMode('async')`)
-check('14 拿不到 localId 时按"结果未知"回，不报成功也不冒充失败',
-  r3.ok === false && r3.error === 'TIMEOUT' && /可关联|未知/.test(r3.detail ?? ''),
-  "{ok:false, error:'TIMEOUT', detail 含 未知/可关联}", JSON.stringify(r3))
-```
-
-第 12 行是这一段的反证：只跑第 10/11 行看不出"回执与事件各写一遍"——`uk_msg` 会把第二遍吞掉，`total` 照样 +1，而 `duplicated` 计数与 live 尾巴的副本都已经不对了。**如果这一行了现，先查 `settleSend` 是否真在 collect 的 succeeded 分支最前面**（顺序错了就是"先上报、后结清"，两行都会写）。
-
-```bash
-node tmp/p6-tg-fixture.mjs
-```
-
-预期：`14/14 PASS`（前 9 行来自 Task 12c）。第 10 行挂了的排查顺序：页内 `window.__tgfx.sendCalls()` 有没有那一次调用（没调用 = `case 'send'` 没走到 TG 分支）→ `sendCalls()[0].messageList.chatId` 是不是纯数字串（错 = `chatKey` 被当成对端 id 之外的东西用了）→ 事件有没有抛（`sendCalls` 有、库里没有 = `localId` 没关联上，看 detail 是不是 TIMEOUT）。
+B 档另跑：真机 `/k/` 上自聊（TG 的"已保存的消息"）发一条，核对 `chat_message` 里 `platform='telegram'`、`app_send=1`、`status='sent'` 三件齐，然后**删掉这条测试消息**（C4，删除走页内 UI，不碰 API）。
 
 - [ ] **Step 6: 回归 + 提交**
 
-```bash
-cd apps/desktop && pnpm run test:unit 2>&1 | tail -6 && pnpm run typecheck
-node tmp/p6e-send.mjs    # WhatsApp 那一支不能被这次 classify 搬家改坏
-node tmp/p6-tg-fixture.mjs
-```
-
-预期：`# pass 103` / `# fail 0`；`p6e-send` 原样绿（它对 `classify` 的断言走 `send.test.ts`，那份测试现在引的是新路径）；TG 驱动 `14/14`。
+`pnpm --dir apps/desktop run typecheck && pnpm --dir apps/desktop run test:unit`（闸门 +6；累计 = Task 12c 终态 + 6，按 C14 不抄绝对数）、A 档第 0～14 行全绿、`git status` 干净。
 
 ```bash
-git add apps/desktop/src/bridge apps/desktop/test tmp/p6-tg-fixture.mjs \
-  docs/superpowers/plans/2026-09-20-chat-history.md
-git commit -m "feat(P6): Telegram 发送链按 localId 结清回执"
+git add apps/desktop/src/bridge apps/desktop/test tmp/p6-tg-fixture.mjs
+git commit -m "feat(P6): Telegram 发送链与 DOM 认领结清回执"
 ```
-
-（`tmp/` 在 gitignore 里，那一行 `git add` 会被忽略并提示——不报错就删掉它，别为把脚本入库而改 ignore。）
 
 ---
+
+## P6g — 渲染层：记录页
+
 
 ### Task 13: 数据层（VO 类型、Query hooks、live 尾巴并入缓存）
 
@@ -8986,7 +8492,7 @@ git commit -m "feat(P6): 记录页应用内回复（先译再发、中文拦截�
 
 ---
 
-## P6g — 记录页外围：搜索、统计、客户与语向
+## P6h — 记录页外围：搜索、统计、客户与语向
 
 ### Task 16: 全局搜索视图与统计卡（含"跳到命中那条消息"）
 
