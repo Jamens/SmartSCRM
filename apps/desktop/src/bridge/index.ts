@@ -3,7 +3,7 @@ import { makeThrottledReporter, onCommand, report } from './host.ts'
 import * as whatsappCollect from './whatsapp/collect.ts'
 import type { BridgeCommand, BridgeInstallConfig } from '../shared/chatTypes.ts'
 import type { ChatPlatform } from '../shared/chatPlatform.ts'
-import type { CollectImpl } from './types.ts'
+import type { CollectCtx, CollectImpl } from './types.ts'
 
 /**
  * 采集实现按平台查表，本任务只有 whatsapp 一项。用查表而不是在四个 case 里各判一次平台：
@@ -19,17 +19,26 @@ let handle: ((cmd: BridgeCommand) => void) | null = null
 let collectorRef: (() => void) | null = null
 let activeRef: (() => void) | null = null
 let pushRef: ReturnType<typeof makeThrottledReporter> | null = null
+/**
+ * 补底轮次代号：每来一轮新的 backfill、每次 destroy 都推进它。
+ * `cancel()` 只撤当前在途的合帧定时器，拦不住还在 `await` 里的上一轮循环——它下一趟会重新起一个
+ * 定时器把帧塞出去（心跳重挂后就是两个循环共用一个 reporter，或卸载后仍有帧出 IPC）。代号停不掉
+ * 循环本身——页内没有 abort 信号可递给 `getMessages`——它保证的是另一头：老轮次的帧一律出不去。
+ */
+let backfillSeq = 0
 
 export function install(config: BridgeInstallConfig): boolean {
   if (installed && installed.bridgeVersion === config.bridgeVersion) return false
-  destroy()
-  installed = config
   const impl = COLLECT[config.platform]
   if (!impl) {
     // 挂载闸门（Task 10）挡的就是"这个平台有没有采集实现"，走到这里说明两处不同步了。
     // 抛出去让握手失败，主进程按 retry → offline 收敛，比挂一条"ready 却永远采不到"的桥好查得多。
+    // 必须在改任何状态之前抛：先记 installed 的话，模块就自称装好了却没有任何 handler，
+    // 而同 bridgeVersion 的下一次 install 会在上面那行直接 return false，永远不再 ready。
     throw new Error(`bridge: 该平台没有采集实现 ${config.platform}`)
   }
+  destroy()
+  installed = config
   const push = makeThrottledReporter()
   pushRef = push
   const collector = impl.startLiveCollect({ emit: push })
@@ -39,10 +48,18 @@ export function install(config: BridgeInstallConfig): boolean {
       case 'ping':
         push({ kind: 'pong', bridgeVersion: config.bridgeVersion })
         return
-      case 'backfill':
+      case 'backfill': {
         // 补底是异步的且不阻塞命令回路：期间新消息仍走 live 事件，幂等交给 uk_msg。
-        void impl.runBackfill(cmd.limit, { emit: push })
+        const seq = ++backfillSeq
+        const emit: CollectCtx['emit'] = (r) => {
+          if (seq === backfillSeq) push(r)
+        }
+        // 循环里逃出来的异常折成一帧 gap：不接住就是 unhandled rejection，整轮采集静默消失。
+        void impl.runBackfill(cmd.limit, { emit }).catch((e: unknown) => {
+          emit({ kind: 'backfill_gap', chatKey: '*', reason: e instanceof Error ? e.message : String(e) })
+        })
         return
+      }
       case 'open_chat':
         impl.reportActiveChat({ emit: push })
         return
@@ -77,6 +94,8 @@ export function destroy(): void {
   tryCall(activeRef)
   // 先停钩子再撤定时器：destroy 之后不允许再有在途的 backfill_progress 出 IPC。
   pushRef?.cancel()
+  // 在跑的补底循环还活在 await 里，下一趟就会重新起一个定时器。推进代号让它剩下的帧全部作废。
+  backfillSeq += 1
   pushRef = null
   handle = null
   installed = null

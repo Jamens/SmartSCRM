@@ -39,6 +39,17 @@ test('backfill_progress 在窗口内合帧，留的是最后一条', async () =>
   setSink(null)
 })
 
+test('cancel 后缓冲里的进度帧不再补发：destroy 之后不该还有帧出 IPC', async () => {
+  const { out } = collect()
+  const push = makeThrottledReporter(10)
+  push({ kind: 'backfill_progress', chatsDone: 1, chatsTotal: 3, messages: 5 })
+  push.cancel()
+  await new Promise((r) => setTimeout(r, 40))
+  // 不 cancel 时这里是 1（上一个用例证的），所以 0 才说明"撤掉的是真在途的那一帧"。
+  assert.equal(out.length, 0)
+  setSink(null)
+})
+
 test('message / send_result 每条直达，不进合帧窗口', () => {
   const { out } = collect()
   const push = makeThrottledReporter(1000)
