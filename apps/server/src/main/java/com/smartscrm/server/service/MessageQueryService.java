@@ -1,6 +1,7 @@
 package com.smartscrm.server.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.ChatConversation;
 import com.smartscrm.server.entity.ChatMessage;
@@ -13,6 +14,7 @@ import com.smartscrm.server.service.msg.MsgTimes;
 import com.smartscrm.server.service.msg.SearchPattern;
 import com.smartscrm.server.web.vo.ConversationPageVO;
 import com.smartscrm.server.web.vo.ConversationVO;
+import com.smartscrm.server.web.vo.CustomerTimelineVO;
 import com.smartscrm.server.web.vo.DayCountVO;
 import com.smartscrm.server.web.vo.MessagePageVO;
 import com.smartscrm.server.web.vo.MessageSearchVO;
@@ -313,6 +315,69 @@ public class MessageQueryService {
             throw new BizException(40404, "会话不存在: " + conversationId);
         }
         return head;
+    }
+
+    /**
+     * 回填的是这个会话的历史消息：新客户在被"建为联系人"之前，聊天早就照规则入库了
+     * （customer_id 为空）。这里只补那一段，范围严格限定在单个会话。
+     */
+    @Transactional
+    public Map<String, Object> linkCustomer(Long tenantId, Long conversationId, Long customerId) {
+        ChatConversation head = requireOwned(tenantId, conversationId);
+        Customer customer = customerMapper.selectOne(new LambdaQueryWrapper<Customer>()
+            .eq(Customer::getTenantId, tenantId)
+            .eq(Customer::getId, customerId)
+            .last("LIMIT 1"));
+        if (customer == null) {
+            throw new BizException(40404, "客户不存在: " + customerId);
+        }
+        // messagesLinked 是"匹配行数"，这里恰好等于"改变行数"：WHERE 带 customer_id IS NULL
+        // 而 SET 写的是非空值，凡匹配到的行必然从 NULL 被改成 customerId。别去掉那个 isNull，
+        // 否则匹配数会把"本来就属于别人"的行也算进来，这个计数就开始撒谎了。
+        int messages = messageMapper.update(null, new LambdaUpdateWrapper<ChatMessage>()
+            .eq(ChatMessage::getTenantId, tenantId)
+            .eq(ChatMessage::getAccountId, head.getAccountId())
+            .eq(ChatMessage::getPlatform, head.getPlatform())
+            .eq(ChatMessage::getChatKey, head.getChatKey())
+            .isNull(ChatMessage::getCustomerId)
+            .set(ChatMessage::getCustomerId, customerId));
+        conversationMapper.update(null, new LambdaUpdateWrapper<ChatConversation>()
+            .eq(ChatConversation::getId, conversationId)
+            .eq(ChatConversation::getTenantId, tenantId)
+            .set(ChatConversation::getCustomerId, customerId));
+        return Map.of("conversationId", conversationId, "customerId", customerId, "messagesLinked", messages);
+    }
+
+    /**
+     * 客户抽屉时间线：该客户名下的最近消息 + 会话头。路径挂 /api/customers/{id}/timeline，
+     * 但实现留在这里——它消费的是 chat_* 那两张表，与查询面同源，不放 CustomerService 那边。
+     */
+    public CustomerTimelineVO timeline(Long tenantId, Long customerId, Integer size) {
+        long owned = customerMapper.selectCount(new LambdaQueryWrapper<Customer>()
+            .eq(Customer::getTenantId, tenantId).eq(Customer::getId, customerId));
+        if (owned == 0) {
+            throw new BizException(40404, "客户不存在: " + customerId);
+        }
+        int limit = sizeOf(size);
+        List<ChatMessage> rows = messageMapper.selectList(new LambdaQueryWrapper<ChatMessage>()
+            .eq(ChatMessage::getTenantId, tenantId)
+            .eq(ChatMessage::getCustomerId, customerId)
+            .orderByDesc(ChatMessage::getMsgTime).orderByDesc(ChatMessage::getId)
+            .last("LIMIT " + limit));
+        long messageCount = messageMapper.selectCount(new LambdaQueryWrapper<ChatMessage>()
+            .eq(ChatMessage::getTenantId, tenantId).eq(ChatMessage::getCustomerId, customerId));
+        List<ChatConversation> heads = conversationMapper.selectList(new LambdaQueryWrapper<ChatConversation>()
+            .eq(ChatConversation::getTenantId, tenantId)
+            .eq(ChatConversation::getCustomerId, customerId)
+            .orderByDesc(ChatConversation::getLastMsgTime));
+        List<MessageVO> messages = new ArrayList<>(rows.stream().map(MessageVO::of).toList());
+        // 正序，且同一毫秒内按 id 递增：DATETIME(3) 允许同一毫秒两条，只按 msgTime 排会不稳定，
+        // 而 P6 的键集游标就是按 (time, id) 这一对定序的——时间线的顺序必须与翻页口径一致。
+        messages.sort((a, b) -> a.msgTime().isEqual(b.msgTime())
+            ? Long.compare(a.id(), b.id())
+            : a.msgTime().compareTo(b.msgTime()));
+        return new CustomerTimelineVO(messages, heads.stream().map(ConversationVO::of).toList(),
+            messageCount, heads.size());
     }
 
     /**

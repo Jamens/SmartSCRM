@@ -11,9 +11,11 @@ import com.smartscrm.server.entity.Label;
 import com.smartscrm.server.mapper.CustomerLabelMapper;
 import com.smartscrm.server.mapper.CustomerMapper;
 import com.smartscrm.server.mapper.LabelMapper;
+import com.smartscrm.server.web.dto.CustomerCreateRequest;
 import com.smartscrm.server.web.dto.CustomerEditRequest;
 import com.smartscrm.server.web.vo.CustomerVO;
 import com.smartscrm.server.web.vo.LabelVO;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.HashMap;
@@ -59,6 +61,49 @@ public class CustomerService {
         Customer customer = requireOwned(tenantId, id);
         Map<Long, List<LabelVO>> labelMap = labelsByCustomerIds(List.of(id));
         return CustomerVO.of(customer, labelMap.getOrDefault(id, List.of()));
+    }
+
+    /**
+     * open_id 是"这个人在这个平台上的 id"，聊天记录里的 chat_key 就是它。
+     * 撞唯一键时报 40901 而不是让 MySQL 异常冒到 50000：前端要能区分"重名"和"已经存在"。
+     */
+    @Transactional
+    public CustomerVO create(Long tenantId, CustomerCreateRequest req) {
+        String openId = req.openId().trim();
+        if (openId.isEmpty()) {
+            throw new BizException(40000, "openId 不能为空白");
+        }
+        if (req.platformType() == null || req.platformType() < 1 || req.platformType() > 7) {
+            throw new BizException(40000, "platformType 只能是 1..7");
+        }
+        long dup = customerMapper.selectCount(new LambdaQueryWrapper<Customer>()
+            .eq(Customer::getTenantId, tenantId)
+            .eq(Customer::getPlatformType, req.platformType())
+            .eq(Customer::getOpenId, openId));
+        if (dup > 0) {
+            throw new BizException(40901, "该平台下此客户已存在: " + openId);
+        }
+        Customer customer = new Customer();
+        customer.setTenantId(tenantId);
+        customer.setPlatformType(req.platformType());
+        customer.setOpenId(openId);
+        customer.setNickname(trimToNull(req.nickname()));
+        customer.setPhone(trimToNull(req.phone()));
+        customer.setEmail(trimToNull(req.email()));
+        customer.setCountry(trimToNull(req.country()));
+        customer.setRemark(trimToNull(req.remark()));
+        customer.setSex(req.sex() == null ? 0 : req.sex());
+        customer.setFirstSeenAt(LocalDateTime.now());
+        customerMapper.insert(customer);
+        return detail(tenantId, customer.getId());
+    }
+
+    private static String trimToNull(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        String t = raw.trim();
+        return t.isEmpty() ? null : t;
     }
 
     public CustomerVO update(Long tenantId, Long id, CustomerEditRequest req) {
