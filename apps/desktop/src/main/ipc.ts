@@ -1,7 +1,9 @@
 import { BrowserWindow, ipcMain } from 'electron'
 import { clearSession, getDeviceId, getSession, saveSession, type StoredSession } from './state/session'
+import { bridgeStates, requestBackfill, sendText } from './services/msgBridge'
 import { getMainWindow, showMainWindow } from './window/mainWindow'
 import { registerViewIpc } from './webContentsView/ipc'
+import type { SendRequest } from '@shared/chatTypes'
 
 export function registerIpcHandlers(): void {
   registerViewIpc()
@@ -17,6 +19,11 @@ export function registerIpcHandlers(): void {
     clearSession()
     return true
   })
+
+  /** 记录页回复：localId 由渲染层生成（乐观气泡的 key），主进程原样回带。 */
+  ipcMain.handle('msg:send', (_e, req: SendRequest) => sendText(req))
+  ipcMain.handle('msg:sync-history', (_e, accountId: number) => requestBackfill(accountId))
+  ipcMain.handle('msg:bridges', () => bridgeStates())
 
   const focused = (): BrowserWindow | null => getMainWindow() ?? BrowserWindow.getFocusedWindow()
 

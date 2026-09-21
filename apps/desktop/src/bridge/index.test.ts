@@ -105,3 +105,74 @@ test('对照：不 destroy 时同一套夹具确实会出进度帧', async (t) =
   // 上一个用例的 0 靠这一条才有意义：不是"什么都没发生"，是"发生的那一帧被代号拦下了"。
   assert.equal(progresses(host.out).length, 1)
 })
+
+/** 带 `sendTextMessage` 的假 WPP，且第一回执卡在 await 里：用来分"同步回执"与"异步上行"。 */
+function gatedSend(): { wpp: unknown; calls: unknown[][]; release: () => void } {
+  let release: () => void = () => undefined
+  const gate = new Promise<void>((r) => {
+    release = r
+  })
+  const calls: unknown[][] = []
+  return {
+    release,
+    calls,
+    wpp: {
+      chat: {
+        list: async () => [],
+        getMessages: async () => [],
+        getActiveChat: () => null,
+        sendTextMessage: async (...args: unknown[]) => {
+          calls.push(args)
+          await gate
+          return { id: 'true_861380001001@c.us_K-1_out', ack: 1, from: '861380000@c.us', sendMsgResult: null }
+        }
+      },
+      on: () => ({ off: () => undefined })
+    }
+  }
+}
+
+test('send 命令交给 sendViaWa：回执异步单独一帧，命令回路不被它排住', async (t) => {
+  const { wpp, calls, release } = gatedSend()
+  const host = fakeHost(wpp)
+  t.after(() => {
+    destroy()
+    delete (globalThis as unknown as { window?: unknown }).window
+  })
+  install(CONFIG)
+  host.out.length = 0 // 只留命令阶段的帧
+  host.deliver({ kind: 'send', localId: 'L1', chatKey: '861380001001@c.us', text: 'hi' })
+  host.deliver({ kind: 'ping' })
+  // 区分性证据：case 'send' 若还是那句写死的 "send not wired yet"，下面两条一条也过不了；
+  // 若改成 await 再 return，pong 就排不到 send_result 前面。
+  assert.equal(host.out[0]?.kind, 'pong')
+  assert.equal(host.out.some((f) => f.kind === 'send_result'), false)
+  release()
+  await idle(0)
+  assert.deepEqual(calls[0], ['861380001001@c.us', 'hi', { createChat: true, waitForAck: false }])
+  assert.deepEqual(host.out.find((f) => f.kind === 'send_result'), {
+    kind: 'send_result',
+    localId: 'L1',
+    ok: true,
+    msgKey: 'true_861380001001@c.us_K-1_out'
+  })
+})
+
+test('WPP.chat 不在时 send 也要有一帧回执：主进程的 invoke 不能白等超时', async (t) => {
+  const host = fakeHost({ on: () => ({ off: () => undefined }) }) // 没有 chat 的 WPP
+  t.after(() => {
+    destroy()
+    delete (globalThis as unknown as { window?: unknown }).window
+  })
+  install(CONFIG)
+  host.out.length = 0
+  host.deliver({ kind: 'send', localId: 'L2', chatKey: 'c', text: 'hi' })
+  await idle(0)
+  assert.deepEqual(host.out.find((f) => f.kind === 'send_result'), {
+    kind: 'send_result',
+    localId: 'L2',
+    ok: false,
+    error: 'BRIDGE_OFFLINE',
+    detail: 'WPP.chat 不可用'
+  })
+})

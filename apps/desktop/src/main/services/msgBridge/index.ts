@@ -3,11 +3,19 @@ import { getSession } from '../../state/session'
 import { getMainWindow } from '../../window/mainWindow'
 import { viewManager } from '../../webContentsView/manager'
 import { platformOfAccountType } from '@shared/chatPlatform'
-import type { BridgeCommand, BridgeReport, BridgeState, LiveFrame, NormalizedMessage } from '@shared/chatTypes'
-import { accountOfView, refreshAccounts, type AccountEntry } from './accountDirectory'
+import type {
+  BridgeCommand,
+  BridgeReport,
+  BridgeState,
+  LiveFrame,
+  SendReceipt,
+  SendRequest
+} from '@shared/chatTypes'
+import { accountOfId, accountOfView, refreshAccounts, type AccountEntry } from './accountDirectory'
 import { BridgeMount } from './bridgeMount'
 import { CollectorHub } from './collectorHub'
-import { createMsgApi } from './msgApi'
+import { createMsgApi, isSendable } from './msgApi'
+import { SendAttribution, SendRegistry } from './sendRegistry'
 
 /** spec §4 的 msgHistoryLimit：每会话补底条数。 */
 export const HISTORY_LIMIT_DEFAULT = 200
@@ -32,9 +40,22 @@ const activeChat = new Map<string, string | null>()
 /** 每视图上一次观察到的登录态：日志只在值翻转时打，掐掉注入层 3s 一次的刷屏。 */
 const lastLoginSeen = new Map<string, boolean>()
 let refreshTimer: NodeJS.Timeout | null = null
+/** invoke 的 Promise 表（localId → 未决），与 `SendAttribution`（数据行归属）各管一件事。 */
+const registry = new SendRegistry()
+const attribution = new SendAttribution()
 
 function broadcastState(): void {
-  getMainWindow()?.webContents.send('msg:state', bridgeStates())
+  const states = bridgeStates()
+  for (const s of states) {
+    // 掉线 / 销毁那一刻的未决发送必须结掉，否则回复框永久卡在 pending 气泡上。
+    // `dropView` 放在 `failView` 之后：intent 也要一起失效，桥恢复后不该再补认领一条。
+    if (s.phase === 'retry' || s.phase === 'offline' || s.phase === 'destroyed') {
+      const n = registry.failView(s.viewId, 'BRIDGE_OFFLINE', s.detail ?? '桥未在线')
+      attribution.dropView(s.viewId)
+      if (n > 0) console.log(`[msgBridge] 结清未决发送 ${n} 条 view=${s.viewId}`)
+    }
+  }
+  getMainWindow()?.webContents.send('msg:state', states)
 }
 
 export function bridgeStates(): BridgeState[] {
@@ -99,16 +120,6 @@ export function observeLoginStatus(viewId: string, isLogin: boolean): void {
   })
 }
 
-/**
- * 归属盖章（Task 11 brief Step 2 的判定表）：页内一律如实报 live，"是不是本应用发的"在这里判——
- * 主进程两边都知道（localId 是它生成的，msgKey 是它收回的）。发送链（Task 12）落地时在同一处
- * 加 SendRegistry 匹配：命中未决发送改 app_send 并带 sendLocalId，未命中才是 native_send。
- */
-function stampOutboundSource(message: NormalizedMessage): NormalizedMessage {
-  if (message.direction === 'out' && message.source === 'live') return { ...message, source: 'native_send' }
-  return message
-}
-
 /** 页内来的文本进主进程日志前收成一行：留着换行就等于允许伪造日志行，长度也不该无界。 */
 function oneLine(text: string | undefined, max = 200): string {
   // \v \f 之类也算换行（Chrome 的 console 会把它们断行），所以按 C0 控制字符整体收。
@@ -124,16 +135,52 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
   if (!entry) return
   const mount = mounts.get(viewId)
   if (report.kind === 'message') {
+    // 归属盖章（Task 11 Step 2 判定表）：页内一律如实报 live，"是不是本应用发的"在这里判——
+    // 主进程两边都知道（localId 是它生成的，msgKey 是它收回的）。命中未决发送改 app_send 并带
+    // sendLocalId，未命中才是 native_send；in 行原样返回。
     // 同一条消息只走一条路：先入采集队列，再广播 live 尾巴（spec §4 第 4 条）。
     const frame: LiveFrame = {
       viewId,
       accountId: entry.accountId,
       platform: entry.platform ?? 'whatsapp',
       activeChatKey: activeChatOf(viewId),
-      message: stampOutboundSource(report.message)
+      message: attribution.stamp(viewId, report.message)
     }
     hub.push(frame)
     getMainWindow()?.webContents.send('msg:live', frame)
+    return
+  }
+  if (report.kind === 'send_result') {
+    const meta =
+      report.ok && report.msgKey
+        ? attribution.settle(report.localId, report.msgKey)
+        : (attribution.abandon(report.localId), null)
+    registry.settle(report)
+    // meta === null 有两种：事件流已经把这一行写进去了，或这条根本不是本应用发的（迟到回执）。
+    // 前者再写一次只是给 uk_msg 添压，后者压根不知道该写什么——都不补。
+    if (meta?.chatKey && report.msgKey) {
+      // 补写那行的 status: 'pending' 是刻意的：这一刻主进程只知道"平台收了单"，之后的
+      // sent/delivered/read 由 ack 事件经 postStatuses 推进（Task 11 Step 6），单调阶梯保证不倒退。
+      const frame: LiveFrame = {
+        viewId,
+        accountId: entry.accountId,
+        platform: entry.platform ?? 'whatsapp',
+        activeChatKey: activeChatOf(viewId),
+        message: {
+          chatKey: meta.chatKey,
+          msgKey: report.msgKey,
+          direction: 'out',
+          body: meta.text,
+          mediaType: 'text',
+          msgTimeEpochSec: Math.floor(Date.now() / 1000),
+          status: 'pending',
+          source: 'app_send',
+          sendLocalId: report.localId
+        }
+      }
+      hub.push(frame)
+      getMainWindow()?.webContents.send('msg:live', frame)
+    }
     return
   }
   if (report.kind === 'ack') {
@@ -205,6 +252,33 @@ export function bridgeOf(viewId: string): BridgeMount | null {
   return mounts.get(viewId) ?? null
 }
 
+/** 渲染层的唯一发送入口：localId 由渲染层生成，主进程只登记不发明。 */
+export async function sendText(req: SendRequest): Promise<SendReceipt> {
+  const localId = req.localId
+  if (!isSendable(req)) return { localId, ok: false, error: 'SEND_FAILED', detail: '正文为空或超长' }
+  const entry = accountOfId(req.accountId)
+  const viewId = entry?.viewId
+  if (!viewId) return { localId, ok: false, error: 'BRIDGE_OFFLINE', detail: '账号没有绑定视图' }
+  const mount = bridgeOf(viewId)
+  if (!mount || !mount.ready) return { localId, ok: false, error: 'BRIDGE_OFFLINE', detail: '会话未在线' }
+  const wait = registry.add(localId, viewId)
+  attribution.claim(viewId, localId, req.chatKey, req.text)
+  mount.push({ kind: 'send', localId, chatKey: req.chatKey, text: req.text })
+  // 超时（TIMEOUT）只在这条 Promise 上暴露，不会变成页内回执：必须在这里 abandon，
+  // 否则同会话随后一条同文本的原生消息会被这条已经放弃的 intent 认领成 app_send。
+  return wait.then((receipt) => {
+    if (!receipt.ok) attribution.abandon(localId)
+    return receipt
+  })
+}
+
+/** 「同步历史」按钮：只在桥 ready 时下得去，否则返回 false 让 UI 保持禁用态一致。 */
+export function requestBackfill(accountId: number): boolean {
+  const viewId = accountOfId(accountId)?.viewId
+  if (!viewId) return false
+  return pushToBridge(viewId, { kind: 'backfill', limit: HISTORY_LIMIT_DEFAULT })
+}
+
 /**
  * 视图销毁（webContentsView/manager.ts 的 destroyView 调用）：旧 mount 连同它握着的
  * 已销毁 webContents 一起作废，下一次 login-status 观察会在新 contents 上重新挂桥。
@@ -230,6 +304,8 @@ export function startMsgBridge(): void {
 export async function stopMsgBridge(): Promise<void> {
   if (refreshTimer) clearInterval(refreshTimer)
   refreshTimer = null
+  // 未决发送的超时定时器没有 unref：不 dispose 就是退出路上最多 20s 的挂起。
+  registry.dispose()
   for (const mount of mounts.values()) mount.dispose()
   mounts.clear()
   activeChat.clear()
