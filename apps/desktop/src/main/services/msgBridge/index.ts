@@ -26,6 +26,8 @@ const hub = new CollectorHub({
 
 const mounts = new Map<string, BridgeMount>()
 const activeChat = new Map<string, string | null>()
+/** 每视图上一次观察到的登录态：日志只在值翻转时打，掐掉注入层 3s 一次的刷屏。 */
+const lastLoginSeen = new Map<string, boolean>()
 let refreshTimer: NodeJS.Timeout | null = null
 
 function broadcastState(): void {
@@ -74,7 +76,10 @@ function mountOne(entry: AccountEntry, viewId: string): void {
 
 /** 注入层每 3s 上报一次登录态：这是主进程唯一知道的"可以挂桥了 / 别采了"信号。 */
 export function observeLoginStatus(viewId: string, isLogin: boolean): void {
-  console.log(`[msgBridge] login-status view=${viewId} isLogin=${isLogin}`)
+  if (lastLoginSeen.get(viewId) !== isLogin) {
+    lastLoginSeen.set(viewId, isLogin)
+    console.log(`[msgBridge] login-status view=${viewId} isLogin=${isLogin}`)
+  }
   if (!isLogin) {
     activeChat.set(viewId, null)
     return
@@ -137,6 +142,7 @@ export function bridgeOf(viewId: string): BridgeMount | null {
  */
 export function unmountView(viewId: string): void {
   const mount = mounts.get(viewId)
+  lastLoginSeen.delete(viewId)
   if (!mount) return
   mount.dispose()
   mounts.delete(viewId)

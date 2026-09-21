@@ -164,6 +164,9 @@ export class BridgeMount {
     }
     const ok = await confirmed
     this.confirmReady = null
+    // dispose() 会把在途握手直接 resolve(true) 放行：这里必须再核一次 stopped，
+    // 否则一条已销毁的 mount 会把阶段翻成 ready 并广播出去。
+    if (this.stopped) return false
     if (!ok) {
       this.scheduleRetry('ready 握手超时')
       return false
@@ -187,6 +190,14 @@ export class BridgeMount {
 
   private onPong(): void {
     this.misses = 0
+    // pong 到手即说明桥还活着：必须撤销在途的 retry 定时器。
+    // 不撤的话（scheduleRetry 已把心跳停掉、retry 挂在那儿等触发），恢复的 pong 把阶段
+    // 提成 ready 后旧 timer 照样 firing → mount() → install() 版本去重只回 false 不报 ready
+    // → 10s 握手超时又 scheduleRetry，backoff 翻倍，阶段永久震荡。
+    if (this.retry) {
+      clearTimeout(this.retry)
+      this.retry = null
+    }
     if (this.phase === 'ready') return
     // 桥还活着（钩子没掉），只是主进程先前误判：把心跳续上即可，不重装。
     this.backoff = HEARTBEAT_MS
