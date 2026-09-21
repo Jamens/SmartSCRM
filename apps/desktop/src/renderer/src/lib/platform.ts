@@ -69,8 +69,10 @@ export const PLATFORMS: Record<PlatformType, PlatformMeta> = {
     label: 'Telegram',
     short: 'TG',
     channel: 'Telegram',
-    embedUrl: 'https://web.telegram.org',
-    hint: '手机号验证码登录 Telegram Web',
+    // 路径必须钉到 /k/：根地址会被页面自己的路由带到 /a/（2026-09-22 实测 location.href
+    // 停在 /a/），而 P6 的整套 TG 契约是按 K 版那一套 DOM 定的（P6 spec §11）。
+    embedUrl: 'https://web.telegram.org/k/',
+    hint: '手机 Telegram 扫码登录 Telegram Web（设置 > 设备 > 登录网页版）',
     color: '#229ED9',
     icon: Send
   },
