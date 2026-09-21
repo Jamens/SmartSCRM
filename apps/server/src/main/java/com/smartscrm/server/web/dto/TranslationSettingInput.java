@@ -23,6 +23,9 @@ public record TranslationSettingInput(
     Boolean previewEnabled,
     Boolean enterToSend,
     Boolean disableChinese,
-    Boolean disableChinesePreventSend
+    Boolean disableChinesePreventSend,
+    /** 可空：缺省即 global；'customer' 时必须带 scopeKey=客户 id。 */
+    String scope,
+    String scopeKey
 ) {
 }

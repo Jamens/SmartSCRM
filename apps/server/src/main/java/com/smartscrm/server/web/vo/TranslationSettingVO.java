@@ -15,6 +15,10 @@ public record TranslationSettingVO(
     Boolean previewEnabled,
     Boolean enterToSend,
     Boolean disableChinese,
-    Boolean disableChinesePreventSend
+    Boolean disableChinesePreventSend,
+    String scope,
+    String scopeKey,
+    /** true = 该客户没有覆盖行，这份设置来自全局（UI 据此显示「跟随全局」）。 */
+    boolean inherited
 ) {
 }

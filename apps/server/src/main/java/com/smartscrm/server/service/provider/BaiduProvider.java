@@ -65,7 +65,10 @@ public class BaiduProvider implements TranslationProvider {
 
     @Override
     public boolean supports(String fromLang, String toLang) {
-        boolean fromOk = fromLang == null || fromLang.isBlank() || LANGS.containsKey(fromLang);
+        // "auto" is baidu's own detect token — the case where the configured row spells
+        // it out (customer override from P6 says 'auto') is equivalent to the blank case.
+        boolean fromOk = fromLang == null || fromLang.isBlank() || "auto".equals(fromLang)
+            || LANGS.containsKey(fromLang);
         return fromOk && LANGS.containsKey(toLang);
     }
 
@@ -78,7 +81,8 @@ public class BaiduProvider implements TranslationProvider {
             throw new ProviderException("百度 语种不支持: " + fromLang + "->" + toLang);
         }
         String to = LANGS.get(toLang);
-        String from = (fromLang == null || fromLang.isBlank()) ? "auto" : LANGS.get(fromLang);
+        String from = (fromLang == null || fromLang.isBlank() || "auto".equals(fromLang))
+            ? "auto" : LANGS.get(fromLang);
 
         List<String> parts = new ArrayList<>();
         String detectedFrom = (fromLang == null || fromLang.isBlank()) ? "" : fromLang;

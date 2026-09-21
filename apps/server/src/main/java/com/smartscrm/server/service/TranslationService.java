@@ -3,14 +3,17 @@ package com.smartscrm.server.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.smartscrm.server.common.BizException;
+import com.smartscrm.server.entity.Customer;
 import com.smartscrm.server.entity.TranslationCache;
 import com.smartscrm.server.entity.TranslationCredential;
 import com.smartscrm.server.entity.TranslationNode;
 import com.smartscrm.server.entity.TranslationSetting;
+import com.smartscrm.server.mapper.CustomerMapper;
 import com.smartscrm.server.mapper.TranslationCacheMapper;
 import com.smartscrm.server.mapper.TranslationCredentialMapper;
 import com.smartscrm.server.mapper.TranslationNodeMapper;
 import com.smartscrm.server.mapper.TranslationSettingMapper;
+import com.smartscrm.server.service.msg.ScopeSettings;
 import com.smartscrm.server.service.provider.Credentials;
 import com.smartscrm.server.service.provider.ProviderException;
 import com.smartscrm.server.service.provider.ProviderResult;
@@ -36,6 +39,7 @@ import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import net.openhft.hashing.LongHashFunction;
 import org.springframework.stereotype.Service;
+import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class TranslationService {
@@ -52,16 +56,19 @@ public class TranslationService {
     private final TranslationNodeMapper nodeMapper;
     private final TranslationCacheMapper cacheMapper;
     private final TranslationCredentialMapper credentialMapper;
+    private final CustomerMapper customerMapper;
     private final SimulatedTranslationEngine engine;
     private final Map<String, TranslationProvider> providers;
 
     public TranslationService(TranslationSettingMapper settingMapper, TranslationNodeMapper nodeMapper,
                               TranslationCacheMapper cacheMapper, TranslationCredentialMapper credentialMapper,
+                              CustomerMapper customerMapper,
                               SimulatedTranslationEngine engine, List<TranslationProvider> providerBeans) {
         this.settingMapper = settingMapper;
         this.nodeMapper = nodeMapper;
         this.cacheMapper = cacheMapper;
         this.credentialMapper = credentialMapper;
+        this.customerMapper = customerMapper;
         this.engine = engine;
         this.providers = providerBeans.stream()
             .collect(Collectors.toMap(TranslationProvider::providerId, Function.identity()));
@@ -70,11 +77,60 @@ public class TranslationService {
     // ============ settings ============
 
     public TranslationSettingVO getSettings(Long tenantId) {
-        return toVO(requireSettings(tenantId));
+        return getSettings(tenantId, null);
+    }
+
+    /** 带 customerId 就按 客户覆盖行 -> 全局 解析；不带与 P5 完全一致（inherited=true）。 */
+    public TranslationSettingVO getSettings(Long tenantId, Long customerId) {
+        TranslationSetting customer = customerId == null ? null : customerRow(tenantId, customerId);
+        ScopeSettings.Resolved resolved = ScopeSettings.resolve(customerId, customer, requireSettings(tenantId));
+        return toVO(resolved.setting(), resolved.inherited());
     }
 
     public TranslationSettingVO updateSettings(Long tenantId, TranslationSettingInput input) {
-        TranslationSetting current = requireSettings(tenantId);
+        return saveInto(requireSettings(tenantId), tenantId, input);
+    }
+
+    /** 保存：scope=customer 时从全局整份复制后覆盖，保证"整行取用"成立。 */
+    @Transactional
+    public TranslationSettingVO updateScopedSettings(Long tenantId, String scope, Long scopeKey,
+                                                     TranslationSettingInput input) {
+        if (!"global".equals(scope) && !"customer".equals(scope)) {
+            throw new BizException(40000, "scope 只能是 global 或 customer");
+        }
+        if ("global".equals(scope)) {
+            return updateSettings(tenantId, input);
+        }
+        if (scopeKey == null) {
+            throw new BizException(40000, "scope=customer 时必须带 scopeKey");
+        }
+        Customer customer = customerMapper.selectOne(new LambdaQueryWrapper<Customer>()
+            .eq(Customer::getTenantId, tenantId).eq(Customer::getId, scopeKey).last("LIMIT 1"));
+        if (customer == null) {
+            throw new BizException(40404, "客户不存在: " + scopeKey);
+        }
+        TranslationSetting existing = customerRow(tenantId, scopeKey);
+        if (existing == null) {
+            existing = copyOf(requireSettings(tenantId), tenantId, scopeKey);
+            settingMapper.insert(existing);
+        }
+        // updateSettings 只认全局行，这里复用它同样的校验 + 赋值：把行 id 换掉即可。
+        return saveInto(existing, tenantId, input);
+    }
+
+    @Transactional
+    public int clearCustomerSettings(Long tenantId, Long customerId) {
+        return settingMapper.delete(new LambdaQueryWrapper<TranslationSetting>()
+            .eq(TranslationSetting::getTenantId, tenantId)
+            .eq(TranslationSetting::getScope, "customer")
+            .eq(TranslationSetting::getScopeKey, String.valueOf(customerId)));
+    }
+
+    /**
+     * 校验 + 逐字段赋值 + 写库，全局行与客户行共用同一份（R5：规则不出现两份）。
+     * current 由调用方给：requireSettings 的兜底行，或 updateScopedSettings 的复制行。
+     */
+    private TranslationSettingVO saveInto(TranslationSetting current, Long tenantId, TranslationSettingInput input) {
         String channel = defaultIfBlank(input.channel(), current.getChannel());
         String server = defaultIfBlank(input.server(), current.getServer());
         if (!CHANNELS.contains(channel)) {
@@ -104,7 +160,31 @@ public class TranslationService {
         current.setDisableChinesePreventSend(input.disableChinesePreventSend() == null
             ? current.getDisableChinesePreventSend() : input.disableChinesePreventSend());
         settingMapper.updateById(current);
-        return toVO(settingMapper.selectById(current.getId()));
+        TranslationSetting saved = settingMapper.selectById(current.getId());
+        return toVO(saved, "global".equals(saved.getScope()));
+    }
+
+    /** 从全局整份复制一条客户覆盖行——除定位列外的全部字段照抄，之后由 saveInto 打上本次改动。 */
+    private static TranslationSetting copyOf(TranslationSetting global, Long tenantId, Long customerId) {
+        TranslationSetting row = new TranslationSetting();
+        row.setTenantId(tenantId);
+        row.setScope("customer");
+        row.setScopeKey(String.valueOf(customerId));
+        row.setServer(global.getServer());
+        row.setServerMode(global.getServerMode());
+        row.setChannel(global.getChannel());
+        row.setReceiveEnabled(global.getReceiveEnabled());
+        row.setReceiveFromLang(global.getReceiveFromLang());
+        row.setReceiveToLang(global.getReceiveToLang());
+        row.setSendEnabled(global.getSendEnabled());
+        row.setSendFromLang(global.getSendFromLang());
+        row.setSendToLang(global.getSendToLang());
+        row.setVoiceEnabled(global.getVoiceEnabled());
+        row.setPreviewEnabled(global.getPreviewEnabled());
+        row.setEnterToSend(global.getEnterToSend());
+        row.setDisableChinese(global.getDisableChinese());
+        row.setDisableChinesePreventSend(global.getDisableChinesePreventSend());
+        return row;
     }
 
     /**
@@ -123,11 +203,28 @@ public class TranslationService {
         return trimmed;
     }
 
-    private TranslationSetting requireSettings(Long tenantId) {
-        TranslationSetting setting = settingMapper.selectOne(new LambdaQueryWrapper<TranslationSetting>()
+    // 1) 取设置：按 scope 定位，global 保持 P5 的兜底建行行为不变
+    private TranslationSetting settingRow(Long tenantId, String scope, String scopeKey) {
+        LambdaQueryWrapper<TranslationSetting> query = new LambdaQueryWrapper<TranslationSetting>()
             .eq(TranslationSetting::getTenantId, tenantId)
-            .eq(TranslationSetting::getScope, "global")
-            .last("LIMIT 1"));
+            .eq(TranslationSetting::getScope, scope);
+        // 全局行的 scope_key 是 NULL：`eq(column, null)` 编译成 `scope_key = NULL`，
+        // 在 SQL 里永假，会把既有全局行也判成"不存在"——必须显式 isNull（P5 行为不变的前提）。
+        if (scopeKey == null) {
+            query.isNull(TranslationSetting::getScopeKey);
+        } else {
+            query.eq(TranslationSetting::getScopeKey, scopeKey);
+        }
+        return settingMapper.selectOne(query.last("LIMIT 1"));
+    }
+
+    /** 客户行的读取：不建行。没有覆盖行就是"跟随全局"。 */
+    private TranslationSetting customerRow(Long tenantId, Long customerId) {
+        return settingRow(tenantId, "customer", String.valueOf(customerId));
+    }
+
+    private TranslationSetting requireSettings(Long tenantId) {
+        TranslationSetting setting = settingRow(tenantId, "global", null);
         if (setting != null) {
             return setting;
         }
@@ -161,11 +258,16 @@ public class TranslationService {
 
     // ============ translate ============
 
+    // 2) translate()：入口先解析生效行，其余逻辑一律读 s.* 而不是全局
     public TranslateVO translate(Long tenantId, TranslateDTO dto) {
         if (!"receive".equals(dto.type()) && !"send".equals(dto.type())) {
             throw new BizException(40000, "type 只能是 receive 或 send");
         }
-        TranslationSetting s = requireSettings(tenantId);
+        TranslationSetting customer = dto.customerId() == null ? null : customerRow(tenantId, dto.customerId());
+        ScopeSettings.Resolved resolved = ScopeSettings.resolve(dto.customerId(), customer, requireSettings(tenantId));
+        TranslationSetting s = resolved.setting();
+        // 缓存 key 不变：key 里已经含 type + channel + from + to（buildCacheKey），
+        // 语向不同天然分键，所以按客户切换语向不需要新增失效逻辑（spec §5）。
         String fromLang = "receive".equals(dto.type()) ? s.getReceiveFromLang() : s.getSendFromLang();
         String toLang = "receive".equals(dto.type()) ? s.getReceiveToLang() : s.getSendToLang();
         String channel = s.getChannel();
@@ -377,11 +479,12 @@ public class TranslationService {
         return (value == null || value.isBlank()) ? fallback : value.trim();
     }
 
-    private TranslationSettingVO toVO(TranslationSetting s) {
+    private TranslationSettingVO toVO(TranslationSetting s, boolean inherited) {
         return new TranslationSettingVO(s.getId(), s.getServer(), s.getServerMode(), s.getChannel(),
             s.getReceiveEnabled(), s.getReceiveFromLang(), s.getReceiveToLang(),
             s.getSendEnabled(), s.getSendFromLang(), s.getSendToLang(),
             s.getVoiceEnabled(), s.getPreviewEnabled(), s.getEnterToSend(),
-            s.getDisableChinese(), s.getDisableChinesePreventSend());
+            s.getDisableChinese(), s.getDisableChinesePreventSend(),
+            s.getScope(), s.getScopeKey(), inherited);
     }
 }

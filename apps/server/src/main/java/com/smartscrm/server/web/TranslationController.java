@@ -1,6 +1,7 @@
 package com.smartscrm.server.web;
 
 import com.smartscrm.server.common.ApiResponse;
+import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.security.AuthPrincipal;
 import com.smartscrm.server.service.TranslationService;
 import com.smartscrm.server.web.dto.CredentialTestDTO;
@@ -16,12 +17,16 @@ import com.smartscrm.server.web.vo.TranslationNodeVO;
 import com.smartscrm.server.web.vo.TranslationSettingVO;
 import jakarta.validation.Valid;
 import java.util.List;
+import java.util.Map;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 @RestController
@@ -35,14 +40,30 @@ public class TranslationController {
     }
 
     @GetMapping("/settings")
-    public ApiResponse<TranslationSettingVO> getSettings(@AuthenticationPrincipal AuthPrincipal principal) {
-        return ApiResponse.ok(service.getSettings(principal.tenantId()));
+    public ApiResponse<TranslationSettingVO> getSettings(@AuthenticationPrincipal AuthPrincipal principal,
+                                                         @RequestParam(required = false) Long customerId) {
+        return ApiResponse.ok(service.getSettings(principal.tenantId(), customerId));
     }
 
     @PutMapping("/settings")
     public ApiResponse<TranslationSettingVO> updateSettings(@AuthenticationPrincipal AuthPrincipal principal,
                                                             @Valid @RequestBody TranslationSettingInput input) {
-        return ApiResponse.ok(service.updateSettings(principal.tenantId(), input));
+        String scope = input.scope() == null || input.scope().isBlank() ? "global" : input.scope();
+        Long scopeKey = null;
+        if (input.scopeKey() != null && !input.scopeKey().isBlank()) {
+            try {
+                scopeKey = Long.valueOf(input.scopeKey().trim());
+            } catch (NumberFormatException e) {
+                throw new BizException(40000, "scopeKey 必须是数字客户 id: " + input.scopeKey());
+            }
+        }
+        return ApiResponse.ok(service.updateScopedSettings(principal.tenantId(), scope, scopeKey, input));
+    }
+
+    @DeleteMapping("/settings/customer/{customerId}")
+    public ApiResponse<Map<String, Integer>> clearCustomer(@AuthenticationPrincipal AuthPrincipal principal,
+                                                           @PathVariable Long customerId) {
+        return ApiResponse.ok(Map.of("cleared", service.clearCustomerSettings(principal.tenantId(), customerId)));
     }
 
     @GetMapping("/nodes")
