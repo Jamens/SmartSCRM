@@ -28,6 +28,7 @@
 - **C12 业务错误码沿用既有词表**：`40000` 参数/取值非法、`40100` 未鉴权、`40404` 目标行不存在、`40901` 冲突、`50000` 未预期异常（`apps/server` 现有 service 就是这套，如 `PlatformAccountService:69` 的"账号不存在"用 `40404`）。本计划所有"找不到这一行"的断言一律写 `40404`，不新造 `40400` —— 两个近邻数字并存，前后端与契约表都会抄错。
 - **C13 主进程发往后端的请求一律走 `apps/desktop/src/main/services/authedFetch.ts`**：不要在调用点手写 `getSession()?.accessToken` + `fetch`。内嵌页的生命周期远长于 access token 的 7200 秒，无刷新的请求会在两小时后整齐地变成 401，而页内只会看到"结果忽然没了"。`authedFetch` 的口径是：附带会话令牌 → 遇 401 刷新一次（并发共享同一次刷新）→ 把新令牌写回 session 文件 → 重放一次 → 仍失败才把响应原样交回调用方。Task 9 的 `createMsgApi`、Task 10 的 `accountDirectory` 与 Task 12 的发送链都按这条接。
 - **本项目桌面端从本计划起有 JS 单测闸门**：`pnpm --dir apps/desktop test:unit`（Node 24 原生跑 `.test.ts`）。约束：被测模块必须只用**可擦除 TS 语法**（无 `enum` / `namespace` / 参数属性），import 必须带 `.ts` 后缀；由 `tsconfig.unit.json` 的 `erasableSyntaxOnly` 把这条钉死。DOM 与 IPC 行为仍靠 CDP 脚本，`node --test` 不碰。
+- **C14 单测计数以实测基线为准**：本计划正文里写死的 `# pass N` 是**写作时**的推演值，评审修复轮一旦新增用例就会整体后移（Task 11 两轮之后实测基线是 48，正文那一条链仍写着 34）。执行每个任务时先跑一次拿到真实基线，期望值 = 真实基线 + 本任务新增用例数；**"数字对不上就把期望调大"不接受**，必须是本任务确实新写了那么多条。终态交付时把这条链按实测重算一遍写进报告。
 
 ## 对 spec 的十三处收敛
 
@@ -3406,7 +3407,7 @@ git commit -m "feat(P6): 消息桥构建管线（wa-js 独立 bundle + 桥 bundl
 - Produces（Task 10 / 12 只认这些）：
   - `collectorHub.ts`：`BatchPayload { accountId: number; activeChatKey: string | null; messages: NormalizedMessage[] }`、`BatchResult { accepted: number; duplicated: number; rejected: number; reasons: string[] }`、`type FlushFn`、`HubOptions { flush; batchSize?; maxQueue?; flushIntervalMs?; retries? }`、`class CollectorHub`（`push(frame: LiveFrame): void`、`flush(): Promise<void>`、`dispose(): void`、`size(): number`、`get dropped: number`）
   - `sendRegistry.ts`：`class SendRegistry`（`get size`、`pending(): string[]`、`add(localId, viewId): Promise<SendReceipt>`、`settle(receipt): boolean`、`failView(viewId, error, detail?): number`、`dispose(): void`）；Task 12 在同一文件追加 `SendAttribution`
-  - `msgApi.ts`：`MsgApiOptions { token; fetchImpl?; apiBase? }`、`DEFAULT_API_BASE`、`createMsgApi(opts)` → `{ postBatch, postStatus, listAccounts }`、`isSendable(req: SendRequest): boolean`
+  - `msgApi.ts`：`MsgApiOptions { token; fetchImpl?; apiBase? }`、`DEFAULT_API_BASE`、`createMsgApi(opts)` → `{ postBatch, postStatuses, listAccounts }`、`isSendable(req: SendRequest): boolean`
   - `async function listAccounts(): Promise<AccountRow[]>`，`AccountRow { id; platformType; viewId; name; status }`
 
 > 这三块为什么值得单独成任务：它们是 P6 里唯一"行为复杂但没有宿主依赖"的主进程代码——攒批、退避、超时、归属都能在纯 Node 里断言。放进闸门的代价是它们必须保持可擦除语法（`erasableSyntaxOnly` 会把参数属性判成 TS1294，所以三份实现的构造器一律写成"字段声明 + 构造体赋值"）与零 `import 'electron'`；换来的是 Task 10 接线时，采集与发送的语义已经绿过一遍，主进程联调只需要盯挂载与路由。
@@ -3909,8 +3910,25 @@ export function createMsgApi(opts: MsgApiOptions) {
         messages: payload.messages
       })
     },
-    postStatus(input: { accountId: number; chatKey: string; msgKey: string; status: MsgStatus }): Promise<{ updated: number } | null> {
-      return call<{ updated: number }>('/api/messages/status', input)
+    /**
+     * 后端收的是 `MessageStatusDTO{accountId, chatKey, updates[]}`：平铺 msgKey/status 会被
+     * Bean Validation 打成 400，而 `call()` 把非 2xx 一律折成 null——状态推进静默不生效。
+     * 一批一请求，切批只在这一处：调用方各自切就会切出不一样的边界。
+     * 中途某批失败就停在这里返回 null——前面的批已经提交了，状态阶梯单调，重复推进无害，
+     * 所以不为"半成功"另造一个部分结果类型。
+     */
+    async postStatuses(input: { accountId: number; chatKey: string; updates: StatusUpdate[] }): Promise<{ updated: number } | null> {
+      let updated = 0
+      for (let i = 0; i < input.updates.length; i += STATUS_BATCH_MAX) {
+        const part = await call<{ updated: number }>('/api/messages/status', {
+          accountId: input.accountId,
+          chatKey: input.chatKey,
+          updates: input.updates.slice(i, i + STATUS_BATCH_MAX)
+        })
+        if (!part) return null
+        updated += part.updated
+      }
+      return { updated }
     },
     /** GET 用 fetch 单独走一遍：账号列表只有挂载与 5 分钟刷新时读，不需要批量语义。 */
     async listAccounts(): Promise<AccountRow[]> {
@@ -3983,7 +4001,7 @@ test('未登录不发请求；后端 code!=0 也算失败（返回 null 让队�
   assert.equal(noToken.calls.length, 0)
 
   const biz = fakeFetch({ body: { code: 40300, message: 'forbidden' } })
-  assert.equal(await createMsgApi({ token: () => 'T', fetchImpl: biz.impl }).postStatus({ accountId: 1, chatKey: 'c', msgKey: 'm', status: 'read' }), null)
+  assert.equal(await createMsgApi({ token: () => 'T', fetchImpl: biz.impl }).postStatuses({ accountId: 1, chatKey: 'c', updates: [{ msgKey: 'm', status: 'read' }] }), null)
 })
 
 test('listAccounts 在非 2xx / 结构不对时给空数组而不是抛', async () => {
@@ -5131,27 +5149,37 @@ const COLLECT: Partial<Record<ChatPlatform, CollectImpl>> = { whatsapp: whatsapp
 
 ```ts
   if (report.kind === 'ack') {
-    // chatKey 为空串时按 msgKey 反查：ack 事件只给 id。省一次查询的路径是带着 chatKey 来。
-    void api.postStatus({
-      accountId: entry.accountId,
-      chatKey: report.chatKey,
-      msgKey: report.msgKey,
-      status: report.status
-    })
-    getMainWindow()?.webContents.send('msg:live', {
-      viewId, accountId: entry.accountId, platform: entry.platform ?? 'whatsapp',
-      activeChatKey: activeChatOf(viewId),
-      message: { chatKey: report.chatKey, msgKey: report.msgKey, direction: 'out',
-        mediaType: 'text', msgTimeEpochSec: 0, status: report.status, source: 'live' }
-    } satisfies LiveFrame)
+    // ack 只推后端状态，不广播 msg:live：这帧没有真的 body / direction / source，
+    // 拼成 NormalizedMessage 会让渲染层按 msgKey 合并时把已有行的方向与归属改脏。
+    // 要做状态气泡时另立一个"状态帧"形状，别复用消息类型。
+    const keys = Array.isArray(report.msgKeys) ? report.msgKeys : []
+    // 后端 `chatKey` 上是 `@NotBlank`、`updates` 上是 `@NotEmpty`：缺任一个都只是被 `call()` 折成 null 的 400。
+    if (!report.chatKey || keys.length === 0) {
+      console.log(`[msgBridge] ack 丢弃 viewId=${viewId} chat=${oneLine(report.chatKey)} keys=${keys.length}：页内没带 chatKey 或 msgKey`)
+      return
+    }
+    // 一次页内事件一请求：整群读回执一条事件能带几十上百个 id，拆成一 id 一请求就是几十个
+    // 带行锁的并发事务，而 `updates[]` 的 200 上限正是留给这种批的。
+    void api
+      .postStatuses({
+        accountId: entry.accountId,
+        chatKey: report.chatKey,
+        updates: keys.map((msgKey) => ({ msgKey, status: report.status }))
+      })
+      .then((r) => {
+        // updated:0 是常态（乱序 ack 被阶梯挡住），只有"整条请求没成"才值得刷屏。
+        if (!r) console.log(`[msgBridge] ack 上报失败 viewId=${viewId} chat=${oneLine(report.chatKey)} keys=${keys.length}`)
+      })
     return
   }
   if (report.kind === 'backfill_progress' || report.kind === 'backfill_gap') {
-    // 只进主进程日志：计数与 chatKey，不含正文（C3）。
+    // 只进主进程日志：计数与 chatKey，不含正文（C3）。页内来的文本（chatKey / reason）一律
+    // 经 oneLine：不截会刷出无界长行，留换行则能被伪造日志行。
+    // droppedTotal 是 CollectorHub 的进程累计丢弃数，不是本轮的：本轮看 msgs=。
     console.log(
       report.kind === 'backfill_gap'
-        ? `[msgBridge] backfill 跳过 viewId=${viewId} chat=${report.chatKey} reason=${report.reason}`
-        : `[msgBridge] backfill 进度 viewId=${viewId} ${report.chatsDone}/${report.chatsTotal} msgs=${report.messages}`
+        ? `[msgBridge] backfill 跳过 viewId=${viewId} chat=${oneLine(report.chatKey)} reason=${oneLine(report.reason)}`
+        : `[msgBridge] backfill 进度 viewId=${viewId} ${report.chatsDone}/${report.chatsTotal} msgs=${report.messages} droppedTotal=${hub.dropped}`
     )
     return
   }
@@ -5210,7 +5238,7 @@ git commit -m "feat(P6): WhatsApp 页内消息归一化、实时事件与限速�
 - Modify: `apps/desktop/electron.vite.config.ts`（`preload` 也要 `@shared` 别名——Task 7 只加了 `main` / `renderer`）
 
 **Interfaces:**
-- Consumes: Task 9 的 `SendRegistry` / `isSendable` / `createMsgApi.postStatus`；Task 10 的 `bridgeOf` / `pushToBridge` / `accountOfId` / `collectorHub`；Task 11 的 `normalizeWa` 与 `wa-js` 的 `WPP.chat.sendTextMessage`。
+- Consumes: Task 9 的 `SendRegistry` / `isSendable` / `createMsgApi.postStatuses({accountId, chatKey, updates})`（一次一条消息也要写成 `updates: [{msgKey, status}]`，平铺形状会被后端 Bean Validation 打成 400，而 `call()` 把非 2xx 折成 null）；Task 10 的 `bridgeOf` / `pushToBridge` / `accountOfId` / `collectorHub`；Task 11 的 `normalizeWa` 与 `wa-js` 的 `WPP.chat.sendTextMessage`。
 - Produces:
   - `class SendAttribution { claim(viewId, localId, chatKey, text): void; settle(localId, msgKey): SendIntentMeta | null; abandon(localId): void; stamp(viewId, msg): NormalizedMessage; dropView(viewId): number; pendingIntents(): string[] }`、`interface SendIntentMeta { chatKey; text }`
   - `sendText(req: SendRequest): Promise<SendReceipt>`、`requestBackfill(accountId: number): boolean`（主进程给 `ipc.ts` 用）
@@ -5218,16 +5246,22 @@ git commit -m "feat(P6): WhatsApp 页内消息归一化、实时事件与限速�
   - 渲染层表面 `window.scrm.msg = { send, syncHistory, bridges, onLive, onState }`
   - IPC channel 字面值：`'msg:send'` / `'msg:sync-history'` / `'msg:bridges'`（invoke）、`'msg:live'` / `'msg:state'`（main → renderer 推送）
 
-- [ ] **Step 1: 先跑一条 grep，把 `sendTextMessage` 的真实签名钉下来**
+- [ ] **Step 1: 复核 `sendTextMessage` 的真实签名（钉在类型上，不靠文档）**
 
-Task 8 Step 1 的同一份解包目录（`tmp/wajs-x/node_modules/@wppconnect/wa-js`）：
+Task 8 那次解包目录（`tmp/wajs-x/`）已经清掉了；4.6.0 的 `.d.ts` 就在 workspace 里，直接读：
 
 ```bash
-grep -rn "sendTextMessage" tmp/wajs-x/node_modules/@wppconnect/wa-js/dist/functions/chat/functions/sendTextMessage.d.ts | head -20
-grep -rn "createChat\|waitForAck\|linkPreview" tmp/wajs-x/node_modules/@wppconnect/wa-js/dist/functions/chat/functions/sendTextMessage.d.ts | head -20
+WAJS="node_modules/.pnpm/@wppconnect+wa-js@4.6.0/node_modules/@wppconnect/wa-js/dist"
+grep -n "sendTextMessage" "$WAJS/chat/functions/sendTextMessage.d.ts"
+grep -n "createChat?\|waitForAck?\|delay?" "$WAJS/chat/types.d.ts"
+sed -n '/export interface SendMessageReturn/,/^}/p' "$WAJS/chat/types.d.ts"
 ```
 
-把读到的参数顺序与 `SendMessageOptions` 的实际成员抄进本任务 Step 4 的 `sendViaWa` 注释里。**下面代码里的 `(to, content, options)` 顺序与 `createChat` 选项名是按 4.6.0 的公开文档写的**：grep 结果不一致时以 grep 为准改代码，不要改口径说明。`waitForAck` 若在 4.6.0 里不存在，就直接去掉它——本计划不依赖"等 ack 才返回"，状态推进另有事件流。
+**本计划写作时已复核到的结果（Step 4 的代码就是照这个写的，跑上面三条只为确认没被版本变更推翻）**：
+`sendTextMessage(chatId, content, options?) => Promise<SendMessageReturn>`，`SendMessageReturn` 是
+`{ id: string; from?: string; to?: string; latestEditMsgKey?: MsgKey; ack: number; sendMsgResult: SendMsgResultObject | null }`
+——**`id` 是字符串**，`sendMsgResult` 在不 `waitForAck` 时恒为 `null`；`SendMessageOptions` 里 `createChat?: boolean`、
+`waitForAck?: boolean` 两个选项名都存在。与复核结果不一致时以复核结果为准改代码，不要改口径说明。
 
 - [ ] **Step 2: 写失败的 `SendAttribution` 测试**
 
@@ -5465,13 +5499,13 @@ cd apps/desktop && pnpm run test:unit 2>&1 | tail -8
 ```ts
 // src/bridge/whatsapp/send.ts
 import type { BridgeCommand, SendError, SendReceipt } from '../../shared/chatTypes.ts'
-import type { WaMsgModel } from '../types.ts'
+import type { SendChatResult } from '../types.ts'
 
 export type SendCmd = Extract<BridgeCommand, { kind: 'send' }>
 
 /** 只依赖发送这一件事，测试用假对象即可，不需要真的 WPP。 */
 export interface SendChat {
-  sendTextMessage(to: string, content: string, options?: Record<string, unknown>): Promise<WaMsgModel>
+  sendTextMessage(to: string, content: string, options?: Record<string, unknown>): Promise<SendChatResult>
 }
 
 /**
@@ -5485,11 +5519,16 @@ export function classify(err: unknown): SendError {
     : 'SEND_FAILED'
 }
 
-export function receiptFrom(cmd: SendCmd, result: WaMsgModel | null | undefined, err: unknown): SendReceipt {
+/**
+ * 回执里的 key **原样用**，不去 `_out` 后缀、不剥前缀：这一串要与事件流那条的
+ * `MsgModel.id._serialized` 逐字相等，后端 `uk_msg` 才认得出是同一行（Step 3 的归属登记与
+ * 补写全靠这一致性）。去尾只属于页内 API 的入参（`deleteMessage` 要的是去掉 `_out` 的那串）。
+ */
+export function receiptFrom(cmd: SendCmd, result: SendChatResult | null | undefined, err: unknown): SendReceipt {
   if (err) {
     return { localId: cmd.localId, ok: false, error: classify(err), detail: err instanceof Error ? err.message : String(err) }
   }
-  const msgKey = result?.id?._serialized
+  const msgKey = result?.id ?? ''
   // 没有 msgKey 就当失败：主进程无法把这一行与 localId 关联，成功返回只会造出一条查不到的幽灵气泡。
   if (!msgKey) return { localId: cmd.localId, ok: false, error: 'SEND_FAILED', detail: '平台未返回 msgKey' }
   return { localId: cmd.localId, ok: true, msgKey }
@@ -5515,19 +5554,18 @@ export async function sendViaWa(cmd: SendCmd, chat: SendChat | undefined): Promi
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { classify, receiptFrom, sendViaWa } from './send.ts'
-import type { WaMsgModel } from '../types.ts'
 
 const cmd = { kind: 'send' as const, localId: 'L1', chatKey: '861380001001@c.us', text: 'hi' }
 
-test('发送成功：回执带 msgKey', async () => {
+test('发送成功：回执带 msgKey（真机返回的是字符串 id，不是 MsgKey 实例）', async () => {
   const calls: unknown[][] = []
   const chat = {
-    async sendTextMessage(...args: unknown[]): Promise<WaMsgModel> {
+    async sendTextMessage(...args: unknown[]) {
       calls.push(args)
-      return { id: { _serialized: 'true_K-1' } }
+      return { id: 'true_861380001001@c.us_K-1_out', ack: 1, from: '861380000@c.us', to: '861380001001@c.us', sendMsgResult: 'OK' }
     }
   }
-  assert.deepEqual(await sendViaWa(cmd, chat), { localId: 'L1', ok: true, msgKey: 'true_K-1' })
+  assert.deepEqual(await sendViaWa(cmd, chat), { localId: 'L1', ok: true, msgKey: 'true_861380001001@c.us_K-1_out' })
   assert.deepEqual(calls[0], ['861380001001@c.us', 'hi', { createChat: true, waitForAck: false }])
 })
 
@@ -5537,8 +5575,9 @@ test('桥在但 WPP 没就绪：BRIDGE_OFFLINE，不发就不算失败在平台�
   })
 })
 
-test('返回体没有 id._serialized：按失败处理，不留无法关联的成功', () => {
-  assert.equal(receiptFrom(cmd, { id: {} }, null)?.error, 'SEND_FAILED')
+test('取不到 id 时按失败处理，不留无法关联的成功', () => {
+  assert.equal(receiptFrom(cmd, {}, null)?.error, 'SEND_FAILED')
+  assert.equal(receiptFrom(cmd, { id: '' }, null)?.error, 'SEND_FAILED')
   assert.equal(receiptFrom(cmd, undefined, null).ok, false)
 })
 
@@ -5548,10 +5587,24 @@ test('错误分类：认得出的算 CHAT_NOT_FOUND，认不出的算 SEND_FAILE
 })
 ```
 
-在 `src/bridge/types.ts` 的 `WppChatApi` 里补上：
+在 `src/bridge/types.ts` 里补回执类型并挂到 `WppChatApi` 上（回执形状属于"页内看到的 wa-js 面"，与 `WaMsgModel` 同一处；`send.ts` 从 `../types.ts` 取它，不要反过来 import `send.ts` 造成环）：
 
 ```ts
-  sendTextMessage(to: string, content: string, options?: Record<string, unknown>): Promise<WaMsgModel>
+/**
+ * wa-js 4.6.0 的类型与真机一致（`dist/chat/types.d.ts` 的 `SendMessageReturn`）：`sendTextMessage`
+ * 结的不是 MsgModel，而是 `{ id, from, to, ack, sendMsgResult }`，且 **`id` 是序列化字符串**
+ * （`true_<chatKey>_<ID>_out`，自带 `_out` 后缀）。按 `id._serialized` 取值会静默拿到 undefined，
+ * 于是每次真发送都被判成"平台未返回 msgKey"。`sendMsgResult` 在不带 `waitForAck` 时恒为 null。
+ */
+export interface SendChatResult {
+  id?: string
+  ack?: number
+  sendMsgResult?: unknown
+}
+```
+
+```ts
+  sendTextMessage(to: string, content: string, options?: Record<string, unknown>): Promise<SendChatResult>
 ```
 
 - [ ] **Step 5: 接进桥与主进程**
@@ -5644,7 +5697,7 @@ export function requestBackfill(accountId: number): boolean {
   }
 ```
 
-> 补写那行的 `status: 'pending'` 是刻意的：那一刻主进程只知道"平台收了单"，之后的 `sent/delivered/read` 由 ack 事件经 `postStatus` 推进（Task 11 Step 6），单调阶梯保证不会倒退。如果事件流随后才把真行带回来，`uk_msg` 会把它判为 duplicated——真时间因此丢一次，只影响 `msg_time` 的秒级误差；反过来（等事件流、不补写）会让记录页在事件流没到之前什么都有不了，代价更大。这条取舍记在这里，Task 19 的验收里用"自聊发送后 3s 内可见"来兜住它。
+> 补写那行的 `status: 'pending'` 是刻意的：那一刻主进程只知道"平台收了单"，之后的 `sent/delivered/read` 由 ack 事件经 `postStatuses` 推进（Task 11 Step 6），单调阶梯保证不会倒退。如果事件流随后才把真行带回来，`uk_msg` 会把它判为 duplicated——真时间因此丢一次，只影响 `msg_time` 的秒级误差；反过来（等事件流、不补写）会让记录页在事件流没到之前什么都有不了，代价更大。这条取舍记在这里，Task 19 的验收里用"自聊发送后 3s 内可见"来兜住它。
 
 视图销毁 / 掉线时必须结清，否则回复框永久卡 pending。`bridgeMount.dispose()` 与 `logged_out` 分支都经过 `index.ts`，在 `onState` 里补：
 
@@ -5723,7 +5776,7 @@ cd apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run build:bridge &&
 | 2 | `window.scrm.msg.send({accountId, chatKey: <自聊>, text: 'P6E-<ts>', localId: crypto.randomUUID()})` | 回执 `{ok:true, msgKey}`；返回 `BRIDGE_OFFLINE` 时**不要**继续，先回 Task 10 的验证 |
 | 3 | 等 3s 后 `GET /api/messages?accountId&chatKey=<自聊>&size=5` | 最新一条 `msg_key === 回执 msgKey`、`source === 'app_send'`、`send_local_id === 那个 localId`（第 2 步与事件流谁先到都不影响这一断言——这正是 Step 3 那张表存在的意义） |
 | 4 | 同 `msg_key` 的行数 | `=== 1`（不是"看起来只有一条"，要拿 `total`/数组长度比对：两条说明补写与事件流没被登记消解） |
-| 5 | 等 15s 再查同一条 | `status` 从 `pending` 前进到 `sent`/`delivered`/`read` 之一（原地不动 = ack 链没通，`postStatus` 那一跳要单独查） |
+| 5 | 等 15s 再查同一条；原地不动时改用页内合成事件复测 | `status` 从 `pending` 前进到 `sent`/`delivered`/`read` 之一。**自聊档位拿不到这一步的 B 档通过**：wa-js 4.6.0 的 `chat.msg_ack_change` 只在"对端回执"或 ack 落到 1 时发，而自聊消息进 Store 时已经是已读，事件根本不发（Task 11 实测）。原地不动因此**不是**缺陷证据，要补一档：`WPP.emit('chat.msg_ack_change', {ids:[<序列化 key 的 MsgKey 形状>], chat, ack:3})` 合成一次事件 → 三条 id 应在**一个** `postStatuses` 请求里全部前进（合批的落库效果）。真实对端回执留给 Task 19 的多端场景 |
 | 6 | 在**原生 WhatsApp 界面**手发一条 `P6E-NATIVE-<ts>` | 入库且 `source === 'native_send'`、`send_local_id` 为 `NULL`（与第 3 条构成反向对照：全打成 app_send 就说明认领过宽） |
 | 7 | `send` 一个不存在的 chatKey（`'0@c.us'`） | 回执 `ok:false`；**记下 detail 原文**，与 `classify` 的归类不符就补正则并回到 Step 4 的测试 |
 | 8 | 无桥账号（未登录视图的 accountId）调 `send` | `{ok:false, error:'BRIDGE_OFFLINE'}`，且页内没有新消息（"不排队"的口径：不在线就直接拒，不延迟发） |
@@ -5732,7 +5785,7 @@ cd apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run build:bridge &&
 
 第 3、4、6 三条是"发送归属"的成对证据：只跑第 3 条无法区分"认领生效"与"事件流根本没来所以没人反驳"。第 6 条给出反例通道，第 4 条钉住不重复。
 
-**测试完清理**：`tmp/p6e-send.mjs` 结尾打印本轮产生的 `msg_key` 列表，人工在自聊里删干净；不要留 `P6E-*` 在 WhatsApp 侧。DEMO 种子不受影响（自聊不是种子客户）。
+**测试完清理**：`tmp/p6e-send.mjs` 结尾打印本轮产生的 `msg_key` 列表并删干净，不要留 `P6E-*` 在 WhatsApp 侧。删除走页内 `WPP.chat.deleteMessage(chatKey, id, true)`，**`id` 传"去掉 `_out` 后缀的那串序列化 key"**（保留 `true_<chatKey>_` 前缀）：带 `_out` 报 `wid error: invalid wid`，只留裸 id 报 `Cannot read properties of undefined (reading '_serialized')`（Task 11 三轮实测的口径，`tmp/p11-cleanup.mjs` 里有一份可用写法）。库内行保留（P6 不做删除同步，spec §1 非目标），并在结论里写明这一条已知差异。DEMO 种子不受影响（自聊不是种子客户）。
 
 - [ ] **Step 8: 提交**
 
