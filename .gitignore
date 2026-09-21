@@ -36,5 +36,9 @@ data/
 # Generated inject bundle (built by apps/desktop build:inject)
 apps/desktop/resources/inject.bundle.js
 
+# Generated message bridge bundles (built by apps/desktop build:bridge)
+apps/desktop/resources/msg-bridge.bundle.js
+apps/desktop/resources/wa-js.bundle.js
+
 # Local verification scratch (throwaway probes and logs)
 tmp/

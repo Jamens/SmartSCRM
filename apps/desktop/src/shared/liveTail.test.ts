@@ -14,6 +14,8 @@ test('mergeTail：同 msgKey 覆盖字段而不新增行（状态推进的落点
   const after = mergeTail(before, [row('a', 10, { status: 'delivered' })])
   assert.equal(after.length, 1)
   assert.equal(after[0].status, 'delivered')
+  // ts 不同时取更大者（`ts: Math.max(...)` 的落点）：同键行仍不新增。
+  assert.equal(mergeTail([row('a', 10)], [row('a', 20)])[0].ts, 20)
 })
 
 test('mergeTail：翻页窗口之外的旧尾巴丢弃，窗口之后的按时间插入', () => {
