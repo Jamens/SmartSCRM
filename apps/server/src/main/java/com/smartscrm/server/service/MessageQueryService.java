@@ -174,6 +174,7 @@ public class MessageQueryService {
 
     public MessageSearchVO search(Long tenantId, String q, Long accountId, String platform, String direction,
                                  String from, String to, Long customerId, String cursor, Integer size) {
+        requirePlatformAllowed(platform);
         String like = SearchPattern.like(q);
         if (like == null) {
             return new MessageSearchVO(List.of(), null, false);
@@ -181,7 +182,6 @@ public class MessageQueryService {
         if (direction != null && !direction.isBlank() && !SEARCH_DIRECTIONS.contains(direction)) {
             throw new BizException(40000, "direction 只能是 in 或 out");
         }
-        requirePlatformAllowed(platform);
         int limit = sizeOf(size);
         LambdaQueryWrapper<ChatMessage> w = new LambdaQueryWrapper<ChatMessage>()
             .eq(ChatMessage::getTenantId, tenantId)
