@@ -18,6 +18,14 @@ export interface MsgApiOptions {
   timeoutMs?: number
 }
 
+export interface StatusUpdate {
+  msgKey: string
+  status: MsgStatus
+}
+
+/** 后端 `MessageStatusDTO.updates` 上的 `@Size(max = 200)`：超了是 400，所以在这里切批。 */
+const STATUS_BATCH_MAX = 200
+
 export const DEFAULT_API_BASE = 'http://localhost:8180'
 
 interface Envelope<T> {
@@ -63,16 +71,24 @@ export function createMsgApi(opts: MsgApiOptions) {
       })
     },
     /**
-     * 后端收的是 `MessageStatusDTO{accountId, chatKey, updates[]}`（`updates` 上 `@NotEmpty`）。
-     * 平铺 msgKey/status 会被 Bean Validation 打成 400，而 `call()` 把非 2xx 一律折成 null——
-     * 状态推进静默不生效。单条 ack 也走这个数组，形状只有一处。
+     * 后端收的是 `MessageStatusDTO{accountId, chatKey, updates[]}`：平铺 msgKey/status 会被
+     * Bean Validation 打成 400，而 `call()` 把非 2xx 一律折成 null——状态推进静默不生效。
+     * 一批一请求，切批只在这一处：调用方各自切就会切出不一样的边界。
+     * 中途某批失败就停在这里返回 null——前面的批已经提交了，状态阶梯单调，重复推进无害，
+     * 所以不为"半成功"另造一个部分结果类型。
      */
-    postStatus(input: { accountId: number; chatKey: string; msgKey: string; status: MsgStatus }): Promise<{ updated: number } | null> {
-      return call<{ updated: number }>('/api/messages/status', {
-        accountId: input.accountId,
-        chatKey: input.chatKey,
-        updates: [{ msgKey: input.msgKey, status: input.status }]
-      })
+    async postStatuses(input: { accountId: number; chatKey: string; updates: StatusUpdate[] }): Promise<{ updated: number } | null> {
+      let updated = 0
+      for (let i = 0; i < input.updates.length; i += STATUS_BATCH_MAX) {
+        const part = await call<{ updated: number }>('/api/messages/status', {
+          accountId: input.accountId,
+          chatKey: input.chatKey,
+          updates: input.updates.slice(i, i + STATUS_BATCH_MAX)
+        })
+        if (!part) return null
+        updated += part.updated
+      }
+      return { updated }
     },
     /** GET 用 fetch 单独走一遍：账号列表只有挂载与 5 分钟刷新时读，不需要批量语义。 */
     async listAccounts(): Promise<AccountRow[]> {

@@ -1,7 +1,7 @@
 // src/bridge/whatsapp/collect.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { runBackfill } from './collect.ts'
+import { runBackfill, startLiveCollect } from './collect.ts'
 import type { BridgeReport } from '../../shared/chatTypes.ts'
 import type { CollectCtx, WaChatModel, WaMsgModel, WppLike } from '../types.ts'
 
@@ -104,23 +104,57 @@ test('补底把会话标题随批次带上：WA 的自聊 name 是空的，标�
   })
 })
 
+test('整页都没有 id._serialized 时报 gap，不许让它长得像"这个会话没历史"', async () => {
+  const noId = (): WaMsgModel =>
+    new MsgLike({
+      id: {},
+      from: { _serialized: '861380001001@c.us' },
+      to: { _serialized: '8610000000000@c.us' },
+      body: 'x',
+      type: 'chat',
+      t: 1_700_000_000,
+      ack: 2
+    }) as unknown as WaMsgModel
+  let calls = 0
+  const getMessages = async (): Promise<WaMsgModel[]> => {
+    calls += 1
+    return [noId(), noId()]
+  }
+  await withWpp(
+    { chat: { list: async () => [chat({ id: { _serialized: '861380001001@c.us' }, name: 'Alice' })], getMessages } } as unknown as WppLike,
+    async () => {
+      const frames: BridgeReport[] = []
+      await runBackfill(10, { emit: (r) => frames.push(r) })
+      const gaps = frames.filter((f) => f.kind === 'backfill_gap')
+      assert.equal(gaps.length, 1, '取不到 id 要单独报一帧：否则日志里只剩 msgs=0，与"翻到底了"分不出来')
+      assert.equal((gaps[0] as { chatKey: string }).chatKey, '861380001001@c.us')
+      assert.equal(calls, 1, '报完 gap 就收手，不必再翻下一页')
+      assert.equal(frames.filter((f) => f.kind === 'message').length, 0)
+    }
+  )
+})
+
 test('整页都是重叠旧行时不再往前翻：limit 够不满也要停，不然这个循环永不结束', async () => {
   let calls = 0
+  const limits: number[] = []
   const page = (): WaMsgModel[] => Array.from({ length: 50 }, (_, i) => msg(true, `S${i}`))
   const getMessages = async (_ck: string, opts: { limit: number }): Promise<WaMsgModel[]> => {
     calls += 1
     // 每页都给满 PAGE_SIZE（所以"不满一页"不会先兜住），且翻到哪都是同一批 50 条。
-    assert.ok(opts.limit === 50)
+    // 记下来而不是在这里断言：断言抛进 getMessages 会被 runBackfill 折成一帧 gap，看不出真因。
+    limits.push(opts.limit)
     return page()
   }
   await withWpp(
     { chat: { list: async () => [chat({ id: { _serialized: '861380001001@c.us' }, name: 'Alice' })], getMessages } } as unknown as WppLike,
     async () => {
       const frames: BridgeReport[] = []
-      await runBackfill(80, { emit: (r) => frames.push(r) })
+      // limit 取真实那一档（200）：80 时改前的老循环也只翻两页，calls 那条断言就白写了。
+      await runBackfill(200, { emit: (r) => frames.push(r) })
       const emitted = frames.filter((f) => f.kind === 'message')
+      assert.deepEqual(limits, [50, 50], '每页都按 PAGE_SIZE 要')
       assert.equal(calls, 2, '第二页一条新行都没有就该收手，不是继续翻到 limit')
-      assert.equal(emitted.length, 50)
+      assert.equal(emitted.length, 50, '老循环会把重叠页照单全收，emit 出 200 帧')
       assert.equal(new Set(emitted.map((m) => (m.kind === 'message' ? m.message.msgKey : ''))).size, 50)
     }
   )
@@ -136,7 +170,7 @@ test('补底按 limit 收口：够数就停，不把整个会话拉穿', async (
   await withWpp(
     {
       chat: {
-        list: async () => [{ id: { _serialized: '861380001001@c.us' }, name: 'Alice' }] as unknown as WaChatModel[],
+        list: async () => [chat({ id: { _serialized: '861380001001@c.us' }, name: 'Alice' })],
         getMessages
       }
     } as unknown as WppLike,
@@ -158,5 +192,55 @@ test('WPP 不在时报 backfill_gap，而不是静默跑完假装采过了', asy
     assert.ok(gap && gap.kind === 'backfill_gap')
     assert.equal(gap.chatKey, '*')
     assert.equal(frames.filter((f) => f.kind === 'message').length, 0)
+  })
+})
+
+/**
+ * 页内事件流的夹具：wa-js 那两处 emit 给的载荷本身就是普通对象字面量
+ * （`emit('chat.msg_ack_change', { ack, chat, ids })`），只有里面的 MsgKey / Chat 模型字段在原型上。
+ */
+function withEvents(): { wpp: WppLike; fire(event: string, payload: unknown): void } {
+  const handlers = new Map<string, (p: unknown) => void>()
+  const wpp = {
+    on: (event: string, cb: (p: unknown) => void) => {
+      handlers.set(event, cb)
+      return { off: () => handlers.delete(event) }
+    }
+  } as unknown as WppLike
+  return { wpp, fire: (event, payload) => handlers.get(event)?.(payload) }
+}
+
+test('一次 ack 事件一帧：整群读回执的 ids[] 不许拆成几十条上报', async () => {
+  const { wpp, fire } = withEvents()
+  await withWpp(wpp, async () => {
+    const frames: BridgeReport[] = []
+    startLiveCollect({ emit: (r) => frames.push(r) })
+    fire('chat.msg_ack_change', {
+      ack: 3,
+      chat: { _serialized: '1203630@g.us' },
+      ids: [{ _serialized: 'K1' }, { _serialized: 'K2' }, { _serialized: 'K3' }]
+    })
+    const acks = frames.filter((f) => f.kind === 'ack')
+    assert.equal(acks.length, 1, '拆成一 id 一帧就是几十个并发请求，每个在落库侧都是一个带行锁的事务')
+    const only = acks[0]
+    assert.ok(only && only.kind === 'ack')
+    assert.deepEqual(only.msgKeys, ['K1', 'K2', 'K3'])
+    assert.equal(only.chatKey, '1203630@g.us')
+    assert.equal(only.status, 'read')
+  })
+})
+
+test('同一批里倒退的那几条被剔掉，剩下的仍并在一帧里', async () => {
+  const { wpp, fire } = withEvents()
+  await withWpp(wpp, async () => {
+    const frames: BridgeReport[] = []
+    startLiveCollect({ emit: (r) => frames.push(r) })
+    const acks = (): Extract<BridgeReport, { kind: 'ack' }>[] => frames.filter((f) => f.kind === 'ack') as Extract<BridgeReport, { kind: 'ack' }>[]
+    fire('chat.msg_ack_change', { ack: 3, chat: { _serialized: 'c@g.us' }, ids: [{ _serialized: 'K1' }, { _serialized: 'K2' }] })
+    // 迟到的 delivered：K1/K2 已经是 read，只有没见过的 K3 该跟着这一帧出去。
+    fire('chat.msg_ack_change', { ack: 2, chat: { _serialized: 'c@g.us' }, ids: [{ _serialized: 'K1' }, { _serialized: 'K2' }, { _serialized: 'K3' }] })
+    assert.equal(acks().length, 2, '倒退那一次也不是白发一帧空批')
+    assert.deepEqual(acks()[1].msgKeys, ['K3'])
+    assert.equal(acks()[1].status, 'delivered')
   })
 })
