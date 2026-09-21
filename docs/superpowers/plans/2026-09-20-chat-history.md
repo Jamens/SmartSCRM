@@ -3084,7 +3084,7 @@ git commit -m "feat(P6): shared 聊天纯模型与 node:test 单测闸门"
 - Produces:
   - `resources/msg-bridge.bundle.js`（IIFE，全局 `__SCRM_BRIDGE_BUNDLE__`，导出 `install(config)` 与 `destroy()`）
   - `resources/wa-js.bundle.js`（`@wppconnect/wa-js` 的 `dist/wppconnect-wa.js` 原样复制；装载后页面里出现 `self.WPP`）
-  - `bridgeVersionOf(source: string): string` —— 主进程用 bundle 内容 sha1 前 12 位当版本号（不额外产文件，不手填版本号）
+  - bundle 版本号：不产 `bridgeVersionOf` 具名函数——Task 10 的 `bridgeMount` 在注入点内联 `createHash('sha1').update(source).digest('hex').slice(0, 12)`，两份 bundle 各算各的（不额外产文件，不手填版本号）
   - `apps/desktop/src/bridge/host.ts`：`report(r: BridgeReport): void`（`window.ele.sendToHost('msg-report', r)` 的封装 + 上报节流）、`onCommand(cb: (c: BridgeCommand) => void): () => void`
   - 通道常量：页→主 `'msg-report'`；主→页 `'msg-cmd'`（Task 10 在 `routePageMessage` 里认这两个）
 
@@ -3298,7 +3298,7 @@ const message = (id: string): BridgeReport => ({
 function collect(): { out: { channel: string; data: unknown }[] } {
   const out: { channel: string; data: unknown }[] = []
   setSink((channel, data) => void out.push({ channel, data }))
-  return out
+  return { out }
 }
 
 test('通道名固定：Task 10 的白名单与这里必须是同一字面值', () => {
