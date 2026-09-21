@@ -1,9 +1,10 @@
 // src/bridge/index.ts —— 握手 + 心跳应答 + 采集接线（whatsapp 一支；telegram 在 Task 12c 登记）
 import { makeThrottledReporter, onCommand, report } from './host.ts'
 import * as whatsappCollect from './whatsapp/collect.ts'
+import { sendViaWa } from './whatsapp/send.ts'
 import type { BridgeCommand, BridgeInstallConfig } from '../shared/chatTypes.ts'
 import type { ChatPlatform } from '../shared/chatPlatform.ts'
-import type { CollectCtx, CollectImpl } from './types.ts'
+import type { CollectCtx, CollectImpl, WppChatApi } from './types.ts'
 
 /**
  * 采集实现按平台查表，本任务只有 whatsapp 一项。用查表而不是在四个 case 里各判一次平台：
@@ -14,7 +15,7 @@ const COLLECT: Partial<Record<ChatPlatform, CollectImpl>> = { whatsapp: whatsapp
 
 let installed: BridgeInstallConfig | null = null
 let offCommand: (() => void) | null = null
-/** 装好后由 mount 调用；send / backfill / open_chat 的 case 在 Task 12 / 14 里补。 */
+/** 装好后由 mount 调用；四条命令 case 齐了（send 在 Task 12 接上真发送）。 */
 let handle: ((cmd: BridgeCommand) => void) | null = null
 let collectorRef: (() => void) | null = null
 let activeRef: (() => void) | null = null
@@ -26,6 +27,10 @@ let pushRef: ReturnType<typeof makeThrottledReporter> | null = null
  * 循环本身——页内没有 abort 信号可递给 `getMessages`——它保证的是另一头：老轮次的帧一律出不去。
  */
 let backfillSeq = 0
+
+/** 发送这一路只在这里碰 `window.WPP`：`sendViaWa` 吃的是 chat 对象，测试给假的即可。 */
+const wppChat = (): WppChatApi | undefined =>
+  typeof window !== 'undefined' && window.WPP ? window.WPP.chat : undefined
 
 export function install(config: BridgeInstallConfig): boolean {
   if (installed && installed.bridgeVersion === config.bridgeVersion) return false
@@ -64,8 +69,10 @@ export function install(config: BridgeInstallConfig): boolean {
         impl.reportActiveChat({ emit: push })
         return
       case 'send':
-        // Task 12 落地；现在收到就明确报失败，不要静默。
-        push({ kind: 'send_result', localId: cmd.localId, ok: false, error: 'SEND_FAILED', detail: 'send not wired yet' })
+        // 不 await：命令回路是同步的，await 会让后面的 ping 排在这条消息后面。
+        void sendViaWa(cmd, wppChat()).then((receipt) => {
+          push({ kind: 'send_result', ...receipt })
+        })
         return
     }
   }

@@ -163,7 +163,8 @@ export class CollectorHub {
   private async deliver(payload: BatchPayload): Promise<boolean> {
     for (let attempt = 1; attempt <= this.retries; attempt++) {
       try {
-        await this.flushFn(payload)
+        const result = await this.flushFn(payload)
+        reportRejected(payload, result)
         return true
       } catch (e) {
         // C3：日志只有计数与错误名，消息正文不进日志。
@@ -175,4 +176,28 @@ export class CollectorHub {
     }
     return false
   }
+}
+
+/** 后端 reason 的形态是 `<msgKey>: <固定文案>`，冒号后面才是给人看的那半句。 */
+const REASON_MAX = 3
+
+function reasonText(reason: string): string {
+  const idx = reason.indexOf(':')
+  // 没有冒号就整条都是页面侧来的字符串，按 C3 收成一行并限长，别给它伪造日志行的机会。
+  const tail = idx < 0 ? reason : reason.slice(idx + 1)
+  return tail.replace(/[\r\n\p{Cc}]/gu, ' ').trim().slice(0, 40)
+}
+
+/**
+ * 逐行拒绝与"投递失败"是两件事：失败会退回重试，而 `chat_key 与平台不匹配` 这类拒绝重试一万次
+ * 也不会成功。它同样不能静默——发送链把 ok 还给渲染层之后，这一行是唯一能把"页内发了"与
+ * "库里有"接上的地方（Task 12 行 7 实测：坏 chatKey 在页内建成了会话、回执 ok，库里却 0 行）。
+ */
+function reportRejected(payload: BatchPayload, result: BatchResult | void): void {
+  if (!result || result.rejected <= 0) return
+  const reasons = [...new Set((result.reasons ?? []).map(reasonText))].filter(Boolean).slice(0, REASON_MAX)
+  console.warn(
+    `[msgHub] 本批拒绝 ${result.rejected}/${payload.messages.length} 条 accountId=${payload.accountId} ` +
+      `chatKey=${payload.activeChatKey ?? '-'} reasons=${reasons.join(' | ') || '未给原因'}`
+  )
 }

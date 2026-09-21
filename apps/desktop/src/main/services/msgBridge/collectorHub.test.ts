@@ -16,7 +16,10 @@ const frame = (accountId: number, chatKey: string, id: string): LiveFrame => ({
 })
 
 /** 记录每次真正投出去的批次；`failFirst` 决定前几次 reject（模拟后端不可用）。 */
-function recorder(failFirst = 0) {
+function recorder(failFirst = 0): {
+  calls: BatchPayload[]
+  flush: (payload: BatchPayload) => Promise<BatchResult>
+} {
   const calls: BatchPayload[] = []
   let n = 0
   const flush = async (payload: BatchPayload): Promise<BatchResult> => {
@@ -92,5 +95,73 @@ test('投递失败：重试到上限后把没投出去的退回队首，恢复�
   await hub.flush()
   assert.deepEqual(calls.flatMap((c) => c.messages.map((m) => m.msgKey)), ['1', '2', '3', '4'])
   assert.equal(hub.size(), 0)
+  hub.dispose()
+})
+
+/** 抓 console.warn：闸门里不许引第三方 spy，直接换掉再换回来。 */
+function captureWarnings(run: () => Promise<void>): Promise<string[]> {
+  return (async () => {
+    const lines: string[] = []
+    const orig = console.warn
+    console.warn = (...args: unknown[]) => void lines.push(args.map(String).join(' '))
+    try {
+      await run()
+    } finally {
+      console.warn = orig
+    }
+    return lines
+  })()
+}
+
+/**
+ * 后端逐行拒绝（`rejected` > 0）不走"退回重试"那条路，所以它没有别的痕迹。
+ * 这两条用例钉的就是"静默丢行"这件事本身：Task 12 行 7 实测里，坏 chatKey 那条回执是 ok，
+ * 页内也确实建成了会话，而库里 0 行——如果这里不打一行，链路上看不出任何异常。
+ */
+test('rejected>0：投出去成功也要留一行原因，且把 msgKey 前缀去掉只留固定文案', async () => {
+  const flush = async (payload: BatchPayload): Promise<BatchResult> => ({
+    accepted: payload.messages.length - 1,
+    duplicated: 0,
+    rejected: 1,
+    reasons: ['true_0@c.us_K-1_out: chat_key 与平台不匹配']
+  })
+  const hub = new CollectorHub({ flush, batchSize: 2, flushIntervalMs: 60_000 })
+  hub.push(frame(1, 'a@c.us', '1'))
+  hub.push(frame(1, 'a@c.us', '2'))
+  const lines = await captureWarnings(() => hub.flush())
+  const hit = lines.filter((l) => l.includes('[msgHub] 本批拒绝'))
+  assert.equal(hit.length, 1)
+  assert.match(hit[0], /1\/2 条/)
+  assert.equal(hit[0].includes('chat_key 与平台不匹配'), true)
+  // 页面侧来的 msgKey 不进日志：只留后端那句固定文案。
+  assert.equal(hit[0].includes('K-1'), false)
+  hub.dispose()
+})
+
+test('全收时一行都不打；原因里的换行不能伪造日志行', async () => {
+  const clean = async (payload: BatchPayload): Promise<BatchResult> => ({
+    accepted: payload.messages.length,
+    duplicated: 0,
+    rejected: 0,
+    reasons: []
+  })
+  const quietHub = new CollectorHub({ flush: clean, batchSize: 1, flushIntervalMs: 60_000 })
+  quietHub.push(frame(1, 'a@c.us', '1'))
+  const quiet = await captureWarnings(() => quietHub.flush())
+  assert.deepEqual(quiet.filter((l) => l.includes('[msgHub]')), [])
+  quietHub.dispose()
+
+  const dirty = async (): Promise<BatchResult> => ({
+    accepted: 0,
+    duplicated: 0,
+    rejected: 1,
+    reasons: ['K-2\n[msgHub] 假装系统正常']
+  })
+  const hub = new CollectorHub({ flush: dirty, batchSize: 1, flushIntervalMs: 60_000 })
+  hub.push(frame(1, 'a@c.us', '2'))
+  const lines = await captureWarnings(() => hub.flush())
+  const hit = lines.filter((l) => l.includes('[msgHub] 本批拒绝'))
+  assert.equal(hit.length, 1)
+  assert.equal(hit[0].includes('\n'), false)
   hub.dispose()
 })

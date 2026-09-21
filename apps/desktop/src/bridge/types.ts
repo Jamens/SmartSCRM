@@ -55,10 +55,23 @@ export interface WaChatModel {
   archived?: boolean
 }
 
+/**
+ * wa-js 4.6.0 的类型与真机一致（`dist/chat/types.d.ts` 的 `SendMessageReturn`）：`sendTextMessage`
+ * 结的不是 MsgModel，而是 `{ id, from, to, ack, sendMsgResult }`，且 **`id` 是序列化字符串**
+ * （`true_<chatKey>_<ID>_out`，自带 `_out` 后缀）。按 `id._serialized` 取值会静默拿到 undefined，
+ * 于是每次真发送都被判成"平台未返回 msgKey"。`sendMsgResult` 在不带 `waitForAck` 时恒为 null。
+ */
+export interface SendChatResult {
+  id?: string
+  ack?: number
+  sendMsgResult?: unknown
+}
+
 export interface WppChatApi {
   list(options: Record<string, unknown>): Promise<WaChatModel[]>
   getMessages(chatId: string, options: Record<string, unknown>): Promise<WaMsgModel[]>
   getActiveChat(): { id?: { _serialized?: string } } | null
+  sendTextMessage(to: string, content: string, options?: Record<string, unknown>): Promise<SendChatResult>
 }
 
 export interface WppLike {
