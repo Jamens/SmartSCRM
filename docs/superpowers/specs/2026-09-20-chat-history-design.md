@@ -19,7 +19,7 @@
 | 决策 | 选法 |
 |---|---|
 | WhatsApp 消息通道 | **页内 wa-js**：`@wppconnect/wa-js` 注入到用户正在看的内嵌 WhatsApp 视图，与原生页共用同一个 Store；不建隐藏第二会话 |
-| Telegram 消息通道 | **页内 API 钩子**：封装 web.telegram.org 页面自身暴露的全局 API（`window.sendMessage` / update 事件流）；动手前先做存在性探测（§11）。**P6 裁定（2026-09-21）：暂缓，TG 这一路整体移出本期**（§11） |
+| Telegram 消息通道 | **页内 store 契约**：内嵌自建 Telegram Web 页面，该页面在 `window` 上暴露自己的全局状态与动作 API（`getGlobal()` / `getActions().sendMessage` / `tgAction`+`apiUpdate` 事件流），TG 采集与发送都读这一层，不做 DOM 抓取。**P6 裁定（2026-09-21 二次）：TG 回归本期，按 §11 的契约基线 + 本地 fixture 页验证；真实登录那一档无账号，永远如实标"未验证"** |
 | 代码归属 | **主进程直挂桥**：桥脚本独立于翻译注入 bundle，由 `main/services/msgBridge/` 构建与挂载；两链只共用登录观察 |
 | 记录页数据源 | **DB + 页内 live 双源**：历史读库；live 尾由同一事件流推送（不做逐条页内 pull 查询），渲染层按 msg_key 去重 |
 | 历史补底 | 每会话最近 N 条（默认 200，可配置），限速批量；之后事件流增量 |
@@ -123,7 +123,7 @@ CREATE TABLE chat_message (
 scrm:msg:send  {accountId, chatKey, text, localId}
   → 回执 {localId, ok, msgKey?, error?}
   错误码：BRIDGE_OFFLINE(会话未在线，不排队) | SEND_FAILED | CHAT_NOT_FOUND
-状态推进：pending → (桥回msgKey) sent → delivered/read（WA 事件驱动）；TG 本期不接入，其档位（只到 sent/failed）留待后续
+状态推进：pending → (桥回msgKey) sent → delivered/read（WA 事件驱动）；TG 到 `sent` 为止——§11.3 的 `updateMessageSendSucceeded` 就是它的落定事件，已读档位在 TG 侧不接（`updateThreadReadState` 只驱动会话头未读，不驱动单条消息状态）
 ```
 
 - 渲染层乐观展示 `pending` 气泡（localId 为 key），事件/回执到达后与库内行合并（msg_key 落地后以库为准）。
@@ -166,7 +166,7 @@ scrm:msg:send  {accountId, chatKey, text, localId}
 | Java 不可用 | Hub 重试 3 次后落主进程日志、丢弃；恢复后不追历史缺口，页内提供「同步历史」按钮触发补底 |
 | 单会话补底失败 | 记录跳过；「同步历史」可重试 |
 | msg_time 异常（0/未来值） | 钳制为接收时刻 UTC，标记 `unknown` 精度（列不存，日志记录） |
-| TG 全局 API 缺失 | §11 探测失败 → TG 降级为"仅打开会话可见采集"（domScan 级）或整块移出 P6，按实测结论定，不猜。**P6 走的是"整块移出"这一支，原因是本期裁定暂缓（未探测），不是探测失败**——两者结论相同、依据不同，后续重启 TG 时 §11 的探测仍要照做 |
+| TG 承载页没有 §11.1 那层 API | 就绪判定 `"getGlobal" in window` 不过 → 该视图按"未 ready"处理，不采集不发送，重挂节奏同上行；**不做 DOM 抓取兜底**（那是另一条技术路线，不在本期口径里）。真实账号那一档本期无账号可验，结论停在"未验证"，不是"降级已实现" |
 
 ## 10. 安全
 
@@ -174,11 +174,38 @@ scrm:msg:send  {accountId, chatKey, text, localId}
 - preload 暴露面：仅 `scrm:msg:*` 固定几个 channel（renderer→main：send；main→renderer：live、state、send 回执），不暴露 `webContents` 句柄。
 - 消息正文不进 console/日志；日志只记 id/计数。
 
-## 11. Telegram 前置探测（P6 Task 0）
+## 11. Telegram 契约基线与验证（P6 Task 0 / 12c / 12d）
 
-在应用内嵌的 web.telegram.org 里探测既定全局 API（`sendMessage`/`getMessage`/update 事件源）是否存在、版本形态如何，**先出探测报告再决定 TG 侧实现深度**；结论回写本 spec §1 表格附注。未探测通过前不得声称 TG 链路可用。
+**P6 裁定（2026-09-21 二次）：TG 回归本期。** 采集与发送都接"页内 store 契约"这一层，不做 DOM 抓取。前提与代价先说清楚：TG 的读取面依赖**承载页自己在 `window` 上暴露状态与动作 API**，内嵌公网站点没有这层能力，所以本期把"契约"当规格来实现和验证，真实登录那一档无账号可用、**永久标"未验证"**（见 §12）。
 
-**P6 裁定（2026-09-21）：本节探测不做，TG 采集与 TG 发送整体移出本期。** 落地的口径不是"档 3 的降级实现"，而是**根本不挂 TG 桥**：TG 账号在视图里照常能看（P2a 的内嵌能力，与本阶段无关），但不会有任何 `platform='telegram'` 的采集行；`chat_key`/`ChatKeys`/DTO 里的 TG 形态判定全部保留（它们是纯函数与列形状，不是采集实现），将来接 TG 时不必改表、不必改归一化规则。这一裁定只影响 P6 的采集面与断言面，不影响 §3 的 `platform` 取值域（`'whatsapp' | 'telegram'`）。
+### 11.1 对承载页的要求（契约，不是探测结论）
+
+| 项 | 要求 |
+|---|---|
+| 就绪判定 | `"getGlobal" in window`；不满足即视为"该视图未 ready"，不采集不发送，按 §9 的重挂节奏走 |
+| 登录判定 | `getGlobal().isInited && !!getGlobal().currentUserId`；false 时只挂不调，登录后自动续采 |
+| 状态读取 | 只读这四处：`chats.byId`（会话形状与标题）、`chats.listIds.active` / `.archived`（补底只遍历 active）、`messages.byChatId`（消息本体）、`byTabId[getCurrentTabId()].activeChatId`（活动会话，决定未读加不加） |
+| 动作 | `getActions().sendMessage(...)` 一个。补底是**读** `messages.byChatId`，不调 `getMessage` 拉历史 |
+| 变更事件 | 只订阅 `apiUpdate` 一个 `CustomEvent`。`tgAction` 与 `apiUpdate` 对同一次变更各抛一帧，两个都订会把每条消息采两遍 |
+
+本节是**规格**：Task 0 的产物不再是"外部站点探测报告"，而是把上表固化成一个可跑的契约基线（fixture 页 + 契约单测）。哪个真实站点能满足就换 URL，换不了就停留在"未验证"，两种情况都不改本节形状。
+
+### 11.2 归一化映射（接进 §3 的两张表与 §5 的批量入库形状）
+
+- `msgKey = String(message.id)`、`chatKey = chatId`（数字串；群/频道是 `-100…` 带负号，`ChatKeys.TG_CHAT` 与 `isGroup` 已认这个形态）、`msgTime = message.date`（epoch 秒）、`body = message.content.text?.text`。
+- `mediaType` 由 `content` 里的 `photo` / `video` / `document` 判定；媒体**本体**仍按 §2 的非目标处理，只落占位与摘要。
+- 方向：`newMessage` 且 `!message.isOutgoing` → `in`；`updateMessageSendSucceeded` → 本端 `out` 的落定。
+- **群与频道不跳过上报**：`chat_key` 带负号也照常入库，`is_group` 由形态判定。会话归属客户这一侧另有闸门（`link-customer` 拒绝群），两者不是一回事。
+- 已读、撤回、编辑的变更事件**本期不接**。不是没做，是形状不允许：TG 的已读是会话级事件，推不到消息级状态（发出侧的状态天花板就是 `sent`，见 §4 的阶梯）；未读的增减一律由后端在入库时按"该行是否属于该视图的活动会话"算（`unreadDelta`），桥不上传任何已读帧。撤回与编辑如果后续要接，改动面是"订阅处多认两个 `update` 类型 + 后端多一条状态迁移"，不改这两张表的形状。
+
+### 11.3 发送与回执
+
+`getActions().sendMessage({ messageList: { chatId, threadId: -1, type: 'thread' }, text })`，回执等 `updateMessageSendSucceeded` 带的 **`localId`** 与 `SendRegistry` 的登记项匹配。匹配键必须是 `localId`：`chatId + 正文文本` 这种拼法在"同一会话连发同一条文本"时会串到别的 pending 上（`uk_msg` 只保证不重复入库，管不了 pending 归属）。WA 与 TG 共用同一个 registry 与同一条状态阶梯，平台差异只在"回执事件从哪儿来"。
+
+### 11.4 客户侧的收敛
+
+TG 的 `customer.open_id` 与 `chat_key` **同形**（纯数字串，群含负号）。这决定了 Task 12c 要顺带改 V3 里 `platform_type=4` 那两条种子的 `open_id` 形态——否则 §5 的自动匹配对 TG 永远命不中，"采集到了却认不出是人"。
+
 
 ## 12. 验证方案（每条都要能区分"生效 / 没动"）
 
@@ -186,7 +213,7 @@ scrm:msg:send  {accountId, chatKey, text, localId}
 |---|---|
 | 后端 | JUnit：batch 幂等（重发同批→duplicated 计数）、游标、搜索过滤、stats、link-customer 回填；curl 契约 8 条全过 |
 | 桥/WA | 真实登录态：小参数补底（N=5）前后 DB 行数与 msg_key 集合比对；发送自聊一条→状态推进到 delivered→**删除测试消息**；native 页手发一条→事件流入库（证明双入口同源）；断线重挂后增量续采不重不漏 |
-| TG | 本期不做（§11 未探测，用户裁定暂缓）：断言整段撤下，改成一条反向断言——跑完 WA 补底与发送后，`GET /api/conversations?accountId=<tg>` 返回空列表、`chat_message` 里 `platform<>'telegram'` 的行数为 0。"没有 TG 数据"要说清是没做，不是做了没采到 |
+| TG | 分两档，**不混算**。**A 档（本期可出绿灯）**：本地 fixture 页 `apps/desktop/test/tg-fixture.html` 按 §11.1 的形状在 `window` 上挂出状态与动作 API，并用脚本化时间线抛 `newMessage`（3 条 in，含一条与已入库正文完全相同的）、`updateMessageSendSucceeded`（带 `localId`）；归一化纯函数走 JS 单测，整链走 CDP——采集 → `/api/messages/batch` → 记录页出现单聊与一个 `-100…` 群会话 → 应用内回复 → 回执推进到 `sent`。**B 档（本期不出结论）**：真实自建站点 = 把 fixture 的 URL 换成站点地址，无账号可用 ⇒ 永久标"未验证"，既不计绿也不计红。另留一条反向断言：TG 那一档没跑时，`chat_message` 里不该出现 `platform='telegram'` 的行 |
 | 渲染层 | CDP 回归：列表/翻页/live 尾去重/回复（先译再发开、关两态）/语向弹层/陌生建客户闭环/搜索跳转/统计卡数字与库内 COUNT 一致 |
 | 输入路径 | 涉及页内交互的断言一律真实鼠标/键盘事件（P5e 教训），不接受 `element.click()` 独证 |
 
