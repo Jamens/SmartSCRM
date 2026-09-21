@@ -4,6 +4,7 @@ import { createMainWindow, setQuitting } from './window/mainWindow'
 import { createTray } from './window/tray'
 import { attachWindowEvents, registerIpcHandlers } from './ipc'
 import { viewManager } from './webContentsView/manager'
+import { startMsgBridge, stopMsgBridge } from './services/msgBridge'
 
 const gotLock = app.requestSingleInstanceLock()
 
@@ -27,6 +28,7 @@ if (!gotLock) {
     })
 
     registerIpcHandlers()
+    startMsgBridge()
     const mainWindow = createMainWindow()
     attachWindowEvents(mainWindow)
     createTray()
@@ -38,6 +40,7 @@ if (!gotLock) {
 
   app.on('before-quit', () => {
     setQuitting(true)
+    void stopMsgBridge()
     viewManager.destroyAll()
   })
 

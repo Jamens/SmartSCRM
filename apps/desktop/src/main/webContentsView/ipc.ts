@@ -2,6 +2,7 @@ import { ipcMain, type Rectangle, type IpcMainEvent, type IpcMainInvokeEvent } f
 import { viewManager } from './manager'
 import { getMainWindow } from '../window/mainWindow'
 import { requestTranslation } from '../services/translationBridge'
+import { handleBridgeReport, observeLoginStatus } from '../services/msgBridge'
 
 /** Channels an embedded page is allowed to push up to the host window. */
 const ALLOWED_HOST_CHANNELS = new Set<string>([
@@ -14,13 +15,19 @@ const ALLOWED_HOST_CHANNELS = new Set<string>([
   'get-new-message',
   'update-unread-count',
   'translation-flags-applied',
-  'auth-status-change'
+  'auth-status-change',
+  /** 消息桥的唯一上行通道；它不改转发给渲染层，而是进 msgBridge。 */
+  'msg-report'
 ])
 
 /** Channels an embedded page may ask the host to serve. */
 const ALLOWED_INVOKE_CHANNELS = new Set<string>(['translate-api'])
 /** Channels the host renderer may push into an embedded page. */
-const ALLOWED_PUSH_CHANNELS = new Set<string>(['update-translation-flags'])
+const ALLOWED_PUSH_CHANNELS = new Set<string>([
+  'update-translation-flags',
+  /** 记录页可以直接命令某个视图"打开这个会话"；主进程自己走 viewManager.sendToView，不经这里。 */
+  'msg-cmd'
+])
 const RATE_WINDOW_MS = 1000
 const RATE_LIMIT = 20
 const rateBuckets = new Map<string, { windowStart: number; count: number }>()
@@ -66,6 +73,15 @@ export function registerViewIpc(): void {
   const routePageMessage = (event: IpcMainEvent, kind: 'toHost' | 'send', arg: { channel: string; data: unknown }): void => {
     const viewId = viewManager.getViewIdByWebContents(event.sender.id)
     if (!viewId || !arg || !ALLOWED_HOST_CHANNELS.has(arg.channel)) return
+    if (arg.channel === 'msg-report') {
+      // 分流后不再转给渲染层：渲染层从 `msg:live` 吃尾巴，避免同一帧两份副本。
+      handleBridgeReport(viewId, arg.data)
+      return
+    }
+    if (arg.channel === 'login-status') {
+      observeLoginStatus(viewId, (arg.data as { isLogin?: boolean } | null)?.isLogin === true)
+      // 仍然转发：渲染层的 useLoginStatusSync 要把在线态写回账号行。
+    }
     forwardToHost(viewId, `${kind}:${arg.channel}`, arg.data)
   }
   ipcMain.on('view:toHost', (event, arg) => routePageMessage(event, 'toHost', arg))

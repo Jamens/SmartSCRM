@@ -3,6 +3,8 @@ import { join } from 'path'
 import { readFileSync, existsSync } from 'fs'
 import { getMainWindow } from '../window/mainWindow'
 import { chromeUserAgent } from './chromeUserAgent'
+import { forgetPageBundleCache } from '../services/msgBridge/bridgeMount'
+import { unmountView } from '../services/msgBridge'
 
 interface ManagedView {
   view: WebContentsView
@@ -77,6 +79,10 @@ export class WebContentsViewManager {
     }
 
     view.webContents.on('dom-ready', () => {
+      // 顶层文档每次装载都会重新走一遍 dom-ready：旧页面的 wa-js Store 已经随文档一起没了，
+      // 不清掉"已装 wa-js"记录，msgBridge 重挂时会跳过 wa 段，桥对着不存在的 Store 采不到东西。
+      // （实测 Electron 39 的 WebContentsView 上 did-navigate 对 reload 不触发，dom-ready 才是可靠信号。）
+      forgetPageBundleCache(view.webContents.id)
       void this.runInject(viewId)
     })
 
@@ -151,6 +157,8 @@ export class WebContentsViewManager {
     win?.contentView.removeChildView(managed.view)
     this.wcToView.delete(managed.view.webContents.id)
     this.injects.delete(viewId)
+    unmountView(viewId)
+    forgetPageBundleCache(managed.view.webContents.id)
     managed.view.webContents.close()
     this.views.delete(viewId)
     if (this.activeViewId === viewId) this.activeViewId = null
@@ -161,6 +169,11 @@ export class WebContentsViewManager {
 
   getViewIdByWebContents(webContentsId: number): string | undefined {
     return this.wcToView.get(webContentsId)
+  }
+
+  /** 只读出口：msgBridge 需要按 viewId 拿到 WebContents 才能 executeJavaScript。 */
+  webContentsOf(viewId: string): Electron.WebContents | null {
+    return this.views.get(viewId)?.view.webContents ?? null
   }
 
   /** Register (or update) the inject intent for a view and inject immediately if the page is ready. */
