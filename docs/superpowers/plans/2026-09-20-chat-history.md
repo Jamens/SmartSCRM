@@ -2601,7 +2601,7 @@ git commit -m "feat(P6): 按客户语向解析（scope=customer）与客户级�
 cd apps/desktop && node -v && pnpm run typecheck:unit
 ```
 
-预期：`v24.x`；tsc 无输出（0 错误）。这一步同时确认"闸门本身能跑"，与后面被测内容无关。
+预期：`v24.x`；**tsc 会以 TS18003 报"No inputs were found"**——Task 7 实跑裁定：include 里的 `src/bridge/**/*` 此时还不存在，空 include 的 tsc 永远不是 0 错误，这一档"空目录绿"是计划文本的错，不是闸门的错。闸门本身能跑的证明挪到 Step 6：src/shared 有第一个文件后 `typecheck:unit` 全绿 + `test:unit` 能跑 RED→GREEN，两件事合起来才算闸门就位。
 
 - [ ] **Step 2: 先写 `chatPlatform.test.ts`（此时实现还不存在，测试必然失败）**
 
@@ -3350,7 +3350,7 @@ cd apps/desktop && pnpm run test:unit 2>&1 | tail -15
 ```json
         "build:bridge": "node scripts/build-bridge.mjs",
         "watch:bridge": "node scripts/build-bridge.mjs --watch",
-        "test:unit": "node --test \"src/shared/**/*.test.ts\" \"src/bridge/**/*.test.ts\"",
+        "test:unit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/shared/**/*.test.ts\" \"src/bridge/**/*.test.ts\"",
         "predev": "pnpm run build:inject && pnpm run build:bridge",
         "build": "pnpm run typecheck && pnpm run build:inject && pnpm run build:bridge && electron-vite build",
 ```
@@ -3431,7 +3431,7 @@ git commit -m "feat(P6): 消息桥构建管线（wa-js 独立 bundle + 桥 bundl
 `package.json` 的 `test:unit` 补第三条 glob（否则新建的三份测试根本不会被跑到，"全绿"是假的）：
 
 ```json
-        "test:unit": "node --test \"src/shared/**/*.test.ts\" \"src/bridge/**/*.test.ts\" \"src/main/services/msgBridge/**/*.test.ts\"",
+        "test:unit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/shared/**/*.test.ts\" \"src/bridge/**/*.test.ts\" \"src/main/services/msgBridge/**/*.test.ts\"",
 ```
 
 ```ts
@@ -7730,7 +7730,7 @@ cd apps/desktop && node --test "src/renderer/src/lib/**/*.test.ts" 2>&1 | tail -
 `apps/desktop/package.json` 的 `test:unit` 变成四条 glob：
 
 ```json
-        "test:unit": "node --test \"src/shared/**/*.test.ts\" \"src/bridge/**/*.test.ts\" \"src/main/services/msgBridge/**/*.test.ts\" \"src/renderer/src/lib/**/*.test.ts\"",
+        "test:unit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/shared/**/*.test.ts\" \"src/bridge/**/*.test.ts\" \"src/main/services/msgBridge/**/*.test.ts\" \"src/renderer/src/lib/**/*.test.ts\"",
 ```
 
 > 只列 `chatDays.ts` 这一个名字，不给 `src/renderer/**/*.ts`：渲染层其余文件全都引 `@/` 别名与 react-query，整目录进来只会让 `typecheck:unit` 因为找不到别名而红，然后又被整体关掉。
