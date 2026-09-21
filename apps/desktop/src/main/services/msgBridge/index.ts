@@ -12,6 +12,9 @@ import { createMsgApi } from './msgApi'
 /** spec §4 的 msgHistoryLimit：每会话补底条数。 */
 export const HISTORY_LIMIT_DEFAULT = 200
 
+/** `StatusUpdateDTO.msgKey` 上的 `@Size(max = 128)`：超长的 key 不是"这一条不更新"，而是整批 400。 */
+const MSG_KEY_MAX = 128
+
 const api = createMsgApi({ token: () => getSession()?.accessToken ?? null })
 
 const hub = new CollectorHub({
@@ -138,11 +141,17 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
     // 拼成 NormalizedMessage 会让渲染层按 msgKey 合并时把已有行的方向与归属改脏
     // （`advanceStatus` 的 WHERE 钉着 `direction='out'`，入库侧的行却是各自带 source 的）。
     // Task 15 要做气泡对勾时，另立一个"状态帧"形状，别复用消息类型。
-    const keys = Array.isArray(report.msgKeys) ? report.msgKeys : []
+    // 页内那条链是半可信的（被内嵌的视图不一定是我们自己的页面），而合批把一条坏 key 的代价
+    // 从"少更一行"放大成"少更一批"，所以在进请求前先把不合法的剔掉、并留一行可数出来的丢弃。
+    const raw = Array.isArray(report.msgKeys) ? report.msgKeys : []
+    const keys = raw.filter((k): k is string => typeof k === 'string' && k.length > 0 && k.length <= MSG_KEY_MAX)
     // 后端 `chatKey` 上是 `@NotBlank`、`updates` 上是 `@NotEmpty`：缺任一个都只是被 `call()` 折成 null 的 400。
     if (!report.chatKey || keys.length === 0) {
-      console.log(`[msgBridge] ack 丢弃 viewId=${viewId} chat=${oneLine(report.chatKey)} keys=${keys.length}：页内没带 chatKey 或 msgKey`)
+      console.log(`[msgBridge] ack 丢弃 viewId=${viewId} chat=${oneLine(report.chatKey)} keys=${raw.length}：页内没带 chatKey 或合法 msgKey`)
       return
+    }
+    if (keys.length !== raw.length) {
+      console.log(`[msgBridge] ack 剔除非法 msgKey viewId=${viewId} chat=${oneLine(report.chatKey)} 丢弃=${raw.length - keys.length}`)
     }
     // 一次页内事件一请求：整群读回执一条事件能带几十上百个 id，拆成一 id 一请求就是几十个
     // 带行锁的并发事务，而 `updates[]` 的 200 上限正是留给这种批的。
@@ -153,8 +162,16 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
         updates: keys.map((msgKey) => ({ msgKey, status: report.status }))
       })
       .then((r) => {
-        // updated:0 是常态（乱序 ack 被阶梯挡住），只有"整条请求没成"才值得刷屏。
-        if (!r) console.log(`[msgBridge] ack 上报失败 viewId=${viewId} chat=${oneLine(report.chatKey)} keys=${keys.length}`)
+        if (!r) {
+          console.log(`[msgBridge] ack 上报失败 viewId=${viewId} chat=${oneLine(report.chatKey)} keys=${keys.length}`)
+          return
+        }
+        // 单条 updated:0 是常态（乱序 ack 被阶梯挡住），但**整批一行没动**要么是重复回执、要么是
+        // key 的形状与库里那批对不上。这一行日志不区分这两者，但没有它就什么都不区分：
+        // "ack 链整条死了"和"只是重复 ack"在日志上长得一模一样。
+        if (r.updated === 0) {
+          console.log(`[msgBridge] ack 全批未推进 viewId=${viewId} chat=${oneLine(report.chatKey)} keys=${keys.length} status=${oneLine(report.status)}`)
+        }
       })
     return
   }

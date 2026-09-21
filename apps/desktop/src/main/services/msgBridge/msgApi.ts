@@ -80,13 +80,14 @@ export function createMsgApi(opts: MsgApiOptions) {
     async postStatuses(input: { accountId: number; chatKey: string; updates: StatusUpdate[] }): Promise<{ updated: number } | null> {
       let updated = 0
       for (let i = 0; i < input.updates.length; i += STATUS_BATCH_MAX) {
-        const part = await call<{ updated: number }>('/api/messages/status', {
+        const part = await call<{ updated?: number }>('/api/messages/status', {
           accountId: input.accountId,
           chatKey: input.chatKey,
           updates: input.updates.slice(i, i + STATUS_BATCH_MAX)
         })
         if (!part) return null
-        updated += part.updated
+        // `call()` 只保证信封里有 data，不保证里面有 updated：直接累加会把整批计数变成 NaN。
+        updated += part.updated ?? 0
       }
       return { updated }
     },
