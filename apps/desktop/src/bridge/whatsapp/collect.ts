@@ -27,17 +27,25 @@ export function startLiveCollect(ctx: CollectCtx): () => void {
   if (!store) return () => undefined
   const live: NormalizeCtx = { source: 'live' }
   const lastStatus = new Map<string, MsgStatus>()
+  // 这份缓存只是"少发一帧必然被阶梯挡掉的 ack"的优化，真守卫在后端 SQL。
+  // 页面活上几天就会为每条外发消息攒一个条目，所以到量整体清空，不逐条淘汰。
+  const rememberStatus = (key: string, status: MsgStatus): void => {
+    if (lastStatus.size > 2_000) lastStatus.clear()
+    lastStatus.set(key, status)
+  }
 
   const subs = [
     store.on('chat.new_message', (msg: WaMsgModel) => {
       const row = normalizeWa(msg, live)
       if (!row) return
-      if (row.status !== 'received') lastStatus.set(row.msgKey, row.status)
+      if (row.status !== 'received') rememberStatus(row.msgKey, row.status)
       ctx.emit({ kind: 'message', message: row })
     }),
     store.on('chat.msg_ack_change', (payload) => {
       const status = fromAck(payload.ack, 'out')
-      // wa-js 4.6.0 复核（见 types.ts 注释）：一条 ack 事件携 `ids[]` 与消息所在会话 `chat`。
+      // wa-js 4.6.0 复核（见 types.ts 注释 + bundle 内 `change:ack` / `handleChatSimpleReceipt` 两处 emit）：
+      // 一条 ack 事件携 `ids[]` 与消息所在会话 `chat`，且只在"对端回执"或 ack 落到 1 时发——
+      // 自聊消息进 store 时就已经是已读，不会有任何 ack 事件，这条链在自聊里测不出来。
       // 带真 chatKey 上报，后端 advanceStatus 的 WHERE 钉着 chat_key，空串永远匹配不上。
       const chatKey = payload.chat?._serialized ?? ''
       for (const key of payload.ids ?? []) {
@@ -45,7 +53,7 @@ export function startLiveCollect(ctx: CollectCtx): () => void {
         if (!id) continue
         const prev = lastStatus.get(id)
         if (prev && !canAdvance(prev, status)) continue
-        lastStatus.set(id, status)
+        rememberStatus(id, status)
         ctx.emit({ kind: 'ack', chatKey, msgKey: id, status })
       }
     }),
@@ -114,11 +122,24 @@ export async function runBackfill(limit: number, ctx: CollectCtx): Promise<void>
     }
     try {
       const collected: WaMsgModel[] = []
+      // 实测（2026-09-22 真页面）：`getMessages({page})` 的相邻页会原样重叠返回，不去重就会为
+      // 一条消息发好几帧——3 条历史被发成 200 帧。uk_msg 兜住了入库，但每帧都是一次 IPC，
+      // 且 `msgs=` 会变成"发射帧数"而不是"这一轮真采到多少条"，那两个数差 60 倍时终端上看不出来。
+      const seen = new Set<string>()
       let page = 0
-      while (collected.length < limit) {
+      for (;;) {
         const batch = await chatApi.getMessages(chatKey, { page, limit: PAGE_SIZE })
         if (!Array.isArray(batch) || batch.length === 0) break
-        collected.push(...batch)
+        const before = collected.length
+        for (const raw of batch) {
+          const id = raw.id?._serialized
+          if (!id || seen.has(id)) continue
+          seen.add(id)
+          collected.push(raw)
+        }
+        // 三个停下条件：不满一页 = 历史到底；够 limit 了；这一页一条新行都没有
+        // （wa-js 的翻页会返回重叠区间，整页都是旧行时再翻下去就永远不会动）。
+        if (batch.length < PAGE_SIZE || collected.length >= limit || collected.length === before) break
         page += 1
       }
       for (const raw of collected.slice(0, limit)) {

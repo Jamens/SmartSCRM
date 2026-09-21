@@ -62,8 +62,17 @@ export function createMsgApi(opts: MsgApiOptions) {
         messages: payload.messages
       })
     },
+    /**
+     * 后端收的是 `MessageStatusDTO{accountId, chatKey, updates[]}`（`updates` 上 `@NotEmpty`）。
+     * 平铺 msgKey/status 会被 Bean Validation 打成 400，而 `call()` 把非 2xx 一律折成 null——
+     * 状态推进静默不生效。单条 ack 也走这个数组，形状只有一处。
+     */
     postStatus(input: { accountId: number; chatKey: string; msgKey: string; status: MsgStatus }): Promise<{ updated: number } | null> {
-      return call<{ updated: number }>('/api/messages/status', input)
+      return call<{ updated: number }>('/api/messages/status', {
+        accountId: input.accountId,
+        chatKey: input.chatKey,
+        updates: [{ msgKey: input.msgKey, status: input.status }]
+      })
     },
     /** GET 用 fetch 单独走一遍：账号列表只有挂载与 5 分钟刷新时读，不需要批量语义。 */
     async listAccounts(): Promise<AccountRow[]> {

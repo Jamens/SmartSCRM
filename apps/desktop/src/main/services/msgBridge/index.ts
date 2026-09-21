@@ -106,6 +106,11 @@ function stampOutboundSource(message: NormalizedMessage): NormalizedMessage {
   return message
 }
 
+/** 页内来的文本进主进程日志前收成一行：留着换行就等于允许伪造日志行，长度也不该无界。 */
+function oneLine(text: string | undefined, max = 200): string {
+  return (text ?? '').replace(/[\r\n]+/g, ' ').slice(0, max)
+}
+
 /** 页 → 主。通道名 `msg-report`，白名单在 webContentsView/ipc.ts。 */
 export function handleBridgeReport(viewId: string, data: unknown): void {
   const report = data as BridgeReport | null
@@ -127,28 +132,30 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
     return
   }
   if (report.kind === 'ack') {
-    // 页内已带真 chatKey（wa-js 4.6.0 的 ack 事件带 chat）；缺 chatKey 的行在后端
-    // advanceStatus 的 WHERE 上匹配不上，updated:0 是常态而不是错误。
-    void api.postStatus({
-      accountId: entry.accountId,
-      chatKey: report.chatKey,
-      msgKey: report.msgKey,
-      status: report.status
-    })
-    getMainWindow()?.webContents.send('msg:live', {
-      viewId, accountId: entry.accountId, platform: entry.platform ?? 'whatsapp',
-      activeChatKey: activeChatOf(viewId),
-      message: { chatKey: report.chatKey, msgKey: report.msgKey, direction: 'out',
-        mediaType: 'text', msgTimeEpochSec: 0, status: report.status, source: 'live' }
-    } satisfies LiveFrame)
+    // ack 只推后端状态，不广播 msg:live：这帧没有真的 body / direction / source，
+    // 拼成 NormalizedMessage 会让渲染层按 msgKey 合并时把已有行的方向与归属改脏
+    // （`advanceStatus` 的 WHERE 钉着 `direction='out'`，入库侧的行却是各自带 source 的）。
+    // Task 15 要做气泡对勾时，另立一个"状态帧"形状，别复用消息类型。
+    if (!report.chatKey) {
+      // 后端 `chatKey` 上是 `@NotBlank`：空串只会换来一个被 `call()` 折成 null 的 400。
+      console.log(`[msgBridge] ack 丢弃 viewId=${viewId} msgKey=${report.msgKey}：页内没带 chatKey`)
+      return
+    }
+    void api
+      .postStatus({ accountId: entry.accountId, chatKey: report.chatKey, msgKey: report.msgKey, status: report.status })
+      .then((r) => {
+        // updated:0 是常态（乱序 ack 被阶梯挡住），只有"整条请求没成"才值得刷屏。
+        if (!r) console.log(`[msgBridge] ack 上报失败 viewId=${viewId} msgKey=${report.msgKey}`)
+      })
     return
   }
   if (report.kind === 'backfill_progress' || report.kind === 'backfill_gap') {
-    // 只进主进程日志：计数与 chatKey，不含正文（C3）。
+    // 只进主进程日志：计数与 chatKey，不含正文（C3）。reason 是页内给的错误文本，
+    // 截断 + 去换行：不截会刷出无界长行，留换行则能被伪造日志行。
     console.log(
       report.kind === 'backfill_gap'
-        ? `[msgBridge] backfill 跳过 viewId=${viewId} chat=${report.chatKey} reason=${report.reason}`
-        : `[msgBridge] backfill 进度 viewId=${viewId} ${report.chatsDone}/${report.chatsTotal} msgs=${report.messages}`
+        ? `[msgBridge] backfill 跳过 viewId=${viewId} chat=${report.chatKey} reason=${oneLine(report.reason)}`
+        : `[msgBridge] backfill 进度 viewId=${viewId} ${report.chatsDone}/${report.chatsTotal} msgs=${report.messages} dropped=${hub.dropped}`
     )
     return
   }

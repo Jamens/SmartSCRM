@@ -61,24 +61,69 @@ function withWpp(wpp: Partial<WppLike> | null, fn: () => Promise<void>): Promise
   })
 }
 
+/** 会话侧同样按真实形状做：`chat.list()` 回来的也是模型实例，字段在原型上。 */
+class ChatLike {
+  d: Record<string, unknown>
+  constructor(d: Record<string, unknown>) {
+    this.d = d
+  }
+  get id(): WaChatModel['id'] {
+    return this.d['id'] as WaChatModel['id']
+  }
+  get name(): string | undefined {
+    return this.d['name'] as string | undefined
+  }
+  get formattedTitle(): string | undefined {
+    return this.d['formattedTitle'] as string | undefined
+  }
+  get archived(): boolean | undefined {
+    return this.d['archived'] as boolean | undefined
+  }
+}
+
+function chat(d: Record<string, unknown>): WaChatModel {
+  return new ChatLike(d) as unknown as WaChatModel
+}
+
 test('补底把会话标题随批次带上：WA 的自聊 name 是空的，标题在 formattedTitle 上', async () => {
-  const chats = [{ id: { _serialized: '861380001001@c.us' }, formattedTitle: '@Jamensd' }] as unknown as WaChatModel[]
+  const chats = [chat({ id: { _serialized: '861380001001@c.us' }, formattedTitle: '@Jamensd' })]
   const getMessages = async (): Promise<WaMsgModel[]> => [msg(true, 'AAA'), msg(false, 'BBB')]
   await withWpp({ chat: { list: async () => chats, getMessages } } as unknown as WppLike, async () => {
     const frames: BridgeReport[] = []
     const ctx: CollectCtx = { emit: (r) => frames.push(r) }
     await runBackfill(10, ctx)
     const messages = frames.filter((f) => f.kind === 'message')
-    // 补底是"先整页取够 limit 再切片"，所以帧数按 limit 收口而不去重——去重交给 uk_msg。
-    const distinct = new Set(messages.map((m) => (m.kind === 'message' ? m.message.msgKey : '')))
-    assert.equal(distinct.size, 2)
-    assert.ok(messages.length >= 2)
+    // 不满一页就是历史到底：只有"还在按 limit 硬翻页"时会拿到 10 帧（2 行 × 5 页）。
+    assert.equal(messages.length, 2)
+    assert.equal(new Set(messages.map((m) => (m.kind === 'message' ? m.message.msgKey : ''))).size, 2)
     // 每一帧都必须带标题：后端 titleOf 只在批次里找，全不带就是列表页一片空标题
     for (const m of messages) {
       assert.ok(m.kind === 'message')
       assert.equal(m.message.chatTitle, '@Jamensd')
     }
   })
+})
+
+test('整页都是重叠旧行时不再往前翻：limit 够不满也要停，不然这个循环永不结束', async () => {
+  let calls = 0
+  const page = (): WaMsgModel[] => Array.from({ length: 50 }, (_, i) => msg(true, `S${i}`))
+  const getMessages = async (_ck: string, opts: { limit: number }): Promise<WaMsgModel[]> => {
+    calls += 1
+    // 每页都给满 PAGE_SIZE（所以"不满一页"不会先兜住），且翻到哪都是同一批 50 条。
+    assert.ok(opts.limit === 50)
+    return page()
+  }
+  await withWpp(
+    { chat: { list: async () => [chat({ id: { _serialized: '861380001001@c.us' }, name: 'Alice' })], getMessages } } as unknown as WppLike,
+    async () => {
+      const frames: BridgeReport[] = []
+      await runBackfill(80, { emit: (r) => frames.push(r) })
+      const emitted = frames.filter((f) => f.kind === 'message')
+      assert.equal(calls, 2, '第二页一条新行都没有就该收手，不是继续翻到 limit')
+      assert.equal(emitted.length, 50)
+      assert.equal(new Set(emitted.map((m) => (m.kind === 'message' ? m.message.msgKey : ''))).size, 50)
+    }
+  )
 })
 
 test('补底按 limit 收口：够数就停，不把整个会话拉穿', async () => {

@@ -37,6 +37,19 @@ test('带 Bearer，且 body 就是 MessageBatchDTO 的形状', async () => {
   })
 })
 
+test('postStatus 的 body 是 MessageStatusDTO 的形状：updates 是数组，不是平铺的 msgKey/status', async () => {
+  const { calls, impl } = fakeFetch({ body: { code: 0, data: { updated: 1 } } })
+  const api = createMsgApi({ token: () => 'T', fetchImpl: impl, apiBase: 'http://h:8180' })
+  const out = await api.postStatus({ accountId: 7, chatKey: '861380000@c.us', msgKey: 'm1', status: 'read' })
+  assert.equal(out?.updated, 1)
+  assert.equal(calls[0].url, 'http://h:8180/api/messages/status')
+  assert.deepEqual(JSON.parse(String(calls[0].init.body)), {
+    accountId: 7,
+    chatKey: '861380000@c.us',
+    updates: [{ msgKey: 'm1', status: 'read' }]
+  })
+})
+
 test('未登录不发请求；后端 code!=0 也算失败（返回 null 让队列退避）', async () => {
   const noToken = fakeFetch({ body: { code: 0, data: {} } })
   assert.equal(await createMsgApi({ token: () => null, fetchImpl: noToken.impl }).postBatch({ accountId: 1, activeChatKey: null, messages: [msg('a')] }), null)
