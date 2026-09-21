@@ -39,8 +39,18 @@ export function report(r: BridgeReport): void {
   else ele()?.sendToHost(REPORT_CHANNEL, r)
 }
 
+/** 节流上报器：可调用，也可在 destroy 时撤销在途合帧定时器。 */
+export interface ThrottledReporter {
+  (r: BridgeReport): void
+  /**
+   * Task 8 评审存档的缺口 ①：backfill_progress 从 Task 11 起真的会发射，
+   * 不 cancel 的话 destroy 之后定时器照样 fire，一条旧帧在桥已卸载后仍出 IPC。
+   */
+  cancel(): void
+}
+
 /** 背压：live 帧在补底期间可能成百上千，按 kind 合帧上报，避免打爆 IPC。 */
-export function makeThrottledReporter(intervalMs = 200): (r: BridgeReport) => void {
+export function makeThrottledReporter(intervalMs = 200): ThrottledReporter {
   const latest = new Map<string, BridgeReport>()
   let timer: ReturnType<typeof setTimeout> | null = null
   const drain = (): void => {
@@ -48,7 +58,7 @@ export function makeThrottledReporter(intervalMs = 200): (r: BridgeReport) => vo
     for (const r of latest.values()) report(r)
     latest.clear()
   }
-  return (r: BridgeReport): void => {
+  const push = (r: BridgeReport): void => {
     // 只有"同 kind 的进度类"可合帧；message / send_result 每条都要真上报。
     if (r.kind === 'backfill_progress') {
       latest.set(r.kind, r)
@@ -57,6 +67,13 @@ export function makeThrottledReporter(intervalMs = 200): (r: BridgeReport) => vo
     }
     report(r)
   }
+  return Object.assign(push, {
+    cancel: (): void => {
+      if (timer) clearTimeout(timer)
+      timer = null
+      latest.clear()
+    }
+  })
 }
 
 export function onCommand(cb: (c: BridgeCommand) => void): () => void {

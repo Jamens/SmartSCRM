@@ -3,7 +3,7 @@ import { getSession } from '../../state/session'
 import { getMainWindow } from '../../window/mainWindow'
 import { viewManager } from '../../webContentsView/manager'
 import { platformOfAccountType } from '@shared/chatPlatform'
-import type { BridgeCommand, BridgeReport, BridgeState, LiveFrame } from '@shared/chatTypes'
+import type { BridgeCommand, BridgeReport, BridgeState, LiveFrame, NormalizedMessage } from '@shared/chatTypes'
 import { accountOfView, refreshAccounts, type AccountEntry } from './accountDirectory'
 import { BridgeMount } from './bridgeMount'
 import { CollectorHub } from './collectorHub'
@@ -96,6 +96,16 @@ export function observeLoginStatus(viewId: string, isLogin: boolean): void {
   })
 }
 
+/**
+ * 归属盖章（Task 11 brief Step 2 的判定表）：页内一律如实报 live，"是不是本应用发的"在这里判——
+ * 主进程两边都知道（localId 是它生成的，msgKey 是它收回的）。发送链（Task 12）落地时在同一处
+ * 加 SendRegistry 匹配：命中未决发送改 app_send 并带 sendLocalId，未命中才是 native_send。
+ */
+function stampOutboundSource(message: NormalizedMessage): NormalizedMessage {
+  if (message.direction === 'out' && message.source === 'live') return { ...message, source: 'native_send' }
+  return message
+}
+
 /** 页 → 主。通道名 `msg-report`，白名单在 webContentsView/ipc.ts。 */
 export function handleBridgeReport(viewId: string, data: unknown): void {
   const report = data as BridgeReport | null
@@ -110,10 +120,36 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
       accountId: entry.accountId,
       platform: entry.platform ?? 'whatsapp',
       activeChatKey: activeChatOf(viewId),
-      message: report.message
+      message: stampOutboundSource(report.message)
     }
     hub.push(frame)
     getMainWindow()?.webContents.send('msg:live', frame)
+    return
+  }
+  if (report.kind === 'ack') {
+    // 页内已带真 chatKey（wa-js 4.6.0 的 ack 事件带 chat）；缺 chatKey 的行在后端
+    // advanceStatus 的 WHERE 上匹配不上，updated:0 是常态而不是错误。
+    void api.postStatus({
+      accountId: entry.accountId,
+      chatKey: report.chatKey,
+      msgKey: report.msgKey,
+      status: report.status
+    })
+    getMainWindow()?.webContents.send('msg:live', {
+      viewId, accountId: entry.accountId, platform: entry.platform ?? 'whatsapp',
+      activeChatKey: activeChatOf(viewId),
+      message: { chatKey: report.chatKey, msgKey: report.msgKey, direction: 'out',
+        mediaType: 'text', msgTimeEpochSec: 0, status: report.status, source: 'live' }
+    } satisfies LiveFrame)
+    return
+  }
+  if (report.kind === 'backfill_progress' || report.kind === 'backfill_gap') {
+    // 只进主进程日志：计数与 chatKey，不含正文（C3）。
+    console.log(
+      report.kind === 'backfill_gap'
+        ? `[msgBridge] backfill 跳过 viewId=${viewId} chat=${report.chatKey} reason=${report.reason}`
+        : `[msgBridge] backfill 进度 viewId=${viewId} ${report.chatsDone}/${report.chatsTotal} msgs=${report.messages}`
+    )
     return
   }
   if (report.kind === 'active_chat') {
