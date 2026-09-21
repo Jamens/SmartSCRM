@@ -5241,7 +5241,7 @@ git commit -m "feat(P6): WhatsApp 页内消息归一化、实时事件与限速�
 - Modify: `apps/desktop/src/main/services/msgBridge/index.ts`（`sendText` / `requestBackfill` / 消化 `send_result` / 盖章 / 掉线结清）
 - Modify: `apps/desktop/src/main/ipc.ts`（三条 invoke）
 - Modify: `apps/desktop/src/preload/index.ts`（`scrm.msg` 五个成员）
-- Modify: `apps/desktop/electron.vite.config.ts`（`preload` 也要 `@shared` 别名——Task 7 只加了 `main` / `renderer`）
+- Modify: `apps/desktop/src/main/services/msgBridge/collectorHub.ts` + `collectorHub.test.ts`（后端逐行拒绝不是投递失败，重试救不回来，也不能静默：`deliver` 打一行 `[msgHub] 本批拒绝 n/m … reasons=…`）
 
 **Interfaces:**
 - Consumes: Task 9 的 `SendRegistry` / `isSendable` / `createMsgApi.postStatuses({accountId, chatKey, updates})`（一次一条消息也要写成 `updates: [{msgKey, status}]`，平铺形状会被后端 Bean Validation 打成 400，而 `call()` 把非 2xx 折成 null）；Task 10 的 `bridgeOf` / `pushToBridge` / `accountOfId` / `collectorHub`；Task 11 的 `normalizeWa` 与 `wa-js` 的 `WPP.chat.sendTextMessage`。
@@ -5757,14 +5757,7 @@ import type { SendRequest } from '@shared/chatTypes'
   }
 ```
 
-并在文件顶部 `import type { BridgeState, LiveFrame, SendReceipt, SendRequest } from '@shared/chatTypes'`。**`electron.vite.config.ts` 的 `preload` 段也要 `resolve.alias`**（Task 7 只给 `main` / `renderer` 加了；preload 单独打包，没有别名会在构建期报 `@shared/chatTypes` 解析失败）：
-
-```ts
-  preload: {
-    resolve: { alias: { '@shared': resolve('src/shared') } },
-    build: { /* 原样保留 */ }
-  },
-```
+并在文件顶部 `import type { BridgeState, LiveFrame, SendReceipt, SendRequest } from '@shared/chatTypes'`。**preload 段不需要为此再加 `resolve.alias`**（Task 12 实测：这一条是纯类型 import，esbuild 先擦掉类型再谈解析，删掉别名后 `electron-vite build` 仍 exit 0，产物 `preload/index.js` 里 `msg` 的五个成员齐全；构建期的解析口径与 `tsconfig.node.json` 的 `paths` 是两件事）。
 
 - [ ] **Step 7: 验证**
 
@@ -5772,7 +5765,7 @@ import type { SendRequest } from '@shared/chatTypes'
 cd apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run build:bridge && pnpm run typecheck
 ```
 
-预期：`# pass 43`（39 + send 4）；typecheck 全绿；`resources/msg-bridge.bundle.js` 重新产出且体积变化在几 KB 内（发送层很薄）。
+预期：`test:unit` 全绿（Task 12 收口时实测 `# pass 63` = 基线 48 + send 4 + SendAttribution 7 + 桥回执 2 + 采集拒绝日志 2；绝对数按 C14 只作参照）；typecheck 全绿；`resources/msg-bridge.bundle.js` 重新产出且体积变化在几 KB 内（发送层很薄）。
 
 真实登录态下的端到端（`tmp/p6e-send.mjs`，CDP 套路同 `verify-renderer-cdp` 记忆：抬窗口 → 断言 `visibilityState === 'visible'` → 结束前 `process.exit()`）。**测试正文统一带 `P6E-` 前缀与时间戳，跑完必须删除自聊里这几条**（spec §12 与既有约定）：
 
@@ -5784,9 +5777,9 @@ cd apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run build:bridge &&
 | 4 | 同 `msg_key` 的行数 | `=== 1`（不是"看起来只有一条"，要拿 `total`/数组长度比对：两条说明补写与事件流没被登记消解） |
 | 5 | 等 15s 再查同一条；原地不动时改用页内合成事件复测 | `status` 从 `pending` 前进到 `sent`/`delivered`/`read` 之一。**自聊档位拿不到这一步的 B 档通过**：wa-js 4.6.0 的 `chat.msg_ack_change` 只在"对端回执"或 ack 落到 1 时发，而自聊消息进 Store 时已经是已读，事件根本不发（Task 11 实测）。原地不动因此**不是**缺陷证据，要补一档：`WPP.emit('chat.msg_ack_change', {ids:[<序列化 key 的 MsgKey 形状>], chat, ack:3})` 合成一次事件 → 三条 id 应在**一个** `postStatuses` 请求里全部前进（合批的落库效果）。真实对端回执留给 Task 19 的多端场景 |
 | 6 | 在**原生 WhatsApp 界面**手发一条 `P6E-NATIVE-<ts>` | 入库且 `source === 'native_send'`、`send_local_id` 为 `NULL`（与第 3 条构成反向对照：全打成 app_send 就说明认领过宽） |
-| 7 | `send` 一个不存在的 chatKey（`'0@c.us'`） | 回执 `ok:false`；**记下 detail 原文**，与 `classify` 的归类不符就补正则并回到 Step 4 的测试 |
+| 7 | `send` 一个不存在的 chatKey（`'0@c.us'`） | 回执 `ok:false`；**记下 detail 原文**，与 `classify` 的归类不符就补正则并回到 Step 4 的测试。**Task 12 实测不成立**：`createChat:true` 会替 `0@c.us` 建出会话并返回 msgKey，回执是 `ok:true`，这一档拿不到失败样本；`CHAT_NOT_FOUND` 的分类词只有 A 档。该行随后被后端 `ChatKeys` 的 `WA_PEER=^(\d{5,20})@(c\.us\|lid\|s\.wallet)$` 逐行拒绝（`/api/messages/batch` 回 `rejected:1, reasons:["<msgKey>: chat_key 与平台不匹配"]`，不写库），页内看得见、库里没有——所以 `deliver` 必须打 `[msgHub] 本批拒绝` 那一行。真异常分类词表留给 Task 19 |
 | 8 | 无桥账号（未登录视图的 accountId）调 `send` | `{ok:false, error:'BRIDGE_OFFLINE'}`，且页内没有新消息（"不排队"的口径：不在线就直接拒，不延迟发） |
-| 9 | 桥在线但把视图 `destroyView` 掉之前发出的未回执那条 | invoke 以 `BRIDGE_OFFLINE` 结掉（Step 5 的 `broadcastState` 结清），dev 终端有 `结清未决发送` 一行 |
+| 9 | 桥在线但把视图 `destroyView` 掉之前发出的未回执那条 | invoke 以 `BRIDGE_OFFLINE` 结掉（Step 5 的 `broadcastState` 结清），dev 终端有 `结清未决发送` 一行。**造在途态别指望页内改写 `WPP.chat.sendTextMessage`**（Task 12 实测：CDP 赋值静默不生效，消息照发出去）；用 `window.scrm.msg.send()` 发一条**不 await**、随即 `destroyView`，再看 dev 日志与那条库行的 `status` 是否停在 `pending` |
 | 10 | 跑完在自聊里删除本轮 `P6E-*` 消息 | 原生页删除成功；库内行保留（P6 不做删除同步，spec §1 非目标），并在结论里写明这一条已知差异 |
 
 第 3、4、6 三条是"发送归属"的成对证据：只跑第 3 条无法区分"认领生效"与"事件流根本没来所以没人反驳"。第 6 条给出反例通道，第 4 条钉住不重复。
