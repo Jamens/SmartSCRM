@@ -1,6 +1,13 @@
 {
   "extends": "@electron-toolkit/tsconfig/tsconfig.node.json",
-  "include": ["src/shared/**/*.ts", "src/bridge/**/*.ts"],
+  "include": [
+    "src/shared/**/*.ts",
+    "src/bridge/**/*.ts",
+    "src/main/services/msgBridge/collectorHub.ts",
+    "src/main/services/msgBridge/sendRegistry.ts",
+    "src/main/services/msgBridge/msgApi.ts",
+    "src/main/services/msgBridge/*.test.ts"
+  ],
   "compilerOptions": {
     "composite": false,
     "noEmit": true,
