@@ -2513,7 +2513,7 @@ cd apps/server && set -o pipefail && ./mvnw -q test -Dtest='ScopeSettingsTest' 2
 | 4 | `POST /api/translation/translate`（`tmp/p6b-scope.json`，customerId=上面那个） | 译文按 `vi` 方向产出，`toLangCode:'vi'` |
 | 5 | 同 text 不带 customerId | `toLangCode` 是全局的 `zh-CN`，且 `fromLangCode/toLangCode/cacheKey` 与第 4 条**都不同**（缓存天然分键的证据） |
 | 6 | 第 4 条重发一次 | `cached:true`（客户行确实参与了缓存命中，不是每次都重算） |
-| 7 | `DELETE /api/translation/settings/customer/<id>` 后 `GET ?customerId=<id>` | `inherited:true`、值回到全局 |
+| 7 | `DELETE /api/translation/settings/customer/<id>` 后 `GET ?customerId=<id>` | `inherited:true`、值回到全局。**本条必须排在第 10 条之后跑**：DELETE 拆掉的正是第 10 条还要读的覆盖行，按表序执行会把第 10 条变成"全局回落"的空断言（Task 6 实跑即为此换了序） |
 | 8 | `PUT /settings` 带 `scope:'customer'` 但不带 `scopeKey` | `code:40000` |
 | 9 | `PUT /settings` 带 `scope:'customer'`, `scopeKey:999999` | `code:40404` |
 | 10 | 第 2 步之后 `PUT /settings`（无 scope，改全局 `receiveToLang:'en'`）再 `GET ?customerId=<id>` | 客户行仍是 `vi`（改全局不能顺手改掉覆盖行） |
@@ -10895,6 +10895,7 @@ git commit -m "feat(P6): 会话头语向弹层与陌生建客户闭环（覆盖�
 - Create: `apps/desktop/src/shared/translateKey.ts` · `translateKey.test.ts`
 - Modify: `apps/desktop/src/inject/core/translation/domScan.ts`、`apps/desktop/src/inject/core/translation/inputPreview.ts`（请求带上页内会话提示）
 - Modify: `apps/desktop/src/inject/core/PlatformAdapter.ts`（+`chatHint(): string | null`，基类返回 null）、`apps/desktop/src/inject/platforms/whatsapp/index.ts`（实现：读 `document.title`）
+- Modify: `apps/server/src/main/java/com/smartscrm/server/service/provider/TencentProvider.java`（补上 `from='auto'` 的对称缺口——Task 6 只放了百度那侧，腾讯渠道配 `auto` 仍会静默降级到模拟引擎；本任务的会话投影会把 `auto` 带上这条路径，缺口从"潜伏"变成"会被踩到"。改法与 Task 6 的 `BaiduProvider` 同形，`TencentProviderTest` 保持全绿）
 
 **Interfaces:**
 - Consumes: Task 6 的 `ScopeSettings.resolve(customerId, customer, global)` 与 `customerRow(tenantId, customerId)`、Task 1 的 `ChatConversation`（`uk_conv = (tenant_id, platform, account_id, chat_key)`）、Task 10 的 `accountOfView(viewId): AccountEntry | null`、Task 10/11 的 `activeChatOf(viewId): string | null`。
