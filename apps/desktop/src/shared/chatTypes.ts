@@ -85,7 +85,11 @@ export type BridgeReport =
   | { kind: 'backfill_progress'; chatsDone: number; chatsTotal: number; messages: number }
   | { kind: 'backfill_gap'; chatKey: string; reason: string }
   | { kind: 'send_result'; localId: string; ok: boolean; msgKey?: string; error?: SendError; detail?: string }
-  | { kind: 'ack'; chatKey: string; msgKey: string; status: MsgStatus }
+  /**
+   * 一次页内 ack 事件一帧：wa-js 的回执事件本来就带着 `ids[]`（整群读回执一次给几十条），
+   * 拆成一 id 一帧会把一次更新变成几十个并发请求，而落库那侧每个请求是一个带行锁的事务。
+   */
+  | { kind: 'ack'; chatKey: string; msgKeys: string[]; status: MsgStatus }
   | { kind: 'active_chat'; chatKey: string | null }
   | { kind: 'logged_out' }
 

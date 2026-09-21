@@ -48,14 +48,18 @@ export function startLiveCollect(ctx: CollectCtx): () => void {
       // 自聊消息进 store 时就已经是已读，不会有任何 ack 事件，这条链在自聊里测不出来。
       // 带真 chatKey 上报，后端 advanceStatus 的 WHERE 钉着 chat_key，空串永远匹配不上。
       const chatKey = payload.chat?._serialized ?? ''
+      const keys: string[] = []
       for (const key of payload.ids ?? []) {
         const id = key?._serialized
         if (!id) continue
         const prev = lastStatus.get(id)
         if (prev && !canAdvance(prev, status)) continue
         rememberStatus(id, status)
-        ctx.emit({ kind: 'ack', chatKey, msgKey: id, status })
+        keys.push(id)
       }
+      // 一次事件一帧：整群读回执一条事件给几十上百个 id，拆开发就是几十个并发请求，
+      // 每个请求在落库侧是一个带行锁的事务。同批同 chatKey 同 status，天然就是一个 updates[] 批次。
+      if (keys.length > 0) ctx.emit({ kind: 'ack', chatKey, msgKeys: keys, status })
     }),
     store.on('conn.logout', () => ctx.emit({ kind: 'logged_out' }))
   ]
@@ -131,11 +135,22 @@ export async function runBackfill(limit: number, ctx: CollectCtx): Promise<void>
         const batch = await chatApi.getMessages(chatKey, { page, limit: PAGE_SIZE })
         if (!Array.isArray(batch) || batch.length === 0) break
         const before = collected.length
+        let noId = 0
         for (const raw of batch) {
           const id = raw.id?._serialized
-          if (!id || seen.has(id)) continue
+          if (!id) {
+            noId += 1
+            continue
+          }
+          if (seen.has(id)) continue
           seen.add(id)
           collected.push(raw)
+        }
+        // 整页都取不到 id 与"历史到此为止"在日志里长得一样（都是 msgs=0），必须分开报：
+        // 前者意味着 wa-js 换了字段形状（原型 getter 那一类事故），本轮采集其实一条都没落。
+        if (noId === batch.length) {
+          ctx.emit({ kind: 'backfill_gap', chatKey, reason: `整页 ${batch.length} 条都没有 id._serialized` })
+          break
         }
         // 三个停下条件：不满一页 = 历史到底；够 limit 了；这一页一条新行都没有
         // （wa-js 的翻页会返回重叠区间，整页都是旧行时再翻下去就永远不会动）。

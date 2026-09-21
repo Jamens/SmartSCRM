@@ -108,7 +108,9 @@ function stampOutboundSource(message: NormalizedMessage): NormalizedMessage {
 
 /** 页内来的文本进主进程日志前收成一行：留着换行就等于允许伪造日志行，长度也不该无界。 */
 function oneLine(text: string | undefined, max = 200): string {
-  return (text ?? '').replace(/[\r\n]+/g, ' ').slice(0, max)
+  // \v \f 之类也算换行（Chrome 的 console 会把它们断行），所以按 C0 控制字符整体收。
+  // eslint-disable-next-line no-control-regex
+  return (text ?? '').replace(/[\x00-\x1f]+/g, ' ').slice(0, max)
 }
 
 /** 页 → 主。通道名 `msg-report`，白名单在 webContentsView/ipc.ts。 */
@@ -136,26 +138,34 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
     // 拼成 NormalizedMessage 会让渲染层按 msgKey 合并时把已有行的方向与归属改脏
     // （`advanceStatus` 的 WHERE 钉着 `direction='out'`，入库侧的行却是各自带 source 的）。
     // Task 15 要做气泡对勾时，另立一个"状态帧"形状，别复用消息类型。
-    if (!report.chatKey) {
-      // 后端 `chatKey` 上是 `@NotBlank`：空串只会换来一个被 `call()` 折成 null 的 400。
-      console.log(`[msgBridge] ack 丢弃 viewId=${viewId} msgKey=${report.msgKey}：页内没带 chatKey`)
+    const keys = Array.isArray(report.msgKeys) ? report.msgKeys : []
+    // 后端 `chatKey` 上是 `@NotBlank`、`updates` 上是 `@NotEmpty`：缺任一个都只是被 `call()` 折成 null 的 400。
+    if (!report.chatKey || keys.length === 0) {
+      console.log(`[msgBridge] ack 丢弃 viewId=${viewId} chat=${oneLine(report.chatKey)} keys=${keys.length}：页内没带 chatKey 或 msgKey`)
       return
     }
+    // 一次页内事件一请求：整群读回执一条事件能带几十上百个 id，拆成一 id 一请求就是几十个
+    // 带行锁的并发事务，而 `updates[]` 的 200 上限正是留给这种批的。
     void api
-      .postStatus({ accountId: entry.accountId, chatKey: report.chatKey, msgKey: report.msgKey, status: report.status })
+      .postStatuses({
+        accountId: entry.accountId,
+        chatKey: report.chatKey,
+        updates: keys.map((msgKey) => ({ msgKey, status: report.status }))
+      })
       .then((r) => {
         // updated:0 是常态（乱序 ack 被阶梯挡住），只有"整条请求没成"才值得刷屏。
-        if (!r) console.log(`[msgBridge] ack 上报失败 viewId=${viewId} msgKey=${report.msgKey}`)
+        if (!r) console.log(`[msgBridge] ack 上报失败 viewId=${viewId} chat=${oneLine(report.chatKey)} keys=${keys.length}`)
       })
     return
   }
   if (report.kind === 'backfill_progress' || report.kind === 'backfill_gap') {
-    // 只进主进程日志：计数与 chatKey，不含正文（C3）。reason 是页内给的错误文本，
-    // 截断 + 去换行：不截会刷出无界长行，留换行则能被伪造日志行。
+    // 只进主进程日志：计数与 chatKey，不含正文（C3）。页内来的文本（chatKey / reason）一律
+    // 经 oneLine：不截会刷出无界长行，留换行则能被伪造日志行。
+    // droppedTotal 是 CollectorHub 的进程累计丢弃数，不是本轮的：本轮看 msgs=。
     console.log(
       report.kind === 'backfill_gap'
-        ? `[msgBridge] backfill 跳过 viewId=${viewId} chat=${report.chatKey} reason=${oneLine(report.reason)}`
-        : `[msgBridge] backfill 进度 viewId=${viewId} ${report.chatsDone}/${report.chatsTotal} msgs=${report.messages} dropped=${hub.dropped}`
+        ? `[msgBridge] backfill 跳过 viewId=${viewId} chat=${oneLine(report.chatKey)} reason=${oneLine(report.reason)}`
+        : `[msgBridge] backfill 进度 viewId=${viewId} ${report.chatsDone}/${report.chatsTotal} msgs=${report.messages} droppedTotal=${hub.dropped}`
     )
     return
   }
