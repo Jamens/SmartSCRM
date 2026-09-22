@@ -77,6 +77,13 @@ test('advanceStatus：一批三个键里两个命中就推两条，没命中的�
   // 只并 status：正文与 ts 不是它的字段，碰不得（逐字段覆盖那条老路的反面）。
   assert.equal(out.rows[0].body, '正文 A')
   assert.equal(out.rows[0].ts, 10)
+  // 命中行必须是**新对象**，入参那一份一个字节都不能动。
+  // 这不是风格问题：`out = [...rows]` 只是浅拷贝，`out[at].status = ...` 那种就地改写的正是
+  // 缓存里正被观察者引用的行对象；而 TanStack v5 的 `setQueryData` 默认走结构共享
+  // （`replaceData → replaceEqualDeep`，深度相等时直接把旧引用还回去），于是"新数据"与旧数据
+  // 是同一个对象、观察者收不到任何通知——症状恰好是本项目最刺眼的那一条：勾永远画不上。
+  assert.notEqual(out.rows[0], before[0])
+  assert.equal(before[0].status, 'pending')
   // 帧里没点名的行不被牵连（c 已在 read，见下一条的兜底）。
   assert.equal(out.rows[2].status, 'read')
 })

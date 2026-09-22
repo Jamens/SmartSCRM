@@ -198,16 +198,18 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
       // flush 把窗口从"最多 2s"缩到"一次 HTTP 往返"，**不等于消除**：ack 仍可能比 `postBatch` 返回更早到。
       // 副作用是当时队列里已有的采集帧会被一起冲出去（`drain` 冲的是整个队列），风暴批量被切小、请求条数
       // 变多，正确性不受影响。`flush()` 自己的 `running` 去重在 `CollectorHub` 里，这里不加第二次防抖。
-      void hub.flush().catch(() => undefined)
+      // 排在广播**之后**：`flush()` 的同步段（`disarm()` 到 `drain()` 起头）万一抛，`.catch` 是接不住同步抛的，
+      // 而广播那句才是页面上那口气——先把它送出去，页面不该被一次采集侧的意外连坐。
       getMainWindow()?.webContents.send('msg:live', frame)
+      void hub.flush().catch(() => undefined)
     }
     return
   }
   if (report.kind === 'ack') {
     // ack 走自己那份形状（`StatusFrame`）与自己那条通道（`msg:status`），不拼成 `NormalizedMessage`
     // 广播 `msg:live`：这帧没有真的 body / direction / source，而渲染层按 msgKey 合并时是逐字段
-    // 覆盖，一帧只有状态的东西会把已有行的方向与正文抹成 null（`advanceStatus` 的 WHERE 钉着
-    // `direction='out'`，入库侧那行却是各自带 source 的）。
+    // 覆盖，一帧只有状态的东西会把已有行的方向与正文抹成 null（后端 `ChatMessageMapper.advanceStatus`
+    // 的 WHERE 钉着 `direction='out'`，入库侧那行却是各自带 source 的）。
     // 页内那条链是半可信的（被内嵌的视图不一定是我们自己的页面），而合批把一条坏 key 的代价
     // 从"少更一行"放大成"少更一批"，所以在进请求前先把不合法的剔掉、并留一行可数出来的丢弃。
     const raw = Array.isArray(report.msgKeys) ? report.msgKeys : []
@@ -227,6 +229,10 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
     // 与后端这次返回几条无关；下面 `ack 全批未推进` 那行日志留着，它仍然是"整条 ack 链死了"和
     // "只是重复回执"唯一的区分点。
     // 超出上限只丢广播、不丢上报；帧里只有键与状态词，没有正文可漏（C2/C3）。
+    // 这一刀切出来的**分叉方向**是已知的：后端 `MessageStatusDTO.updates` 带 `@Size(max = 200)`，
+    // 第 201 把键起整批 400、`postStatuses` 一路折成 null（一行都没落库），而页面这一侧已经按前
+    // 200 把键推进过了。今天不修（要修就两头一起想：上报也逐批提交，或后端放宽），记在这儿是
+    // 为了让改 `STATUS_KEYS_MAX` 的人知道这个数字同时钉着一条广播与一个 400。
     // 已知限制：尾巴按 `gcTime` 五分钟回收，一条状态**只在尾巴里**推进过、后端那一行没落成的话，
     // 五分钟后重读会退回 `pending` —— 上面 `send_result` 分支那一次 `hub.flush()` 就是为了让这种行尽量不存在。
     getMainWindow()?.webContents.send('msg:status', {
