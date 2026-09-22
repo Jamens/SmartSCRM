@@ -68,6 +68,11 @@ export default function MessageBubble({ row, showSender, failedHint }: Props): R
   const Media = mediaType === 'text' ? null : MEDIA_ICON[mediaType]
   return (
     <div
+      /**
+       * 值是平台原生 id 本身（`id._`），不带 chatKey：同一条会话内唯一，跨会话不保证。
+       * Task 16 的锚点跳转要按它定位时，选择器必须限定在当前线程容器里
+       * （`[data-p6-scroller="thread"] [data-msg-key="..."]`），否则可能命中另一个会话缓存页里的同键节点。
+       */
       data-msg-key={row.msgKey}
       className={cn('mb-2 flex flex-col', out ? 'items-end' : 'items-start')}
     >

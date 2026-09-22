@@ -1,9 +1,9 @@
 // src/renderer/src/lib/chatDays.ts
-import dayjs from 'dayjs'
+// 相对路径 + `.ts` 后缀是闸门要求的：本文件被 `node --test` 直接跑，Node 不认 `@shared/*` 别名
+// （msgBridge 那几份进闸门的文件同一个写法）。非闸门文件照旧用 `@shared/chatTime`。
+import { chatClock, chatDayBefore, chatDayKey, chatDayParts } from '../../../shared/chatTime.ts'
 
-const DAY_KEY = 'YYYY-MM-DD'
-
-/** `day` 是本地日键，同时当 React key 用：它稳定、可比、可读。 */
+/** `day` 是东八区日键（`chatDayKey` 的形状），同时当 React key 用：它稳定、可比、可读。 */
 export interface DaySection<T> {
   day: string
   rows: T[]
@@ -17,7 +17,7 @@ export interface DaySection<T> {
 export function groupByDay<T extends { ts: number }>(rows: readonly T[]): DaySection<T>[] {
   const out: DaySection<T>[] = []
   for (const row of [...rows].sort((a, b) => a.ts - b.ts)) {
-    const day = dayjs(row.ts).format(DAY_KEY)
+    const day = chatDayKey(row.ts)
     const last = out[out.length - 1]
     if (last && last.day === day) last.rows.push(row)
     else out.push({ day, rows: [row] })
@@ -25,13 +25,22 @@ export function groupByDay<T extends { ts: number }>(rows: readonly T[]): DaySec
   return out
 }
 
-/** 日头文案（spec §8 的"日分组"）。 */
+/**
+ * 同一个文案规则服务两处：日头（`dayLabel`）与列表右侧的绝对时间（`listTime`）。
+ * 年份比较用日键自己拆出来的数，不解析成 Date——解析就会再引入一次"哪个区"的问题。
+ */
+function absoluteDayLabel(day: string, todayKey: string): string {
+  const { year, month, day: dom } = chatDayParts(day)
+  const text = `${month}月${dom}日`
+  return year === chatDayParts(todayKey).year ? text : `${year}年${text}`
+}
+
+/** 日头文案（spec §8 的"日分组"）。`day` 是 `chatDayKey` 出来的日键。 */
 export function dayLabel(day: string, nowMs: number = Date.now()): string {
-  const today = dayjs(nowMs)
-  const target = dayjs(day)
-  if (target.format(DAY_KEY) === today.format(DAY_KEY)) return '今天'
-  if (target.format(DAY_KEY) === today.subtract(1, 'day').format(DAY_KEY)) return '昨天'
-  return target.year() === today.year() ? target.format('M月D日') : target.format('YYYY年M月D日')
+  const todayKey = chatDayKey(nowMs)
+  if (day === todayKey) return '今天'
+  if (day === chatDayBefore(todayKey)) return '昨天'
+  return absoluteDayLabel(day, todayKey)
 }
 
 /**
@@ -42,9 +51,9 @@ export function listTime(ts: number, nowMs: number = Date.now()): string {
   const diffMs = nowMs - ts
   if (diffMs < 60_000) return '刚刚'
   if (diffMs < 60 * 60_000) return `${Math.floor(diffMs / 60_000)}分钟前`
-  const at = dayjs(ts)
-  const today = dayjs(nowMs)
-  if (at.format(DAY_KEY) === today.format(DAY_KEY)) return at.format('HH:mm')
-  if (at.format(DAY_KEY) === today.subtract(1, 'day').format(DAY_KEY)) return '昨天'
-  return at.year() === today.year() ? at.format('M月D日') : at.format('YYYY年M月D日')
+  const todayKey = chatDayKey(nowMs)
+  const day = chatDayKey(ts)
+  if (day === todayKey) return chatClock(ts)
+  if (day === chatDayBefore(todayKey)) return '昨天'
+  return absoluteDayLabel(day, todayKey)
 }

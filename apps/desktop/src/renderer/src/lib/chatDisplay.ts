@@ -1,6 +1,6 @@
 // src/renderer/src/lib/chatDisplay.ts
-import dayjs from 'dayjs'
 import type { ConversationVO } from '@/api/messages'
+import { chatClock } from '@shared/chatTime'
 
 /**
  * 没有 title 时至少让人认得出这是谁：chat_key 的 `@c.us` / `@telegram` 后缀
@@ -11,7 +11,7 @@ export function titleOfConversation(c: Pick<ConversationVO, 'title' | 'chatKey'>
   return c.chatKey.split('@')[0] ?? c.chatKey
 }
 
-/** 气泡里的时刻：日分组已经交代了"哪天"，这里只到分。 */
+/** 气泡里的时刻：日分组已经交代了"哪天"，这里只到分。与日头同区（东八区），否则气泡上的分和它所在那天的界不是同一把尺。 */
 export function timeOfMessage(ts: number): string {
-  return dayjs(ts).format('HH:mm')
+  return chatClock(ts)
 }
