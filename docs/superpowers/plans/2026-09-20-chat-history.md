@@ -8179,7 +8179,7 @@ git commit -m "feat(P6): 聊天记录页骨架（会话列表、消息流、日�
 
 - [ ] **Step 1: 先写 `sendDraft.test.ts`**
 
-"先拦后译"与"拦不拦"这两条规则是回复框唯一的业务判断，而它在浏览器里最难复现——要同时凑出「设置开着」「草稿含中文」「自聊能收到」三件事，一旦失败分不清是判断错了还是链路断了。切成纯函数进闸门（Task 14 已经铺好第四条 glob，这里不需要再改配置）：
+"先拦后译"与"拦不拦"这两条规则是回复框唯一的业务判断，而它在浏览器里最难复现——要同时凑出「设置开着」「草稿含中文」「自聊能收到」三件事，一旦失败分不清是判断错了还是链路断了。切成纯函数进闸门（**实测更正**：`tsconfig.unit.json` 的 `include` 只有 `src/shared/**/*.ts` 是 glob，renderer 侧是**按文件名**列的，所以本任务必须往 `include` 里补 `sendDraft.ts` 与 `sendDraft.test.ts` 两行，并把它一并 `git add`——漏掉不会报错，只是这两份文件不在 unit 程序里、绿灯不代表它被检查过）：
 
 ```ts
 // src/renderer/src/lib/sendDraft.test.ts
@@ -8296,6 +8296,7 @@ cd apps/desktop && pnpm run test:unit 2>&1 | tail -6 && pnpm run typecheck
 预期：`# pass 56` / `# fail 0`（Task 14 结束的 48 + 本任务 8 条）；typecheck 全绿。
 
 > **实测回写**：链头的 48 是推演值，Task 14 结束时实测 **74**（C14）。所以本任务的期望是 **74 + 简报列出的那 8 条 = 82**，不是 56。**"数字对不上就把期望调大"不接受**：新增用例数按简报逐条数得出来，跑出来比它多或少都要当场查是哪几条没落地。
+> **本任务收口时的实测链**（每一档都是当场跑出来的数，评审修复轮只加不减）：实现 `990867a` → **82**；round 1（重试闸与文案归位，`91fd72a`）→ **86**；round 2（发送错误拆成 `lib/sendError.ts`，`0a09ead`）→ **97**；round 3（`code=` 也过消毒，`3127668`）→ **98**；Task 15b（`advanceStatus` 进 shared，`154f991`+`0f41a70`）→ **105**。Step 7 那句"与 Step 2 同数"只对**首次实现**成立，走过评审修复轮后必查这份链。
 
 - [ ] **Step 3: `api/translation.ts` 的客户级扩展**
 
@@ -8636,7 +8637,7 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
 cd apps/desktop && pnpm run test:unit 2>&1 | tail -6 && pnpm run typecheck
 ```
 
-预期：`# pass 56` / `# fail 0`（与 Step 2 同数，本步只动组件与 API 层，不加用例）；typecheck 全绿（四个 tsconfig 里 `TranslationSettingVO` 的新字段没被任何解构漏掉，`useTranslationSettings()` 的调用方一处不改也能过）。
+预期：`# pass 82` / `# fail 0`（与 Step 2 同数，本步只动组件与 API 层，不加用例）；typecheck 全绿（四个 tsconfig 里 `TranslationSettingVO` 的新字段没被任何解构漏掉，`useTranslationSettings()` 的调用方一处不改也能过）。**实测口径更正**：这一行的 82 是"Task 15 实现刚落地的数"；走完评审修复轮与 Task 15b 后本表的复跑基线是 **105**（数字链见 Step 2 末尾的回写），跑到哪一档就用当时实测的数，**不要**反过来把用例删成对上某个数。
 
 CDP（C9 抬窗口；C10 输入全部走真实键盘；后端在 8180；真实登录态缺失时按 C11 把 3–7 行标 blocked）：
 
@@ -8646,7 +8647,7 @@ CDP（C9 抬窗口；C10 输入全部走真实键盘；后端在 8180；真实�
 | 2 | 关掉「先译再发」，真实键盘敲 `test-15` + Enter | 气泡立刻出现（`status:'pending'` 的 ⏱），`data-msg-key` 以 `~` 开头；`chat_message` 里随后出现 `body='test-15'` 的行 | 原文直发路径 |
 | 3 | 打开「先译再发」，敲中文 `你好` + Enter | 发出去的气泡正文是**译文**（与草稿不同）；库里最新一条 `body` 等于气泡文本；`/api/translation/translate` 请求发出且 `type='send'` | 真的走了 HTTP 译文通道；只看"发出去了"区分不出有没有翻 |
 | 4 | 「中文拦截」两开关都开，敲 `测试拦截` 点发送 | 出现「消息含中文，已拦截发送」；尾巴行数不变；`/api/translation/translate` 请求数不增；`chat_message` 行数不增 | 拦在译前面（第 4 条单测的端到端对应物）。只看文案会放过"提示完照样发"的实现 |
-| 5 | 第 2 步之后等 ack 帧 | 同一 `data-msg-key` 节点上的图标 ⏱ → ✓ → ✓✓ 变化，且 `[data-msg-key]` 的**节点数不变** | 换键与状态推进都并在一行上；节点数 +1 就是把 ack 当新消息 |
+| 5 | 第 2 步之后等 ack 帧（**本行归 Task 15b 驱动，见该任务的 CDP 表**） | 同一 `data-msg-key` 节点上的图标 ⏱ → ✓ → ✓✓ 变化，且 `[data-msg-key]` 的**节点数不变** | 换键与状态推进都并在一行上；节点数 +1 就是把 ack 当新消息 |
 | 6 | 造一次失败（对不存在的 `chatKey`：左列没有该会话时直连 `msgService.send`，或停掉桥） | 气泡停在 ⚠ + 「重试」按钮 + 文案属于 `SEND_ERROR_TEXT` 的某一种 | 失败必须有可见出口；只有 ⚠ 没有按钮 = 插槽没接上 |
 | 7 | 真实鼠标点「重试」 | 出现**第二条** pending 气泡（新 `~localId`），第 6 行那条仍是 failed；两行的 `data-msg-key` 不同 | 「重试 = 新 localId 重发」；原地翻成功 = 把没发出去的说成发出去了 |
 | 8 | 回归 P5：翻译中心改一个开关保存 | 保存后开关保持新值（`onSuccess` 从 `setQueryData` 改成整前缀失效之后必须复跑，缓存键形状也变了）；内嵌页仍收到 `update-translation-flags` 广播且 `revision` 递增 | Step 3 是唯一一处会动到 P5 行为的改动，这条就是它的回归 |
@@ -8655,12 +8656,67 @@ CDP（C9 抬窗口；C10 输入全部走真实键盘；后端在 8180；真实�
 
 第 4、5、7 三行是这一步的硬证据：分别对应"拦截顺序"、"换键不换行"、"重试是真重发"，三条都是只看界面一眼看不出来、而错了会直接坑到销售的点。
 
+> **第 5 行的档位更正（实测事实，Task 11）**：自聊这一档**拿不到真实 ack**——wa-js 4.6.0 的
+> `chat.msg_ack_change` 只在"对端回执"或 ack 落到 1 时发，而自聊消息进 Store 时已经是已读，事件根本不发。
+> 所以第 5 行在自聊只能是 **A 档**：合成一次 `WPP.emit('chat.msg_ack_change', {ids:[...], chat, ack:3})`
+> 或用 `__p6f.status(frame)` 直接喂一帧，量的是"主进程广播 → 尾巴状态推进 → 图标换档"这段接线；
+> ⏱→✓→✓✓ 的 **B 档通过要留到 Task 19 的多端场景**（真机对端回执）。把自聊里"图标不动"当成缺陷证据是错的，
+> 反过来把 A 档通过写成"B 档已验证"更错（C11）。
+
 - [ ] **Step 8: 提交**
 
 ```bash
 git add apps/desktop/src/renderer/src/lib/sendDraft.ts apps/desktop/src/renderer/src/lib/sendDraft.test.ts apps/desktop/src/renderer/src/api/translation.ts apps/desktop/src/renderer/src/lib/liveTailSync.ts apps/desktop/src/renderer/src/components/messages/ReplyComposer.tsx apps/desktop/src/renderer/src/components/messages/MessageThread.tsx apps/desktop/src/renderer/src/pages/MessagesPage.tsx
 git commit -m "feat(P6): 记录页应用内回复（先译再发、中文拦截、乐观气泡与重试）"
 ```
+
+---
+
+### Task 15b: ack 状态帧（主进程广播 → 尾巴状态推进）
+
+> 本任务不在最初的 20 个任务里，是 Task 15 评审时发现的计划漏跳：**Step 7 第 5 行断言 ⏱→✓→✓✓，
+> 而 Task 15 的 Files 清单里没有任何主进程文件**——桥那条 ack 链在 Task 11 是"只上报后端、刻意不广播"，
+> `applyLiveFrame` 里等状态帧的分支自 Task 13 起零生产者。于是"会话开着时连一个 ✓ 都拿不到"这件事
+> 谁都没错、但没人负责。补漏的口径是：**状态帧是另一种形状，不复用 `NormalizedMessage`**
+> （`applyLiveFrame` 的合并逐字段覆盖，把只有状态的东西塞进消息形状会把已有行的 body/direction 抹成 null）。
+
+**Files:**
+- Modify: `apps/desktop/src/shared/chatTypes.ts`（新增 `StatusFrame`：`viewId` / `accountId` / `platform` / `chatKey` / `msgKeys[]` / `status`，只带键不带正文）
+- Modify: `apps/desktop/src/shared/liveTail.ts`（`furtherStatus` 从渲染层搬进来 + 新增 `advanceStatus(rows, msgKeys, status) → {rows, changed}`）
+- Test: `apps/desktop/src/shared/liveTail.test.ts`
+- Modify: `apps/desktop/src/main/services/msgBridge/index.ts`（ack 分支在两道闸之后、`postStatuses` 之前广播 `msg:status`，`STATUS_KEYS_MAX = 200` 只切广播不切上报；`send_result` 分支 `hub.push` 之后补一次 `void hub.flush()`）
+- Modify: `apps/desktop/src/preload/index.ts`（`msg.onStatus`）、`apps/desktop/src/renderer/src/services/msgService.ts`（`fallback` 补 `onStatus`）
+- Modify: `apps/desktop/src/renderer/src/lib/liveTailSync.ts`（`applyLiveStatus`、订阅与解绑、`__p6f.status` 探针；**删掉** `msgTimeEpochSec === 0` 占位分支，`FrameLanding` 收成 `'row' | 'dropped'`）
+
+**Interfaces:**
+- Consumes: Task 11 的 ack 上报链（`postStatuses`）、Task 13 的尾巴缓存（`tailKey`）与 `chatStatus.canAdvance`。
+- Produces（Task 12d / 19 要用）：`StatusFrame` 与 `msg:status` 通道 —— TG 的"认领 out 行"走同一形状；
+  `advanceStatus` 是状态推进的唯一实现处；`__p6f.status(frame)` 是 A 档入口。
+
+**两条裁定（写在代码注释里，改之前先读）**：
+1. **广播不 gate 在 `r.updated > 0` 上**。`updated === 0` 的两种原因（重复 ack / 行还没落库）里，后者恰恰最
+   需要页面立刻给出 ✓，拿它当闸会把"刚发出去"这一批整批挡掉。代价：尾巴可能领先后端，尾巴按 `gcTime`
+   五分钟回收后重读会退回 `pending` —— 第 2 条就是为了让这种行尽量不存在。
+2. **`send_result` 后面插那一次 `hub.flush()` 治的是一个结构性次序缺陷**：`advanceStatus` 是
+   `UPDATE ... WHERE msg_key = ?`，而行经批量器最多 2s 才落库、`INSERT IGNORE` 之后插进来的那行会把状态
+   永久留在 `pending`（UPDATE 早到就打空）。它把窗口从 ≤2s 缩到一次 HTTP 往返，**不等于消除**；
+   可达性依赖 ack 相对 flush 的时机，而这个时机我们只在自聊档量过、且自聊压根不发 ack（见下）。
+   注释与结论里都不许把它写成"实测到的现象"。
+
+**验证**（闸门实测：`test:unit` **105 / 105 / fail 0**，typecheck 四段 exit 0）：
+`advanceStatus` 的七条用例是这一段的覆盖主体——`changed` 只数"真的变了"、找不到键绝不新增行、
+倒退 ack 被挡、入参数组不被就地改、`failed` 不被翻成 `sent`。主进程那两处的**接线**不在 unit 射程内
+（`liveTailSync.ts` 进不了 unit 程序：React + `@/services` 别名），由下面的 CDP 行负责。
+
+CDP（前提交与 Step 7 同一次跑动）：
+
+| # | 操作 | 断言 | 区分的是什么 |
+|---|---|---|---|
+| 1 | 尾巴里已有一条 `pending` 的 out 行，A 档喂 `__p6f.status({..., msgKeys:[那个键], status:'delivered'})` | 返回值 `=== 1`，`__p6f.read()` 那一行状态变 `delivered`，**行数不变**；界面同一个 `[data-msg-key]` 节点图标换档 | 状态帧写的是已有行，不是新消息（返回 `changed` 才数得出"没多出行"） |
+| 2 | 同一帧再喂一次；再喂一帧 `status:'sent'`（倒退） | 两次都返回 `0`，界面仍是 `delivered` | 只允许向上的阶梯在渲染层这一侧也成立；重复回执不该被当成更新 |
+| 3 | 喂一帧 `msgKeys` 全是陌生键 | 返回 `0`、`__p6f.read()` 逐字节不变 | 找不到行就什么都不写（幽灵气泡的唯一防线） |
+| 4 | 形状不合格的帧（`accountId` 非整数 / `chatKey` 空串 / `msgKeys` 里混入超长串） | 返回 `0` 且缓存不变 | 页内上来的东西进缓存 key 之前必须有闸 |
+| 5 | 真实登录态下给对端（非自聊）发一条，看图标 | ⏱ → ✓ → ✓✓ **B 档**，且库里那行的 `status` 与界面一致 | 第 1–4 行量的是接线，这一行才量"平台事件 → 后端 → 页面"整条链。自聊拿不到真 ack，所以它必须在多端场景量（Task 19） |
 
 ---
 
