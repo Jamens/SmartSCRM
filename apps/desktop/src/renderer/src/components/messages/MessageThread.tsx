@@ -235,8 +235,9 @@ export default function MessageThread({
                             // 新 localId = 第二条气泡，旧的留在原地，看得出重试过（spec §5 的幂等口径）。
                             // 不额外提示成败：气泡自己的状态就是提示（pending 转圈 / 失败仍是 ⚠），
                             // 再加一条 toast 只会把"两条气泡哪条是新的"变得更难看清。
-                            // Task 15b: 真发成功的那条今天会一直停在 ⏱——ack 不广播回渲染层，
-                            // 打开着的线程也不会自己去库里重取那一行，所以这里"不额外提示"是有代价的。
+                            // 状态推进靠 ack 帧（`msg:status` → `applyLiveStatus`），它只推尾巴里已有的
+                            // 那一行；行只在库页里时，打开着的线程不会自己去重取，所以这里"不额外提示"
+                            // 仍然有代价。
                             void retryFrom(row.msgKey, body)
                           }}
                         >

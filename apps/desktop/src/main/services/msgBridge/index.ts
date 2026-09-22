@@ -9,7 +9,8 @@ import type {
   BridgeState,
   LiveFrame,
   SendReceipt,
-  SendRequest
+  SendRequest,
+  StatusFrame
 } from '@shared/chatTypes'
 import { accountOfId, accountOfView, refreshAccounts, type AccountEntry } from './accountDirectory'
 import { BridgeMount } from './bridgeMount'
@@ -22,6 +23,15 @@ export const HISTORY_LIMIT_DEFAULT = 200
 
 /** `StatusUpdateDTO.msgKey` 上的 `@Size(max = 128)`：超长的 key 不是"这一条不更新"，而是整批 400。 */
 const MSG_KEY_MAX = 128
+
+/**
+ * 一次状态广播带多少把键，与后端 `updates[]` 的 200 上限同量级：整群读回执一条事件能带上几百个
+ * id，不切开就是一条无界长的 IPC。切的只是广播，上报那一段原样不动——超出上限的键照样发给后端，
+ * 只是不进这一帧。
+ * 渲染层 `liveTailSync.ts` 的 `STATUS_KEYS_MAX` 是同一个数字的第二份写法：跨主/渲染两个 tsconfig
+ * 边界的常量没有共享点，与 `MSG_KEY_MAX`/`KEY_MAX_LEN` 那一对同理，改任何一处都要改两处。
+ */
+const STATUS_KEYS_MAX = 200
 
 const api = createMsgApi({ token: () => getSession()?.accessToken ?? null })
 
@@ -160,7 +170,8 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
     // 前者再写一次只是给 uk_msg 添压，后者压根不知道该写什么——都不补。
     if (meta?.chatKey && report.msgKey) {
       // 补写那行的 status: 'pending' 是刻意的：这一刻主进程只知道"平台收了单"，之后的
-      // sent/delivered/read 由 ack 事件经 postStatuses 推进（Task 11 Step 6），单调阶梯保证不倒退。
+      // sent/delivered/read 由 ack 事件推进（Task 11 Step 6）——落库走 `postStatuses`，页面走
+      // 下面 ack 分支广播的 `msg:status`，两条各自单调（`canAdvance` 与后端 `advanceStatus` 同形）。
       const frame: LiveFrame = {
         viewId,
         accountId: entry.accountId,
@@ -179,15 +190,24 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
         }
       }
       hub.push(frame)
+      // 这一次 flush 是给"本应用自己发出去的那条"开的后门（采集链的批量照旧，那是给风暴用的）：
+      // `hub.push` 只进队列，攒到 500 条或 2s 定时器才冲，而 ack 落库是一条 `UPDATE ... WHERE msg_key = ?`
+      // ——行还没插进去，UPDATE 就先打空，之后 `INSERT IGNORE` 插进来的那行状态永远停在 `pending`。
+      // 这是**结构性次序缺陷**（UPDATE 排在 INSERT 之前），不是我们量到的现象：可达性取决于 ack 相对
+      // 批量 flush 的时机，而这条时机在非自聊会话上没量过（自聊拿不到页内回执事件，见 Task 11 的结论）。
+      // flush 把窗口从"最多 2s"缩到"一次 HTTP 往返"，**不等于消除**：ack 仍可能比 `postBatch` 返回更早到。
+      // 副作用是当时队列里已有的采集帧会被一起冲出去（`drain` 冲的是整个队列），风暴批量被切小、请求条数
+      // 变多，正确性不受影响。`flush()` 自己的 `running` 去重在 `CollectorHub` 里，这里不加第二次防抖。
+      void hub.flush().catch(() => undefined)
       getMainWindow()?.webContents.send('msg:live', frame)
     }
     return
   }
   if (report.kind === 'ack') {
-    // ack 只推后端状态，不广播 msg:live：这帧没有真的 body / direction / source，
-    // 拼成 NormalizedMessage 会让渲染层按 msgKey 合并时把已有行的方向与归属改脏
-    // （`advanceStatus` 的 WHERE 钉着 `direction='out'`，入库侧的行却是各自带 source 的）。
-    // Task 15 要做气泡对勾时，另立一个"状态帧"形状，别复用消息类型。
+    // ack 走自己那份形状（`StatusFrame`）与自己那条通道（`msg:status`），不拼成 `NormalizedMessage`
+    // 广播 `msg:live`：这帧没有真的 body / direction / source，而渲染层按 msgKey 合并时是逐字段
+    // 覆盖，一帧只有状态的东西会把已有行的方向与正文抹成 null（`advanceStatus` 的 WHERE 钉着
+    // `direction='out'`，入库侧那行却是各自带 source 的）。
     // 页内那条链是半可信的（被内嵌的视图不一定是我们自己的页面），而合批把一条坏 key 的代价
     // 从"少更一行"放大成"少更一批"，所以在进请求前先把不合法的剔掉、并留一行可数出来的丢弃。
     const raw = Array.isArray(report.msgKeys) ? report.msgKeys : []
@@ -200,6 +220,23 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
     if (keys.length !== raw.length) {
       console.log(`[msgBridge] ack 剔除非法 msgKey viewId=${viewId} chat=${oneLine(report.chatKey)} 丢弃=${raw.length - keys.length}`)
     }
+    // 两道闸都过了、请求还没发：先把状态推给页面。气泡上的 ⏱→✓→✓✓ 就等这一帧。
+    // 为什么不 gate 在下面那个 `r.updated > 0` 上（这是判断，不是省事）：`updated === 0` 的两种原因
+    // ——重复回执，或那一行还没落库——里，后者恰恰是最需要页面立刻给出 ✓ 的那种（刚发出去的那条），
+    // 拿它当闸会把最常见的一次"刚发出去"的推进整批挡掉。渲染层这条尾巴的状态来源是平台事件本身，
+    // 与后端这次返回几条无关；下面 `ack 全批未推进` 那行日志留着，它仍然是"整条 ack 链死了"和
+    // "只是重复回执"唯一的区分点。
+    // 超出上限只丢广播、不丢上报；帧里只有键与状态词，没有正文可漏（C2/C3）。
+    // 已知限制：尾巴按 `gcTime` 五分钟回收，一条状态**只在尾巴里**推进过、后端那一行没落成的话，
+    // 五分钟后重读会退回 `pending` —— 上面 `send_result` 分支那一次 `hub.flush()` 就是为了让这种行尽量不存在。
+    getMainWindow()?.webContents.send('msg:status', {
+      viewId,
+      accountId: entry.accountId,
+      platform: entry.platform ?? 'whatsapp',
+      chatKey: report.chatKey,
+      msgKeys: keys.slice(0, STATUS_KEYS_MAX),
+      status: report.status
+    } satisfies StatusFrame)
     // 一次页内事件一请求：整群读回执一条事件能带几十上百个 id，拆成一 id 一请求就是几十个
     // 带行锁的并发事务，而 `updates[]` 的 200 上限正是留给这种批的。
     void api

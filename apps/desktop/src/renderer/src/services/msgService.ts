@@ -21,6 +21,7 @@ const fallback: MsgApi = {
   syncHistory: noVal(false),
   bridges: noVal<BridgeState[]>([]),
   onLive: () => () => {},
+  onStatus: () => () => {},
   onState: () => () => {}
 }
 

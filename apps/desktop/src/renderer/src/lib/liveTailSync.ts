@@ -8,9 +8,8 @@ import {
   type MessagePageVO,
   type ThreadRow
 } from '@/api/messages'
-import { mergeTail, pendingKey, settlePending } from '@shared/liveTail'
-import { canAdvance } from '@shared/chatStatus'
-import type { BridgeState, LiveFrame, MsgStatus, SendReceipt } from '@shared/chatTypes'
+import { advanceStatus, furtherStatus, mergeTail, pendingKey, settlePending } from '@shared/liveTail'
+import type { BridgeState, LiveFrame, SendReceipt, StatusFrame } from '@shared/chatTypes'
 import { ipcFailureText, outcomeOf, sendErrorLogText } from './sendError'
 
 /**
@@ -18,20 +17,20 @@ import { ipcFailureText, outcomeOf, sendErrorLogText } from './sendError'
  * 合并的三条规则在 `@shared/liveTail`（Task 7 已单测），这里只做"帧 → 缓存"的搬运，
  * 加两个帧形状带来的特例（状态帧只并状态、同键行的 id/customerId/status 以"更可信的一份"为准）。
  *
- * 写尾巴的入口有三个（`applyLiveFrame` / `settleLocalId` / `appendPending`），连同读它的
- * `useThreadRows` 与发起写的 `useSendText` 都在这一个文件里：它们改的是同一份数组，
+ * 写尾巴的入口有四个（`applyLiveFrame` / `applyLiveStatus` / `settleLocalId` / `appendPending`），
+ * 连同读它的 `useThreadRows` 与发起写的 `useSendText` 都在这一个文件里：它们改的是同一份数组，
  * 散到组件里就一定会出现"谁负责去重"说不清的那天。
  */
 
 /**
- * 一帧 live 的落点，也是 Step 5 要断言的返回值：
+ * 一帧 live 消息的落点，也是 A 档探针（`__p6f.landing`）断言的返回值：
  * - `row`：并进了所属会话的尾巴（新消息，补底帧也算）
- * - `status`：只推进了已有行的状态（ack 帧）
- * - `dropped`：这一帧没写任何缓存——两种原因：形状不合格的帧（`chatKey`/`msgKey`/`accountId`
- *   过不了 `isKey`/整数闸），或状态帧找不到对应行（那条消息只在库页里，本会话尾巴没这份）。
- *   调用方不按原因分支，所以两个原因共用一个值；要分开看就在浏览器里对比 `read()` 前后。
+ * - `dropped`：这一帧没写任何缓存——形状不合格的帧（`chatKey`/`msgKey`/`accountId`
+ *   过不了 `isKey`/整数闸）。
+ *   ack 那种只推状态、不插行的帧不在这份取值里：它是独立的形状与通道（`StatusFrame` /
+ *   `msg:status`），落点由 `applyLiveStatus` 返回的推进条数承担（0 = 一行都没动）。
  */
-export type FrameLanding = 'row' | 'status' | 'dropped'
+export type FrameLanding = 'row' | 'dropped'
 
 /**
  * 尾巴缓存 key：一条会话一份，与库页那条 infinite query 分开存。
@@ -71,29 +70,6 @@ export function rowOfLive(frame: LiveFrame): ThreadRow {
 }
 
 /**
- * 状态取哪一份。两条源各自只是"某个时刻的快照"，谁都不必然更新，但阶梯只能向上
- * （`canAdvance` 与后端 `advanceStatus` 的 `FIELD()` 同形），所以"更靠后的那个"就是
- * 合起来能给出的最好答案。两个方向都要问：库行已经 `read` 而尾巴还停在 `pending` 是常态
- * （ack 只上报后端、从不广播回渲染层，见 msgBridge/index.ts 的 ack 分支），只看尾巴会把
- * 这行永久冻在 `pending`；反过来尾巴先到 `read`、库页还是上一次翻页的 `sent` 时也不能倒退。
- * 两边都推进不了时保留第一个参数——`failed` 与 `received` 不在阶梯里，正是由这条兜底决定归属。
- */
-function furtherStatus(current: MsgStatus, incoming: MsgStatus): MsgStatus {
-  if (canAdvance(current, incoming)) return incoming
-  if (canAdvance(incoming, current)) return current
-  return current
-}
-
-/** ack 帧专用：只把 `status` 并到已有行上，且只允许向上。 */
-function mergeStatus(rows: readonly ThreadRow[], msgKey: string, status: MsgStatus): ThreadRow[] {
-  const at = rows.findIndex((r) => r.msgKey === msgKey)
-  if (at < 0) return [...rows]
-  const out = [...rows]
-  out[at] = { ...out[at], status: furtherStatus(out[at].status, status) }
-  return out
-}
-
-/**
  * 列表与统计的失效做 1s 合流。补底一次能推上百帧（Task 10 的 `message` 上报不分实时与补底），
  * 逐帧 invalidate 会把会话列表打成 refetch 风暴；尾巴本身是 setQueryData，不产生请求，无需合流。
  */
@@ -127,6 +103,13 @@ function isKey(v: unknown): v is string {
 }
 
 /**
+ * 一帧状态广播最多带多少把键，与主进程 `msgBridge` 的 `STATUS_KEYS_MAX` 是同一个数字的第二份写法
+ * （跨主/渲染两个 tsconfig 边界没有共享点，与上面 `KEY_MAX_LEN` 对 `MSG_KEY_MAX` 同理）：
+ * 那边按它切片，这边按它拒收，改一处就要改两处。
+ */
+const STATUS_KEYS_MAX = 200
+
+/**
  * 帧 → 缓存。不分"当前会话 / 其它会话"：尾巴按 `tailKey` 各存一份，
  * 切会话时读自己那份，所以从别处切回来也不会丢下刚到的那几条
  * （采集是 500/2s 批量落库，此刻库页里还没有它们）。
@@ -137,23 +120,45 @@ export function applyLiveFrame(qc: QueryClient, frame: LiveFrame): FrameLanding 
   if (!Number.isInteger(frame.accountId) || !isKey(msg?.chatKey) || !isKey(msg?.msgKey))
     return 'dropped'
   const { accountId } = frame
-  const { chatKey, msgKey, status } = frame.message
+  const { chatKey } = frame.message
   const key = tailKey(accountId, chatKey)
   const tail = qc.getQueryData<ThreadRow[]>(key) ?? []
 
-  // 状态帧的入口（只推进状态、没有行可插）。今天没有生产者发 `msgTimeEpochSec === 0` 的帧：
-  // 主进程 msgBridge/index.ts 的 ack 分支刻意不广播 `msg:live`，因为拼成 NormalizedMessage
-  // 会把已有行的 direction / body 改脏。这个分支是 Task 15 那个独立"状态帧"形状到位时的闸，
-  // 那时它必须已经在这里——不能让第一帧状态更新去撞 mergeTail：逐字段覆盖会把已有正文抹成 null。
-  if (frame.message.msgTimeEpochSec === 0) {
-    if (!tail.some((r) => r.msgKey === msgKey)) return 'dropped'
-    qc.setQueryData(key, mergeStatus(tail, msgKey, status))
-    return 'status'
-  }
-
+  // 这里不收只带状态的帧：`mergeTail` 的同键规则是逐字段覆盖，一帧没有 body/direction 的东西
+  // 撞进来会把已有行的正文与方向抹成 null。那种帧走 `msg:status` → `applyLiveStatus`。
   qc.setQueryData(key, mergeTail(tail, [rowOfLive(frame)]))
   scheduleListInvalidation(qc)
   return 'row'
+}
+
+/**
+ * 状态帧 → 缓存：ack 的那一帧（`StatusFrame`，只带键与目标状态）并进尾巴里已有的那几行。
+ * 形状闸与 `applyLiveFrame` 同一套——这帧从页内一路传上来，类型不作运行时保证——不合格就返回 0
+ * 并且什么都不写。`msgKeys` 超上限也按不合格处理：主进程已按同一个数字切过，还能超长说明它不是
+ * 主进程那条路来的，截一半写进去只会留下一批"看上去推进过了"的半截状态。
+ * 状态词不校验白名单：阶梯外的值在 `furtherStatus` 两个方向上都推不动，注定是一条 no-op，
+ * 与后端 `advanceStatus` 的 `FIELD()` 同一套立场。
+ *
+ * 不 invalidate 列表与统计：状态不进列表（会话行那些字段没有哪一格会因为一条 ack 改变），
+ * 为它打一次 refetch 只是把翻页风暴请回来。
+ */
+export function applyLiveStatus(qc: QueryClient, frame: StatusFrame): number {
+  if (
+    !Number.isInteger(frame.accountId) ||
+    !isKey(frame.chatKey) ||
+    !Array.isArray(frame.msgKeys) ||
+    frame.msgKeys.length === 0 ||
+    frame.msgKeys.length > STATUS_KEYS_MAX ||
+    !frame.msgKeys.every((k) => isKey(k))
+  )
+    return 0
+  const key = tailKey(frame.accountId, frame.chatKey)
+  const tail = qc.getQueryData<ThreadRow[]>(key) ?? []
+  const { rows, changed } = advanceStatus(tail, frame.msgKeys, frame.status)
+  // 命中 0 行也照样写：这一句的判据是"帧合格"，不是"状态动了"——写进去的是字段等值的新数组，
+  // 语义没变；不在这儿加 `changed > 0` 的分支，是为了让它以后并第二个字段时不被这里悄悄滤掉。
+  qc.setQueryData(key, rows)
+  return changed
 }
 
 /**
@@ -206,9 +211,11 @@ export function appendPending(
   qc.setQueryData(key, mergeTail(tail, [rowOfPending(input)]))
 }
 
-/** 控制台探针：dev 下一帧一帧手喂进来验证落点（`applyLiveFrame` 等三个入口），生产构建里整块不存在。 */
+/** 控制台探针：dev 下一帧一帧手喂进来验证落点（`applyLiveFrame` 等四个入口），生产构建里整块不存在。 */
 interface P6Probe {
   landing: (frame: LiveFrame) => FrameLanding
+  /** 手喂一帧状态：返回值就是"这一帧真的推进了几行"，气泡 ⏱→✓→✓✓ 的 A 档断言靠它。 */
+  status: (frame: StatusFrame) => number
   settle: (input: { accountId: number; chatKey: string; localId: string; msgKey?: string }) => void
   read: (accountId: number, chatKey: string) => ThreadRow[]
   bridgeStates: () => BridgeState[]
@@ -221,6 +228,7 @@ export function useLiveTailSync(): void {
   const qc = useQueryClient()
   useEffect(() => {
     const offLive = msgService.onLive((frame) => applyLiveFrame(qc, frame))
+    const offStatus = msgService.onStatus((frame) => applyLiveStatus(qc, frame))
     const offState = msgService.onState((states) =>
       qc.setQueryData<BridgeState[]>(queryKeys.bridges, states)
     )
@@ -236,6 +244,7 @@ export function useLiveTailSync(): void {
       // 实例（回归脚本临时挂的 root）把指针改到它自己的缓存上，读出来是空的却并不是应用没收到。
       ;(window as unknown as { __p6f?: P6Probe }).__p6f = {
         landing: (frame: LiveFrame) => applyLiveFrame(qc, frame),
+        status: (frame: StatusFrame) => applyLiveStatus(qc, frame),
         settle: (input: { accountId: number; chatKey: string; localId: string; msgKey?: string }) =>
           settleLocalId(qc, input),
         read: (accountId: number, chatKey: string) =>
@@ -245,6 +254,7 @@ export function useLiveTailSync(): void {
     }
     return () => {
       offLive()
+      offStatus()
       offState()
       if (import.meta.env.DEV) delete (window as unknown as { __p6f?: P6Probe }).__p6f
     }
@@ -362,9 +372,10 @@ export function useThreadRows(
       raw.map((r) => {
         const known = db.find((d) => d.msgKey === r.msgKey)
         // live 帧不知道库内自增 id，也不知道后端匹配到的客户；同键相遇时以库行为准。
-        // status 也必须一起过：`mergeTail` 的同键规则是逐字段覆盖（尾巴赢），而 ack 从来不广播回
-        // 渲染层，所以库行的状态只会比尾巴新、永远不会反过来——不修的话 out 气泡的勾会永久
-        // 停在 `pending`，而 Task 14 渲染的就是这个数组，下游修不了。
+        // status 也必须一起过，而且两个方向都得问（`furtherStatus`）：尾巴那一份由 `msg:status`
+        // 的 ack 帧推进、只推它自己已有的行，所以库页既可能更新（尾巴被 `gcTime` 收走过、ack 早于
+        // live 帧到达）也可能更旧（库页还是上一次翻页的快照）。按 `mergeTail` 那套"尾巴一定赢"
+        // 会把 out 气泡的勾冻在 `pending`，而 Task 14 渲染的就是这个数组，下游修不了。
         return known
           ? {
               ...r,
