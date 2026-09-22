@@ -105,6 +105,28 @@ function useInvalidateCustomers() {
   }
 }
 
+export interface CreateCustomerInput {
+  platformType: number
+  openId: string
+  nickname?: string | null
+  phone?: string | null
+  email?: string | null
+  country?: string | null
+  remark?: string | null
+  sex?: number
+}
+
+/**
+ * 字段与 Task 5 的 `CustomerCreateRequest` 逐字一致；`openId` 就是会话的 `chat_key`（收敛 4）。
+ *
+ * 这里不做失效：`useCreateCustomer` 的下一步一定是 link-customer（Task 17 的闭环里两步连着走），
+ * 列表刷新由调用方在 link 成功后统一触发——在这里就 invalidate，"创建成功但没关联"时客户列表里
+ * 会多出一个谁也对不上的陌生人。
+ */
+export function useCreateCustomer() {
+  return useMutation({ mutationFn: (input: CreateCustomerInput) => http.post<CustomerVO>('/api/customers', input) })
+}
+
 export function useUpdateCustomer() {
   const invalidate = useInvalidateCustomers()
   return useMutation({
