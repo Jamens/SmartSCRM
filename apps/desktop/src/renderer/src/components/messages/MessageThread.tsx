@@ -1,9 +1,10 @@
 // src/renderer/src/components/messages/MessageThread.tsx
 import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import MessageBubble from '@/components/messages/MessageBubble'
 import { useMarkRead, useMessages, type ConversationVO } from '@/api/messages'
-import { useThreadRows } from '@/lib/liveTailSync'
+import { useSendText, useThreadRows } from '@/lib/liveTailSync'
 import { dayLabel, groupByDay } from '@/lib/chatDays'
 import { titleOfConversation } from '@/lib/chatDisplay'
 
@@ -31,6 +32,8 @@ export default function MessageThread({
   })
   const rows = useThreadRows(accountId, conversation.chatKey, data?.pages)
   const sections = useMemo(() => groupByDay(rows), [rows])
+  /** 失败气泡的「重试」走同一条发送链（新 localId = 新气泡），不另开一条路。 */
+  const { send } = useSendText(accountId, conversation.chatKey)
 
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   /** 翻页前记下的视口尺寸：新页插进来之后要用它把高度差补回去。 */
@@ -149,7 +152,30 @@ export default function MessageThread({
               </span>
             </div>
             {section.rows.map((row) => (
-              <MessageBubble key={row.msgKey} row={row} showSender={conversation.isGroup} />
+              <MessageBubble
+                key={row.msgKey}
+                row={row}
+                showSender={conversation.isGroup}
+                failedHint={
+                  row.body ? (
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="h-5 px-1.5 text-[11px]"
+                      onClick={() => {
+                        // 重发的是这条失败消息的正文，不再翻一遍：再译会让"重发出去的内容"
+                        // 和"当初失败的内容"不一致。新 localId = 第二条气泡，旧的留在原地，
+                        // 看得出重试过（spec §5 的幂等口径）。
+                        // 不额外提示成败：气泡自己的状态就是提示（pending 转圈 / 失败仍是 ⚠），
+                        // 再加一条 toast 只会把"两条气泡哪条是新的"变得更难看清。
+                        if (row.body) void send(row.body)
+                      }}
+                    >
+                      重试
+                    </Button>
+                  ) : undefined
+                }
+              />
             ))}
           </section>
         ))}
