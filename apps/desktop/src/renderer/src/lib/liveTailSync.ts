@@ -1,15 +1,25 @@
 import { useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { msgService } from '@/services/msgService'
-import { flattenRows, queryKeys, type MessagePageVO, type ThreadRow } from '@/api/messages'
+import {
+  flattenRows,
+  queryKeys,
+  rowOfPending,
+  type MessagePageVO,
+  type ThreadRow
+} from '@/api/messages'
 import { mergeTail, pendingKey, settlePending } from '@shared/liveTail'
 import { canAdvance } from '@shared/chatStatus'
-import type { BridgeState, LiveFrame, MsgStatus } from '@shared/chatTypes'
+import type { BridgeState, LiveFrame, MsgStatus, SendError, SendReceipt } from '@shared/chatTypes'
 
 /**
  * 记录页"双源取数"的另一半：历史读库（`api/messages`），尾巴吃广播（本文件）。
  * 合并的三条规则在 `@shared/liveTail`（Task 7 已单测），这里只做"帧 → 缓存"的搬运，
  * 加两个帧形状带来的特例（状态帧只并状态、同键行的 id/customerId/status 以"更可信的一份"为准）。
+ *
+ * 写尾巴的入口有三个（`applyLiveFrame` / `settleLocalId` / `appendPending`），连同读它的
+ * `useThreadRows` 与发起写的 `useSendText` 都在这一个文件里：它们改的是同一份数组，
+ * 散到组件里就一定会出现"谁负责去重"说不清的那天。
  */
 
 /**
@@ -179,6 +189,22 @@ export function settleLocalId(
   )
 }
 
+/**
+ * 乐观气泡进尾巴：键是 `pendingKey(localId)`（`~` 前缀），回执或 live 帧到达后换掉。
+ * 之后落库的真行按 msgKey 与它合并，界面上始终只有一个节点。
+ *
+ * 只写尾巴、不碰会话列表：列表的 `lastMsgBody` 等页内那条 `app_send` 的 live 帧到达后再刷
+ * （`applyLiveFrame` 会合流失效）。差一两秒，但避免了"点了发送→列表和流各刷新一次"的抖动。
+ */
+export function appendPending(
+  qc: QueryClient,
+  input: { accountId: number; chatKey: string; text: string; localId: string }
+): void {
+  const key = tailKey(input.accountId, input.chatKey)
+  const tail = qc.getQueryData<ThreadRow[]>(key) ?? []
+  qc.setQueryData(key, mergeTail(tail, [rowOfPending(input)]))
+}
+
 /** 控制台探针：dev 下一帧一帧手喂进来验证落点（`applyLiveFrame` 等三个入口），生产构建里整块不存在。 */
 interface P6Probe {
   landing: (frame: LiveFrame) => FrameLanding
@@ -239,6 +265,51 @@ export function useBridgeOf(accountId: number | null): BridgeState | null {
   })
   if (accountId === null) return null
   return data?.find((s) => s.accountId === accountId && s.ready) ?? null
+}
+
+/** 四种失败的下一步完全不同，不能都糊成"发送失败"。 */
+export const SEND_ERROR_TEXT: Record<SendError, string> = {
+  BRIDGE_OFFLINE: '会话未在线，无法发送',
+  CHAT_NOT_FOUND: '没找到这个会话，先在页面里把它打开一次',
+  SEND_FAILED: '发送失败',
+  TIMEOUT: '等回执超时，可以重试'
+}
+
+/**
+ * 发送链的渲染层这一段：登记乐观气泡 → 等主进程回执 → 换键。
+ * 不乐观翻状态（`ok:true` 只证明平台收下），推进阶梯是 ack 帧的事（Task 13 第 6 行断言）。
+ */
+export function useSendText(
+  accountId: number | null,
+  chatKey: string | null
+): { send: (text: string) => Promise<{ ok: true } | { ok: false; message: string }> } {
+  const qc = useQueryClient()
+  return {
+    async send(text) {
+      if (accountId === null || chatKey === null) return { ok: false, message: '还没选中会话' }
+      const localId = crypto.randomUUID()
+      appendPending(qc, { accountId, chatKey, text, localId })
+      let receipt: SendReceipt
+      try {
+        receipt = await msgService.send({ accountId, chatKey, text, localId })
+      } catch (e) {
+        // `ipcMain.handle` 抛出会以 rejected promise 回到这里，不接住的话上面那条乐观气泡
+        // 就永远停在 ⏱（既没有 ⚠ 也没有重试按钮），而调用方的 catch 会把它报成"译文获取失败"。
+        // 按失败结清：键留 `~localId`、状态翻 failed，人能看到并且能重试。
+        settleLocalId(qc, { accountId, chatKey, localId })
+        return {
+          ok: false,
+          message: `${SEND_ERROR_TEXT.SEND_FAILED}：${e instanceof Error ? e.message : String(e)}`
+        }
+      }
+      // ok 但没带 msgKey 时留 `~localId` 不猜键：Task 12 的页内发送一定回 id，
+      // 真出现说明上游契约破了，让 Task 19 的端到端把它抓出来，而不是在这里编一个。
+      settleLocalId(qc, { accountId, chatKey, localId, msgKey: receipt.ok ? receipt.msgKey : undefined })
+      if (receipt.ok) return { ok: true }
+      const base = SEND_ERROR_TEXT[receipt.error ?? 'SEND_FAILED']
+      return { ok: false, message: receipt.detail ? `${base}：${receipt.detail}` : base }
+    }
+  }
 }
 
 /**

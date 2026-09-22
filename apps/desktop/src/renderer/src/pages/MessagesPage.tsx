@@ -3,6 +3,7 @@ import { useState } from 'react'
 import { History } from 'lucide-react'
 import ConversationList from '@/components/messages/ConversationList'
 import MessageThread from '@/components/messages/MessageThread'
+import ReplyComposer from '@/components/messages/ReplyComposer'
 import { useSelectionStore } from '@/stores/accounts'
 import {
   flattenConversations,
@@ -64,11 +65,15 @@ export default function MessagesPage(): React.JSX.Element {
            * （`atBottomRef` / 翻页前记的 `anchorRef`），不重挂载就会带着上一条的残留进新会话——
            * 上一条停在中间时新会话也落在中间（而不是最新一条），而在翻页途中切换会话时，那份
            * `anchorRef` 记的是**旧会话**的高度，补位算出来的是个任意位置。
+           *
+           * 回复框在这条边界之内，所以换会话时它那份未发出的草稿也一起作废——这是要的：
+           * 给甲写了一半的话不该在点开乙之后还在框里，更不该被 Enter 发进乙的会话。
            */
           <MessageThread
             key={`${selectedId}:${conversation.chatKey}`}
             accountId={selectedId}
             conversation={conversation}
+            footer={<ReplyComposer accountId={selectedId} conversation={conversation} />}
           />
         ) : (
           <p className="flex flex-1 items-center justify-center px-6 text-sm text-muted-foreground">

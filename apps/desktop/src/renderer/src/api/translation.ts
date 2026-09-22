@@ -19,6 +19,12 @@ export interface TranslationSettingVO {
   enterToSend: boolean
   disableChinese: boolean
   disableChinesePreventSend: boolean
+  /** 'global' | 'customer'：这次拿到的设置属于哪一层。 */
+  scope: string
+  /** scope='customer' 时是客户 id 的字符串形式；全局为 null。 */
+  scopeKey: string | null
+  /** true = 该客户没有覆盖行，这份是继承来的全局。 */
+  inherited: boolean
 }
 
 /**
@@ -41,6 +47,9 @@ export interface TranslationSettingInput {
   enterToSend?: boolean
   disableChinese?: boolean
   disableChinesePreventSend?: boolean
+  /** 缺省即写全局；写客户覆盖行时与 `scopeKey` 成对出现。 */
+  scope?: string
+  scopeKey?: string
 }
 
 export interface TranslationNodeVO {
@@ -113,10 +122,17 @@ const NODES_KEY = ['translation-nodes'] as const
 const DELAYS_KEY = ['translation-delays'] as const
 const STATS_KEY = ['translation-cache-stats'] as const
 
-export function useTranslationSettings() {
+/** 一层一条缓存：global 与某个客户的覆盖行可以同时挂在屏上（回复框读客户、推送读全局）。 */
+export const settingsKeyOf = (customerId?: number | null): readonly ['translation-settings', number | 'global'] =>
+  [SETTINGS_KEY[0], customerId ?? 'global'] as const
+
+export function useTranslationSettings(customerId?: number | null) {
   return useQuery({
-    queryKey: SETTINGS_KEY,
-    queryFn: () => http.get<TranslationSettingVO>('/api/translation/settings')
+    queryKey: settingsKeyOf(customerId),
+    queryFn: () =>
+      http.get<TranslationSettingVO>(
+        `/api/translation/settings${customerId ? `?customerId=${customerId}` : ''}`
+      )
   })
 }
 
@@ -149,8 +165,12 @@ export function useUpdateTranslationSettings() {
   return useMutation({
     mutationFn: (input: TranslationSettingInput) =>
       http.put<TranslationSettingVO>('/api/translation/settings', input),
-    onSuccess: (data) => {
-      qc.setQueryData(SETTINGS_KEY, data)
+    onSuccess: () => {
+      // 原来这里是 `setQueryData(SETTINGS_KEY, data)`：那次 PUT 写的到底是哪一层由
+      // input.scope 决定，而全局与客户级两份可能同时在屏上。整前缀失效让每层各自重取，
+      // 代价是一次 refetch（设置页保存是低频动作），换来的是"改全局不会顺手改掉覆盖行"
+      // 这类断言在渲染层也成立。
+      void qc.invalidateQueries({ queryKey: SETTINGS_KEY })
       void qc.invalidateQueries({ queryKey: STATS_KEY })
     }
   })
@@ -159,10 +179,42 @@ export function useUpdateTranslationSettings() {
 export function useTrialTranslate() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (input: { text: string; type: TranslateType }) =>
+    mutationFn: (input: { text: string; type: TranslateType; customerId?: number | null }) =>
       http.post<TranslateVO>('/api/translation/translate', input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: STATS_KEY })
   })
+}
+
+/**
+ * 整份提交的构造器：`PUT /settings` 本身是**局部提交**（上面 `TranslationSettingInput` 的口径，
+ * 翻译中心就只发改动的那几个字段），这里把当前读到的那份 VO 逐字段抄进 input 再叠上 patch，
+ * 是为了回复框那一次开关——它可能要落一条**还不存在的客户覆盖行**，整份写让那一行落地时与
+ * 用户此刻看到的这份继承值逐字段相同，而不是"服务端按全局行复制 + 本次改动"；全局行在两者之间
+ * 被别人改过时这两种结果会分叉。代价是这份快照可能过期，所以只用于"用户正盯着这一层"的场景，
+ * 设置页那种高频整表表单仍走只发改动字段。
+ * 逐字段列出来而不是解构 rest，是为了让"以后 VO 多了一个字段"必须在这里显式表态。
+ */
+export function settingsInputOf(
+  current: TranslationSettingVO,
+  patch: Partial<TranslationSettingInput>
+): TranslationSettingInput {
+  return {
+    server: current.server,
+    serverMode: current.serverMode,
+    channel: current.channel,
+    receiveEnabled: current.receiveEnabled,
+    receiveFromLang: current.receiveFromLang,
+    receiveToLang: current.receiveToLang,
+    sendEnabled: current.sendEnabled,
+    sendFromLang: current.sendFromLang,
+    sendToLang: current.sendToLang,
+    voiceEnabled: current.voiceEnabled,
+    previewEnabled: current.previewEnabled,
+    enterToSend: current.enterToSend,
+    disableChinese: current.disableChinese,
+    disableChinesePreventSend: current.disableChinesePreventSend,
+    ...patch
+  }
 }
 
 const CREDENTIALS_KEY = ['translation-credentials'] as const
