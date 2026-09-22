@@ -66,10 +66,13 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
         setHint(outcome.message)
       }
     } catch (e) {
-      // 这个 catch 只能是**译文通道**抛的：`send` 自己不会 reject——`lib/liveTailSync.ts` 的
-      // `useSendText` 给 `msgService.send` 包的那层 try/catch（那里的文档注释是这件事的另一半）
-      // 就是这条标注为真的前提。它哪天开始往外抛，这句文案就会变成假原因
-      //（用户以为发不出去是翻译的锅，其实是桥），改那一处时必须同时回来改这里。
+      // 这个 catch 里**译文通道**只是头号嫌疑，不是唯一嫌疑：`lib/liveTailSync.ts` 的
+      // `useSendText` 只把 `msgService.send` 那层 IPC 调用包进 try/catch（那里的文档注释是这件
+      // 事的另一半），所以主进程 reject 在那边就按失败结清了、不会从这里漏出来。可 `send` 整体
+      // 仍然可能在 try 之外抛（`crypto.randomUUID()`、`appendPending`、`settleLocalId`、
+      // `outcomeOf` 之前的字段读取——那份注释里是同一份清单，以它为准）。那些抛照样落到这里，
+      // 照样被下面那句报成"译文获取失败"这个假原因（用户以为发不出去是翻译的锅，其实出问题的
+      // 是本地那几步）；排查时读 e.message 那半句。两处注释互指，改任何一处都要回来改另一处。
       // 留字不降级：译文拿不到就把原文留在框里。降级成"直接发中文"是最坏选择——
       // 用户以为发的是译文，实际发出去的是他刚敲的中文。
       setHint(`译文获取失败：${e instanceof Error ? e.message : String(e)}`)
