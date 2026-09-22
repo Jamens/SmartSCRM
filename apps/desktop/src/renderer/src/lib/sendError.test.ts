@@ -139,3 +139,26 @@ test('sendErrorLogText：code 缺失时报成兜底码，detail 缺失时留空�
   assert.equal(noDetail, 'code=BRIDGE_OFFLINE detail=')
   assert.ok(!noDetail.includes('detail=undefined'))
 })
+
+test('sendErrorLogText：非并集的怪 code 同样过消毒 —— 一行、有界，且留着"上游送过怪码"这个事实', () => {
+  // `SendError` 是类型不是校验器（`chatTypes.ts:87` 那个 `error` 字段从页内到这一步没人验形状），
+  // 所以"上游只送四条合法码"这个前提不在本文件里。今天它成立，这一条就是防它哪天不成立：
+  // 少消毒 `code` 那半边时，`detail` 被压平了而码里的换行照原样出去——一行日志被拆成两行，
+  // 而且超长（截断只作用在 detail 上）。
+  const code = `WEIRD\n\x01CODE${'x'.repeat(300)}`
+  const s = sendErrorLogText(
+    receipt({ ok: false, error: code as unknown as SendError, detail: 'y'.repeat(2000) })
+  )
+  // 期望值是手算的，不是把返回值抄一遍：`\n\x01` 是相邻的两个控制字符，一起收成**一个**空格
+  //（与主进程那份 `oneLine` 同形），压完再截到 200 → 'WEIRD CODE' 占 10 格、尾巴 190 个 x。
+  assert.equal(s, `code=WEIRD CODE${'x'.repeat(190)} detail=${'y'.repeat(200)}`)
+  // eslint-disable-next-line no-control-regex
+  assert.ok(!/[\x00-\x1f]/.test(s), `code 段不该把控制字符带进日志：${JSON.stringify(s)}`)
+  // 整行封顶 = 两个 200 字符段 + `code=`/` detail=` 那 13 字符骨架 = 413；实测正好贴边，而消毒前是
+  // 524 字符（那 311 字符的码原样落进日志）。
+  assert.ok(s.length <= 2 * 200 + 'code= detail='.length, `整行长度必须有界：${s.length}`)
+  // 这一条是"不能顺手把认不出的码折成兜底码"：界面上那句走 `SEND_FAILED` 是对的，可这行日志
+  // 是"上游送过一个怪码"唯一的落点，被兜底文案替掉就等于把事实抹平（上面那条等式也已排除，
+  // 但没有它红得更快、也更说明理由）。
+  assert.ok(!s.includes('code=SEND_FAILED'), s)
+})

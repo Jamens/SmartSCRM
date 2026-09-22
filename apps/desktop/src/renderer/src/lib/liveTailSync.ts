@@ -280,7 +280,8 @@ export function useBridgeOf(accountId: number | null): BridgeState | null {
  * 不接住的话上面那条乐观气泡就永远停在 ⏱（既没有 ⚠ 也没有重试按钮），而调用方的 catch 会把它
  * 报成"译文获取失败"——那是个假原因，用户会去查翻译而不是查桥。
  * 这里只声称 IPC 那一段：`send` 整体仍可能在 try 之外抛（`crypto.randomUUID()`、
- * `appendPending`、`outcomeOf` 之前的字段读取），那些抛出去就是调用方的问题了，别把这句注释
+ * `appendPending`、`settleLocalId`（它写缓存，`catch` 里那次调用同样在 try 之外）、`outcomeOf`
+ * 之前的字段读取），那些抛出去就是调用方的问题了，别把这句注释
  * 读成"这个函数永不 reject"。两处注释互指，改任何一处都要回来改另一处。
  */
 export function useSendText(

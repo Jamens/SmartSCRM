@@ -88,12 +88,21 @@ function oneLine(text: string | undefined, max = 200): string {
 }
 
 /**
- * 一行日志用的消毒后文本：`code=` + `detail=`，页内来的原文压成一行并截断。
+ * 一行日志用的消毒后文本：`code=` + `detail=`，两段都过 `oneLine`（压成一行 + 截断）。
  * `detail` 可能是几千字符的 wa-js 原文，留着换行等于允许伪造日志行。
  * 只给渲染层控制台用（C2/C3：不进 preload、不进注入页），也不参与任何用户可见文案。
  * `error` 缺失时报成 `SEND_FAILED` 而不是字面的 `code=undefined`——那是这条回执真正所属的
  * 那一档，与 `sendErrorText` 同一条兜底规矩。
+ *
+ * `code` 也过消毒，**不是**因为它现在有怪值：今天送得上来的确实只有合法字面量
+ * （`bridge/whatsapp/send.ts` 的 `classify()` 与 `sendRegistry.ts` 里那几处）。要消毒的理由是
+ * "上游只送合法码"这个前提**不在本文件里**，而类型挡不住它——`SendError` 是类型不是校验器，
+ * `chatTypes.ts:87` 那个 `error` 字段从页内到这一步没人验过形状（同 `sendErrorText` 那段）。
+ * 少消毒这半边就是在这行日志上留一个闸外缺口：非并集值的码能把换行和超长原样带出去，
+ * 而 `detail` 那半边却被压平了。更要紧的是这里不能顺手折成 `SEND_FAILED`：给人看的那句走归类
+ * 兜底是对的，可这行日志是"上游送过一个怪码"这件事**唯一**的落点，替掉就等于抹平事实。
  */
 export function sendErrorLogText(receipt: SendReceipt): string {
-  return `code=${receipt.error ?? 'SEND_FAILED'} detail=${oneLine(receipt.detail)}`
+  const code = oneLine(String(receipt.error ?? 'SEND_FAILED'))
+  return `code=${code} detail=${oneLine(receipt.detail)}`
 }
