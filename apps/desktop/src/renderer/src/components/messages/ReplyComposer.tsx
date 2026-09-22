@@ -32,6 +32,9 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
 
   const sendNow = async (): Promise<void> => {
     if (!settings) return
+    // 重入闸：Enter 这条路不受按钮上那个 `disabled={busy}` 保护，等回执期间再敲一次就是
+    // 两条一样的消息发出去两次（客户那边看得一清二楚）。键位与按钮两条路必须同一个闸。
+    if (busy) return
     const decision = decideDraft(draft, settings)
     if (decision.kind === 'empty') return
     if (decision.kind === 'tooLong') {
