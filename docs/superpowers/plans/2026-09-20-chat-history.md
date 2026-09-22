@@ -7345,7 +7345,7 @@ git commit -m "feat(P6): 记录页数据层与 live 尾巴并入 Query 缓存"
 
 为什么单独把这个文件切出来：日头文案、"今天/昨天/跨年"的分支、列表右侧的相对时间，全是"看起来对、边界必错"的代码，而它们在浏览器里要造出跨日数据才能看见——`ts` 由后端墙钟串换算，测试环境里凑不出"昨天 23:59"。切成一个只依赖 `ts`（毫秒）的纯模块，闸门里就能逐条断言。
 
-`groupByDay` 的泛型约束写成 `{ ts: number }` 而不是 `ThreadRow`：`api/messages.ts` 连着 react-query 与 `@/lib/http`，一旦被闸门里的文件 import，`node --test` 就会去解析整套渲染层依赖，`tsconfig.unit.json` 里也没有 `@/*` 别名。**闸门内的 renderer 文件只许引外部纯依赖（dayjs）与相对路径。**
+`groupByDay` 的泛型约束写成 `{ ts: number }` 而不是 `ThreadRow`：`api/messages.ts` 连着 react-query 与 `@/lib/http`，一旦被闸门里的文件 import，`node --test` 就会去解析整套渲染层依赖，`tsconfig.unit.json` 里也没有 `@/*` 别名。**闸门内的 renderer 文件只许引外部纯依赖与相对路径。**（实测回写：这里的"外部纯依赖"终态是**没有**——dayjs 被换成 `../../../shared/chatTime.ts`。相对路径 + `.ts` 后缀是 `node --test` 的硬要求，`@shared/*` 别名 Node 不认，msgBridge 那几份进闸门的文件同一个写法。）
 
 ```ts
 // src/renderer/src/lib/chatDays.test.ts
@@ -7492,6 +7492,8 @@ cd apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run typecheck
 
 预期：`# pass 48` / `# fail 0`（Task 13 结束的 43 + 本任务 5）；typecheck 全绿——这一步同时确认 `erasableSyntaxOnly` 吃得下泛型约束与默认参数（都是可擦除语法），不吃参数属性。
 
+> **实测回写（Task 14 做完之后）**：`# pass 48` 是推演值（C14），实测本任务结束时是 **74**（63 基线 + `chatDays.test.ts` 6 + `chatTime.test.ts` 5）。上面那份 `chatDays.ts` 代码块按 `dayjs(ts)` 在**浏览器时区**里格式化，评审按收敛 9 判成"只做了一半"：`chatMs()` 把解析钉在东八区，格式化却跟着机器走，换一台非 +08 的机器就会把 07:00（上海）那条挂到昨天的日头下。终态是把展示侧时区收进 **`src/shared/chatTime.ts`**（`CHAT_ZONE_OFFSET_MIN=480` / `CHAT_ZONE_OFFSET_TAG='+08:00'` / `chatDayKey` / `chatClock` / `chatDayParts` / `chatDayBefore`，不引 dayjs），`chatDays.ts` 与 `chatDisplay.ts` 全部改用它。**Task 15+ 往页面上写任何"哪天 / 几点"都从 `@shared/chatTime` 取，不要再抄一份 `dayjs(ms).format(...)` 或 `'+08:00'` 字面量。**
+
 - [ ] **Step 3: 导航与路由**
 
 `lib/nav.ts`：`NAV_ITEMS` 里 工作台 之后插一条（聊天记录是"看数据"的模块，排在账号工作台之后、客户之前），import 补 `History`：
@@ -7554,6 +7556,8 @@ export function timeOfMessage(ts: number): string {
 > `listTime` 留在 `chatDays.ts`、`timeOfMessage` 放在这里：前者带着跨日/跨年/未来时间的判断，是被闸门钉住的逻辑；后者就是一句 `format('HH:mm')`。
 
 - [ ] **Step 5: `MessagesPage.tsx`——两列骨架与账号选择**
+
+> **实测回写（评审修复轮，Task 15/16/17 都挂在这段选择逻辑上，以现码为准）**：下面这份代码块把点选那一刻的 `ConversationVO` 存进 state 并直接交给线程，是**死快照**——本页不订阅任何 query，列表 refetch 只会重渲染左列，右列的 `unreadCount` / `lastMsgTime` / `title` / `customerId` 全停在点进来那一瞬（表现：正在看的这条会话角标清了又挂回来，Task 17 挂上客户后标题也不改口）。终态两处改动：① 清归属从 `useEffect`+`setPicked(null)` 改成派生值 `owned = picked?.accountId === selectedId ? picked : null`（effect 内同步 setState 被 `react-hooks` 判错，且 Task 16 跨账号跳转会被无条件清误伤）；② 再订阅一份**无筛选**首屏（`unfilteredConversationQuery(selectedId)`），`conversation = flattenConversations(headPages?.pages).find(c => c.id === owned.id) ?? owned`，读列表现值、查不到才退回快照；③ `<MessageThread key={`${selectedId}:${conversation.chatKey}`} …>`——线程的滚动状态全是组件内 ref（`atBottomRef` / `anchorRef`），不带 key 就是就地复用：上一条停在中间 → 新会话也落在中间；翻页在途中切会话 → 拿旧会话的高度算出任意位置。`ConversationList` 那边的查询对象也必须 `...unfilteredConversationQuery(accountId)` 展开，两处形状不同就是两份各自刷新的缓存（键是 `hashKey` = 排序后 `JSON.stringify`，它丢 `undefined` 键但留 `''` 与 `null`）。
 
 ```tsx
 // src/renderer/src/pages/MessagesPage.tsx
@@ -7785,9 +7789,9 @@ export default function ConversationList({
                     {summary || '（无文字内容）'}
                   </span>
                   <span className="shrink-0 text-[11px] text-muted-foreground">
-                    {c.lastMsgTime
-                      ? listTime(dayjs(c.lastMsgTime).valueOf())
-                      : ''}
+                    {/* 实测修正：`dayjs(c.lastMsgTime).valueOf()` 按浏览器时区解析后端给的
+                        东八区墙钟串，会和气泡（ts 由 chatMs 算）差出几个小时。走 chatMs()。 */}
+                    {c.lastMsgTime ? listTime(chatMs(c.lastMsgTime)) : ''}
                   </span>
                 </span>
               </span>
@@ -7827,7 +7831,10 @@ export default function ConversationList({
 import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
 import { Badge } from '@/components/ui/badge'
 import MessageBubble from '@/components/messages/MessageBubble'
-import { useMarkRead, useMessages, useThreadRows, type ConversationVO } from '@/api/messages'
+import { useMarkRead, useMessages, type ConversationVO } from '@/api/messages'
+// 实测修正：`useThreadRows` 在 `@/lib/liveTailSync`（Task 13 落在那儿，`api/messages.ts` 没有转发），
+// 按下面这一行引，否则 typecheck 直接 TS2305。
+import { useThreadRows } from '@/lib/liveTailSync'
 import { dayLabel, groupByDay } from '@/lib/chatDays'
 import { titleOfConversation } from '@/lib/chatDisplay'
 
@@ -7857,11 +7864,34 @@ export default function MessageThread({ accountId, conversation, footer }: Props
   const anchorRef = useRef<{ height: number; top: number } | null>(null)
   const atBottomRef = useRef(true)
 
+  /**
+   * 实测回写（评审修复轮）：简报这一版在 dev 下**每次进会话发两次** `POST /read`（`<StrictMode>`
+   * 把挂载 effect 跑两遍，实测两条 POST 同一毫秒、都 code:0、中间没有任何列表 GET），
+   * 且注释里"列表 refetch 会把刚到的消息又计成未读，那时本 effect 再清一次"这条前提不成立：
+   * ① `conversation` 是 `MessagesPage` 点选时存下的快照，列表 refetch 到不了这里（修复轮已改成按 id
+   * 从缓存取现值）；② 就算到了，`ChatConversationMapper.upsertHead` 的 `last_msg_time` 是
+   * `IF(VALUES(...) > 现值)` 才前进的**单调**列，而 `unread_count += delta` 是**无条件**的——
+   * 一条比会话头更老的 live 行会只涨未读、不动头，用 `id + lastMsgTime` 做记号时这笔永远撞不开。
+   * 终态记号是三段 `id|lastMsgTime|unreadCount`，并在观察到 `unreadCount<=0` 时抹号重新武装
+   * （`useMarkRead.onSuccess` 本地就把角标清零，所以"清完再来一笔"必然经过 0）；`onError` 抹号，
+   * 失败还允许下一次渲染重试。完整理由写在 `MessageThread.tsx` 的那段注释里，行为证据是驱动的
+   * 行 6（挂载 1 次 / 换 props 1 次 / `unread=0` 反向对照 0 次）与行 6d（头没动只涨未读 → 恰好再 1 次）。
+   */
+  const readMark = `${conversation.id}|${conversation.lastMsgTime ?? ''}|${conversation.unreadCount}`
+  const clearedMarkRef = useRef<string | null>(null)
   useEffect(() => {
-    // 进会话就清未读（收敛 11 的"尽力值"）：只看 `unreadCount > 0`，不比较游标——
-    // 列表 refetch 会把刚到的消息又计成未读，那时本 effect 再清一次即可。
-    if (conversation.unreadCount > 0) markRead(conversation.id)
-  }, [conversation, markRead])
+    if (conversation.unreadCount <= 0) {
+      clearedMarkRef.current = null
+      return
+    }
+    if (clearedMarkRef.current === readMark) return
+    clearedMarkRef.current = readMark
+    markRead(conversation.id, {
+      onError: () => {
+        if (clearedMarkRef.current === readMark) clearedMarkRef.current = null
+      }
+    })
+  }, [conversation, readMark, markRead])
 
   const onScroll = (): void => {
     const el = scrollerRef.current
@@ -8104,12 +8134,26 @@ CDP 部分（C9 抬起窗口 + `visibilityState === 'visible'`；C10 一切点�
 
 第 3、4、5 三行必须连着跑：它们合起来才说清"上滑看历史时不被拽走、在底部时才跟"这条交互，单独任何一行都能被"每次都跳底"或"从不跳底"两种错误实现蒙过去。
 
+> **实测回写（这一版驱动跑出 97 条 ok / 0 FAIL / 0 BLOCKED，`tmp/p6f-page.mjs` + `tmp/out-p6f-page.txt`；下面是简报与本任务实际做到的不一致的地方，Task 19 按同一口径复验）**
+>
+> - **`# pass 48` 是推演值**（C14）：本任务终态 **74**。
+> - **行 2** 的"（未选会话时尾巴为空）"在暖窗口不成立——尾巴按会话各存一份、`gcTime` 内切回来还在。另外后端 `/api/messages` 的 `records` 是**升序**，所以"第一页"要用 `all.slice(-30)` 比；写 `slice(0,30)` 的驱动在自聊涨过 30 条之后必然假红（实测过顺序，不是推的）。
+> - **行 3** 的"ΔscrollHeight == 新插入那几条的高度之和"这条式子本身少算两项（`offsetHeight` 不含气泡自己的上下 margin；翻到最早一页时多出的 `已经到最早的一条` 占位），实测 685 ≠ 570。拆成两笔按 border-box + margin 逐条认领的账（各自 ±2），另用 `rectTop` 前后差直接量"视觉锚点不动"（实测 0.00px）。**这是补全账目，不是放宽阈值。**
+> - **行 6** 从"库里恰好有未读"改成脚本自己造（B 档，走 `POST /api/messages/batch` 让后端 `unreadDelta` 加，前置断言 HTTP 读到 `unreadCount==1`）。造不出未读的那条路要点明：补底通道给的是 `source:'backfill'`，`unreadDelta` 不认。
+> - **新增行 6d**（两档合体）：夹具让未读 0→1 而 `lastMsgTime` 一模一样（后端算出来的形状，不是脚本塞的）→ 手喂一帧触发列表重取 → 断言**恰好再 1 次** `POST /read`，再看后端 `unread==0` 与左列角标消失。这一行咬的就是清未读记号漏掉 `unreadCount` 那一种实现（0 次）。
+> - **新增行 7b**：行 7 只断言"离线账号按钮 disabled + 没有提示"，hint 那三句文案一次都没被观察到发生过。7b 在桥 ready 的账号上真点一次「同步历史」，断言提示是「补底已开始，消息到一条刷一条」（放宽成"有字就行"就分不清"桥接住了 / 桥没接 / invoke 抛了"），换账号后提示收掉、切回来还在。**代价与账**：这一次是真补底，所以放在行 9 的 C4 收口之后单独记一笔"C4 追加"（本轮 8 秒窗内 0/0/0）。
+> - **新增行 8c**：真实滚轮把上一条会话停在 `gap 300px`，切会话后新会话必须落在自己底部（`gap 0`），并显式量出"内容 1944px > 视口 777px"，否则 `gap==0` 可能只是没内容可滚。
+> - **行 8 的日分组期望改按东八区算**（`chatDayKey` 的口径）。**C11 限制写明**：本机就是 +08，这一行**没有**区分力——真正咬得住的是 `chatTime.test.ts` / `chatDays.test.ts` 里那几条换区用例（UTC / 纽约 / 加尔各答 / 基里巴斯 + 一条"这条 instant 在 UTC 与纽约的本地日历上确实是前一天"的反事实锚点）。
+> - **行 9 实测**：`166 → 169`（+3 = 行 6 两条 + 行 6d 一条），整跑渲染层写请求 3 次、全是 `POST /api/conversations/{id}/read`，期望条数由本次跑的夹具派生而不是写死；期间真实广播帧 0 条，所以手喂的归因是干净的。
+
 - [ ] **Step 10: 提交**
 
 ```bash
 git add apps/desktop/src/renderer/src/lib/nav.ts apps/desktop/src/renderer/src/App.tsx apps/desktop/src/renderer/src/lib/chatDays.ts apps/desktop/src/renderer/src/lib/chatDays.test.ts apps/desktop/src/renderer/src/lib/chatDisplay.ts apps/desktop/src/renderer/src/pages/MessagesPage.tsx apps/desktop/src/renderer/src/components/messages apps/desktop/tsconfig.unit.json apps/desktop/package.json
 git commit -m "feat(P6): 聊天记录页骨架（会话列表、消息流、日分组与翻页）"
 ```
+
+> **实测回写**：实现提交是 `1a050a1`（上面这份文件清单原样，11 files）。评审修复另起一笔 `8658607`（10 files / +390 / -68），多出来的两个文件是 `src/shared/chatTime.ts` 与 `chatTime.test.ts`——它们落在 `src/shared/**/*.ts` 这条 glob 里，`tsconfig.unit.json` 的 `include` 不用改就能进 typecheck（**这条对本计划后面每个动 `src/shared` 的任务都成立；反过来，往 `src/renderer/src/lib/` 新加进闸门的文件必须同时补 `include` 里那一行，Task 15 的 `sendDraft.ts` / `sendDraft.test.ts` 就是这种**）。
 
 ---
 
@@ -8250,6 +8294,8 @@ cd apps/desktop && pnpm run test:unit 2>&1 | tail -6 && pnpm run typecheck
 ```
 
 预期：`# pass 56` / `# fail 0`（Task 14 结束的 48 + 本任务 8 条）；typecheck 全绿。
+
+> **实测回写**：链头的 48 是推演值，Task 14 结束时实测 **74**（C14）。所以本任务的期望是 **74 + 简报列出的那 8 条 = 82**，不是 56。**"数字对不上就把期望调大"不接受**：新增用例数按简报逐条数得出来，跑出来比它多或少都要当场查是哪几条没落地。
 
 - [ ] **Step 3: `api/translation.ts` 的客户级扩展**
 
