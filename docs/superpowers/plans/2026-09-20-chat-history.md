@@ -6982,7 +6982,9 @@ import type { BridgeState, LiveFrame, MsgStatus } from '@shared/chatTypes'
  * 一帧 live 的落点，也是 Step 5 要断言的返回值：
  * - `row`：并进了所属会话的尾巴（新消息，补底帧也算）
  * - `status`：只推进了已有行的状态（ack 帧）
- * - `dropped`：ack 找不到对应行——那条消息只存在于库页里，本会话尾巴没这份
+ * - `dropped`：这一帧没写任何缓存——两种原因：形状不合格的帧（`chatKey`/`msgKey`/`accountId` 过不了
+ *   `isKey`/整数闸），或状态帧找不到对应行（那条消息只在库页里，本会话尾巴没这份）。调用方不按
+ *   原因分支，所以两个原因共用一个值；要分开看就在浏览器里对比 `read()` 前后。
  */
 export type FrameLanding = 'row' | 'status' | 'dropped'
 
