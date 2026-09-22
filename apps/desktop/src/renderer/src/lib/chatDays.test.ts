@@ -20,15 +20,20 @@ const sh = (y: number, m: number, d: number, hh = 12, mm = 0): number =>
 const dayKey = (y: number, m: number, d: number): string =>
   `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`
 
-/** 换机器时区跑一遍：见最后那条用例，它是"东八区口径"唯一的反证手段。 */
+/**
+ * 换机器时区跑一遍：见最后那条用例，它是"东八区口径"唯一的反证手段。
+ * 恢复要按**名字赋值**，不能 `delete process.env.TZ`：Node 只在 TZ 被赋值时重算偏移，delete 之后
+ * 进程仍留在上一个区（本机实测：设成加尔各答再 delete，`getTimezoneOffset()` 还是 -330），
+ * 同文件后面的用例就悄悄换了前提。原来没设 TZ 时，先记下机器区名再赋回去——副作用是跑完后 TZ
+ * 从"未设"变成"设成同名区"，对 Date 而言两者等价（本机实测偏移同为 -480）。
+ */
 function withZone<T>(tz: string, read: () => T): T {
-  const prev = process.env.TZ
+  const prev = process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone
   process.env.TZ = tz
   try {
     return read()
   } finally {
-    if (prev === undefined) delete process.env.TZ
-    else process.env.TZ = prev
+    process.env.TZ = prev
   }
 }
 

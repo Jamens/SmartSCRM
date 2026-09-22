@@ -12,19 +12,21 @@ import {
 
 /**
  * 把 instant 摆到某个机器时区里读一遍，用来证明"日界与时刻不跟机器时区走"。
- * 断言必须在这里换区：本机是东八区，不换区的话"按浏览器时区格式化"的错实现和正确实现
- * 跑出来一模一样，这条用例就成了永真的摆设。
+ * 断言要包在这里面才叫换区：只在文件开头读一次机器时区、后面全靠 `getUTC*` 的写法，
+ * 换到别的机器上覆盖的是别的区——这条用例的四种前提就退化成一种（下面循环处的注释有实测）。
  */
 function withZone<T>(tz: string, read: () => T): T {
-  const prev = process.env.TZ
+  // 恢复要按**名字赋值**，不能 `delete process.env.TZ`：Node 只在 TZ 被赋值时重算偏移，delete 之后
+  // 进程仍留在上一个区（本机实测：设成 Asia/Kolkata 再 delete，`getTimezoneOffset()` 还是 -330，
+  // 连 `resolvedOptions().timeZone` 也跟着停在 Asia/Calcutta），同文件后面的用例就悄悄换了前提。
+  // 原来没设 TZ 时先记下机器区名再赋回去——副作用是跑完后 TZ 从"未设"变成"设成同名区"，
+  // 对 Date 而言两者等价（本机实测偏移同为 -480）。赋 `undefined` 更不行：会被存成字符串 "undefined"。
+  const prev = process.env.TZ ?? Intl.DateTimeFormat().resolvedOptions().timeZone
   process.env.TZ = tz
   try {
     return read()
   } finally {
-    // 原来是没设过 TZ 的：必须 delete，赋 `undefined` 会被 Node 存成字符串 "undefined"，
-    // 之后所有 Date 都按 UTC 走，同文件后面的用例就悄悄换了前提。
-    if (prev === undefined) delete process.env.TZ
-    else process.env.TZ = prev
+    process.env.TZ = prev
   }
 }
 
@@ -49,8 +51,13 @@ test('日键与时刻按东八区算，机器时区换四个都不受影响', ()
   // 2026-09-20 00:01 +08 = 2026-09-19 16:01 UTC：UTC 轴上是前一天，纽约更早
   const justAfterMidnight = sh(2026, 9, 20, 0, 1)
   for (const tz of ZONES) {
-    assert.equal(chatDayKey(justAfterMidnight), '2026-09-20', `${tz} 下日键错了`)
-    assert.equal(chatClock(justAfterMidnight), '00:01', `${tz} 下时刻错了`)
+    // 断言本身包在 withZone 里，这四个 `tz` 才是前提而不是标签。本机（东八区）上换不换区都能抓到
+    // `shifted()` 之后按本地读的那种错实现（等于再叠一次 +08），所以这条的价值在别的机器上：
+    // 实测把机器区设成 UTC 跑同一份错实现，不切区的那条用例照样绿，只有这个循环会红。
+    withZone(tz, () => {
+      assert.equal(chatDayKey(justAfterMidnight), '2026-09-20', `${tz} 下日键错了`)
+      assert.equal(chatClock(justAfterMidnight), '00:01', `${tz} 下时刻错了`)
+    })
   }
   // 反事实锚点：这条 instant 在 UTC/纽约的本地日历上确实是 9-19，
   // 所以"按浏览器时区格式化"的实现只会红在这里，不会两条都绿。
