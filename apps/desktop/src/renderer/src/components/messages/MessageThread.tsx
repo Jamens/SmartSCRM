@@ -1,9 +1,11 @@
 // src/renderer/src/components/messages/MessageThread.tsx
-import { useEffect, useLayoutEffect, useMemo, useRef, type ReactNode } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import MessageBubble from '@/components/messages/MessageBubble'
 import { useMarkRead, useMessages, type ConversationVO } from '@/api/messages'
+import { useTranslationSettings } from '@/api/translation'
+import { gateDraft, TOO_LONG_HINT } from '@/lib/sendDraft'
 import { useSendText, useThreadRows } from '@/lib/liveTailSync'
 import { dayLabel, groupByDay } from '@/lib/chatDays'
 import { titleOfConversation } from '@/lib/chatDisplay'
@@ -32,8 +34,69 @@ export default function MessageThread({
   })
   const rows = useThreadRows(accountId, conversation.chatKey, data?.pages)
   const sections = useMemo(() => groupByDay(rows), [rows])
-  /** 失败气泡的「重试」走同一条发送链（新 localId = 新气泡），不另开一条路。 */
+  /**
+   * 失败气泡的「重试」走同一条发送链（新 localId = 新气泡），不另开一条路。
+   * 设置读的是回复框那一层（同一个 `customerId`、同一份缓存条目，TanStack 会去重），因为
+   * **重试也必须过闸**：`MessageBubble` 的失败插槽对任何 `out` + `failed` 的行都会出现，
+   * 里面包含 `source:'native_send'`（在页面里发的、本应用从没判过正文的那一类），
+   * 那些正文从没走过 `decideDraft`。不闸一次，就是"中文拦截开着时点一下重试，中文原样出去"。
+   */
+  const { data: settings } = useTranslationSettings(conversation.customerId)
   const { send } = useSendText(accountId, conversation.chatKey)
+  /**
+   * 重入闸：**每个失败行一个在飞名额**，第二次激活是空操作。
+   *
+   * 不变式：同一行在结清之前，最多只有一笔发送在路上。要挡的是 `ReplyComposer` 那个 `busy`
+   * 闸挡掉的同一件事，而且这里更宽——重试按钮点中之后就保有焦点，长按 Enter 的键重复与双击
+   * 都会把 `onClick` 打进来好几次，而每一次激活都会 `crypto.randomUUID()` mint 一个新 localId
+   * → 同一条正文发出去 N 遍，客户那边看得一清二楚。
+   *
+   * 用 `ref` 而不是 state：占位与检查必须在**第一个 await 之前同步**完成，同一批事件里
+   * 后一次激活才能看见前一次的占位（state 要等重渲染才更新，读到的还是旧值）。
+   * 按 `msgKey` 分名额而不是整页一个闸：重试一条不该把另一条失败气泡也锁住。
+   */
+  const inFlight = useRef<Set<string>>(new Set())
+  /** 闸门给出的拒绝理由挂在哪条气泡上（线程里没有全局提示位，理由要说清是哪一条）。 */
+  const [gateHint, setGateHint] = useState<{ rowKey: string; text: string } | null>(null)
+
+  // 不用 useCallback 包：这里的正确性不依赖函数身份（在飞的名额在 `inFlight` 那个 ref 里，
+  // 不在闭包里），而 `useSendText` 每次渲染都返回新对象，包了也稳不住引用。
+  const retryFrom = async (rowKey: string, body: string): Promise<void> => {
+    if (inFlight.current.has(rowKey)) return
+    inFlight.current.add(rowKey)
+    // 只抹这一次点的那条气泡的理由：整体置 null 会把另一条气泡上挂着的理由一起清掉。
+    setGateHint((current) => (current && current.rowKey === rowKey ? null : current))
+    try {
+      if (!settings) {
+        // 没有闸门依据就**不发**：放出去的是一条没判过中文的正文，而那正是这道闸存在的理由。
+        // 拿不到设置通常是后端没在线，那种情况下回复框也判成离线，这里跟着一起停住才是同一套语义。
+        setGateHint({ rowKey, text: '还没读到翻译设置，稍后再试' })
+        return
+      }
+      const gate = gateDraft(body, settings)
+      if (gate.kind !== 'ok') {
+        setGateHint({ rowKey, text: gate.kind === 'tooLong' ? TOO_LONG_HINT : gate.reason })
+        return
+      }
+      // 发出去的是 trim 过的那一份：闸门量的就是它，回复框发的也是它，三处同口径才不会
+      // 出现"这里放行、主进程 `isSendable`（量原始长度）却拒掉"的差一。全空白的正文
+      //（库里确实有只敲了空格的 `native_send` 行）按"没有内容"停下，比让主进程回一条
+      // 说不清原因的 SEND_FAILED 诚实。
+      const text = body.trim()
+      if (!text) {
+        setGateHint({ rowKey, text: '这条消息是空白的，没有可重发的内容' })
+        return
+      }
+      // 不重译：重发的是这条失败消息的正文，再译一遍会让"重发出去的内容"和
+      // "当初失败的内容"不一致。闸门只管拦截 + 长度这半边。
+      await send(text)
+    } finally {
+      // 名额在"结清 / 被闸停下 / 异常"三条路上都回到这里之后才交还。写在 finally 里而不是
+      // 成功分支末尾：`send` 按契约不抛（`liveTailSync.useSendText` 的文档注释钉着这件事），
+      // 但一次意外拒绝就把这一行的重试永久锁死，代价比"多一道无条件释放"大得多。
+      inFlight.current.delete(rowKey)
+    }
+  }
 
   const scrollerRef = useRef<HTMLDivElement | null>(null)
   /** 翻页前记下的视口尺寸：新页插进来之后要用它把高度差补回去。 */
@@ -151,32 +214,44 @@ export default function MessageThread({
                 {dayLabel(section.day)}
               </span>
             </div>
-            {section.rows.map((row) => (
-              <MessageBubble
-                key={row.msgKey}
-                row={row}
-                showSender={conversation.isGroup}
-                failedHint={
-                  row.body ? (
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="h-5 px-1.5 text-[11px]"
-                      onClick={() => {
-                        // 重发的是这条失败消息的正文，不再翻一遍：再译会让"重发出去的内容"
-                        // 和"当初失败的内容"不一致。新 localId = 第二条气泡，旧的留在原地，
-                        // 看得出重试过（spec §5 的幂等口径）。
-                        // 不额外提示成败：气泡自己的状态就是提示（pending 转圈 / 失败仍是 ⚠），
-                        // 再加一条 toast 只会把"两条气泡哪条是新的"变得更难看清。
-                        if (row.body) void send(row.body)
-                      }}
-                    >
-                      重试
-                    </Button>
-                  ) : undefined
-                }
-              />
-            ))}
+            {section.rows.map((row) => {
+              // 正文在这里收窄一次就够：插槽的三元与点击回调读的是同一份 `body`。
+              // 回调里再写 `if (row.body)` 不是多一道保险——闭包会丢掉 TS 对 `row.body`
+              // 这条属性路径的收窄，所以要么传这个已判过的 const，要么就得重测一遍。
+              const body = row.body
+              return (
+                <MessageBubble
+                  key={row.msgKey}
+                  row={row}
+                  showSender={conversation.isGroup}
+                  failedHint={
+                    body ? (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-5 px-1.5 text-[11px]"
+                          onClick={() => {
+                            // 新 localId = 第二条气泡，旧的留在原地，看得出重试过（spec §5 的幂等口径）。
+                            // 不额外提示成败：气泡自己的状态就是提示（pending 转圈 / 失败仍是 ⚠），
+                            // 再加一条 toast 只会把"两条气泡哪条是新的"变得更难看清。
+                            // Task 15b: 真发成功的那条今天会一直停在 ⏱——ack 不广播回渲染层，
+                            // 打开着的线程也不会自己去库里重取那一行，所以这里"不额外提示"是有代价的。
+                            void retryFrom(row.msgKey, body)
+                          }}
+                        >
+                          重试
+                        </Button>
+                        {gateHint?.rowKey === row.msgKey && (
+                          // 被闸门停下的一击：不另外发一条 toast，理由就写在点它的那条气泡后面。
+                          <span className="text-[11px] text-destructive">{gateHint.text}</span>
+                        )}
+                      </>
+                    ) : undefined
+                  }
+                />
+              )
+            })}
           </section>
         ))}
       </div>
