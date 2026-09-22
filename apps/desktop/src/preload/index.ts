@@ -1,6 +1,6 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { BridgeState, LiveFrame, SendReceipt, SendRequest } from '@shared/chatTypes'
+import type { BridgeState, LiveFrame, SendReceipt, SendRequest, StatusFrame } from '@shared/chatTypes'
 
 export interface StoredSession {
   accessToken: string
@@ -78,8 +78,8 @@ const scrm = {
     }
   },
   /**
-   * 聊天记录（P6）：三条 invoke + 两条推送。订阅型返回解绑函数，与 `win.onMaximizedChanged` 同形，
-   * 渲染层卸载时不必知道 ipcRenderer 的存在。
+   * 聊天记录（P6）：三条 invoke + 三条推送（live 消息帧、status 状态帧、state 桥状态）。
+   * 订阅型返回解绑函数，与 `win.onMaximizedChanged` 同形，渲染层卸载时不必知道 ipcRenderer 的存在。
    */
   msg: {
     send: (req: SendRequest): Promise<SendReceipt> => ipcRenderer.invoke('msg:send', req),
@@ -89,6 +89,11 @@ const scrm = {
       const listener = (_event: IpcRendererEvent, frame: LiveFrame): void => callback(frame)
       ipcRenderer.on('msg:live', listener)
       return () => ipcRenderer.removeListener('msg:live', listener)
+    },
+    onStatus: (callback: (frame: StatusFrame) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, frame: StatusFrame): void => callback(frame)
+      ipcRenderer.on('msg:status', listener)
+      return () => ipcRenderer.removeListener('msg:status', listener)
     },
     onState: (callback: (states: BridgeState[]) => void): (() => void) => {
       const listener = (_event: IpcRendererEvent, states: BridgeState[]): void => callback(states)
