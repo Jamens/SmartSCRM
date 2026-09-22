@@ -6597,7 +6597,7 @@ git commit -m "feat(P6): Telegram 发送链与 DOM 认领结清回执"
   - 行形状与拉平：`ThreadRow`（渲染层唯一的消息数组元素类型）、`rowOfMessage(m)`、`rowOfPending({ localId, accountId, chatKey, text })`、`flattenMessages(pages)`、`flattenConversations(pages)`、`flattenHits(pages)`、`flattenRows(pages)`
   - `queryKeys`（模块内导出的常量对象，liveTailSync 与页面都从这里取 key，避免字符串两份）
   - `msgService`：`{ isElectron, send, syncHistory, bridges, onLive, onState }`（浏览器降级同 `viewService` 写法）
-  - `liveTailSync`：`useLiveTailSync(): void`、`useBridgeOf(accountId): BridgeState | null`（离线态禁用回复框）、`useThreadRows(accountId, chatKey, pages): ThreadRow[]`、`tailKey(accountId, chatKey)`、`rowOfLive(frame): ThreadRow`、`applyLiveFrame(qc, frame): FrameLanding`（`'row' | 'status' | 'dropped'`）、`settleLocalId(qc, { accountId, chatKey, localId, msgKey? }): void`。后三个导出是为了让 CDP 脚本能在控制台里单独喂一帧、喂一条回执验证。
+  - `liveTailSync`：`useLiveTailSync(): void`、`useBridgeOf(accountId): BridgeState | null`（离线态禁用回复框）、`useThreadRows(accountId, chatKey, pages): ThreadRow[]`、`tailKey(accountId, chatKey)`、`rowOfLive(frame): ThreadRow`、`applyLiveFrame(qc, frame): FrameLanding`（原写 `'row' | 'status' | 'dropped'`；**Task 15b 实测后收成 `'row' | 'dropped'`**，状态帧改由独立入口 `applyLiveStatus(qc, frame): number` 处理，见 §Task 15b）、`settleLocalId(qc, { accountId, chatKey, localId, msgKey? }): void`。后三个导出是为了让 CDP 脚本能在控制台里单独喂一帧、喂一条回执验证。
 
 - [ ] **Step 1: `api/messages.ts`——类型与 hooks**
 
@@ -6988,6 +6988,14 @@ import type { BridgeState, LiveFrame, MsgStatus } from '@shared/chatTypes'
  */
 export type FrameLanding = 'row' | 'status' | 'dropped'
 
+// 【Task 15b 实测更正】上面这一段与下面那两处 `status` 分支都已作废：形状收成
+// `export type FrameLanding = 'row' | 'dropped'`，状态帧从 `msg:live` 里搬进独立通道 `msg:status`
+// （`StatusFrame`），落点是 `applyLiveStatus(qc, frame): number`，`mergeStatus` 换成了
+// `@shared/liveTail` 里的 `advanceStatus(rows, msgKeys, status) → { rows, changed }`——它要接一批键
+// （一帧 ack 可以带多条 `ids`），而 `mergeStatus` 的签名只接一把。下面保留原样是为了留痕：
+// 计划当初就打算让 `msg:live` 兼作状态通道，代价是每帧都要靠 `msgTimeEpochSec === 0` 这个
+// 魔法值区分两种语义，而这个分支自 Task 13 起零生产者，直到 15b 才删。
+
 /** 尾巴缓存 key：一条会话一份，与库页那条 infinite query 分开存（理由见本步末尾）。 */
 export const tailKey = (accountId: number, chatKey: string) =>
   ['msg', 'tail', accountId, chatKey] as const
@@ -7094,6 +7102,12 @@ export function applyLiveFrame(qc: QueryClient, frame: LiveFrame): FrameLanding 
   // 主进程 msgBridge/index.ts 的 ack 分支刻意不广播 `msg:live`，因为拼成 NormalizedMessage
   // 会把已有行的 direction / body 改脏。这个分支是 Task 15 那个独立"状态帧"形状到位时的闸，
   // 那时它必须已经在这里——不能让第一帧状态更新去撞 mergeTail：逐字段覆盖会把已有正文抹成 null。
+  // 【Task 15b 实测更正】这一整段分支已删除，状态帧走 `msg:status` → `applyLiveStatus`。
+  // 删除时连带暴露出一条没写进计划的隐含职责：`normalizeWa` 在 `raw.t` 不是数字时给的缺省就是 0
+  //（`bridge/whatsapp/normalize.ts:116`），所以 `=== 0` 还顺手挡着"没有可用时间戳的活帧"——
+  // 空尾巴时长出渲染成 1970 的第一行，非空尾巴时被 mergeTail 挤掉却仍返回 'row'。
+  // 现在的形状：帧级闸门 `typeof at !== 'number' || !Number.isInteger(at) || at < 0` → dropped，
+  // 加 `row.ts === 0` 钳成接收时刻（与后端 `MsgTimes.toDbTime` 同形）。回归块在 `tmp/p13-rows36.mjs` 行 5b。
   if (frame.message.msgTimeEpochSec === 0) {
     if (!tail.some((r) => r.msgKey === msgKey)) return 'dropped'
     qc.setQueryData(key, mergeStatus(tail, msgKey, status))
@@ -7298,7 +7312,7 @@ cd apps/desktop && pnpm run typecheck && pnpm run test:unit 2>&1 | tail -5
 | 2 | `GET /api/messages?size=3` 连取三页（带 `before`） | 三页 `id` 集合互不相交、整体按 `msgTime` 正序拼接后无乱序（`flattenMessages` 的反序拼接因此成立） |
 | 3 | 记录页打开会话 A，另设备给 A 发一条 | 不点任何按钮就出现该条，且 `applyLiveFrame` 返回 `'row'`（CDP 里 `window.__p6f.landing` 打点）。**实测分两档**：缓存侧由 `tmp/p13-rows36.mjs` 手喂帧验到 `'row'`；"不点任何按钮"由 `tmp/p13-live.mjs` 验（主进程 `msg:sync-history` → 页内补底 → `collectorHub` 广播，脚本一次探针都不调，真实会话的尾巴自己变长）。**气泡真渲染出来的那一半在 Task 14**（本任务没有页面组件），两档都不等于 UI 证据 |
 | 4 | 会话列表停在 A，给**另一个**会话 B 发消息 | 返回 `'row'` 且落进 `tailKey(B)`，A 的尾巴长度不变（区分"并进错的会话"）；切到 B 立刻看得到那条，不用等库页 refetch。**后半句（"切到 B 立刻看得到"）需要记录页，Task 14 复跑**；本任务验到的是"按 `tailKey` 各存一份、换一个键读不到" |
-| 5 | ack 帧（`msgTimeEpochSec === 0`）到达 | 已有行 `status` 变化，行数、正文与首行时间全不变（`mergeStatus` 生效；正文变空 = 走了 mergeTail，判失败；行数 +1 = 把 ack 当新行，判失败）。**只有 A 档**：主进程当前不广播 ack（`msgBridge/index.ts` 的 Task 11 定档），`msg:live` 上不存在 ts=0 帧，所以这一档只能由探针手喂合成帧验到；真的状态帧形状与推进链是 Task 15 的活。**两处反直觉的实测细节**：(1) 目标行必须是 `direction:'out'` 且状态还没到顶的行——`fromAck` 对 in 行恒返回 `received`，拿 in 行当靶子时"状态变了"这条断言根本不可满足，写出来的期望只能是"没变"，等于什么都没测（第一版就踩了这条）；(2) `mergeStatus` 走 `furtherStatus`（阶梯上取更远的一端）而不是直接赋值，所以同一行先后喂 `sent`→`delivered` 会推进、喂 `read`→`delivered` 必须原地不动，两条都要断言；再加一条同键别的行不受影响的对照 |
+| 5 | ack 帧（`msgTimeEpochSec === 0`）到达 | 已有行 `status` 变化，行数、正文与首行时间全不变（`mergeStatus` 生效；正文变空 = 走了 mergeTail，判失败；行数 +1 = 把 ack 当新行，判失败）。**只有 A 档**：主进程当前不广播 ack（`msgBridge/index.ts` 的 Task 11 定档），`msg:live` 上不存在 ts=0 帧，所以这一档只能由探针手喂合成帧验到；真的状态帧形状与推进链是 Task 15 的活。**两处反直觉的实测细节**：(1) 目标行必须是 `direction:'out'` 且状态还没到顶的行——`fromAck` 对 in 行恒返回 `received`，拿 in 行当靶子时"状态变了"这条断言根本不可满足，写出来的期望只能是"没变"，等于什么都没测（第一版就踩了这条）；(2) `mergeStatus` 走 `furtherStatus`（阶梯上取更远的一端）而不是直接赋值，所以同一行先后喂 `sent`→`delivered` 会推进、喂 `read`→`delivered` 必须原地不动，两条都要断言；再加一条同键别的行不受影响的对照。**【Task 15b 之后本行的形状已作废】**：状态帧不再是"`msg:live` 上 ts=0 的帧"，而是独立通道 `msg:status` 上的 `StatusFrame`（`{accountId, chatKey, msgKeys[], status}`，只带一批键），`mergeStatus` 换成 `advanceStatus → {rows, changed}`；驱动里这一行改用 `__p6f.status(...)` 喂并断言返回 `changed`，见 §Task 15b 的 CDP 表。同一处还新增行 5b 覆盖"活帧时间戳闸门 + `ts === 0` 钳成接收时刻"（删占位分支时暴露出的隐含职责，本行原文没有预见到） |
 | 6 | 发送一条自聊消息后回执到达（`settleLocalId`） | 乐观气泡的 `~localId` 换成真 msgKey 且状态仍是 `pending`（换键就顺手写 sent = 把"平台收下"当成"已送达"，判失败）；随后到的同 msgKey live 帧并成一行，`id`/`customerId` 由库行补回（`mergeTail` 的 `Math.max(ts)` 让 ack 帧的 0 不污染行首）。**实测全部通过**，其中"补回"那一半由 `tmp/p13-hooks.mjs` 在真挂的 `useThreadRows` 上量（尾巴里 `id=0/customerId=null`，合成后 `id=242/customerId=2`，同时正文/状态/direction/ts 由帧覆盖）。**评审后补的一条闸**：气泡和真实键都不在这份尾巴里时 `settleLocalId` 直接返回。不拦的话 `settlePending` 会落到 `mergeTail(rows, [{msgKey, ts: 0, ...}])` 那一支，而空尾巴时 `oldest` 是 `-Infinity`——失败支留下一条没有 body/direction 的 `failed` 幽灵气泡顶在窗口最上面，成功支留下一条空行（`settlePending` 自己的注释"气泡已经不在时不新增行"要靠这条闸才成立）。两条幽灵断言 + 一条"有闸没闸都该绿"的不过头对照（独立键）都在 `tmp/p13-rows36.mjs` 里；去掉闸做反事实，恰好只红那两条 |
 | 7 | 浏览器模式（`vite` 直开，无 `window.scrm`） | 页面渲染、`msgService.send` 返回 `BRIDGE_OFFLINE`、回复框禁用文案出现；控制台无未捕获异常。**实测口径换成同源 iframe**（`tmp/p13-browser.mjs` + `tmp/p13-frame.mjs`）：应用文档 CSP 是 `script-src 'self'`，srcdoc 内联脚本一律不执行，探测代码必须放成 `/@fs` 下的同源外部脚本文件。断言到 `isElectron=false`、`send` 回 `BRIDGE_OFFLINE` 且 `localId` 原样带回、`bridges()` 给 `[]`、`syncHistory()` 给 `false`、`onLive/onState` 给可调用的退订函数、降级对象六个成员齐平，并对照主窗口同一份模块 `isElectron=true`。**"控制台无未捕获异常"另由 `tmp/p13f-browserboot.mjs` 在真实 Chrome（headless + `--remote-debugging-port`，指向同一个 vite）里量**：无桥启动、`__p6f` 探针挂上、`bridgeStates()` 给 0 且不抛、自检注入那条异常恰好被数到一次、除此之外零条未捕获异常。CDP 的 `Runtime.exceptionThrown` 载荷字段是 `params.exceptionDetails`（不是 `params.details`），消息文本在 `exception.description`——取错字段会让收集器"数到了却匹配不上标记"，看起来像应用炸了。**登录走应用自己的 `useAuthStore.getState().login(...)`**（真实表单在浏览器里没有 bridge，无法点），这一步是脚本偏离，记录在案。**"回复框禁用文案出现"随 UI 挪到 Task 15** |
 | 8 | 桥未 ready（未登录视图） | `useBridgeOf(accountId)` 返回 `null`，回复框 disabled（离线态：列表仍读得到库，spec §8）。**null 那一半实测通过**（缓存里只有 offline / 只有别的账号时都给 null；三条混合时只挑本账号且 ready 的那条）。disabled 随 UI 挪到 Task 15。**顺带量出一条会让这一行永久失败的写法**：`useBridgeOf` 里若照搬尾巴那句 `initialData: []`，条目被 `gcTime` 收走后 `staleTime: Infinity` 会把"没有数据"读成"空且永远新鲜"，一次请求都不发（`tmp/p13-gc2.mjs` 对照：留着 initialData 挂 3s 仍 null、缓存 0 条；去掉后 0.6s 内自己恢复成那条 ready）→ 桥 ready 而回复框永久禁用。计划正文与代码注释都已改成不写 initialData |
@@ -8717,6 +8731,35 @@ CDP（前提交与 Step 7 同一次跑动）：
 | 3 | 喂一帧 `msgKeys` 全是陌生键 | 返回 `0`、`__p6f.read()` 逐字节不变 | 找不到行就什么都不写（幽灵气泡的唯一防线） |
 | 4 | 形状不合格的帧（`accountId` 非整数 / `chatKey` 空串 / `msgKeys` 里混入超长串） | 返回 `0` 且缓存不变 | 页内上来的东西进缓存 key 之前必须有闸 |
 | 5 | 真实登录态下给对端（非自聊）发一条，看图标 | ⏱ → ✓ → ✓✓ **B 档**，且库里那行的 `status` 与界面一致 | 第 1–4 行量的是接线，这一行才量"平台事件 → 后端 → 页面"整条链。自聊拿不到真 ack，所以它必须在多端场景量（Task 19） |
+
+**评审轮的两条 Important，计划正文没写到的事实**（`24ac04f`）：
+
+1. **`advanceStatus` 必须返回新行对象**，且这一点要有断言。`out = [...rows]` 只是浅拷贝，
+   `out[at].status = ...` 那种就地改写的正是缓存里被观察者引用的那一个行对象；TanStack v5 的
+   `setQueryData` 默认走结构共享（`replaceData → replaceEqualDeep`，深度相等时把旧引用原样还回去），
+   于是**观察者根本不触发**。症状不是报错而是"勾永远画不上"——最难查的一类。七条用例在这一点上
+   原本是零断言的（12 条全绿放着就地改写跑过去了），现在钉的是 `assert.notEqual(out.rows[0], before[0])`
+   加一条"入参那一份的状态不被污染"，并用变异验证过（换成就地写 → `notStrictEqual` 报红）。
+2. **删 `msgTimeEpochSec === 0` 占位分支时连带删掉了一条隐含职责**：`normalizeWa` 在 `raw.t`
+   不是数字时给出的缺省就是 0（`bridge/whatsapp/normalize.ts:116`），所以那个 `=== 0` 还顺手挡着
+   "没有可用时间戳的活帧"。删完的两种后果：空尾巴 → 长出渲染成 1970 的第一行；非空尾巴 → 被
+   `mergeTail` 挤掉却仍返回 `'row'`。现在的时间戳是帧级闸门（非整数/负数/缺字段 → `dropped`）
+   加 `ts === 0` 钳成接收时刻（与后端 `MsgTimes.toDbTime` 对同一个值做的是同一件事）。
+   **选钳不选丢**：丢了这条消息在打开的会话里不出现、几秒后库页却有它，
+   同一条消息"尾巴看不见、库页看得见"是最难查的分叉；钳完两边都有，`mergeTail` 的 `Math.max`
+   会把后到的库页时间保住。回归块在 `tmp/p13-rows36.mjs` 新增的行 5b
+   （`0` → `'row'` 且 ts 落在接收窗口；`'123'` / `-5` / `null` / 字段缺失 → `'dropped'`；
+   NaN 必须在页内赋值——`JSON.stringify` 把 NaN 写成 `null`，从外面喂会虚报覆盖）。
+
+**Task 15b 第 5 行的前提尚未成立**（评审读 wa-js 4.6.0 bundle 得出，不是推测出来的现象）：
+`chat.msg_ack_change` 有**两个生产者且键形状不同**。`ack === 1` 复用同一个 MsgKey 实例
+（`{ ack, chat: e.to, ids: [e.id] }`）→ ⏱→✓ 这一档与尾巴/库行的 `_serialized` **按构造相等**；
+`ack ≥ 2` 走 `handle{Chat,Group,Status}SimpleReceipt`，在那里**重建**
+`new MsgKey({ id: externalIds[i], remote: e.from, fromMe, participant })`。另外 `_out` 在 bundle 里
+出现 **0 次**（它来自 WAWeb 的 model 层，不由 wa-js 写出）。所以 ✓✓/read 整条链**有可能从未匹配上过**。
+这一行因此从"待跑"降级为"待测且可能不通过"：不自作主张改代码去"修"，需要先在非自聊会话上采到
+第一条设备回执。**Task 19 的第一条测量**：非自聊会话收到 `ack ≥ 2` 时比较帧里 `ids[i]._serialized`
+与 Store 行 `id._serialized`；不等就把 `handle*SimpleReceipt` 的重建参数列为缺陷，而不是判页面坏。
 
 ---
 
