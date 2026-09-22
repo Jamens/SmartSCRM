@@ -47,6 +47,21 @@ export interface LiveFrame {
   message: NormalizedMessage
 }
 
+/**
+ * ack 推进用的"状态帧"：一次页内事件一帧，只带键与目标状态，不带正文/方向/来源。
+ * 与 `LiveFrame` 分开是有原因的：`applyLiveFrame` 的合并是逐字段覆盖，把一帧只有状态的
+ * 东西塞进 `NormalizedMessage`，就会把已有行的 body/direction 抹成 null。
+ * 后端落库与页面显示都以这份为准，所以 `status` 只允许向上（`chatStatus.canAdvance`）。
+ */
+export interface StatusFrame {
+  viewId: string
+  accountId: number
+  platform: ChatPlatform
+  chatKey: string
+  msgKeys: string[]
+  status: MsgStatus
+}
+
 export type BridgePhase = 'none' | 'mounting' | 'ready' | 'retry' | 'offline' | 'destroyed'
 
 export interface BridgeState {
