@@ -12,7 +12,7 @@
         "typecheck:inject": "tsc --noEmit -p tsconfig.inject.json",
         "typecheck:unit": "tsc --noEmit -p tsconfig.unit.json",
         "typecheck": "pnpm run typecheck:node && pnpm run typecheck:web && pnpm run typecheck:inject && pnpm run typecheck:unit",
-        "test:unit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/shared/**/*.test.ts\" \"src/bridge/**/*.test.ts\" \"src/main/services/msgBridge/**/*.test.ts\"",
+        "test:unit": "node --disable-warning=MODULE_TYPELESS_PACKAGE_JSON --test \"src/shared/**/*.test.ts\" \"src/bridge/**/*.test.ts\" \"src/main/services/msgBridge/**/*.test.ts\" \"src/renderer/src/lib/**/*.test.ts\"",
         "build:inject": "node scripts/build-inject.mjs",
         "watch:inject": "node scripts/build-inject.mjs --watch",
         "build:bridge": "node scripts/build-bridge.mjs",
