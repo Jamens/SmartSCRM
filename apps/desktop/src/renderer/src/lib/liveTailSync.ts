@@ -116,8 +116,22 @@ const STATUS_KEYS_MAX = 200
  */
 export function applyLiveFrame(qc: QueryClient, frame: LiveFrame): FrameLanding {
   // 类型上 `message` 一定在，运行时它是页内拼出来再一路传上来的：这里按未知形状对待。
-  const msg: { chatKey?: unknown; msgKey?: unknown } | undefined = frame.message
-  if (!Number.isInteger(frame.accountId) || !isKey(msg?.chatKey) || !isKey(msg?.msgKey))
+  const msg:
+    | { chatKey?: unknown; msgKey?: unknown; msgTimeEpochSec?: unknown }
+    | undefined = frame.message
+  const at = msg?.msgTimeEpochSec
+  if (
+    !Number.isInteger(frame.accountId) ||
+    !isKey(msg?.chatKey) ||
+    !isKey(msg?.msgKey) ||
+    // 时间戳是这一行的排序键，不是可缺省字段。给不出"大约什么时候"的帧一律不合格：
+    // `mergeTail` 只按 ts 比，NaN/字符串会把规则 2 与规则 3（升序）同时打掉。
+    // 但 **0 不在这一条里**——它不是坏值，是 `normalizeWa` 在 `raw.t` 不是数字时给出的那个缺省
+    //（`bridge/whatsapp/normalize.ts:116`），下面单独钳制。
+    typeof at !== 'number' ||
+    !Number.isInteger(at) ||
+    at < 0
+  )
     return 'dropped'
   const { accountId } = frame
   const { chatKey } = frame.message
@@ -126,7 +140,15 @@ export function applyLiveFrame(qc: QueryClient, frame: LiveFrame): FrameLanding 
 
   // 这里不收只带状态的帧：`mergeTail` 的同键规则是逐字段覆盖，一帧没有 body/direction 的东西
   // 撞进来会把已有行的正文与方向抹成 null。那种帧走 `msg:status` → `applyLiveStatus`。
-  qc.setQueryData(key, mergeTail(tail, [rowOfLive(frame)]))
+  const row = rowOfLive(frame)
+  // `ts === 0` 钳成接收时刻，与后端 `MsgTimes.toDbTime` 对同一个值做的是同一件事（那里钳成入库时刻）。
+  // 为什么钳而不是丢：丢了这条消息在页面上根本不会出现（线程不会因为有 live 帧就到就重取库页），
+  // 而它几秒后确实会带着一个正常时间落进库里——同一条消息"尾巴看不见、库页看得见"是最难查的那种分叉；
+  // 钳之后两边都有，且 `mergeTail` 的 `Math.max` 会把后到的库页时间保住。
+  // 这条钳制原先藏在 `msgTimeEpochSec === 0` 那个占位分支里，而那个分支在 Task 15b 被删——
+  // 那时 0 还兼着"这是一帧状态"的标记，删分支的人只看见了标记、没看见顺手挡住的这半件事。
+  if (row.ts === 0) row.ts = Date.now()
+  qc.setQueryData(key, mergeTail(tail, [row]))
   scheduleListInvalidation(qc)
   return 'row'
 }
