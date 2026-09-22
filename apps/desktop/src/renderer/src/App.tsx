@@ -3,6 +3,7 @@ import { HashRouter, Navigate, Route, Routes } from 'react-router-dom'
 import { useAuthStore } from '@/stores/auth'
 import AppLayout from '@/layouts/AppLayout'
 import HomePage from '@/pages/HomePage'
+import MessagesPage from '@/pages/MessagesPage'
 import CustomersPage from '@/pages/CustomersPage'
 import LabelsPage from '@/pages/LabelsPage'
 import AudiencesPage from '@/pages/AudiencesPage'
@@ -43,6 +44,7 @@ function App(): React.JSX.Element {
         <Route element={<AppLayout onLogout={() => void logout()} />}>
           <Route index element={<Navigate to={DEFAULT_NAV_PATH} replace />} />
           <Route path="/workspace" element={<HomePage />} />
+          <Route path="/messages" element={<MessagesPage />} />
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/labels" element={<LabelsPage />} />
           <Route path="/audiences" element={<AudiencesPage />} />
