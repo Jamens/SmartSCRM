@@ -244,9 +244,24 @@ export interface ThreadRow extends TailRow {
   sendLocalId: string | null
 }
 
-/** `msgTime` 是后端给的本地墙钟串（收敛 9），dayjs 直接解析即为浏览器的同一时刻。 */
+/**
+ * 后端写库与读库的墙钟固定在 `Asia/Shanghai`（`MsgTimes.CHAT_ZONE`），Jackson 出来的串是
+ * 不带偏移的 `LocalDateTime`（实测 `"2026-09-22T07:48:44"`，DATETIME(3) 时带 `.123`）。
+ * `dayjs(串)` 会按浏览器本地时区解析：换一台非东八区的机器，库页所有 `ts` 整体平移，
+ * 而 live 帧的 `ts` 由平台 epoch 秒换算、不跟着平移——`mergeTail` 的同键判定与升序排序
+ * 就是在比两组不可通的数。这里显式补回写库那个偏移，两条源才是同一个时刻。
+ * 已经自带 Z 或 ±hh:mm 的串不再补，避免后端哪天换成 `OffsetDateTime` 时反向错一次。
+ */
+const CHAT_ZONE_OFFSET = '+08:00'
+
+export function chatMs(msgTime: string): number {
+  const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(msgTime)
+  return dayjs(hasZone ? msgTime : `${msgTime}${CHAT_ZONE_OFFSET}`).valueOf()
+}
+
+/** 库行 → 渲染行：`ts` 走 `chatMs`，与 live 帧、乐观气泡共用 epoch 口径。 */
 export function rowOfMessage(m: MessageVO): ThreadRow {
-  return { ...m, ts: dayjs(m.msgTime).valueOf() }
+  return { ...m, ts: chatMs(m.msgTime) }
 }
 
 /** 乐观气泡：localId 派生出临时键，回执或 live 帧到达后由 `settlePending` 换成真实 msgKey。 */

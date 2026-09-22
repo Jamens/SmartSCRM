@@ -1,14 +1,15 @@
-import { useEffect } from 'react'
+import { useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { msgService } from '@/services/msgService'
 import { flattenRows, queryKeys, type MessagePageVO, type ThreadRow } from '@/api/messages'
 import { mergeTail, pendingKey, settlePending } from '@shared/liveTail'
+import { canAdvance } from '@shared/chatStatus'
 import type { BridgeState, LiveFrame, MsgStatus } from '@shared/chatTypes'
 
 /**
  * 记录页"双源取数"的另一半：历史读库（`api/messages`），尾巴吃广播（本文件）。
  * 合并的三条规则在 `@shared/liveTail`（Task 7 已单测），这里只做"帧 → 缓存"的搬运，
- * 加两个帧形状带来的特例（状态帧只并状态、同键行的 id/customerId 以库为准）。
+ * 加两个帧形状带来的特例（状态帧只并状态、同键行的 id/customerId/status 以"更可信的一份"为准）。
  */
 
 /**
@@ -56,12 +57,26 @@ export function rowOfLive(frame: LiveFrame): ThreadRow {
   }
 }
 
-/** ack 帧专用：只把 `status` 并到已有行上。 */
+/**
+ * 状态取哪一份。两条源各自只是"某个时刻的快照"，谁都不必然更新，但阶梯只能向上
+ * （`canAdvance` 与后端 `advanceStatus` 的 `FIELD()` 同形），所以"更靠后的那个"就是
+ * 合起来能给出的最好答案。两个方向都要问：库行已经 `read` 而尾巴还停在 `pending` 是常态
+ * （ack 只上报后端、从不广播回渲染层，见 msgBridge/index.ts 的 ack 分支），只看尾巴会把
+ * 这行永久冻在 `pending`；反过来尾巴先到 `read`、库页还是上一次翻页的 `sent` 时也不能倒退。
+ * 两边都推进不了时保留第一个参数——`failed` 与 `received` 不在阶梯里，正是由这条兜底决定归属。
+ */
+function furtherStatus(current: MsgStatus, incoming: MsgStatus): MsgStatus {
+  if (canAdvance(current, incoming)) return incoming
+  if (canAdvance(incoming, current)) return current
+  return current
+}
+
+/** ack 帧专用：只把 `status` 并到已有行上，且只允许向上。 */
 function mergeStatus(rows: readonly ThreadRow[], msgKey: string, status: MsgStatus): ThreadRow[] {
   const at = rows.findIndex((r) => r.msgKey === msgKey)
   if (at < 0) return [...rows]
   const out = [...rows]
-  out[at] = { ...out[at], status }
+  out[at] = { ...out[at], status: furtherStatus(out[at].status, status) }
   return out
 }
 
@@ -70,15 +85,32 @@ function mergeStatus(rows: readonly ThreadRow[], msgKey: string, status: MsgStat
  * 逐帧 invalidate 会把会话列表打成 refetch 风暴；尾巴本身是 setQueryData，不产生请求，无需合流。
  */
 const LIST_INVALIDATE_MS = 1000
-let listInvalidation: ReturnType<typeof setTimeout> | null = null
+// 按 QueryClient 存，不用模块级单例：dev 的回归脚本会临时挂第二个 root，共用一个指针会让后一份
+// 缓存收到的帧合流进前一份的 invalidate。也不在卸载时 clear——那一秒内已到的帧已经写进尾巴了，
+// 取消会把它们的列表刷新整批丢掉（角标不再 refetch），而 WeakMap 的 pin 上限就是 1s。
+const listInvalidations = new WeakMap<QueryClient, ReturnType<typeof setTimeout>>()
 
 function scheduleListInvalidation(qc: QueryClient): void {
-  if (listInvalidation) return
-  listInvalidation = setTimeout(() => {
-    listInvalidation = null
-    void qc.invalidateQueries({ queryKey: queryKeys.conversationsRoot })
-    void qc.invalidateQueries({ queryKey: queryKeys.statsRoot })
-  }, LIST_INVALIDATE_MS)
+  if (listInvalidations.has(qc)) return
+  listInvalidations.set(
+    qc,
+    setTimeout(() => {
+      listInvalidations.delete(qc)
+      void qc.invalidateQueries({ queryKey: queryKeys.conversationsRoot })
+      void qc.invalidateQueries({ queryKey: queryKeys.statsRoot })
+    }, LIST_INVALIDATE_MS)
+  )
+}
+
+/**
+ * `chatKey`/`msgKey` 要进缓存 key 与同键判定，而主进程对 `message` kind 只校 `report.kind`
+ * （ack 那条路才先过滤键形状）。坏帧或恶意帧不挡的话，每来一个陌生 chatKey 就长出一条尾巴条目，
+ * `msgKey` 缺失还会造出无法命中也永远丢不掉的行。长度闸与后端 `MessageService` 的白名单同量级。
+ */
+const KEY_MAX_LEN = 128
+
+function isKey(v: unknown): v is string {
+  return typeof v === 'string' && v.length > 0 && v.length <= KEY_MAX_LEN
 }
 
 /**
@@ -87,6 +119,10 @@ function scheduleListInvalidation(qc: QueryClient): void {
  * （采集是 500/2s 批量落库，此刻库页里还没有它们）。
  */
 export function applyLiveFrame(qc: QueryClient, frame: LiveFrame): FrameLanding {
+  // 类型上 `message` 一定在，运行时它是页内拼出来再一路传上来的：这里按未知形状对待。
+  const msg: { chatKey?: unknown; msgKey?: unknown } | undefined = frame.message
+  if (!Number.isInteger(frame.accountId) || !isKey(msg?.chatKey) || !isKey(msg?.msgKey))
+    return 'dropped'
   const { accountId } = frame
   const { chatKey, msgKey, status } = frame.message
   const key = tailKey(accountId, chatKey)
@@ -117,14 +153,27 @@ export function settleLocalId(
 ): void {
   const key = tailKey(input.accountId, input.chatKey)
   const tail = qc.getQueryData<ThreadRow[]>(key) ?? []
+  const bubbleKey = pendingKey(input.localId)
+  // 两个键都不在这份尾巴里就什么都不做。走 `settlePending` 的话它会落到
+  // `mergeTail(rows, [{ msgKey, ts: 0, ...extra }])` 那一支，而空尾巴时 `mergeTail` 的
+  // `oldest` 是 -Infinity——那行没有 body/chatKey/direction 的"幽灵气泡"会被留下：
+  // 失败支带着 `status:'failed'` 出现在窗口最顶上，成功支则是一条空行。
+  // `settlePending` 自己的注释写的是"气泡已经不在时不新增行"，这条闸才是让那句话成立的地方。
+  // 真实键那一行还在（live 帧先到、回执后到）时不拦：命中同键覆盖，ts 由 Math.max 保住。
+  const hasBubble = tail.some(
+    (r) => r.msgKey === bubbleKey || (input.msgKey !== undefined && r.msgKey === input.msgKey)
+  )
+  if (!hasBubble) return
+  if (!input.msgKey) {
+    qc.setQueryData(key, settlePending(tail, input.localId, bubbleKey, { status: 'failed' }))
+    return
+  }
   qc.setQueryData(
     key,
     // 成功只换键、不改状态：回执只证明平台当场收下了这条，推进阶梯是 ack 的事
     //（把 pending 直接写成 sent，失败的消息也会一路绿到底）。
     // 失败则必须留在窗口里：键保持 `~localId`，只翻状态，让人看得见并能重试。
-    input.msgKey
-      ? settlePending(tail, input.localId, input.msgKey)
-      : settlePending(tail, input.localId, pendingKey(input.localId), { status: 'failed' })
+    settlePending(tail, input.localId, input.msgKey)
   )
 }
 
@@ -143,9 +192,16 @@ export function useLiveTailSync(): void {
   const qc = useQueryClient()
   useEffect(() => {
     const offLive = msgService.onLive((frame) => applyLiveFrame(qc, frame))
-    const offState = msgService.onState((states) => qc.setQueryData<BridgeState[]>(queryKeys.bridges, states))
+    const offState = msgService.onState((states) =>
+      qc.setQueryData<BridgeState[]>(queryKeys.bridges, states)
+    )
     // 首帧不等广播：切到记录页时桥可能早就 ready 了，而 `msg:state` 是事件不是状态。
-    void msgService.bridges().then((states) => qc.setQueryData(queryKeys.bridges, states))
+    // catch 是必需的：`ipcMain.handle` 抛出会以 rejected promise 回到这里，不接就是渲染层一条
+    // 未处理拒绝。这一条只是"补一次初始状态"，拿不到就等下一次 `msg:state` 广播，不提示。
+    void msgService
+      .bridges()
+      .then((states) => qc.setQueryData(queryKeys.bridges, states))
+      .catch(() => undefined)
     if (import.meta.env.DEV) {
       // 写在 effect 里而不是渲染期：探针捕获的是"这一次挂载的那份 qc"，渲染期赋值会让第二个
       // 实例（回归脚本临时挂的 root）把指针改到它自己的缓存上，读出来是空的却并不是应用没收到。
@@ -153,7 +209,8 @@ export function useLiveTailSync(): void {
         landing: (frame: LiveFrame) => applyLiveFrame(qc, frame),
         settle: (input: { accountId: number; chatKey: string; localId: string; msgKey?: string }) =>
           settleLocalId(qc, input),
-        read: (accountId: number, chatKey: string) => qc.getQueryData<ThreadRow[]>(tailKey(accountId, chatKey)) ?? [],
+        read: (accountId: number, chatKey: string) =>
+          qc.getQueryData<ThreadRow[]>(tailKey(accountId, chatKey)) ?? [],
         bridgeStates: () => qc.getQueryData<BridgeState[]>(queryKeys.bridges) ?? []
       }
     }
@@ -183,16 +240,24 @@ export function useBridgeOf(accountId: number | null): BridgeState | null {
 }
 
 /**
+ * 缓存里没有尾巴时的稳定空数组。写它是安全的：`raw.map(...)` 与 `mergeTail` 都产出新数组，
+ * 这个引用不会从 `useThreadRows` 逃出去；每次 render 新建一个 `[]` 倒是会让下面的 memo 全部失效。
+ */
+const NO_ROWS: ThreadRow[] = []
+
+/**
  * 记录页把"库页 + 尾巴"合成一份渲染数组：两条来源只在 msgKey 与 ts 上相遇。
  * 合并方向不能反：`mergeTail(库页, 尾巴)` 让比窗口头更旧的补底帧被规则 2 丢掉
  * （它们本来就在库里，上滑翻页才拿得到）；反过来以尾巴为底会把整页历史当"旧行"扔光。
+ * 每一层都 memo：Task 14 的自动滚 effect 依赖 `[rows]`，返回新引用会让它每帧都触发，
+ * 而气泡上的 memo 永远命中不了。
  */
 export function useThreadRows(
   accountId: number | null,
   chatKey: string | null,
   pages: MessagePageVO[] | undefined
 ): ThreadRow[] {
-  const db = flattenRows(pages)
+  const db = useMemo(() => flattenRows(pages), [pages])
   // 切会话不清尾巴：尾巴按会话各存一份，`-1`/`''` 只是"还没选中会话"时的占位键。会话切回来时
   // 读到同一份尾巴，而库页里那时可能还没有刚到的那几条（采集是 500/2s 批量落库）；未挂载的尾巴
   // 条目由 TanStack 的 `gcTime` 自然回收，不需要手写清理。
@@ -202,15 +267,29 @@ export function useThreadRows(
   // 取 `data` 而不是 v4 的 `.state.data`：v5 的 useQuery 返回值上没有 `state` 这一层。
   const { data: cached } = useQuery({
     queryKey: key,
-    queryFn: () => [] as ThreadRow[],
+    queryFn: () => NO_ROWS,
     enabled: false,
-    initialData: [] as ThreadRow[]
+    initialData: NO_ROWS
   })
-  const raw = cached ?? []
-  // live 帧不知道库内自增 id，也不知道后端匹配到的客户；同键相遇时以库行为准。
-  const tail = raw.map((r) => {
-    const known = db.find((d) => d.msgKey === r.msgKey)
-    return known ? { ...r, id: known.id, customerId: known.customerId } : r
-  })
-  return mergeTail(db, tail)
+  const raw = cached ?? NO_ROWS
+  const tail = useMemo(
+    () =>
+      raw.map((r) => {
+        const known = db.find((d) => d.msgKey === r.msgKey)
+        // live 帧不知道库内自增 id，也不知道后端匹配到的客户；同键相遇时以库行为准。
+        // status 也必须一起过：`mergeTail` 的同键规则是逐字段覆盖（尾巴赢），而 ack 从来不广播回
+        // 渲染层，所以库行的状态只会比尾巴新、永远不会反过来——不修的话 out 气泡的勾会永久
+        // 停在 `pending`，而 Task 14 渲染的就是这个数组，下游修不了。
+        return known
+          ? {
+              ...r,
+              id: known.id,
+              customerId: known.customerId,
+              status: furtherStatus(known.status, r.status)
+            }
+          : r
+      }),
+    [raw, db]
+  )
+  return useMemo(() => mergeTail(db, tail), [db, tail])
 }
