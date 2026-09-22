@@ -10,7 +10,9 @@
     "src/renderer/src/lib/chatDays.ts",
     "src/renderer/src/lib/chatDays.test.ts",
     "src/renderer/src/lib/sendDraft.ts",
-    "src/renderer/src/lib/sendDraft.test.ts"
+    "src/renderer/src/lib/sendDraft.test.ts",
+    "src/renderer/src/lib/sendError.ts",
+    "src/renderer/src/lib/sendError.test.ts"
   ],
   "compilerOptions": {
     "composite": false,

@@ -10,7 +10,8 @@ import {
 } from '@/api/messages'
 import { mergeTail, pendingKey, settlePending } from '@shared/liveTail'
 import { canAdvance } from '@shared/chatStatus'
-import type { BridgeState, LiveFrame, MsgStatus, SendError, SendReceipt } from '@shared/chatTypes'
+import type { BridgeState, LiveFrame, MsgStatus, SendReceipt } from '@shared/chatTypes'
+import { ipcFailureText, outcomeOf, sendErrorLogText } from './sendError'
 
 /**
  * 记录页"双源取数"的另一半：历史读库（`api/messages`），尾巴吃广播（本文件）。
@@ -267,40 +268,20 @@ export function useBridgeOf(accountId: number | null): BridgeState | null {
   return data?.find((s) => s.accountId === accountId && s.ready) ?? null
 }
 
-/** 四种失败的下一步完全不同，不能都糊成"发送失败"。 */
-export const SEND_ERROR_TEXT: Record<SendError, string> = {
-  BRIDGE_OFFLINE: '会话未在线，无法发送',
-  CHAT_NOT_FOUND: '没找到这个会话，先在页面里把它打开一次',
-  SEND_FAILED: '发送失败',
-  TIMEOUT: '等回执超时，可以重试'
-}
-
-/**
- * 按一个**未知值**去那份表里取文案。
- *
- * `SendError` 是类型不是校验器：`msgBridge/index.ts` 把页内上来的 `send_result` 原样转进
- * `registry.settle(report)`，`error` 那个字段没人验过形状（`chatTypes.ts:87`）。查到并集外
- * 的字符串（或非字符串）时 `SEND_ERROR_TEXT[坏值]` 是 `undefined`，拼出来的提示就成
- * "undefined：…" 端给销售看。认不出的一律归 `SEND_FAILED`——宁可文案粗一点。
- *
- * 用 `hasOwnProperty` 而不是 `in`：后者会顺原型链查到 `toString` / `constructor` 之类的函数，
- * 那就不是"取不到文案"而是"把函数拼进文案"了。
- */
-function sendErrorText(error: SendError | undefined): string {
-  const code = error ?? 'SEND_FAILED'
-  return Object.prototype.hasOwnProperty.call(SEND_ERROR_TEXT, code)
-    ? SEND_ERROR_TEXT[code]
-    : SEND_ERROR_TEXT.SEND_FAILED
-}
-
 /**
  * 发送链的渲染层这一段：登记乐观气泡 → 等主进程回执 → 换键。
  * 不乐观翻状态（`ok:true` 只证明平台收下），推进阶梯是 ack 帧的事（Task 13 第 6 行断言）。
+ * 回执到文案的那段映射（含四条码归类、`ok:true` 却没 msgKey 怎么办）不在这里，
+ * 在 `./sendError`——那份是无 React 依赖的纯函数，`sendError.test.ts` 直接测它。
  *
- * 另一个契约（`ReplyComposer.sendNow` 的那个 catch 的标注全靠它）：**这个 `send` 不会 reject**。
- * 主进程 `ipcMain.handle` 抛出时会以 rejected promise 回到这里，不接住的话上面那条乐观气泡
- * 就永远停在 ⏱（既没有 ⚠ 也没有重试按钮），而调用方的 catch 会把它报成"译文获取失败"——
- * 那是个假原因，用户会去查翻译而不是查桥。两处注释互指，改任何一处都要回来改另一处。
+ * 另一个契约（`ReplyComposer.sendNow` 的那个 catch 的标注全靠它）：**那段 `msgService.send`
+ * 的调用不会把 reject 漏给调用方**。主进程 `ipcMain.handle` 抛出时会以 rejected promise 回到
+ * 下面那个 catch，在那里就按失败结清（乐观气泡翻 ⚠ + 重试，调用方拿到 `{ok:false}`）。
+ * 不接住的话上面那条乐观气泡就永远停在 ⏱（既没有 ⚠ 也没有重试按钮），而调用方的 catch 会把它
+ * 报成"译文获取失败"——那是个假原因，用户会去查翻译而不是查桥。
+ * 这里只声称 IPC 那一段：`send` 整体仍可能在 try 之外抛（`crypto.randomUUID()`、
+ * `appendPending`、`outcomeOf` 之前的字段读取），那些抛出去就是调用方的问题了，别把这句注释
+ * 读成"这个函数永不 reject"。两处注释互指，改任何一处都要回来改另一处。
  */
 export function useSendText(
   accountId: number | null,
@@ -318,11 +299,9 @@ export function useSendText(
       } catch (e) {
         // 见上面那段契约：异常在这里就按失败结清（键留 `~localId`、状态翻 failed），
         // 人能看到并且能重试，并且**不往外抛**，调用方那句"译文获取失败"才只可能是翻译给的。
+        // 这一支不加日志：主进程那边抛得比这里有上下文，同一件事记两处只会让人猜哪条是真的。
         settleLocalId(qc, { accountId, chatKey, localId })
-        return {
-          ok: false,
-          message: `${SEND_ERROR_TEXT.SEND_FAILED}：${e instanceof Error ? e.message : String(e)}`
-        }
+        return { ok: false, message: ipcFailureText(e) }
       }
       // ok 但没带 msgKey 时留 `~localId` 不猜键：Task 12 的页内发送一定回 id，
       // 真出现说明上游契约破了，让 Task 19 的端到端把它抓出来，而不是在这里编一个。
@@ -332,21 +311,14 @@ export function useSendText(
         localId,
         msgKey: receipt.ok ? receipt.msgKey : undefined
       })
-      // `ok:true` 却没有 msgKey：上面那一行已经把气泡翻成了 ⚠ + 重试（`settleLocalId` 的
-      // 无 msgKey 分支），所以这里**不能**报成功——报成功的话调用方会把草稿清空，
-      // 界面上就是"平台说收下了，却留一条失败气泡"这种自相矛盾，而点那次重试会把同一条正文
-      // 再发一遍。今天的 WA 桥造不出这一组合（`bridge/whatsapp/send.ts` 的 `receiptFrom`
-      // 没有 msgKey 就直接回失败），但 Task 12d 的 Telegram 回执是另一段代码，不继承那个保证。
-      if (receipt.ok && !receipt.msgKey) {
-        return {
-          ok: false,
-          message: `${SEND_ERROR_TEXT.SEND_FAILED}：平台没有回消息标识，这条是否真的发出去了无法确认`
-        }
-      }
-      if (receipt.ok) return { ok: true }
-      // 只给人看那句归类后的文案，不带 `receipt.detail`：detail 是 wa-js 抛出的原文
-      //（`bridge/whatsapp/send.ts` 的 `err.message`），销售读不懂也不该读，要看去控制台。
-      return { ok: false, message: sendErrorText(receipt.error) }
+      // 失败回执的 code/detail 只进这一行日志：给人看的仍然是 `outcomeOf` 那句归类文案，
+      // 一个字都不许多（detail 是 wa-js 抛出的原文，销售读不懂也不该读）。
+      // 只在渲染层控制台，不进 preload、不进注入页（C2/C3）；成功路径不留日志，
+      // `ok:true` 却没 msgKey 那一支没有 code/detail 可记，所以同样不记。
+      if (!receipt.ok) console.warn('[useSendText]', sendErrorLogText(receipt))
+      // 那三段成败判定整体在 `./sendError` 的 `outcomeOf`（含"ok 却没 msgKey 不能报成功"的理由），
+      // 那里有它的单测。
+      return outcomeOf(receipt)
     }
   }
 }
