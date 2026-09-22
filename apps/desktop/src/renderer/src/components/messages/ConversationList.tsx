@@ -17,19 +17,30 @@ import { useAccounts } from '@/stores/accounts'
 import { platformOf } from '@/lib/platform'
 import { msgService } from '@/services/msgService'
 import { useBridgeOf } from '@/lib/liveTailSync'
-import { chatMs, flattenConversations, useConversations, type ConversationVO } from '@/api/messages'
+import {
+  chatMs,
+  flattenConversations,
+  unfilteredConversationQuery,
+  useConversations,
+  type ConversationVO
+} from '@/api/messages'
 import { listTime } from '@/lib/chatDays'
 import { titleOfConversation } from '@/lib/chatDisplay'
 import { isChatPlatform } from '@shared/chatPlatform'
 
 const ALL = 'all'
-const LIST_SIZE = 30
 
 interface Props {
   accountId: number | null
   onAccountIdChange: (id: number) => void
   picked: ConversationVO | null
   onPick: (conversation: ConversationVO) => void
+}
+
+/** 补底提示：跟着"哪个账号上按的"走，换账号后不再显示上一条（文字留在另一个账号名下会误导）。 */
+interface SyncHint {
+  accountId: number
+  text: string
 }
 
 export default function ConversationList({
@@ -41,16 +52,15 @@ export default function ConversationList({
   const { data: accounts = [] } = useAccounts()
   const [keyword, setKeyword] = useState('')
   const [platform, setPlatform] = useState<string>(ALL)
-  const [syncHint, setSyncHint] = useState<string | null>(null)
+  const [syncHint, setSyncHint] = useState<SyncHint | null>(null)
   const debouncedKeyword = useDebouncedValue(keyword, 300)
   const bridge = useBridgeOf(accountId)
 
   const query = useMemo(
     () => ({
-      accountId,
+      ...unfilteredConversationQuery(accountId),
       platform: isChatPlatform(platform) ? platform : null,
-      q: debouncedKeyword.trim() || undefined,
-      size: LIST_SIZE
+      q: debouncedKeyword.trim() || undefined
     }),
     [accountId, platform, debouncedKeyword]
   )
@@ -60,11 +70,22 @@ export default function ConversationList({
 
   const syncHistory = (): void => {
     if (accountId === null) return
-    void msgService.syncHistory(accountId).then((started) => {
-      // 两种结果必须长得不一样：主进程返回 false 表示"命令发出去了但桥没接"，
-      // 静默成功会让人以为在补底，然后对着空列表怀疑数据丢了。
-      setSyncHint(started ? '补底已开始，消息到一条刷一条' : '会话未在线，补底未启动')
-    })
+    const at = accountId
+    void msgService
+      .syncHistory(accountId)
+      .then((started) => {
+        // 两种结果必须长得不一样：主进程返回 false 表示"命令发出去了但桥没接"，
+        // 静默成功会让人以为在补底，然后对着空列表怀疑数据丢了。
+        setSyncHint({
+          accountId: at,
+          text: started ? '补底已开始，消息到一条刷一条' : '会话未在线，补底未启动'
+        })
+      })
+      // 拒绝了也要有下文：invoke 失败（桥没挂、主进程抛了）原本只剩一个未处理的 rejection，
+      // 用户按了按钮什么也没发生，比"补底未启动"更难判断。
+      .catch(() => {
+        setSyncHint({ accountId: at, text: '补底请求没发出去，请检查会话是否在线' })
+      })
   }
 
   return (
@@ -120,21 +141,33 @@ export default function ConversationList({
           </Button>
         </div>
 
-        {syncHint && <p className="text-xs text-muted-foreground">{syncHint}</p>}
+        {syncHint !== null && syncHint.accountId === accountId && (
+          <p className="text-xs text-muted-foreground">{syncHint.text}</p>
+        )}
       </div>
 
       <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 py-2">
-        {isPending && (
+        {/* 没选账号时查询是 disabled 的，`isPending` 会一直挂着——不挡住这句就变成"永远在加载"，
+            而真正的原因是没账号可查（右列那句提示在左列看不见）。 */}
+        {accountId !== null && isPending && (
           <p className="px-2 py-4 text-center text-xs text-muted-foreground">加载会话中…</p>
+        )}
+        {accountId === null && (
+          <p className="px-2 py-4 text-center text-xs text-muted-foreground">
+            先在上面选择一个平台账号。
+          </p>
         )}
         {isError && (
           <p className="px-2 py-4 text-center text-xs text-destructive">
             无法加载会话，请确认后端已启动。
           </p>
         )}
-        {!isPending && !isError && conversations.length === 0 && (
+        {accountId !== null && !isPending && !isError && conversations.length === 0 && (
           <p className="px-2 py-6 text-center text-xs text-muted-foreground">
-            这个账号还没有采集到会话。登录后会自动补底，也可以点上面的「同步历史」。
+            {/* 空列表有两种原因：账号真没数据，还是被筛选条件筛空。指错原因会让人以为采集丢了。 */}
+            {debouncedKeyword.trim() !== '' || platform !== ALL
+              ? '没有匹配当前筛选条件的会话，清空关键字或选回「全部平台」试试。'
+              : '这个账号还没有采集到会话。登录后会自动补底，也可以点上面的「同步历史」。'}
           </p>
         )}
         {conversations.map((c) => {

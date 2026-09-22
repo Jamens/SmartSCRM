@@ -1,6 +1,7 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { http } from '@/lib/http'
+import { CHAT_ZONE_OFFSET_TAG } from '@shared/chatTime'
 import { pendingKey, type TailRow } from '@shared/liveTail'
 import type { Direction, MediaType, MsgSource, MsgStatus } from '@shared/chatTypes'
 import type { ChatPlatform } from '@shared/chatPlatform'
@@ -109,6 +110,27 @@ const qs = (input: Record<string, unknown>): string => {
   }
   const s = p.toString()
   return s ? `?${s}` : ''
+}
+
+/**
+ * 会话列表首屏的条数。**页与列表都按这个数取**：查询键把 `size` 算进去了，两处数字一旦不同，
+ * 页面订阅的就是另一份永远不刷新的缓存——右列的未读/标题不会再跟着列表动，而且看不出报错。
+ */
+export const CONVERSATION_LIST_SIZE = 30
+
+/**
+ * 「无筛选那一份」查询参数的唯一写法。左列与 `MessagesPage` 都从这里取：查询键是整个参数对象
+ * （`['msg','conversations', p]`），两处形状不同就是两份各自刷新的缓存，页面那份永远等不到左列
+ * 的 refetch——表现成"角标清了又挂着、标题不跟着改口"，而且一行报错都没有。
+ *
+ * 键是 TanStack 默认 `hashKey`（`query-core/build/modern/utils.js`）算的：对象键排序后
+ * `JSON.stringify`，而 `JSON.stringify` 会丢掉值为 `undefined` 的键。所以无筛选时列表只需把 `q`
+ * 留成 `undefined`（不是 `''`——空串会留下 `"q":""`，那就成了另一份键），两处的哈希才相同、
+ * 才真的共用一份缓存；带关键字时列表自然落到另一份键上，页面继续读无筛选那一份，
+ * 会话被筛掉时右列照旧可用。
+ */
+export function unfilteredConversationQuery(accountId: number | null): ConversationQuery {
+  return { accountId, platform: null, size: CONVERSATION_LIST_SIZE }
 }
 
 export function useConversations(p: ConversationQuery) {
@@ -251,12 +273,14 @@ export interface ThreadRow extends TailRow {
  * 而 live 帧的 `ts` 由平台 epoch 秒换算、不跟着平移——`mergeTail` 的同键判定与升序排序
  * 就是在比两组不可通的数。这里显式补回写库那个偏移，两条源才是同一个时刻。
  * 已经自带 Z 或 ±hh:mm 的串不再补，避免后端哪天换成 `OffsetDateTime` 时反向错一次。
+ *
+ * 偏移量本身只有一个 TS 侧定义：`@shared/chatTime` 的 `CHAT_ZONE_OFFSET_TAG`。
+ * 解析在这里钉住，格式化（日键 / 时刻）在那边钉住——两边各写一份 `'+08:00'` 时，
+ * 改一处就会静默分叉，而分叉的表现是"某些消息挂在不该在的那一天"。
  */
-const CHAT_ZONE_OFFSET = '+08:00'
-
 export function chatMs(msgTime: string): number {
   const hasZone = /[zZ]$|[+-]\d{2}:?\d{2}$/.test(msgTime)
-  return dayjs(hasZone ? msgTime : `${msgTime}${CHAT_ZONE_OFFSET}`).valueOf()
+  return dayjs(hasZone ? msgTime : `${msgTime}${CHAT_ZONE_OFFSET_TAG}`).valueOf()
 }
 
 /** 库行 → 渲染行：`ts` 走 `chatMs`，与 live 帧、乐观气泡共用 epoch 口径。 */

@@ -38,19 +38,38 @@ export default function MessageThread({
   const atBottomRef = useRef(true)
 
   /**
-   * 清未读的记号：`会话 id + 会话头时间`。同一笔未读只清一次，StrictMode 在 dev 把挂载 effect 跑两遍
-   * 时不会变成两次 POST /read（实测第一次进会话 2 次、切到别的会话再回来 1 次，差别只在"挂载"还是"换 props"）。
-   * 列表 refetch 把新消息计成未读时，未读只由插入推动、`lastMsgTime` 一定跟着走 → 记号是新的 → 这里仍会再清一次。
-   * 失败要把记号删掉：不然下一次渲染被 `has()` 挡住，角标就一直挂着。
+   * 清未读：`unreadCount > 0` 就发 `POST /read`，但**同一笔未读只发一次**。挡重复用三层记号
+   * `会话 id + 会话头时间 + 未读数`，并在看到 `unreadCount` 归零时把记号抹掉重新武装：
+   *
+   * - 为什么带上未读数：`upsertHead` 的 `last_msg_time` 是 `IF(VALUES(...) > 现值)` 才前进的
+   *   （`ChatConversationMapper`），而 `unread_count = unread_count + delta` 无条件——一条比会话头更老的
+   *   live 行（时钟偏慢、迟到投递，spec §9 自己列的那条）会只涨未读、不动头。只用 `id + 头时间`
+   *   做记号时这种未读永远撞不开，角标就挂在正在看的这条会话上。
+   * - 为什么归零要抹记号：`useMarkRead.onSuccess` 本地就把角标清零了，所以"清完再来一笔"必然经过 0；
+   *   记号留在内存里会让下一次 `unreadCount` 回到同一个数时被当成同一笔。
+   * - 为什么只留最近一笔、不攒集合：本组件按"账号 + 会话"重挂载（MessagesPage 的 `key`），换一条会话
+   *   记号自然作废；留着同一笔也只在"清完又涨回同一个未读数"时挡路，而那正是上面归零重新武装要放行的一次。
+   * - 失败必须抹记号：`onError` 那条分支不抹的话，下一次渲染被同一个记号挡住，角标也永远挂着。
+   *
+   * 少了这层记号会怎样是实测过的：dev 的 `<StrictMode>` 把挂载 effect 跑两遍，第一次进会话就是
+   * 2 次 POST（同一毫秒、都 code:0）；列表 refetch 还会带着新引用再触发。
    */
-  const readMark = `${conversation.id}|${conversation.lastMsgTime ?? ''}`
-  const clearedRef = useRef<Set<string>>(new Set())
+  const readMark = `${conversation.id}|${conversation.lastMsgTime ?? ''}|${conversation.unreadCount}`
+  const clearedMarkRef = useRef<string | null>(null)
   useEffect(() => {
-    // 进会话就清未读（收敛 11 的"尽力值"）：只看 `unreadCount > 0`，不比较游标。
-    if (conversation.unreadCount <= 0 || clearedRef.current.has(readMark)) return
-    clearedRef.current.add(readMark)
-    markRead(conversation.id, { onError: () => clearedRef.current.delete(readMark) })
+    if (conversation.unreadCount <= 0) {
+      clearedMarkRef.current = null
+      return
+    }
+    if (clearedMarkRef.current === readMark) return
+    clearedMarkRef.current = readMark
+    markRead(conversation.id, {
+      onError: () => {
+        if (clearedMarkRef.current === readMark) clearedMarkRef.current = null
+      }
+    })
   }, [conversation, readMark, markRead])
+
   const onScroll = (): void => {
     const el = scrollerRef.current
     if (!el) return
