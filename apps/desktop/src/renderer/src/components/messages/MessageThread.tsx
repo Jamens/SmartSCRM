@@ -179,27 +179,42 @@ export default function MessageThread({
   /** 每个锚点只滚一次：live 帧会让 rows 变化，不记一笔就会每来一条拽回去一次。 */
   const anchoredRef = useRef<string | null>(null)
   /**
-   * 高亮的退场计时器存在 ref 里而不是 effect 的 cleanup 里，这一处与直觉相反但有必要：
-   * 本 effect 的依赖是 `[anchor, rows]`，而 live 帧会在 2 秒之内换掉 `rows` 的引用（上面那条
-   * "每个锚点只滚一次"记的就是这件事）。cleanup 一跑就把计时器掐了，重跑又因为 anchoredRef
-   * 已命中而直接 return —— 高亮会永久挂在那条气泡上，"2 秒"变成"直到下一次切会话"。
-   * 所以计时器只由"换会话"和"卸载"两处收口，不跟着 effect 的重跑走。
+   * 只记"上一次看到的 chatKey"，不记"是不是挂载后第一轮"——后者在这套 dev 环境里会被
+   * `<StrictMode>` 打穿：模拟卸载会再跑一遍 setup，用"第一轮跳过"当闸门的话，第二遍就被当成
+   * 换了会话，把 layout effect 刚设上的高亮抹掉。同一个套路本文件的 `clearedMarkRef`（清未读那一处）
+   * 已经用过一次，理由是同一个：挂载 effect 跑两遍。
+   *
+   * 而挂载第一轮确实不能"顺手清一次"。`useMessages` 没有设 staleTime，重复跳同一条命中时缓存里的行
+   * 在挂载那一次 commit 就渲染出来了：锚定 layout effect 先跑（滚到位 + 设高亮），这条 passive
+   * effect 后跑。实测（`tmp/p6h-g17.mjs`）：冷缓存那一路 ring=true，热缓存那一路 ring=false，
+   * 两次的 scrollTop 都是 318 —— 位置跳对了、亮没亮出来，就是这一句 `setHighlightKey(null)` 干的。
+   * 挂载时 `anchoredRef` 本来就是 null、高亮本来就是空，清与不清的差别只剩"把刚点亮的抹掉"。
+   *
+   * 改完两路都亮（`tmp/p6h-g19.mjs`，每 10ms 采一次 DOM 的 `ring-1`）：冷挂载 1986ms、
+   * 热缓存 1997ms，都在 2 秒退场。
    */
-  const highlightTimerRef = useRef<number | null>(null)
-  const clearHighlightTimer = (): void => {
-    if (highlightTimerRef.current !== null) {
-      window.clearTimeout(highlightTimerRef.current)
-      highlightTimerRef.current = null
-    }
-  }
+  const seenChatKeyRef = useRef<string | null>(conversation.chatKey)
 
   useEffect(() => {
+    if (seenChatKeyRef.current === conversation.chatKey) return
+    seenChatKeyRef.current = conversation.chatKey
     // 换会话就忘掉上一个锚点：anchor 由页面清，但 chatKey 一变，本组件里绝不能再滚
     anchoredRef.current = null
-    clearHighlightTimer()
     setHighlightKey(null)
-    return clearHighlightTimer
   }, [conversation.chatKey])
+
+  /**
+   * 2 秒退场单独立一条 effect，依赖只有 `highlightKey`。放在锚定那条 layout effect 里管不住：
+   * 那条的依赖是 `[anchor, rows]`，live 帧一改 rows 就 cleanup + 重跑，重跑又因为 `anchoredRef`
+   * 已命中直接 return —— 计时器被掐了却没人重新点上，"2 秒"变成"直到下一次切会话"；改成 ref 存
+   * 计时器、只在卸载收口，又会被 `<StrictMode>` 的模拟卸载掐掉同一刀。依赖收成 `highlightKey`
+   * 之后两条路都到不了：亮着就一定有一个计时器在跑，灭了 cleanup 自己把它收掉。
+   */
+  useEffect(() => {
+    if (highlightKey === null) return
+    const timer = window.setTimeout(() => setHighlightKey(null), HIGHLIGHT_MS)
+    return () => window.clearTimeout(timer)
+  }, [highlightKey])
 
   useLayoutEffect(() => {
     const key = anchor?.msgKey ?? null
@@ -210,11 +225,6 @@ export default function MessageThread({
     anchoredRef.current = key
     row.scrollIntoView({ block: 'end' })
     setHighlightKey(key)
-    clearHighlightTimer()
-    highlightTimerRef.current = window.setTimeout(() => {
-      highlightTimerRef.current = null
-      setHighlightKey(null)
-    }, HIGHLIGHT_MS)
     // rows 而不是 rows.length：锚点行可能在长度不变时由尾巴合并换进来
   }, [anchor, rows])
 
