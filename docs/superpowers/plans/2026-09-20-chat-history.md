@@ -11077,9 +11077,9 @@ git commit -m "feat(P6): 内嵌页气泡按客户取语向（生效面 ②：主
 **Interfaces:**
 - Consumes: Task 5 的 `GET /api/customers/{id}/timeline?size`；Task 13 的 `useCustomerTimeline(id, size)` / `rowOfMessage(m)` / `ThreadRow` / `ConversationVO`；Task 14 的 `MessageBubble` / `titleOfConversation`、`chatDays` 的 `listTime`；Task 16 的 `isGroupChatKey`；既有 `useCustomer`（抽屉已经把整份 `CustomerVO` 传进来了，不需要再查）、`useNavigate`、zustand。
 - Produces（Task 19 只认这些）：
-  - `lib/chatTimeline`：`interface TimelineHead { chatKey: string; title: string | null; isGroup: boolean }`、`interface TimelineGroup<T> { chatKey: string; title: string; isGroup: boolean; lastTs: number; rows: T[] }`、`groupByConversation<T extends { chatKey: string; ts: number }>(messages, heads): TimelineGroup<T>[]`
+  - `lib/chatTimeline`：`interface TimelineHead { accountId: number; chatKey: string; title: string | null; isGroup: boolean }`、`interface TimelineGroup<T> { accountId: number; chatKey: string; title: string; isGroup: boolean; lastTs: number; rows: T[] }`、`groupByConversation<T extends { accountId: number; chatKey: string; ts: number }>(messages, heads): TimelineGroup<T>[]`、导出的 `cardKey(accountId, chatKey): string`（卡片身份 = 会话身份 = 这个复合键，`CustomerTimeline` 建 `headOf` 时共用同一份）
   - `stores/chatJump`：`useChatJumpStore`（`target: ConversationVO | null`、`hold(c)`、`clear()`）
-  - `CustomerTimeline`：props `{ customerId: number }`，DOM 上带 `data-p6-timeline="list|empty"`、`data-p6-timeline-group="<chatKey>"`、`data-p6-timeline-jump="<chatKey>"`
+  - `CustomerTimeline`：props `{ customerId: number }`，DOM 上带 `data-p6-timeline="list|empty"`、`data-p6-timeline-group="<accountId>|<chatKey>"`、`data-p6-timeline-account="<accountId>"`、`data-p6-timeline-jump="<accountId>|<chatKey>"`（后两个属性都是评审补的：一个号码挂两个账号时，`chatKey` 单独作键会把两张卡并成一张、跳转还会跳到错的账号，界面上没有痕迹）
   - `MessageThread` 根节点的 `data-p6-thread="<conversationId>"`：跨页跳转的精确落点选择器（此前只能按标题文本来断"选中了哪条会话"）
 - 不做（留给后面）：真实登录态端到端（Task 19）、时间线翻页（端点只有 `size`，没有游标；`SIZE = 20` 就是产品口径"最近消息"）。
 
@@ -11402,7 +11402,7 @@ CDP（C9 抬窗口 + `visibilityState === 'visible'`；C10 真实鼠标）。本
 
 | # | 操作 | 断言 | 区分的是什么 |
 |---|---|---|---|
-| 1 | 客户管理页真实鼠标点开那位有消息的种子客户 | 抽屉里 `[data-p6-timeline="list"]` 存在；`section[data-p6-timeline-group]` 根数 === `curl /api/customers/{id}/timeline?size=20` 的 `conversationCount` | 时间线真的读了新端点，而不是把会话列表又渲染一遍 |
+| 1 | 客户管理页真实鼠标点开那位有消息的种子客户 | 抽屉里 `[data-p6-timeline="list"]` 存在；`section[data-p6-timeline-group]` 根数 === `curl /api/customers/{id}/timeline?size=20` 的 `messages` 里**去重后的 `(accountId, chatKey)` 数**，且每张卡的键都落在这个集合里（**不是** `conversationCount`：那是投影出来的会话头总数，可能含本轮 `size` 窗口里没有消息的会话，等式一般不成立） | 时间线真的读了新端点并按会话身份切卡，而不是把会话列表又渲染一遍 |
 | 2 | 数气泡 | `[data-p6-timeline] [data-msg-key]` 总数 === `curl` 的 `messages.length`；且每个 `msgKey` 都出现在"自己那条会话"的卡片里 | **一条不丢 + 不落错卡**：`Map.get()` 后直接 `continue` 的实现会在这里掉消息，而页面看起来仍然满满当当 |
 | 3 | 卡片顺序与卡内顺序 | 卡片按各卡最后一条 `msgTime` 倒序；卡内 `msgTime` 单调不减（对照 curl 的原始数组） | 排序基准是"卡内最新"，不是会话头的 `lastMsgTime` 投影值 |
 | 4 | 看一张群卡片与一张单聊卡片 | 群卡片每条 in 气泡上方有发送人小字；单聊卡片没有 | `showSender` 按 `group.isGroup` 分派，而不是按"这位客户的全部会话" |
@@ -11410,9 +11410,17 @@ CDP（C9 抬窗口 + `visibilityState === 'visible'`；C10 真实鼠标）。本
 | 6 | 先在记录页切到另一个账号，再从抽屉跳同一个会话 | `[data-p6-thread]` 的 id 就是目标会话；账号下拉/侧栏选中的是该会话所属账号 | 跨账号投递与 Task 16 第 10 行共享同一个失效面（"归属判定"effect 会把刚跳进来的会话抹掉），这次由抽屉触发 |
 | 7 | 回到客户页再跳另一条会话；然后在记录页手动点一条会话、切去翻译中心再切回 | 前一步 `[data-p6-thread]` 变成新目标；后一步选中的仍是手动点的那条 | 投递是一次性的：`clear()` 真的跑了，target 不会粘住把人一次次拽回抽屉里那条 |
 | 8 | `curl /api/customers/{id}/timeline?size=2` | `messages.length <= 2`、`conversations` 只含这 2 条涉及的会话；抽屉默认 20 条时气泡数 === min(20, 真实总数) | "最近 N 条"的口径落在页面上；也顺带证明 `size` 不是游标翻页（本任务不做翻页） |
-| 9 | 收尾 | 全程无 `POST` / `PUT` / `DELETE` 请求（看请求计数插桩）；`GET /api/customers?keyword=` 的种子计数与打开抽屉前一致 | 抽屉打开一次不该改动任何数据（种子与归属都不动） |
+| 9 | 收尾 | 全程无**业务写**（非 GET 里扣掉 `authedFetch` 的 `POST /api/auth/refresh` 令牌续期后为 0，续期单独打印不算违规）；`GET /api/customers?keyword=` 的种子计数与打开抽屉前一致 | 抽屉打开一次不该改动任何数据（种子与归属都不动）。令牌续期是 C13 取数通路自带的传输层、不落业务表，把它算成"写"会误 FAIL、整体放行又会掩盖真正的业务写，所以拆开 |
 
 第 2、5、6、7 行是本任务的硬证据：不丢消息、整条会话过桥、跨账号不被复位 effect 抹掉、投递不粘住。这四条在界面上都要"看一眼就知道对不对"以外的情形才暴露，所以逐条给了对照组。
+
+> **实测回写（Task 18 做完 + 一轮评审修复之后）**：
+> - **`# pass 83` 是推演值**（C14）。Task 17b 收尾时基线已是 **128**，本任务首轮 +4 条 `chatTimeline` = **132**；评审修复轮补两条多账号用例（同号挂两账号拆两卡 / 两账号只一条有会话头走回落组）→ 终态 **134**。`lint` 仓库整体坏，不是通过项。
+> - **会话身份是 `(accountId, chatKey)`，不是 `chatKey`**：正文上面那份 `chatTimeline.ts` / `CustomerTimeline.tsx` 代码块按 `chatKey` 成组、建 `headOf`，评审判成 Important——一个号码挂两个 WhatsApp 账号时两张卡会并成一张，且「打开」跳到 `headOf` 里最后写入那条头上，用户看的是 A 号会话、点进去是 B 号线程，界面无痕迹。终态：分组键、`TimelineHead/TimelineGroup.accountId`、`data-p6-timeline-group/-jump/-account` 全走 `cardKey(accountId, chatKey)`，`cardKey` 从 `chatTimeline.ts` 导出一边一份。
+> - **`import ... from '@shared/chatKeys'` 在闸门文件里编译绿、运行炸**：`chatTimeline.ts` 进 `tsconfig.unit.json`，`node --test` 不认 `@shared/*` 别名（只在 tsconfig paths 里存在）。改成相对路径 + `.ts` 后缀 `'../../../shared/chatKeys.ts'`，与 `chatSearch.ts` / `chatDays.ts` / `createCustomerPrefill.ts` 同一写法。
+> - **第 7 行期望值按实测改写**：简报写"切回记录页后选中的仍是手动点的那条"。`picked`/`anchor`/`view` 是 `MessagesPage` 的本地 state，离开路由即随组件卸载消失 ⇒ 回来时线程为空。这一行真正钉的是"投递不粘住"，断言改成 `afterReturn !== 第二次目标 id`（实测 `thread=null` 通过；若 `clear()` 没跑，重挂载会抢回上一条）。**`owned` 归属判定是派生值（`picked.accountId === selectedId ? picked : null`），不是 effect**——第 6 行跨账号跳进来能渲染线程，本身就要求 picked 跟着切回目标账号。
+> - **第 3 行"卡片倒序"、第 4 行"群卡片有发送人小字"在只读数据上拿不到证据 → 显式 `n/a`**：库里每位种子客户只有 1 条会话，四条群会话（`chat_conversation.id` 31/144/154/238）的 `customer_id` 全是 null，任何客户时间线都凑不出第二张卡或群卡；补它要写库（违反本任务只读）或把群会话 `link-customer` 到某客户而该端点**无解绑能力**（不可逆）。这两条 + 跨账号分裂（第 1 行的 `1b`）转 Task 19 验收行，由 `chatTimeline.test.ts` 六条用例作单元侧的常驻证明。
+> - **`ConversationList` 容器补 `data-p6-scroller="list"`**（评审外的控制器补充）：第 6/7 行要在 CDP 里点左列某条会话，而右列线程标题含同一客户名，不限定容器会点到右列；与 Task 16 给线程容器补 `data-p6-scroller="thread"` 同一条路。
 
 - [ ] **Step 6: 提交**
 
