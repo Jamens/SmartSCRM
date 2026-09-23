@@ -1,6 +1,10 @@
 import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { http } from '@/lib/http'
+// 搜索门槛只有一份字面量：`SearchPanel` 用它写"至少几个字"的提示，这里用它决定 `enabled`。
+// 依赖方向是 api → lib（`chatSearch` 是纯模块，不 import 本文件，否则闸门里 `node --test` 会被
+// react-query 整套依赖拖住），所以常量放在 `chatSearch` 两侧都读得到。
+import { MIN_QUERY } from '@/lib/chatSearch'
 import { CHAT_ZONE_OFFSET_TAG } from '@shared/chatTime'
 import { pendingKey, type TailRow } from '@shared/liveTail'
 import type { Direction, MediaType, MsgSource, MsgStatus } from '@shared/chatTypes'
@@ -170,7 +174,7 @@ export function useMessages(p: MessageQuery) {
 export function useSearchMessages(p: SearchQuery) {
   return useInfiniteQuery({
     queryKey: queryKeys.search(p, null),
-    enabled: p.q.trim().length >= 2,
+    enabled: p.q.trim().length >= MIN_QUERY,
     initialPageParam: null as string | null,
     queryFn: ({ pageParam }) =>
       http.get<MessageSearchVO>(`/api/messages/search${qs({ ...p, cursor: pageParam })}`),

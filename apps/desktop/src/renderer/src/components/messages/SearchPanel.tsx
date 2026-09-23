@@ -17,13 +17,12 @@ import { useAccounts } from '@/stores/accounts'
 import { platformOf } from '@/lib/platform'
 import { flattenHits, useSearchMessages } from '@/api/messages'
 import { listTime } from '@/lib/chatDays'
-import { jumpToOfHit, type JumpTarget } from '@/lib/chatSearch'
+import { jumpToOfHit, MIN_QUERY, type JumpTarget } from '@/lib/chatSearch'
 import { accountTypeOfPlatform, isChatPlatform, type ChatPlatform } from '@shared/chatPlatform'
 import type { Direction } from '@shared/chatTypes'
 
 const ALL = 'all'
 const HIT_SIZE = 20
-const MIN_QUERY = 2
 
 interface Props {
   onJump: (target: JumpTarget) => void
@@ -41,6 +40,13 @@ export default function SearchPanel({ onJump, currentCustomerId }: Props): React
   const [to, setTo] = useState('')
   const [onlyCurrentCustomer, setOnlyCurrentCustomer] = useState(false)
   const debounced = useDebouncedValue(keyword, 300)
+  /**
+   * 开关的"生效"= 按下了 **且** 右列确实挂着一位客户。允许在搜索视图里用左列换会话/换账号，那时
+   * `currentCustomerId` 会变成 null，请求里的 `customerId` 本来就不发了——如果按钮还显示按下态、
+   * 「清除过滤」还算它一位，界面就是"看着在按客户过滤、结果却是全量"。所以三处（请求、按钮态、
+   * filtersOn）一律读这一条派生值，并给一行小字说明"换到已关联客户的会话会自动恢复"。
+   */
+  const customerFilterOn = onlyCurrentCustomer && currentCustomerId !== null
 
   const query = useMemo(
     () => ({
@@ -51,10 +57,10 @@ export default function SearchPanel({ onJump, currentCustomerId }: Props): React
       // from/to 交 'YYYY-MM-DD'：后端把 to 展到当天 23:59:59（Task 4 的 parseDay），前端不再拼时分
       from: from || null,
       to: to || null,
-      customerId: onlyCurrentCustomer ? currentCustomerId : null,
+      customerId: customerFilterOn ? currentCustomerId : null,
       size: HIT_SIZE
     }),
-    [debounced, platform, account, direction, from, to, onlyCurrentCustomer, currentCustomerId]
+    [debounced, platform, account, direction, from, to, customerFilterOn, currentCustomerId]
   )
   const { data, isPending, isFetching, isError, hasNextPage, isFetchingNextPage, fetchNextPage } =
     useSearchMessages(query)
@@ -66,7 +72,7 @@ export default function SearchPanel({ onJump, currentCustomerId }: Props): React
     direction !== ALL ||
     from !== '' ||
     to !== '' ||
-    onlyCurrentCustomer
+    customerFilterOn
 
   const reset = (): void => {
     setPlatform(ALL)
@@ -130,7 +136,10 @@ export default function SearchPanel({ onJump, currentCustomerId }: Props): React
           <Input type="date" className="w-36" value={to} onChange={(e) => setTo(e.target.value)} />
           <Button
             type="button"
-            variant={onlyCurrentCustomer ? 'default' : 'outline'}
+            variant={customerFilterOn ? 'default' : 'outline'}
+            /** 三态读法：`onlyCurrentCustomer` 是"用户按过没有"，`customerFilterOn` 是"现在真的在过滤"。
+             *  `aria-pressed` 给后者——驱动与读屏都按它判，别去嗅 class。 */
+            aria-pressed={customerFilterOn}
             size="sm"
             disabled={currentCustomerId === null}
             title={currentCustomerId === null ? '先在右侧选中一个已关联客户的会话' : undefined}
@@ -145,6 +154,11 @@ export default function SearchPanel({ onJump, currentCustomerId }: Props): React
             </Button>
           )}
         </div>
+        {onlyCurrentCustomer && currentCustomerId === null && (
+          <p className="text-[11px] text-muted-foreground">
+            当前会话没有关联客户，「只看当前客户」暂时停用；换到已关联客户的会话会自动恢复。
+          </p>
+        )}
         {searchable && isFetching && !isPending && (
           <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <LoaderCircle className="size-3 animate-spin" />
@@ -172,7 +186,14 @@ export default function SearchPanel({ onJump, currentCustomerId }: Props): React
           const target = jumpToOfHit(hit)
           return (
             <button
-              key={hit.message.msgKey}
+              /**
+               * React 的 `key` 用 `chatKey:msgKey`，不是 Produces 里那个 `data-p6-hit` 的值：搜索结果
+               * 天生跨会话，而 `msgKey` 只是平台原生 id、**同一条会话内**唯一（TG 的原生 id 会跨会话重号），
+               * 拿它当 key 会在撞上时给出重复键、React 复用错的那张卡。
+               * `data-p6-hit` 按 brief 保持 `msgKey` 原值 ⇒ 它不是全局主键，选择器要带
+               * `[data-p6-search="panel"]` 作用域或配合会话名一起定位（Task 18/19 的驱动照这条写）。
+               */
+              key={`${hit.message.chatKey}:${hit.message.msgKey}`}
               type="button"
               data-p6-hit={hit.message.msgKey}
               disabled={target === null}

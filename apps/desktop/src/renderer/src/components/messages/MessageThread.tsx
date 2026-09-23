@@ -198,7 +198,10 @@ export default function MessageThread({
   useEffect(() => {
     if (seenChatKeyRef.current === conversation.chatKey) return
     seenChatKeyRef.current = conversation.chatKey
-    // 换会话就忘掉上一个锚点：anchor 由页面清，但 chatKey 一变，本组件里绝不能再滚
+    // 换会话就忘掉上一个锚点：anchor 由页面清，但 chatKey 一变，本组件里绝不能再滚。
+    // 分工写清楚，别让读的人以为闸只有这一道：第一道是页面 `onPick` 清 anchor + `around` 与本 effect
+    // 两侧的 `chatKey` 校验，第二道才是当前消费者带 `key={selectedId:chatKey}` 重挂载（真换了会话时
+    // 这条 effect 其实跑不到——组件已经换成新的了）。它守的是"同一实例内 chatKey 变了却没重挂载"那种将来。
     anchoredRef.current = null
     setHighlightKey(null)
   }, [conversation.chatKey])
@@ -217,7 +220,15 @@ export default function MessageThread({
   }, [highlightKey])
 
   useLayoutEffect(() => {
-    const key = anchor?.msgKey ?? null
+    /**
+     * `chatKey` 这道校验和上面 `around` 那道是同一件事的两半，必须都做：`data-msg-key` 的值是平台原生
+     * id，只在同一条会话内唯一（`MessageBubble` 的注释钉着这条），所以一个属于别的会话的旧锚点**能**在
+     * 当前这一屏里命中同号节点——只按 `msgKey` 定位就会滚过去并给它描边，而定位条不出现（`around` 为
+     * null 时它是藏的），表现就是"亮了但不是跳的那条"。今天的消费者带 `key={selectedId:chatKey}` 重挂载、
+     * 页面 `onPick` 也会清锚点，所以打不到；但 Task 18「跳回记录页」会新增写 `anchor` 的入口，那时注释里
+     * 的分工就只靠这一行撑着。
+     */
+    const key = anchor && anchor.chatKey === conversation.chatKey ? anchor.msgKey : null
     if (!key || anchoredRef.current === key) return
     const row = scrollerRef.current?.querySelector<HTMLElement>(`[data-msg-key="${CSS.escape(key)}"]`)
     // 还没渲染出来：上滑翻页途中锚点行会自己出现，下一轮 rows 变化再来滚
