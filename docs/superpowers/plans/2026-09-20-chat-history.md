@@ -9866,7 +9866,9 @@ git commit -m "feat(P6): 记录页全局搜索视图与统计卡（搜索结果�
   - `lib/createCustomerPrefill`：`interface Prefill { platformType: number; openId: string; nickname: string | null; phone: string | null }`、`interface PrefillSource`（`ConversationVO` 的五个字段）、`canCreateCustomer(c): boolean`、`prefillOfConversation(c): Prefill | null`
   - `lib/directionDraft`：`interface DirectionDraft`（收发各「启用 + 源 + 目标」六字段）、`type DirectionSource = DirectionDraft`、`draftOf(s): DirectionDraft`、`dirtyCount(base, next): number`、`directionSummary(s, kind: 'receive' | 'send'): string`
   - `components/translation/LangSelect`：`LangSelect({ value, options, allowAuto?, onChange })`、`AUTO_SOURCE`
-  - `api/translation`：`useResetCustomerTranslationSettings()` → `useMutation<number, …, { cleared: number }>`
+  - `api/translation`：`useResetCustomerTranslationSettings()` → `useMutation<{ cleared: number }, Error, number>`（入参 `customerId`；返回的是 `http.del<{cleared}>` 那份 data。评审时这里把两个类型参数写反了，按这份实测签名接）
+  - `api/messages`：`useLinkCustomer().onSuccess` 会本地抹 `conversationsRoot` 里那一条的 `customerId`（`setQueriesData`，与 `useMarkRead` 同一套做法）——**右列的会话是从列表派生的**，只改页面 state 覆盖不到它
+  - `api/customers`：`useInvalidateCustomers()` → `() => void`，导出给"创建 → 关联"两步链在 link 成功处触发客户列表重取
   - `ConversationActions`：props `{ conversation: ConversationVO; onLinked: (customerId: number) => void }`，DOM 上带 `data-p6-actions="header"`、`data-p6-action="direction|create"`、`data-p6-direction-summary`、`data-p6-customer-name`
   - `MessageThread` 的 props 增加 `headerExtra?: ReactNode`
 - 不做（留给后面）：内嵌页气泡的客户级语向（下一个任务 Task 17b）、客户抽屉时间线（Task 18）、真实登录态端到端（Task 19）。
@@ -10743,6 +10745,20 @@ CDP（C9 抬窗口、`visibilityState === 'visible'` 再动手；C10 点与键�
 | 13 | 收尾（C4 + 种子） | `DELETE /api/customers/<新建 id>`；复跑 `GET /api/customers?keyword=` 确认 DEMO 种子计数回到原值；**并记录**：该会话 `customerId` 仍指向已删 id（当前契约如此，删客户不清归属） | 测试痕迹清零，同时把"悬空归属"这条既有语义留成书面事实而不是靠下个人发现 |
 
 第 4、7、8、10 行是本任务的硬证据。第 10 行尤其不能省：它是"设置存对了但没有任何人按它翻译"这类错误的唯一暴露口；第 7 行与第 8 行必须成对读，单看任何一行都能被"按钮恒灰 / 恒亮"糊过去。真实登录态缺失时第 10 行按 C11 标 blocked（它要走发送链），其余 12 行读的是库与 HTTP，不受影响。
+
+> **实测回写（Task 17 做完之后：`node tmp/p6-task17-seed.mjs 8` 布景 → `node tmp/p6i-actions.mjs` → 断言失败 0 条 / blocked 1 行（行 10b），exit 2，输出在 `tmp/.p6i-run2.log`。C4：`customers 5→5`、账号 7 `conversations 35→35 / messages 189→189`，A 档临时二号（id=25）跑完已删，用户那份全局 `translation_setting` 与开跑前逐字段 diff `[]`。下一轮换 tag 重跑：`node tmp/p6-task17-seed.mjs 9`。下面是简报与实际做到的不一致之处，Task 19 按同一口径复验）**
+>
+> - **`# pass 76` 是推演值**（C14）：本任务终态 **125**（含评审修复补的两条对称断言），`test:unit` + `typecheck` 四段全绿。`lint` 仓库整体坏，不是通过项。
+> - **Produces 里 `useResetCustomerTranslationSettings()` 的类型参数写反了**：实际是 `useMutation<{ cleared: number }, Error, number>`——入参 `customerId: number`，`http.del<{cleared}>` 的返回那份是 data。Task 18/19 按**实际**签名接。
+> - **Step 8 的 `git add` 清单少一个文件**：`api/customers.ts`（评审修复要把 `useInvalidateCustomers` 导出给 `handleLinked`）。主提交按清单走的是 `dd77fa4`，那一个文件与其余五处修复合成第二笔 `fix(P6)`。
+> - **行 10 拆成两行跑，10b 是 blocked**：简报那一行把两件不同的事写在一起——"开关写回哪一层"不需要登录态，"发出去的气泡用的是这位客户的目标语言"必须走真实发送链。落成 **10a**（覆盖层 `sendEnabled` 翻转 + 全局行 `sendEnabled` 不变 + 全局整行 diff `[]`，全过）与 **10b**（B 档：需 WhatsApp 内嵌页登录，且会真发一句删不掉的泰语出去，按 C11 标 blocked）。Task 19 收 10b。
+> - **"没有覆盖行时那一下改的是全局行"是设计，不是缺陷**：`ReplyComposer.toggleSendLang` 的口径是"写回它读到的那一层"（`scope==='customer'` 才写覆盖行）。第一次跑动把这条报成 `全局=true 快照=false` 的 FAIL，是**驱动前提错了**——它假设第 8 行的覆盖行还在，而当时第 8 行没跑成。修法：10a 先按 HTTP 现读的 `scope` 设前提门禁（不是客户层就直接 blocked），**并且**把"全局整行逐字段 diff `[]`"留成常驻断言——真要写错层，它一样会红。
+> - **C-1 的回归口实测到位**：行 4 一次点击让三件同时翻转（`create:false / direction:true / name:"P17-linked-8"`），且线程里是这条会话自己的两条 msgKey；行 6 那条同 open_id 的会话在**失败之后**仍是 `create:true / direction:false`。右列读的是列表派生那一条，所以本地抹值必须落在 `useLinkCustomer.onSuccess`（`setQueriesData` 打 `conversationsRoot`），只改 `picked` 覆盖不到它。
+> - **行 6 的断言原文在后端不存在**：后端回的是 `该平台下此客户已存在: <openId>`；简报写的「该平台下这个 open_id 已经有客户了」是 `CreateCustomerDialog` 的 `duplicate` 分支补上去的那半句。机判口径因此落在 **`data-p6-error-code="40901"`**（新增的 `ApiError.code` 出口），文案只作辅助；同时断言同一段里**没有** 50000 / internal error。
+> - **回填范围**：`messagesLinked` 只覆盖这一条会话——另一账号名下同 open_id 那条会话的消息归属实测仍是 `[null]`。"只补空、不越会话"这条得证。
+> - **Radix 与 CDP 的三处坑，记进 `env-facts.md`**：(a) **`Escape` 在 Dialog 里关的是 Dialog**，不是下拉——只有 `[role="option"]` 在场时才允许按它，否则第 8 行会把整个弹层关掉并连锁打挂 9/10a/11；(b) **`disabled` 的 `<button>` 对 hit-test 是透明的**，`elementFromPoint` 命中的是它下面那层，所以"点不到恢复全局"在这一步是**正确行为**，不能当失败；(c) `MessageThread` 带 `key={selectedId:chatKey}` ⇒ 换会话后第一帧线程是空的，读 `keys` 前必须等**这条会话自己的** msgKey 出现，否则第 1/2/6 行的空数组看着就像功能坏了。另外还有一条旧坑复现：开着 Modal Dialog 时整个窗口 `pointer-events:none`，残留的弹层会让后续导航点击"点不到"，每行收尾要 `closeDialogIfOpen`。
+> - **行 13 的悬空归属落成事实**：`DELETE /api/customers/24` 之后 head#244 与那 2 条消息的 `customer_id` 仍指已删 id，界面上回落成「客户 #24」（`useCustomer` 404 → `customer` undefined，Badge 用 `??` 兜住不白屏）。当前契约如此，改不改是后续期的决定。
+> - **行 12 只证明了页内那一半**：翻译中心两格可选、能存能回显、还原后与开跑前逐字段相同 ⇒ `LangSelect` 提取没弄坏 P5 的老调用方。**注入层**读不读这份客户覆盖行，是 Task 17b 的射程，本任务没碰。
 
 - [ ] **Step 8: 提交**
 
