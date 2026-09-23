@@ -5,7 +5,7 @@ import { ArrowUpRight, MessageSquareDashed } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import MessageBubble from '@/components/messages/MessageBubble'
 import { rowOfMessage, useCustomerTimeline, type ConversationVO } from '@/api/messages'
-import { groupByConversation } from '@/lib/chatTimeline'
+import { cardKey, groupByConversation } from '@/lib/chatTimeline'
 import { titleOfConversation } from '@/lib/chatDisplay'
 import { listTime } from '@/lib/chatDays'
 import { useChatJumpStore } from '@/stores/chatJump'
@@ -23,10 +23,14 @@ export default function CustomerTimeline({ customerId }: { customerId: number })
     () => (data ? groupByConversation(data.messages.map(rowOfMessage), data.conversations) : []),
     [data]
   )
-  /** 跳转要整份 `ConversationVO`；回落组（没有会话头）拿不到 `accountId`，只能不给按钮。 */
+  /**
+   * 跳转要整份 `ConversationVO`；回落组（没有会话头）拿不到 `accountId`，只能不给按钮。
+   * 键是 `cardKey(accountId, chatKey)` 而不是 `chatKey`：同一个号码挂在两个账号上时，两张卡各自对应
+   * 自己那条会话头，按 `chatKey` 建映射会让后写入的那条覆盖前一条——按钮于是永远跳到最后一个账号。
+   */
   const headOf = useMemo(() => {
     const map = new Map<string, ConversationVO>()
-    for (const c of data?.conversations ?? []) map.set(c.chatKey, c)
+    for (const c of data?.conversations ?? []) map.set(cardKey(c.accountId, c.chatKey), c)
     return map
   }, [data])
 
@@ -43,11 +47,12 @@ export default function CustomerTimeline({ customerId }: { customerId: number })
   return (
     <div className="flex flex-col gap-3" data-p6-timeline="list">
       {groups.map((group) => {
-        const head = headOf.get(group.chatKey)
+        const head = headOf.get(cardKey(group.accountId, group.chatKey))
         return (
           <section
-            key={group.chatKey}
-            data-p6-timeline-group={group.chatKey}
+            key={cardKey(group.accountId, group.chatKey)}
+            data-p6-timeline-group={cardKey(group.accountId, group.chatKey)}
+            data-p6-timeline-account={group.accountId}
             className="rounded-xl border border-border/60 px-3 pt-2 pb-1"
           >
             <header className="mb-1 flex items-center gap-2">
@@ -57,22 +62,23 @@ export default function CustomerTimeline({ customerId }: { customerId: number })
                 {group.isGroup && <span className="ml-1 text-[10px] text-muted-foreground">群</span>}
               </span>
               <span className="shrink-0 text-[10px] text-muted-foreground">{listTime(group.lastTs)}</span>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-6 shrink-0 gap-1 px-1.5 text-[11px]"
-                data-p6-timeline-jump={group.chatKey}
-                disabled={!head}
-                title={head ? '在聊天记录页打开这个会话' : '这条会话的会话头还没投影出来，暂时跳不过去'}
-                onClick={() => {
-                  if (!head) return
-                  hold(head)
-                  navigate('/messages')
-                }}
-              >
-                <ArrowUpRight className="size-3" />
-                打开
-              </Button>
+              <span title={head ? undefined : '这条会话的会话头还没投影出来（只采到了消息），暂时跳不过去'}>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  className="h-6 shrink-0 gap-1 px-1.5 text-[11px]"
+                  data-p6-timeline-jump={cardKey(group.accountId, group.chatKey)}
+                  disabled={!head}
+                  onClick={() => {
+                    if (!head) return
+                    hold(head)
+                    navigate('/messages')
+                  }}
+                >
+                  <ArrowUpRight className="size-3" />
+                  打开
+                </Button>
+              </span>
             </header>
             {group.rows.map((row) => (
               <MessageBubble key={row.msgKey} row={row} showSender={group.isGroup} />
