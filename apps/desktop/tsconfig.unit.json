@@ -18,7 +18,11 @@
     "src/renderer/src/lib/chatSearch.ts",
     "src/renderer/src/lib/chatSearch.test.ts",
     "src/renderer/src/lib/chatStats.ts",
-    "src/renderer/src/lib/chatStats.test.ts"
+    "src/renderer/src/lib/chatStats.test.ts",
+    "src/renderer/src/lib/createCustomerPrefill.ts",
+    "src/renderer/src/lib/createCustomerPrefill.test.ts",
+    "src/renderer/src/lib/directionDraft.ts",
+    "src/renderer/src/lib/directionDraft.test.ts"
   ],
   "compilerOptions": {
     "composite": false,

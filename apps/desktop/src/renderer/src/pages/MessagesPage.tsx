@@ -1,7 +1,9 @@
 // src/renderer/src/pages/MessagesPage.tsx
 import { useState } from 'react'
 import { History, MessagesSquare, Search } from 'lucide-react'
+import { useQueryClient } from '@tanstack/react-query'
 import ConversationList from '@/components/messages/ConversationList'
+import ConversationActions from '@/components/messages/ConversationActions'
 import MessageThread from '@/components/messages/MessageThread'
 import ReplyComposer from '@/components/messages/ReplyComposer'
 import SearchPanel from '@/components/messages/SearchPanel'
@@ -9,6 +11,7 @@ import StatsCards from '@/components/messages/StatsCards'
 import { useMarkRead } from '@/api/messages'
 import {
   flattenConversations,
+  queryKeys,
   unfilteredConversationQuery,
   useConversations,
   type ConversationVO
@@ -52,6 +55,7 @@ export default function MessagesPage(): React.JSX.Element {
   const selectedId = useSelectionStore((s) => s.selectedId)
   const select = useSelectionStore((s) => s.select)
   const markRead = useMarkRead().mutate
+  const qc = useQueryClient()
   const [view, setView] = useState<View>('conversations')
   /** 点选那一刻的行：id 归属判定与"列表里找不到时"的兜底都靠它。 */
   const [picked, setPicked] = useState<ConversationVO | null>(null)
@@ -84,6 +88,19 @@ export default function MessagesPage(): React.JSX.Element {
     owned === null
       ? null
       : (flattenConversations(headPages?.pages).find((c) => c.id === owned.id) ?? owned)
+
+  /**
+   * 关联成功的三件收尾事，少一件界面就开始说谎：
+   * 1) 本地 `picked.customerId` 必须立刻改——它是「建为客户」按钮的显示条件。
+   *    不改的后果是按钮还在原地，再点一次就给同一个 open_id 建出第二个客户（撞 40901）。
+   * 2) 会话列表要重取（标题旁的归属标记、`customerId` 过滤都变了）。
+   * 3) 消息与搜索命中要重取（link-customer 把消息行的 customer_id 补上了，
+   *    Task 16 的「只看当前客户」过滤拿的就是这个字段）。
+   */
+  const handleLinked = (customerId: number): void => {
+    setPicked((p) => (p ? { ...p, customerId } : p))
+    void qc.invalidateQueries({ queryKey: queryKeys.root })
+  }
 
   /** 搜索结果 → 换账号、选会话、记锚点、切回会话视图。四件事必须一起发生，所以在同一个函数里做完。 */
   const jump = (target: JumpTarget): void => {
@@ -151,6 +168,7 @@ export default function MessagesPage(): React.JSX.Element {
             conversation={conversation}
             anchor={anchor}
             onClearAnchor={() => setAnchor(null)}
+            headerExtra={<ConversationActions conversation={conversation} onLinked={handleLinked} />}
             footer={<ReplyComposer accountId={selectedId} conversation={conversation} />}
           />
         ) : (

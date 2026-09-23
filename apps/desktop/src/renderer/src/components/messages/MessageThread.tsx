@@ -23,6 +23,8 @@ interface Props {
   /** 搜索跳转带进来的锚点；`chatKey` 不匹配时一律忽略（陈旧锚点会让后端回 40404，整列空掉）。 */
   anchor?: JumpTarget['anchor'] | null
   onClearAnchor?: () => void
+  /** 会话头右侧的动作区（Task 17 的「语向」与「建为客户」）。线程组件不认识那两个弹层。 */
+  headerExtra?: ReactNode
 }
 
 export default function MessageThread({
@@ -30,7 +32,8 @@ export default function MessageThread({
   conversation,
   footer,
   anchor,
-  onClearAnchor
+  onClearAnchor,
+  headerExtra
 }: Props): React.JSX.Element {
   const markRead = useMarkRead().mutate
   const around = anchor && anchor.chatKey === conversation.chatKey ? anchor.messageId : null
@@ -255,7 +258,10 @@ export default function MessageThread({
             )}
           </p>
         </div>
-        <span className="shrink-0 text-xs text-muted-foreground">{rows.length} 条</span>
+        <div className="flex shrink-0 items-center gap-2">
+          {headerExtra}
+          <span className="text-xs text-muted-foreground">{rows.length} 条</span>
+        </div>
       </div>
 
       {/*
