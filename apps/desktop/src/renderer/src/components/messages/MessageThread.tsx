@@ -9,6 +9,7 @@ import { gateDraft, TOO_LONG_HINT } from '@/lib/sendDraft'
 import { useSendText, useThreadRows } from '@/lib/liveTailSync'
 import { dayLabel, groupByDay } from '@/lib/chatDays'
 import { titleOfConversation } from '@/lib/chatDisplay'
+import { HIGHLIGHT_MS, type JumpTarget } from '@/lib/chatSearch'
 
 const PAGE_SIZE = 30
 /** 距底 80px 以内算"在看着底部"——差一个像素就把跟底关掉的话，滚动惯性会让人错过新消息。 */
@@ -19,18 +20,25 @@ interface Props {
   conversation: ConversationVO
   /** Task 15 的回复框从这里进来；本任务不传，线程照常展示历史。 */
   footer?: ReactNode
+  /** 搜索跳转带进来的锚点；`chatKey` 不匹配时一律忽略（陈旧锚点会让后端回 40404，整列空掉）。 */
+  anchor?: JumpTarget['anchor'] | null
+  onClearAnchor?: () => void
 }
 
 export default function MessageThread({
   accountId,
   conversation,
-  footer
+  footer,
+  anchor,
+  onClearAnchor
 }: Props): React.JSX.Element {
   const markRead = useMarkRead().mutate
+  const around = anchor && anchor.chatKey === conversation.chatKey ? anchor.messageId : null
   const { data, isPending, isError, hasNextPage, isFetchingNextPage, fetchNextPage } = useMessages({
     accountId,
     chatKey: conversation.chatKey,
-    size: PAGE_SIZE
+    size: PAGE_SIZE,
+    around
   })
   const rows = useThreadRows(accountId, conversation.chatKey, data?.pages)
   const sections = useMemo(() => groupByDay(rows), [rows])
@@ -165,6 +173,51 @@ export default function MessageThread({
     el.scrollTop = el.scrollHeight
   }, [rows.length])
 
+  // 3) 锚定：声明顺序同样是硬要求——必须排在补位与跟底之后，同一个 useLayoutEffect 批次里
+  //    后写的 scrollTop 覆盖先写的，排在跟底之前就会被"滚到底"抹掉。
+  const [highlightKey, setHighlightKey] = useState<string | null>(null)
+  /** 每个锚点只滚一次：live 帧会让 rows 变化，不记一笔就会每来一条拽回去一次。 */
+  const anchoredRef = useRef<string | null>(null)
+  /**
+   * 高亮的退场计时器存在 ref 里而不是 effect 的 cleanup 里，这一处与直觉相反但有必要：
+   * 本 effect 的依赖是 `[anchor, rows]`，而 live 帧会在 2 秒之内换掉 `rows` 的引用（上面那条
+   * "每个锚点只滚一次"记的就是这件事）。cleanup 一跑就把计时器掐了，重跑又因为 anchoredRef
+   * 已命中而直接 return —— 高亮会永久挂在那条气泡上，"2 秒"变成"直到下一次切会话"。
+   * 所以计时器只由"换会话"和"卸载"两处收口，不跟着 effect 的重跑走。
+   */
+  const highlightTimerRef = useRef<number | null>(null)
+  const clearHighlightTimer = (): void => {
+    if (highlightTimerRef.current !== null) {
+      window.clearTimeout(highlightTimerRef.current)
+      highlightTimerRef.current = null
+    }
+  }
+
+  useEffect(() => {
+    // 换会话就忘掉上一个锚点：anchor 由页面清，但 chatKey 一变，本组件里绝不能再滚
+    anchoredRef.current = null
+    clearHighlightTimer()
+    setHighlightKey(null)
+    return clearHighlightTimer
+  }, [conversation.chatKey])
+
+  useLayoutEffect(() => {
+    const key = anchor?.msgKey ?? null
+    if (!key || anchoredRef.current === key) return
+    const row = scrollerRef.current?.querySelector<HTMLElement>(`[data-msg-key="${CSS.escape(key)}"]`)
+    // 还没渲染出来：上滑翻页途中锚点行会自己出现，下一轮 rows 变化再来滚
+    if (!row) return
+    anchoredRef.current = key
+    row.scrollIntoView({ block: 'end' })
+    setHighlightKey(key)
+    clearHighlightTimer()
+    highlightTimerRef.current = window.setTimeout(() => {
+      highlightTimerRef.current = null
+      setHighlightKey(null)
+    }, HIGHLIGHT_MS)
+    // rows 而不是 rows.length：锚点行可能在长度不变时由尾巴合并换进来
+  }, [anchor, rows])
+
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="flex items-center justify-between gap-3 border-b border-border/60 px-6 py-3">
@@ -183,6 +236,26 @@ export default function MessageThread({
         </div>
         <span className="shrink-0 text-xs text-muted-foreground">{rows.length} 条</span>
       </div>
+
+      {/*
+        定位条只在**锚点真的作用到了窗口**时出现：`around === null` 有两种情况（没有锚点、
+        锚点属于另一条会话），那两种都是默认窗口，说着"比它更新的消息不在这个窗口里"就是假话。
+      */}
+      {anchor && around !== null && (
+        <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-primary/5 px-6 py-1.5">
+          <span className="truncate text-[11px] text-muted-foreground">
+            已定位到 {anchor.label} 那条消息：更早的记录在下面，比它更新的消息不在这个窗口里。
+          </span>
+          <Button
+            size="sm"
+            variant="ghost"
+            className="h-6 shrink-0 px-2 text-[11px]"
+            onClick={() => onClearAnchor?.()}
+          >
+            回到最新
+          </Button>
+        </div>
+      )}
 
       <div
         ref={scrollerRef}
@@ -224,6 +297,7 @@ export default function MessageThread({
                   key={row.msgKey}
                   row={row}
                   showSender={conversation.isGroup}
+                  highlight={highlightKey === row.msgKey}
                   failedHint={
                     body ? (
                       <>
