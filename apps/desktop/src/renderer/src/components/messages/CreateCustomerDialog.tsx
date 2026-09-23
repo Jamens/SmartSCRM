@@ -46,7 +46,14 @@ export default function CreateCustomerDialog({
   // 里那句是同一件事——列表 refetch（新消息到达、窗口重新聚焦）会换掉 `conversation` 的对象身份，
   // 带着它铺表单就会把用户敲了一半的昵称抹回预填值。
   useEffect(() => {
-    if (!open || !prefill) return
+    if (!open) {
+      // 与 `CustomerDirectionDialog` 同一件事：`create.isError` 跨开关残留的话，
+      // 下一次打开弹层第一眼是上一轮的「已经有客户了」。
+      create.reset()
+      link.reset()
+      return
+    }
+    if (!prefill) return
     // 每次打开都重铺：上一轮失败留下的输入会让用户以为"我已经改过了"。
     setNickname(prefill.nickname ?? '')
     setPhone(prefill.phone ?? '')
@@ -147,7 +154,11 @@ export default function CreateCustomerDialog({
               />
             </div>
             {create.isError && (
-              <p data-p6-create-error="" className="text-xs text-destructive">
+              <p
+                data-p6-create-error=""
+                data-p6-error-code={create.error instanceof ApiError ? String(create.error.code) : ''}
+                className="text-xs text-destructive"
+              >
                 {create.error instanceof Error ? create.error.message : '创建失败'}
                 {duplicate &&
                   ' —— 该平台下这个 open_id 已经有客户了。当前没有"按 open_id 找已有客户"的入口（客户列表的关键词只搜昵称 / 手机 / 邮箱），请到客户管理页确认是哪一位。'}

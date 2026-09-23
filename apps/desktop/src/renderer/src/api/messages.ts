@@ -223,14 +223,38 @@ export function useMarkRead() {
   })
 }
 
-/** 「建为客户」的第一步在 `api/customers.ts`（Step 1b）：那里已经有改删查三份 hooks，创建是第四份。 */
+/**
+ * 「建为客户」的第一步在 `api/customers.ts`（Step 1b）：那里已经有改删查三份 hooks，创建是第四份。
+ *
+ * 成功后本地抹会话缓存那一条的 `customerId`，与 `useMarkRead` 同一套做法。不抹就会有一段窗口：
+ * 右列的 `conversation` 是**从列表派生**的（`MessagesPage` 里 `?? owned` 只在列表查不到时才兜底），
+ * 页面 state 那份 `picked` 的修正到不了这里。窗口里「建为客户」还亮着，再点一次就给同一个
+ * open_id 建出第二位客户；回复框那位读者更脏——它按 `conversation.customerId` 选写回层，
+ * 这段时间点「先译再发」改的是**全局**行。refetch 会追上，但追上之前界面在说假话。
+ */
 export function useLinkCustomer() {
+  const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: { conversationId: number; customerId: number }) =>
       http.post<{ conversationId: number; customerId: number; messagesLinked: number }>(
         `/api/conversations/${input.conversationId}/link-customer`,
         { customerId: input.customerId }
+      ),
+    onSuccess: (r, input) => {
+      qc.setQueriesData<{ pages: ConversationPageVO[] }>({ queryKey: queryKeys.conversationsRoot }, (data) =>
+        data
+          ? {
+              ...data,
+              pages: data.pages.map((page) => ({
+                ...page,
+                records: page.records.map((c) =>
+                  c.id === input.conversationId ? { ...c, customerId: r.customerId } : c
+                )
+              }))
+            }
+          : data
       )
+    }
   })
 }
 
