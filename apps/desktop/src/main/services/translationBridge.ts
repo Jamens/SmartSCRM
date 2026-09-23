@@ -7,6 +7,15 @@ export interface TranslateRequest {
   noCache?: boolean
 }
 
+/**
+ * 会话归属：生效面 ② 的那两个字段。类型上就把它与 `TranslateRequest` 分开，是因为
+ * 这条边界只有主进程能过——页内那份 `chatHint` 只是去重提示，永远不填进这里。
+ */
+export interface TranslateContext {
+  accountId?: number
+  chatKey?: string
+}
+
 export interface TranslateResponse {
   translation: string
   cached: boolean
@@ -29,9 +38,13 @@ export interface TranslateResponse {
  *
  * `authedFetch` owns the auth lifetime: an embedded window stays open far longer than the
  * access token's TTL, so a 401 here means "stale token", not "logged out".
+ *
+ * `ctx` 是调用方（只有主进程那一个调用点）按 `viewId` 反查出来的会话归属，不是页面给的字段：
+ * 两个都不带时后端按全局语向解析，那就是 ② 的默认态。
  */
 export async function requestTranslation(
   req: TranslateRequest,
+  ctx: TranslateContext = {},
   apiBase?: string
 ): Promise<TranslateResponse | null> {
   try {
@@ -40,7 +53,7 @@ export async function requestTranslation(
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify(req)
+        body: JSON.stringify({ ...req, ...ctx })
       },
       apiBase
     )

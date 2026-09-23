@@ -130,7 +130,7 @@ scrm:msg:send  {accountId, chatKey, text, localId}
 - 渲染层乐观展示 `pending` 气泡（localId 为 key），事件/回执到达后与库内行合并（msg_key 落地后以库为准）。
 - 重试 = 新 localId 重发，幂等仍靠 `uk_msg`（对端真实重复由平台消息 id 区分，属产品可接受的"真重发"）。
 - **先译再发**：回复框是普通 textarea，复用 P5 翻译 HTTP 通道与中文拦截；`sendLangSetting` 全局开关语义照旧。
-- **按客户语向**：`translation_setting.scope/scope_key` 启用 `scope='customer'`（P5 已留列）；解析顺序 customer→global。生效面有两处：① 记录页回复框（已知 customerId）；② 内嵌页气泡——主进程从桥的 `activeChat` 事件维护「视图 → customerId」，随翻译请求下发给注入层，注入层按客户取语向。缓存 key 含 from/to，语向切换天然分键，不新增失效逻辑。
+- **按客户语向**：`translation_setting.scope/scope_key` 启用 `scope='customer'`（P5 已留列）；解析顺序固定为 **显式 `customerId` → 会话投影 → 全局**，会话投影是显式值的缺省填充，不是能压过它的另一条通道。生效面有两处：① 记录页回复框（渲染层已知 `customerId`，直接带上）；② 内嵌页气泡——由**主进程**按 `viewId` 给翻译请求盖 `accountId` + `chatKey`（前者取自账号目录、后者取自该视图此刻的活跃会话），后端拿 `(tenant_id, account_id, chat_key)` 在 `chat_conversation` 上精确匹配投影出 `customer_id`，再走同一个解析口。**页面上报的账号与会话一律不进后端**：注入层只有一个页内的 `chatHint`，它只用于把本页的 inflight 请求去重键按会话分开，语种判定不依赖它。投影查不到行（陌生会话、平台错配、桥未挂上）时回落全局，与 ① 的缺省态同一个语义。缓存 key 含 from/to，语向切换天然分键，不新增失效逻辑。
 
 ## 6. 陌生号码 → 客户
 

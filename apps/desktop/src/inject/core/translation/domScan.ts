@@ -89,7 +89,9 @@ export function startMessageTranslation(injector: BaseInjector): () => void {
     if (state.isTranslated(msgId) && (!saved || saved.type === type)) return
 
     renderPendingTranslation(msgId, anchor)
-    const result = await requestTranslate(injector, { text, type })
+    // 会话提示进请求：同一句话在两个会话里可能走两个语向（生效面 ②），共用了 inflight
+    // 就会把上一个会话的语种画到这一会话的气泡上。它只用于页内去重，不出页。
+    const result = await requestTranslate(injector, { text, type, chatHint: adapter.chatHint() })
     if (stopped || !row.isConnected) return
 
     if (result) {
