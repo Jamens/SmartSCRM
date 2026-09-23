@@ -103,7 +103,9 @@ export const queryKeys = {
   bridges: ['msg', 'bridges'] as const,
   /** 失效用的前缀：新消息会让整张列表与所有天数的统计同时过期，逐个 days 点名会漏。 */
   conversationsRoot: ['msg', 'conversations'] as const,
-  statsRoot: ['msg', 'stats'] as const
+  statsRoot: ['msg', 'stats'] as const,
+  /** 失效用的整片前缀：客户归属变了会同时波及会话、消息、搜索、统计与时间线。 */
+  root: ['msg'] as const
 }
 
 const qs = (input: Record<string, unknown>): string => {

@@ -176,6 +176,23 @@ export function useUpdateTranslationSettings() {
   })
 }
 
+/**
+ * 删掉覆盖行 = 该客户回到全局。Task 6 的 `DELETE /settings/customer/{id}` 返回 `{cleared:0|1}`：
+ * `cleared === 0` 也是成功（本来就没有覆盖行），不要拿它当失败提示——那只会让用户以为按钮坏了。
+ * 失效走整前缀：与保存同一套理由（两层可能同时挂在屏上）。
+ */
+export function useResetCustomerTranslationSettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (customerId: number) =>
+      http.del<{ cleared: number }>(`/api/translation/settings/customer/${customerId}`),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: SETTINGS_KEY })
+      void qc.invalidateQueries({ queryKey: STATS_KEY })
+    }
+  })
+}
+
 export function useTrialTranslate() {
   const qc = useQueryClient()
   return useMutation({
