@@ -59,9 +59,16 @@ interface Props {
   showSender: boolean
   /** Task 15 的「重试」按钮从这里进来；本任务用默认的失败文案。 */
   failedHint?: ReactNode
+  /** 搜索跳转命中时的 2 秒描边：只加在外层行容器上，`data-msg-key` 与它同一处，CDP 取的就是这个节点。 */
+  highlight?: boolean
 }
 
-export default function MessageBubble({ row, showSender, failedHint }: Props): React.JSX.Element {
+export default function MessageBubble({
+  row,
+  showSender,
+  failedHint,
+  highlight
+}: Props): React.JSX.Element {
   const out = row.direction === 'out'
   // 先收到局部变量再判：TS 对 `row.mediaType` 这种属性路径的收窄不如局部 const 稳。
   const mediaType = row.mediaType
@@ -74,7 +81,11 @@ export default function MessageBubble({ row, showSender, failedHint }: Props): R
        * （`[data-p6-scroller="thread"] [data-msg-key="..."]`），否则可能命中另一个会话缓存页里的同键节点。
        */
       data-msg-key={row.msgKey}
-      className={cn('mb-2 flex flex-col', out ? 'items-end' : 'items-start')}
+      className={cn(
+        'mb-2 flex flex-col rounded-lg transition-colors',
+        out ? 'items-end' : 'items-start',
+        highlight && 'bg-primary/10 ring-1 ring-primary/50'
+      )}
     >
       {showSender && !out && (
         <span className="mb-0.5 text-[11px] text-muted-foreground">

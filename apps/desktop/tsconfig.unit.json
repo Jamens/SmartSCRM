@@ -12,7 +12,13 @@
     "src/renderer/src/lib/sendDraft.ts",
     "src/renderer/src/lib/sendDraft.test.ts",
     "src/renderer/src/lib/sendError.ts",
-    "src/renderer/src/lib/sendError.test.ts"
+    "src/renderer/src/lib/sendError.test.ts",
+    "src/shared/chatKeys.ts",
+    "src/shared/chatKeys.test.ts",
+    "src/renderer/src/lib/chatSearch.ts",
+    "src/renderer/src/lib/chatSearch.test.ts",
+    "src/renderer/src/lib/chatStats.ts",
+    "src/renderer/src/lib/chatStats.test.ts"
   ],
   "compilerOptions": {
     "composite": false,
