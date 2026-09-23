@@ -243,7 +243,7 @@ export default function MessageThread({
   }, [anchor, rows])
 
   return (
-    <div className="flex min-h-0 flex-1 flex-col">
+    <div className="flex min-h-0 flex-1 flex-col" data-p6-thread={conversation.id}>
       <div className="flex items-center justify-between gap-3 border-b border-border/60 px-6 py-3">
         <div className="min-w-0">
           <p className="truncate text-sm font-medium text-foreground">

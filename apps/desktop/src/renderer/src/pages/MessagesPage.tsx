@@ -1,5 +1,5 @@
 // src/renderer/src/pages/MessagesPage.tsx
-import { useState } from 'react'
+import { useEffect, useState } from 'react'
 import { History, MessagesSquare, Search } from 'lucide-react'
 import { useQueryClient } from '@tanstack/react-query'
 import ConversationList from '@/components/messages/ConversationList'
@@ -18,6 +18,7 @@ import {
   type ConversationVO
 } from '@/api/messages'
 import { useSelectionStore } from '@/stores/accounts'
+import { useChatJumpStore } from '@/stores/chatJump'
 import { type JumpTarget } from '@/lib/chatSearch'
 import { cn } from '@/lib/utils'
 
@@ -90,6 +91,25 @@ export default function MessagesPage(): React.JSX.Element {
     owned === null
       ? null
       : (flattenConversations(headPages?.pages).find((c) => c.id === owned.id) ?? owned)
+
+  const jumpTarget = useChatJumpStore((s) => s.target)
+  const clearJump = useChatJumpStore((s) => s.clear)
+
+  /**
+   * 消费客户抽屉（Task 18）递过来的一次性投递。放在归属判定（`owned` 那条派生）之后：
+   * 这里 `select(accountId)` 与 `setPicked(会话)` 是同一次批处理里一起落的，派生值看到的
+   * 两边永远一致，不会出现"账号还没切过去、会话先被判定成不归属"的中间帧。
+   */
+  useEffect(() => {
+    if (!jumpTarget) return
+    // 先 clear 再落 state：这是一次性投递。留着 target 的话，用户在记录页里手动换了会话、
+    // 这个 effect 再跑一次就会把抽屉里那条抢回去——而且只有"离开路由再回来"时才看得见。
+    clearJump()
+    select(jumpTarget.accountId)
+    setPicked(jumpTarget)
+    setAnchor(null)
+    setView('conversations')
+  }, [jumpTarget, clearJump, select])
 
   /**
    * 关联成功的四件收尾事，少一件界面就开始说谎：

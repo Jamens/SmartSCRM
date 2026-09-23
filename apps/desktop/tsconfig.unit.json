@@ -22,7 +22,9 @@
     "src/renderer/src/lib/createCustomerPrefill.ts",
     "src/renderer/src/lib/createCustomerPrefill.test.ts",
     "src/renderer/src/lib/directionDraft.ts",
-    "src/renderer/src/lib/directionDraft.test.ts"
+    "src/renderer/src/lib/directionDraft.test.ts",
+    "src/renderer/src/lib/chatTimeline.ts",
+    "src/renderer/src/lib/chatTimeline.test.ts"
   ],
   "compilerOptions": {
     "composite": false,

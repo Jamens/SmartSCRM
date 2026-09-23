@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
+import CustomerTimeline from '@/components/customers/CustomerTimeline'
 import { cn } from '@/lib/utils'
 import {
   useDeleteCustomer,
@@ -217,6 +218,12 @@ export default function CustomerDrawer({ customer, tree, onClose }: Props): Reac
               ))}
               {tree.length === 0 && <p className="text-xs text-muted-foreground">还没有标签分组。</p>}
             </div>
+          </div>
+
+          <Separator className="my-5" />
+          <div>
+            <h3 className="mb-2 text-sm font-semibold">最近消息</h3>
+            <CustomerTimeline customerId={customer.id} />
           </div>
         </div>
 

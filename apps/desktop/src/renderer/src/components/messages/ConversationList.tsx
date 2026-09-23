@@ -146,7 +146,10 @@ export default function ConversationList({
         )}
       </div>
 
-      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 py-2">
+      {/* `data-p6-scroller="list"` 与 `MessageThread` 那侧的 `"thread"` 成对：
+          跨页跳转（Task 18 的抽屉投递）要在 CDP 里"点左列某一条会话"，右列标题里也有同一个客户名，
+          不限定容器就会点到右列去。 */}
+      <div className="min-h-0 flex-1 space-y-1 overflow-y-auto px-2 py-2" data-p6-scroller="list">
         {/* 没选账号时查询是 disabled 的，`isPending` 会一直挂着——不挡住这句就变成"永远在加载"，
             而真正的原因是没账号可查（右列那句提示在左列看不见）。 */}
         {accountId !== null && isPending && (
