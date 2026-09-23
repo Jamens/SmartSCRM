@@ -39,10 +39,13 @@ export default function StatsCards({ accountId }: { accountId: number | null }):
   return (
     /**
      * `data-p6-stats-window` 两头都给：容器上是**当前生效**的那一个值（读一份属性就知道现在是 7 还是 30），
-     * 两个按钮上是**各自的**值（驱动按 `[data-p6-stats-window="30"]` 点它）。计划的 Interfaces 那句把
+     * 两个按钮上是**各自的**值（可切换的入口）。计划的 Interfaces 那句把
      * 「`data-p6-stats-window="7|30"`」和「`data-p6-stats="cards"`」写在同一句"DOM 上带"里，读起来像容器，
      * 而 Step 4 的代码片段落在按钮上——两处都留，后面任何一侧读法都能拿到值。
-     * 消费侧口径：**要"当前窗口"读容器，要"切换入口"读按钮**，别用 `querySelector` 的第一个命中猜。
+     * 消费侧口径：**要"当前窗口"读容器，要"切换入口"点按钮**，别用 `querySelector` 的第一个命中猜。
+     * 尤其别拿裸属性选择器去点：两边属性名相同，容器文档序在前，`[data-p6-stats-window="30"]` 在
+     * `days===30` 时命中的是容器——点上去什么都不会发生，却照样过 hit-test。要点就写全
+     * `button[data-p6-stats-window="30"]`。
      */
     <div
       data-p6-stats="cards"
