@@ -2,7 +2,8 @@ import { ipcMain, type Rectangle, type IpcMainEvent, type IpcMainInvokeEvent } f
 import { viewManager } from './manager'
 import { getMainWindow } from '../window/mainWindow'
 import { requestTranslation } from '../services/translationBridge'
-import { handleBridgeReport, observeLoginStatus } from '../services/msgBridge'
+import { handleBridgeReport, observeLoginStatus, activeChatOf } from '../services/msgBridge'
+import { accountOfView } from '../services/msgBridge/accountDirectory'
 
 /** Channels an embedded page is allowed to push up to the host window. */
 const ALLOWED_HOST_CHANNELS = new Set<string>([
@@ -100,12 +101,27 @@ export function registerViewIpc(): void {
       if (!text || text.length > 5000) return null
       const type = req?.type === 'send' ? 'send' : 'receive'
       const apiBase = viewManager.getInjectConfig(viewId)?.apiBase
+      // 口径①：后端只认主进程盖的章。上面那行 `as Partial<{...}>` 是一份**挑选**清单——
+      // 页面上报的其它字段（包括它的 `chatHint`）一律进不了 body；`accountId` 与 `chatKey`
+      // 由这里按 `event.sender` 反查出的 `viewId` 自己填。于是页面永远说不出"我属于哪个账号的
+      // 哪个会话"，一个错映射最多让语向选错，不会让它读到别人的客户行（后端查询还额外带 tenant_id）。
+      // 口径②：投影即时效。`activeChatOf` 是主进程手里"这个视图正在看哪个会话"的最后一份已知值
+      // （桥的 `active_chat` 事件 + 命令驱动上报）。切了会话而事件没到时，气泡会按上一个会话的客户
+      // 语向多译一次；下一轮扫描 msgId 变了自然纠正。不为此加页内轮询，也不加"会话切换"专属的失效广播。
+      const entry = accountOfView(viewId)
+      const activeChat = activeChatOf(viewId)
+      // 后端那列是 VARCHAR(128)，超长会让整次翻译 400、页内只看得见"没译文"，所以在盖章处就丢掉。
+      const chatKey = activeChat && activeChat.length <= 128 ? activeChat : undefined
       return requestTranslation(
         {
           text,
           type,
           ...(req?.input === true ? { input: true } : {}),
           ...(req?.noCache === true ? { noCache: true } : {})
+        },
+        {
+          ...(entry ? { accountId: entry.accountId } : {}),
+          ...(chatKey ? { chatKey } : {})
         },
         typeof apiBase === 'string' ? apiBase : undefined
       )

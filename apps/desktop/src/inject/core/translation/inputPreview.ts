@@ -96,7 +96,12 @@ export function mountInputPreview(injector: BaseInjector): () => void {
       if (!target) return
       layer = ensureLayer()
       place(target)
-      const result = await requestTranslate(injector, { text, type: 'send', input: true })
+      const result = await requestTranslate(injector, {
+        text,
+        type: 'send',
+        input: true,
+        chatHint: adapter.chatHint()
+      })
       if (result) paint(result)
       else hide()
     }, TRANSLATE_THROTTLE_TIME)
@@ -127,7 +132,13 @@ export function mountInputPreview(injector: BaseInjector): () => void {
     e.preventDefault()
     e.stopPropagation()
     void (async () => {
-      const result = await requestTranslate(injector, { text, type: 'send' })
+      // 输入框里的草稿就是发给此刻这个会话的，所以「先译再发」与预览一样带会话提示：
+      // 生效面 ② 对它同样成立（记录页回复框那条走的是 ①，与本文件无关）。
+      const result = await requestTranslate(injector, {
+        text,
+        type: 'send',
+        chatHint: adapter.chatHint()
+      })
       if (!result) return
       await adapter.setInputText(result.translation)
       const forwarded = new KeyboardEvent('keydown', {

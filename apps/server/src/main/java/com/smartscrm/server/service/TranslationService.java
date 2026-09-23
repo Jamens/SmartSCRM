@@ -3,11 +3,13 @@ package com.smartscrm.server.service;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.smartscrm.server.common.BizException;
+import com.smartscrm.server.entity.ChatConversation;
 import com.smartscrm.server.entity.Customer;
 import com.smartscrm.server.entity.TranslationCache;
 import com.smartscrm.server.entity.TranslationCredential;
 import com.smartscrm.server.entity.TranslationNode;
 import com.smartscrm.server.entity.TranslationSetting;
+import com.smartscrm.server.mapper.ChatConversationMapper;
 import com.smartscrm.server.mapper.CustomerMapper;
 import com.smartscrm.server.mapper.TranslationCacheMapper;
 import com.smartscrm.server.mapper.TranslationCredentialMapper;
@@ -57,18 +59,20 @@ public class TranslationService {
     private final TranslationCacheMapper cacheMapper;
     private final TranslationCredentialMapper credentialMapper;
     private final CustomerMapper customerMapper;
+    private final ChatConversationMapper conversationMapper;
     private final SimulatedTranslationEngine engine;
     private final Map<String, TranslationProvider> providers;
 
     public TranslationService(TranslationSettingMapper settingMapper, TranslationNodeMapper nodeMapper,
                               TranslationCacheMapper cacheMapper, TranslationCredentialMapper credentialMapper,
-                              CustomerMapper customerMapper,
+                              CustomerMapper customerMapper, ChatConversationMapper conversationMapper,
                               SimulatedTranslationEngine engine, List<TranslationProvider> providerBeans) {
         this.settingMapper = settingMapper;
         this.nodeMapper = nodeMapper;
         this.cacheMapper = cacheMapper;
         this.credentialMapper = credentialMapper;
         this.customerMapper = customerMapper;
+        this.conversationMapper = conversationMapper;
         this.engine = engine;
         this.providers = providerBeans.stream()
             .collect(Collectors.toMap(TranslationProvider::providerId, Function.identity()));
@@ -223,6 +227,28 @@ public class TranslationService {
         return settingRow(tenantId, "customer", String.valueOf(customerId));
     }
 
+    /**
+     * 生效面 ②：把"当前会话"换成客户 id。三种情况一律返回 null 回落全局——
+     * 请求没带齐 accountId/chatKey、查不到会话行、行上没挂客户。
+     * 只按 uk_conv 的三列精确匹配，不做前缀模糊：猜错语向译出的是别人家的语言，
+     * 比"没译"更难排查。
+     * <p>
+     * 第四列 platform 不必再进 WHERE：account_id 是 platform_accounts 的主键，一个账号只属于
+     * 一个平台，拿它筛过的行再筛平台是恒真的附加条件。所以"账号与会话不是一对"的请求
+     * （TG 账号 id 配一个 WA 的 chatKey）落到"查不到行"这一档，而不是 400。
+     */
+    private Long customerOfChat(Long tenantId, Long accountId, String chatKey) {
+        if (accountId == null || chatKey == null || chatKey.isBlank()) {
+            return null;
+        }
+        ChatConversation conv = conversationMapper.selectOne(new LambdaQueryWrapper<ChatConversation>()
+            .eq(ChatConversation::getTenantId, tenantId)
+            .eq(ChatConversation::getAccountId, accountId)
+            .eq(ChatConversation::getChatKey, chatKey)
+            .last("LIMIT 1"));
+        return conv == null ? null : conv.getCustomerId();
+    }
+
     private TranslationSetting requireSettings(Long tenantId) {
         TranslationSetting setting = settingRow(tenantId, "global", null);
         if (setting != null) {
@@ -263,11 +289,15 @@ public class TranslationService {
         if (!"receive".equals(dto.type()) && !"send".equals(dto.type())) {
             throw new BizException(40000, "type 只能是 receive 或 send");
         }
-        TranslationSetting customer = dto.customerId() == null ? null : customerRow(tenantId, dto.customerId());
-        ScopeSettings.Resolved resolved = ScopeSettings.resolve(dto.customerId(), customer, requireSettings(tenantId));
+        Long customerId = dto.customerId() != null
+            ? dto.customerId()
+            : customerOfChat(tenantId, dto.accountId(), dto.chatKey());
+        TranslationSetting customer = customerId == null ? null : customerRow(tenantId, customerId);
+        ScopeSettings.Resolved resolved = ScopeSettings.resolve(customerId, customer, requireSettings(tenantId));
         TranslationSetting s = resolved.setting();
         // 缓存 key 不变：key 里已经含 type + channel + from + to（buildCacheKey），
         // 语向不同天然分键，所以按客户切换语向不需要新增失效逻辑（spec §5）。
+        // 生效面 ② 走的是同一条口子：会话投影换出来的还是那两列语种，键自然就分开了。
         String fromLang = "receive".equals(dto.type()) ? s.getReceiveFromLang() : s.getSendFromLang();
         String toLang = "receive".equals(dto.type()) ? s.getReceiveToLang() : s.getSendToLang();
         String channel = s.getChannel();

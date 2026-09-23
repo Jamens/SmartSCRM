@@ -10921,7 +10921,7 @@ test('input preview never shares a slot with a bubble', () => {
 pnpm --dir apps/desktop test:unit
 ```
 
-预期：`Cannot find module './translateKey.ts'`（RED，实现文件还没建）；建完文件后 `# pass 79` / `# fail 0`（Task 17 结束的 76 + 本任务 3）。
+预期：`Cannot find module './translateKey.ts'`（RED，实现文件还没建）；建完文件后 `# pass 79` / `# fail 0`（Task 17 结束的 76 + 本任务 3）。**79 是推演值**（C14）：Task 17 收尾时基线已经是 125，本任务的实测终态是 **128**。
 
 `translationQueue.ts` 两处改动：
 
@@ -11042,10 +11042,19 @@ node tmp/p6c-page-direction.mjs
 - Task 19 Step 7 第 1、3 条：已知限制清单里"内嵌页气泡不跟客户语向"那一条删掉，换成实测结论；`docs/notes/…-verification.md` 的 ② 段落指到本任务两张表。
 - P5 spec `docs/superpowers/specs/2026-09-19-translation-center-design.md` §4.2 的"页面说不出语种/渠道/令牌"那句旁边补一行：它同样说不出账号与会话——② 之后这两个字段由主进程注入。
 
+> **实测回写（Task 17b 做完之后：Step 2 的 `node tmp/p6c-chatkey-direction.mjs` 八行 + 四条收尾全 PASS、exit 0。前置是脚本自己现读的，不是抄来的：WA `accountId=7` / TG `accountId=2` / 会话 `8613800001001@c.us` → `conversationId=29`、`customerId=1` / 第二位客户 `id=5` / 全局接收目标 `zh-CN` / `translation_cache totalKeys=168`。C4：`customers 5→5`、全局 `translation_setting` 前后逐字段 diff 为空、两条覆盖行都以 `inherited:true` 收口；缓存表 `168 → 171`（+3，命中 942 → 946），新增全在本契约自己的语种键上。Step 6 见下）**
+>
+> - **`# pass 79` 是推演值**（C14）：本任务终态 **128**（Task 17 收尾时基线已是 125，本任务 +3 条 `translateKey`）。`test:unit` + `typecheck` 四段全绿；`./mvnw -o package` 跑到的后端测试 **55/55**。`lint` 仓库整体坏，不是通过项。
+> - **第 2 行的"确实存过一条"有实测依据**：`totalKeys 168 → 169`。没有这个增量，第 7 行的 `cached=true` 可能只是撞上了历史数据，"存 → 命中"这条链就只剩一半。
+> - **第 8 行同时是第 7 行的反证**：删掉覆盖行后同一 `text/type` 落回 `zh-CN` 且 `cached=true` —— 命中的是第 3/4/5 行写进全局键的那条，不是第 7 行的 `vi`。缓存按语向分键由此钉死，不需要额外读库。
+> - **平台错配落在"查不到行"而不是 400**（第 4 行：TG 的 `accountId` 配 WA 的 `chatKey` → `status=200 code=0` + 全局语向）。成立的原因是 `account_id` 本身是 `platform_accounts` 的主键、一个账号只有一个平台，所以 `WHERE` 里不必再带 `platform` 列；这条推理已写进 `customerOfChat` 的注释，防止下一个人"顺手补一列"。
+> - **Step 8 的 `git add` 清单少一个文件**：`apps/server/.../provider/TencentProvider.java`（Files 段列了它——`from='auto'` 的对称缺口——add 清单没跟上）。清单已就地补正，提交按补正后的走。
+> - **Step 6 尚未跑**：它要三件人手里才有的东西——系统代理开着（本机 `web.whatsapp.com` 直连超时）、开发窗口抬到可见、该账号在视图里真的登录着。当前状态是 **blocked（C11）**，"生效面 ② 的页内端到端未验证；Step 2 的 HTTP 面已验"。驱动脚本 `tmp/p6c-page-direction.mjs` 已按 P5 §6.3 的插桩口径写好，抬窗后即可跑；同一原因让 `node tmp/p5-manual.mjs bubbles` 的 P5 回归也还没跑，两行一起在 Task 19 补。
+
 - [ ] **Step 8: 提交**
 
 ```bash
-cd /d/SmartSCRM && git add apps/server/src/main/java/com/smartscrm/server/web/dto/TranslateDTO.java apps/server/src/main/java/com/smartscrm/server/service/TranslationService.java apps/desktop/src/shared/translateKey.ts apps/desktop/src/shared/translateKey.test.ts apps/desktop/src/inject/core/translation/translationQueue.ts apps/desktop/src/inject/core/translation/domScan.ts apps/desktop/src/inject/core/translation/inputPreview.ts apps/desktop/src/inject/core/PlatformAdapter.ts apps/desktop/src/inject/platforms/whatsapp/index.ts apps/desktop/src/main/services/translationBridge.ts apps/desktop/src/main/webContentsView/ipc.ts docs/superpowers/specs/2026-09-20-chat-history-design.md docs/superpowers/specs/2026-09-19-translation-center-design.md docs/superpowers/plans/2026-09-20-chat-history.md
+cd /d/SmartSCRM && git add apps/server/src/main/java/com/smartscrm/server/web/dto/TranslateDTO.java apps/server/src/main/java/com/smartscrm/server/service/TranslationService.java apps/server/src/main/java/com/smartscrm/server/service/provider/TencentProvider.java apps/desktop/src/shared/translateKey.ts apps/desktop/src/shared/translateKey.test.ts apps/desktop/src/inject/core/translation/translationQueue.ts apps/desktop/src/inject/core/translation/domScan.ts apps/desktop/src/inject/core/translation/inputPreview.ts apps/desktop/src/inject/core/PlatformAdapter.ts apps/desktop/src/inject/platforms/whatsapp/index.ts apps/desktop/src/main/services/translationBridge.ts apps/desktop/src/main/webContentsView/ipc.ts docs/superpowers/specs/2026-09-20-chat-history-design.md docs/superpowers/specs/2026-09-19-translation-center-design.md docs/superpowers/plans/2026-09-20-chat-history.md
 git commit -m "feat(P6): 内嵌页气泡按客户取语向（生效面 ②：主进程盖会话，后端按投影解析）"
 ```
 

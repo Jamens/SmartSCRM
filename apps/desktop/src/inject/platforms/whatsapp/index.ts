@@ -107,6 +107,17 @@ export class WhatsAppAdapter extends PlatformAdapter {
     return { ...INPUT, ...MESSAGE, ...APP }
   }
 
+  /**
+   * WhatsApp 打开某个会话时把会话名写进 `document.title`（P5 的 `getUserInfo` 已经在读它，
+   * 连未读后缀 `(...)` 都是它剥的）。这是一条纯 DOM 事实，不需要平台内部对象。
+   * 两个已知退化都不修补，只在这里写明：① 两个会话同名 → 提示撞车，退化成共用一次 inflight
+   * promise（与"没有会话提示"的今天等价）；② 未读后缀会让同一会话在不同时刻给出不同提示 →
+   * 多问一次，后端缓存仍按语种分键挡住。两者都只是多一次请求，不影响取到哪个语向。
+   */
+  chatHint(): string | null {
+    return document.title.trim() || null
+  }
+
   hookInput(_injector: BaseInjector): void {
     /* input interception lands with quick-reply (P4) */
   }

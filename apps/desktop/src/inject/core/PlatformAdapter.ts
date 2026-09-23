@@ -69,6 +69,14 @@ export abstract class PlatformAdapter extends EventEmitter {
     return null
   }
 
+  /**
+   * 页内此刻在跟谁说话的一个提示串。只用于本页的请求去重，不进请求体、不参与任何语种判定。
+   * 名字故意不叫 chatKey：那是主进程盖章的字段，两者不是一个东西。
+   */
+  chatHint(): string | null {
+    return null
+  }
+
   async getRecentMessages(_chatId: string, _limit = 10): Promise<unknown[]> {
     throw new Error('必须实现 getRecentMessages 方法')
   }

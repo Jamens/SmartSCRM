@@ -1,12 +1,15 @@
 import { TRANSLATE_THROTTLE_TIME } from '../../constants/config'
 import { TRANSLATE_API } from '../../constants/events'
 import type { BaseInjector } from '../BaseInjector'
+import { translateKey } from '../../../shared/translateKey'
 
 export interface TranslateRequest {
   text: string
   type: 'receive' | 'send'
   input?: boolean
   noCache?: boolean
+  /** 页内此刻看的会话提示。只用于本页 inflight 去重；到后端的那份由主进程重新盖章。 */
+  chatHint?: string | null
 }
 
 export interface TranslateResponse {
@@ -41,7 +44,7 @@ export function requestTranslate(
   injector: BaseInjector,
   req: TranslateRequest
 ): Promise<TranslateResponse | null> {
-  const key = `${req.type}|${req.input === true ? 'i' : 'f'}|${req.text}`
+  const key = translateKey(req)
   const running = inflight.get(key)
   if (running) return running
 

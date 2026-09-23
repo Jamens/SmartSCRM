@@ -64,7 +64,11 @@ public class TencentProvider implements TranslationProvider {
 
     @Override
     public boolean supports(String fromLang, String toLang) {
-        boolean fromOk = fromLang == null || fromLang.isBlank() || LANGS.containsKey(fromLang);
+        // "auto" is tencent's own detect token too — a configured row that spells it out
+        // (a customer override saying 'auto') must reach the vendor, not degrade to the
+        // simulated engine just because it is not one of our eight codes.
+        boolean fromOk = fromLang == null || fromLang.isBlank() || "auto".equals(fromLang)
+            || LANGS.containsKey(fromLang);
         return fromOk && LANGS.containsKey(toLang);
     }
 
@@ -76,7 +80,8 @@ public class TencentProvider implements TranslationProvider {
         if (!supports(fromLang, toLang)) {
             throw new ProviderException("腾讯 语种不支持: " + fromLang + "->" + toLang);
         }
-        String from = (fromLang == null || fromLang.isBlank()) ? "auto" : LANGS.get(fromLang);
+        String from = (fromLang == null || fromLang.isBlank() || "auto".equals(fromLang))
+            ? "auto" : LANGS.get(fromLang);
         String to = LANGS.get(toLang);
 
         List<String> parts = new ArrayList<>();

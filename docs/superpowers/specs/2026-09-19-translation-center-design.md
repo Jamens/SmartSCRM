@@ -296,6 +296,7 @@ P5 改为引用常量，并补 `update-preview-setting` 常量与接收端。
 
 - `view:invoke` 通道白名单：P5 只有 `translate-api`。
 - 页面可传字段：`text` / `type` / `input` / `noCache`。**不含**语言、渠道、节点、token。
+- 它同样说不出**账号与会话**：P6 生效面 ②（气泡按客户取语向）落地后，`accountId` 与 `chatKey` 由主进程按 `viewId` 反查盖上，页内那个 `chatHint` 只是本页的请求去重提示，不在这份清单里、到不了后端。
 - `text` ≤ 5000 字符；每个 `viewId` 令牌桶 20 req/s；超限返回 `null`（前端按"无译文"降级）。
 - 响应只含译文与元信息（语向、渠道、缓存键、布尔标记），不含凭据与后端地址。
 - JWT 只存在于主进程 `getSession()`（`main/state/session.ts`），不进 preload、不进页面。
