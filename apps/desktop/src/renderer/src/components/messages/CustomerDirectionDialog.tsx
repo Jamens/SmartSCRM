@@ -20,6 +20,7 @@ import {
   useUpdateTranslationSettings
 } from '@/api/translation'
 import { sourceLanguagesFor, targetLanguagesFor } from '@/lib/langData'
+import { ApiError } from '@/lib/http'
 import { draftOf, dirtyCount, type DirectionDraft } from '@/lib/directionDraft'
 
 function LangRow({
@@ -158,8 +159,14 @@ export default function CustomerDirectionDialog({
               channel={data.channel}
             />
 
+            {/* 码属性与 `CreateCustomerDialog` 的错误出口同一口径：中文给人读，属性给人判
+                （C12——40000 的语种不合法与 50000 的后端炸了不能只剩两种中文）。 */}
             {save.isError && (
-              <p data-p6-direction-error="" className="text-xs text-destructive">
+              <p
+                data-p6-direction-error=""
+                data-p6-error-code={save.error instanceof ApiError ? String(save.error.code) : ''}
+                className="text-xs text-destructive"
+              >
                 保存失败：{save.error instanceof Error ? save.error.message : '后端不可用'}
               </p>
             )}
@@ -169,7 +176,11 @@ export default function CustomerDirectionDialog({
               读的人就分不出"没删掉"和"没存上"。
             */}
             {reset.isError && (
-              <p data-p6-direction-reset-error="" className="text-xs text-destructive">
+              <p
+                data-p6-direction-reset-error=""
+                data-p6-error-code={reset.error instanceof ApiError ? String(reset.error.code) : ''}
+                className="text-xs text-destructive"
+              >
                 恢复失败：{reset.error instanceof Error ? reset.error.message : '后端不可用'}
               </p>
             )}

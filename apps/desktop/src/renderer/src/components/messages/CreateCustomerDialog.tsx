@@ -172,6 +172,21 @@ export default function CreateCustomerDialog({
             <p className="text-xs text-destructive">
               客户 #{createdId} 已经创建成功，但历史消息关联失败（会话头还没挂上）。
             </p>
+            {/*
+             * 第二步的失败原因也要露，而且露的是**码**：这一段原来是固定文案，于是 40404（会话行不在了）、
+             * 40000（后端不让群会话挂客户）与 50000（后端自己炸了）在界面上长得一模一样，而三者对应的
+             * 下一步完全不同——前两条点「重试关联」不会好，只有最后一条值得再点。与上面 `create.isError`
+             * 同一口径：属性给人判，中文给人读。
+             */}
+            {link.isError && (
+              <p
+                data-p6-link-error=""
+                data-p6-error-code={link.error instanceof ApiError ? String(link.error.code) : ''}
+                className="text-xs text-destructive"
+              >
+                {link.error instanceof Error ? link.error.message : '关联失败'}
+              </p>
+            )}
             <p className="text-[11px] text-muted-foreground">
               重试只会补"关联"这一步，不会再建一位重复客户——重复的 open_id 会被后端挡在 40901。
             </p>
