@@ -101,8 +101,10 @@ export function registerViewIpc(): void {
       if (!text || text.length > 5000) return null
       const type = req?.type === 'send' ? 'send' : 'receive'
       const apiBase = viewManager.getInjectConfig(viewId)?.apiBase
-      // 口径①：后端只认主进程盖的章。上面那行 `as Partial<{...}>` 是一份**挑选**清单——
-      // 页面上报的其它字段（包括它的 `chatHint`）一律进不了 body；`accountId` 与 `chatKey`
+      // 口径①：后端只认主进程盖的章。真正把页面字段挡在门外的是下面 `requestTranslation` 里那份
+      // **重建的 body 字面量**（只把 `text`/`type`/`input`/`noCache` 逐个挑进去）——页面多报的字段
+      // （包括它的 `chatHint`）不会被复制进去，自然进不了后端。上面那行 `as Partial<{...}>` 只是
+      // 个类型标注、编译期就擦掉，**不提供任何运行时过滤**，别把它当安全边界读。`accountId` 与 `chatKey`
       // 由这里按 `event.sender` 反查出的 `viewId` 自己填。于是页面永远说不出"我属于哪个账号的
       // 哪个会话"，一个错映射最多让语向选错，不会让它读到别人的客户行（后端查询还额外带 tenant_id）。
       // 口径②：投影即时效。`activeChatOf` 是主进程手里"这个视图正在看哪个会话"的最后一份已知值
