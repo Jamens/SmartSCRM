@@ -24,7 +24,9 @@ test('陌生 WhatsApp 单聊：openId 就是 chatKey，手机号从形态里剥�
 
 test('三个否决各自单独成立：已关联、head 说是群、chatKey 是群形态', () => {
   assert.equal(canCreateCustomer(src({ customerId: 7 })), false)
+  assert.equal(prefillOfConversation(src({ customerId: 7 })), null)
   assert.equal(canCreateCustomer(src({ isGroup: true })), false)
+  assert.equal(prefillOfConversation(src({ isGroup: true })), null)
   // head 标着"不是群"但键是 @g.us：两处都要过，只信 head 就会给群建出一位客户。
   assert.equal(canCreateCustomer(src({ chatKey: '120363000000000000@g.us' })), false)
   assert.equal(prefillOfConversation(src({ chatKey: '120363000000000000@g.us' })), null)

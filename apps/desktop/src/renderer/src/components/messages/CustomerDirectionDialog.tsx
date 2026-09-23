@@ -79,6 +79,10 @@ export default function CustomerDirectionDialog({
   useEffect(() => {
     if (!open) {
       setDraft(null)
+      // 关掉时把两条 mutation 的错误态一起清掉：Radix 关闭只卸载 `DialogContent`，组件本体常驻，
+      // `save.isError` 会跨开关残留——重开弹层第一眼看到上一轮的「保存失败」，那是假话。
+      save.reset()
+      reset.reset()
       return
     }
     if (data) setDraft((d) => d ?? draftOf(data))
@@ -157,6 +161,16 @@ export default function CustomerDirectionDialog({
             {save.isError && (
               <p data-p6-direction-error="" className="text-xs text-destructive">
                 保存失败：{save.error instanceof Error ? save.error.message : '后端不可用'}
+              </p>
+            )}
+            {/*
+              DELETE 失败要单独说一句：按钮从「恢复中…」退回「恢复全局」而界面一字不出，
+              用户读到的是"这颗按钮坏了"。标记与保存那条分开——两件事塞进同一个属性，
+              读的人就分不出"没删掉"和"没存上"。
+            */}
+            {reset.isError && (
+              <p data-p6-direction-reset-error="" className="text-xs text-destructive">
+                恢复失败：{reset.error instanceof Error ? reset.error.message : '后端不可用'}
               </p>
             )}
           </div>

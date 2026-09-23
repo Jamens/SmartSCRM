@@ -98,7 +98,12 @@ export function useLabelTree() {
   })
 }
 
-function useInvalidateCustomers() {
+/**
+ * 导出给"创建 → 关联"两步链用：`useCreateCustomer` 自己不失效（理由见它上面那段注释），
+ * 刷新点落在 link 成功的那一处（`MessagesPage.handleLinked`）。不导出的话，那里只能写
+ * `['customers']` 字面量，键就有了第二份定义。
+ */
+export function useInvalidateCustomers() {
   const qc = useQueryClient()
   return (): void => {
     void qc.invalidateQueries({ queryKey: CUSTOMERS_KEY })
