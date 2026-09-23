@@ -9,6 +9,14 @@ import type { ChatPlatform } from '@shared/chatPlatform'
 export const HIGHLIGHT_MS = 2_000
 
 /**
+ * 起搜的最少字符数，**界面提示与 `useSearchMessages` 的 `enabled` 共用这一个值**：两边各写一份字面量时，
+ * 改一处就成了"写着要两个字、一个字就发请求"或反过来永远不发。放在这里而不是 `api/messages.ts`，是因为
+ * 本文件不 import 任何 react-query 的东西（闸门里跑得了），依赖方向只允许 `api → lib`，反过来会把
+ * `chatSearch` 拖出 `node --test`。
+ */
+export const MIN_QUERY = 2
+
+/**
  * 只声明用得到的字段：`api/messages.ts` 连着 react-query 与 `@/lib/http`，一旦被闸门里的
  * 文件 import，`node --test` 就得去解析整套渲染层依赖，而 `tsconfig.unit.json` 里没有 `@/*` 别名。
  * TS 是结构类型，真实 VO 赋给这些窄形状天然成立——两侧的字段名由 Task 4 / Task 13 钉着。
