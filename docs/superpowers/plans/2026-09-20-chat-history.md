@@ -8796,7 +8796,7 @@ CDP（前提交与 Step 7 同一次跑动）：
   - `@shared/chatKeys`：`isGroupChatKey(chatKey: string | null | undefined): boolean`、`peerPhoneOfChatKey(chatKey: string | null | undefined): string | null`——后端 `ChatKeys.isGroup` / `ChatKeys.peerPhoneOf` 的 TS 镜像，Task 17 的「建为客户」预填要用后者
   - `lib/chatSearch`：`HIGHLIGHT_MS`、`anchorLabel(ts, nowMs?)`、`jumpToOfHit(hit: HitShape): JumpTarget | null`、`interface JumpTarget { conversation: JumpConversation; anchor: { msgKey: string; messageId: number; chatKey: string; label: string } }`
   - `lib/chatStats`：`BAR_DAYS = 7`、`interface DayBar`、`toBars(perDay, windowDays?)`、`shareOf(part, total): string`
-  - `StatsCards`：props `{ accountId: number | null }`，DOM 上带 `data-p6-stats="cards"`、`data-p6-stats-window="7|30"`、每根柱子 `data-p6-bar="<YYYY-MM-DD>"`
+  - `StatsCards`：props `{ accountId: number | null }`，DOM 上带 `data-p6-stats="cards"`、每根柱子 `data-p6-bar="<YYYY-MM-DD>"`；`data-p6-stats-window` **两份各有其义**（Task 16 评审定的口径，见本任务末尾回写）：cards 容器上是**当前生效**的窗口，两个切换按钮上是**各自的**值
   - `SearchPanel`：props `{ onJump: (t: JumpTarget) => void; currentCustomerId: number | null }`，DOM 上带 `data-p6-search="panel"`、`data-p6-search-input`、结果卡片 `data-p6-hit="<msgKey>"`
   - `MessageThread` 的 props 增加 `anchor?: JumpTarget['anchor'] | null` 与 `onClearAnchor?: () => void`；`MessageBubble` 增加 `highlight?: boolean`
   - `MessagesPage` 的页面 state：`view: 'conversations' | 'search'`、`anchor: JumpTarget['anchor'] | null`
@@ -9812,6 +9812,27 @@ CDP（C9 抬窗口；C10 输入走真实键盘与真实鼠标；后端在 8180�
 | 12 | 读柱条 | `[data-p6-bar]` 根数 === `min(7, perDay.length)`；最大那根内层 `style.height === '100%'`；切到一个没有消息的账号时全部 `'0%'`、收发比文案为「—」 | 归一与除零两条算术在真界面上同时成立 |
 
 第 3、4、6、10、12 五行是本任务的硬证据：锚点进窗口、高亮会退场、陈旧锚点被清、跨账号跳转不被复位 effect 抹掉、除零不 NaN——全是看一眼界面看不出、错了却直接坑到销售的地方。真实登录态缺失也不影响本步（读的是库里已入库的消息），这一条与 Task 19 不同。
+
+> **实测回写（Task 16 做完之后：`node tmp/p6h-search.mjs` → 134 条 ok / 0 FAIL / 0 BLOCKED，输出在 `tmp/out-p6h-run19.txt`；C4 前后一致 `a7{32,204,2}` / `a2{1,3,0}`，整跑界面侧只发出 3 次 `POST /conversations/*/read`，A 档临时空账号跑完已删。下面是简报与实际做到的不一致之处，Task 19 按同一口径复验）**
+>
+> - **`# pass 68` 是推演值**（C14）：本任务终态 **117**，`test:unit` + `typecheck` 四段全绿。`lint` 在仓库里整体坏（ESLint 9.39.5 `RangeError: Invalid string length`），**别把它当通过项写进任何结论**。
+> - **行 3 / 4 第一次是真的红的，而且只有"再跳一次"才红**：`useMessages` 没有设 `staleTime`，暖缓存下消息行在**挂载那一次 commit 里**就渲染出来了，所以"等下一帧再找节点"的那类守卫在首跳（冷挂载）能过、二跳（热缓存）必失败。修法不是加等待，是把 `seenChatKeyRef` 换成**按值比对**（ref 初始化成当前 `chatKey`，命中才跳过）——dev `<StrictMode>` 会把挂载 effect 调两遍，任何"跳过第一轮"的计数式守卫在这里都必然被自己骗过去。改完两条路各测一次（`tmp/p6h-g19.mjs`，每 10ms 采 DOM 的 `ring-1`）：**冷挂载 1986ms、热缓存 1997ms 高亮，都在 2 秒内退场**。
+> - **行 4 的判据是 class，不是 fiber**：插桩里 `MessageBubble` 的 `memoizedProps.highlight` 比 DOM 的 `ring-1` 晚约 0.5s 才变 false（class 2121ms 掉，prop 采到最后仍是 true），怀疑读到了 `alternate` 那份。这条按**仪器噪声**记录，没有据此改产品代码；换区/换实现时别拿 fiber 读数当产品证据。
+> - **行 6 的前置按简报原样重做，不是产品缺陷**：切回「全局搜索」时 `SearchPanel` 是条件渲染 ⇒ 重新挂载，关键词本来就要重敲。上一轮把"面板状态还在"当期望，那是驱动写错。
+> - **请求计数必须先 `location.reload()`**：包装层会叠（同一页每跑一次多套一层，实测把"1 次"读成"4 次"）。终态是开跑重载拿原始 `fetch`、只包一次、跑一条唯一探针做 **1:1 自检**，并且每个请求数断言都并排给一份 `performance.getEntriesByType('resource')` 的对照数（与包装无关）。
+> - **原生日期输入有两处坑，都记在 `env-facts.md`**：Chromium 142 上只有**年份段**吃 8 位数字；逐字符敲会先落一个**中间完整值**⇒ 发两次请求，所以断言要看**最后一次**；而且只有关键词防抖，日期键入立即发请求 ⇒ **网络记号必须在按键之前取**。
+> - **`data-p6-stats-window` 落成了两份，消费侧口径定了**：**要"当前窗口"读容器**（`[data-p6-stats="cards"]` 上的 `data-p6-stats-window` 就是当前生效值），**要"切换入口"点按钮**。驱动点击一律写全 `button[data-p6-stats-window="30"]`——属性名两边相同、容器文档序在前，裸选择器在当前值下命中的是容器：点上去什么都不会发生，却照样过 hit-test。行 11 于是两侧都有断言，容器那份走满 **7→30→7**（回读那条是补的，否则一个只在初始渲染写死的死属性能骗过单向读）。
+> - **行 9 的客户维度拆成"按过"与"生效"两件事**：`customerFilterOn = onlyCurrentCustomer && currentCustomerId !== null` 同时驱动请求参数、按钮 `variant`/`aria-pressed`、`filtersOn`；`currentCustomerId` 变 null 时多一行提示"当前会话没有关联客户，「只看当前客户」暂时停用；换到已关联客户的会话会自动恢复"。评审原话的失效形态是"按钮还亮着、结果却是全量"。**行 9 新增 7 条断言**：就地换到未关联客户的会话 ⇒ 按钮弹回 + 提示在 + `disabled`，**停用期请求真的不带 `customerId=`**（不是只改样式），换回带客户的会话自动恢复。
+> - **`MIN_QUERY` 单源在 `lib/chatSearch`**，`SearchPanel`（提示文案 + `searchable`）与 `api/messages.ts` 的 `enabled` 三处读它。依赖方向只能是 **api → lib**，反了会把 react-query 拖进 `node --test` 那条链。
+> - **`data-p6-hit="<msgKey>"` 不是全局主键**：`data-msg-key` 只在会话内唯一，选择器要带 `[data-p6-search="panel"]` 作用域；命中列表的 React `key` 用 `chatKey:msgKey`（搜索结果天生跨会话）。锚定 layout effect 也补了 `anchor.chatKey === conversation.chatKey`，与 `around` 那道校验合成完整一闸——今天不可达（消费者带 `key={selectedId:chatKey}` 重挂载），但 **Task 18 会新增写 `anchor` 的入口**。
+>
+> **本任务没验到的（别当成已验）**：
+>
+> - **行 11 只证明参数接上了，没证明后端真用了它**：当前数据下 7 天与 30 天窗口落在同一批消息上，四个数**实测相同**（180 / 147 / 33 / 31）。要咬住后端得造 8–30 天前的消息当夹具，把"两个窗口的四个数**不同**"写成一行断言 → **Task 19**。
+> - **群会话形状一次都没在真界面上跳过**：`showSender` 与跨会话 `msgKey` 撞号（上面那条 `chatKey` 守卫防的形状）唯一可达的路径是一条群夹具 + 一次群命中跳转 → **Task 19 或 Task 18 布景**。
+> - **三个分支只有单测覆盖**：`anchorLabel` 的"刚刚/分钟"档位边界、`toBars` 的 `windowDays > BAR_DAYS` 夹取、`shareOf` 的 `total=0`（界面上由空账号那一屏另证过一次）。
+>
+> **未采纳的三条评审 Minor，逐条裁定**：视图切换丢面板状态（不改：简报口径就是重挂载重敲，驱动行 6/9 把它写死成断言）；同值 `highlightKey` 不续期（接受为口径：`HIGHLIGHT_MS` 是"这次跳转的提示停留多久"，不是"最后一次交互后 2 秒"）；`toBars` 静默夹到 `BAR_DAYS`（不改签名：签名是 Produces 钉给 Task 17–19 的，要 30 根柱条属需求变更）。
 
 - [ ] **Step 9: 提交**
 
