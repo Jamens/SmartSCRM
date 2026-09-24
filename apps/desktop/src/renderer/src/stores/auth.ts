@@ -1,6 +1,7 @@
 import { create } from 'zustand'
 import { configureHttp, http, ApiError } from '@/lib/http'
-import { getDeviceId, type UserInfo } from '@/lib/device'
+import { currentDeviceName, getDeviceId, type UserInfo } from '@/lib/device'
+import { osVersionOf } from '@shared/machine'
 
 export type AuthPhase = 'boot' | 'anonymous' | 'authenticated'
 
@@ -54,12 +55,16 @@ const store = create<AuthState>((set) => ({
     set({ submitting: true, error: null })
     try {
       const deviceId = await getDeviceId()
+      // 系统版本随登录一起上报后端 `device.os_version`。取不到（纯浏览器预览没有主进程）时留空，
+      // 而不是把「未知」写进库里——那一列以后是要被人读回去的。
+      const profile = await window.scrm?.app.getMachineProfile().catch(() => null)
       const result = await http.post<LoginResult>('/api/auth/login', {
         username,
         password,
         inviteCode,
         deviceId,
-        deviceName: navigator.userAgent.includes('Electron') ? 'SmartSCRM Desktop' : 'Dev Browser'
+        deviceName: currentDeviceName(),
+        osVersion: profile ? osVersionOf(profile) : ''
       })
       set({
         phase: 'authenticated',

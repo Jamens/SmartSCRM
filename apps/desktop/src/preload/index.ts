@@ -9,6 +9,7 @@ import type {
 } from '@shared/chatTypes'
 import type { AppSettings, ThemeSnapshot } from '../main/state/settings'
 import type { BadgeEcho } from '@shared/badge'
+import type { MachineProfile, StorageUsage } from '@shared/machine'
 
 export interface StoredSession {
   accessToken: string
@@ -37,7 +38,13 @@ export interface PageMessageEvent {
 
 const scrm = {
   app: {
-    getDeviceId: (): Promise<string> => ipcRenderer.invoke('app:get-device-id')
+    getDeviceId: (): Promise<string> => ipcRenderer.invoke('app:get-device-id'),
+    /**
+     * 设备信息卡（A14）那十个字段。同步就有，所以这条 invoke 基本是瞬时回执；
+     * 占用单独一条，理由见主进程 `services/machineProfile.ts` 的头注释。
+     */
+    getMachineProfile: (): Promise<MachineProfile> => ipcRenderer.invoke('app:get-machine-profile'),
+    getStorageUsage: (): Promise<StorageUsage> => ipcRenderer.invoke('app:get-storage-usage')
   },
   session: {
     save: (session: StoredSession): Promise<boolean> => ipcRenderer.invoke('session:save', session),
