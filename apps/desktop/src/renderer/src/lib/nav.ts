@@ -4,6 +4,7 @@ import {
   Languages,
   LayoutDashboard,
   MessagesSquare,
+  Settings,
   Target,
   Tags,
   Users,
@@ -26,7 +27,9 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/audiences', label: '人群包', icon: Target },
   { path: '/quick-replies', label: '快捷回复', icon: MessagesSquare },
   { path: '/materials', label: '素材库', icon: FolderOpen },
-  { path: '/translation', label: '翻译中心', icon: Languages }
+  { path: '/translation', label: '翻译中心', icon: Languages },
+  // 设置排在最后：它是宿主能力，不是业务模块。
+  { path: '/settings', label: '设置', icon: Settings }
 ]
 
 export const DEFAULT_NAV_PATH = '/workspace'

@@ -1,6 +1,8 @@
 import { BrowserWindow, shell } from 'electron'
 import { join } from 'path'
 import { is } from '@electron-toolkit/utils'
+import { windowBackgroundOf } from '@shared/theme'
+import { themeSnapshot } from '../state/settings'
 import icon from '../../../resources/icon.png?asset'
 
 let mainWindow: BrowserWindow | null = null
@@ -34,7 +36,8 @@ export function createMainWindow(): BrowserWindow {
     frame: false,
     titleBarStyle: 'hidden',
     autoHideMenuBar: true,
-    backgroundColor: '#f7f8fb',
+    // 窗口底色读不到 CSS 变量，只能与页面令牌手工对齐（两处值都在 shared/theme 里）。
+    backgroundColor: windowBackgroundOf(themeSnapshot().effective),
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),

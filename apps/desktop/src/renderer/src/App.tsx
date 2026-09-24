@@ -10,6 +10,7 @@ import AudiencesPage from '@/pages/AudiencesPage'
 import QuickRepliesPage from '@/pages/QuickRepliesPage'
 import MaterialsPage from '@/pages/MaterialsPage'
 import TranslationPage from '@/pages/TranslationPage'
+import SettingsPage from '@/pages/SettingsPage'
 import LoginPage from '@/pages/LoginPage'
 import { DEFAULT_NAV_PATH } from '@/lib/nav'
 import { LoaderCircle } from 'lucide-react'
@@ -51,6 +52,7 @@ function App(): React.JSX.Element {
           <Route path="/quick-replies" element={<QuickRepliesPage />} />
           <Route path="/materials" element={<MaterialsPage />} />
           <Route path="/translation" element={<TranslationPage />} />
+          <Route path="/settings" element={<SettingsPage />} />
           <Route path="*" element={<Navigate to={DEFAULT_NAV_PATH} replace />} />
         </Route>
       </Routes>
