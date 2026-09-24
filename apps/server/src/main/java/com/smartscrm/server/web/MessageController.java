@@ -10,6 +10,7 @@ import com.smartscrm.server.web.vo.BatchAcceptVO;
 import com.smartscrm.server.web.vo.MessagePageVO;
 import com.smartscrm.server.web.vo.MessageSearchVO;
 import com.smartscrm.server.web.vo.MessageStatsVO;
+import com.smartscrm.server.web.vo.UnreadTotalVO;
 import jakarta.validation.Valid;
 import java.util.Map;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -74,5 +75,11 @@ public class MessageController {
                                             @RequestParam Long accountId,
                                             @RequestParam(required = false) Integer days) {
         return ApiResponse.ok(query.stats(principal.tenantId(), accountId, days));
+    }
+
+    /** 租户级未读汇总：不带 accountId，任务栏角标要的是"这个应用总共有多少没读的"。 */
+    @GetMapping("/unread-total")
+    public ApiResponse<UnreadTotalVO> unreadTotal(@AuthenticationPrincipal AuthPrincipal principal) {
+        return ApiResponse.ok(query.unreadTotal(principal.tenantId()));
     }
 }

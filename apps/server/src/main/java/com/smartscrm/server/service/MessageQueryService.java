@@ -22,6 +22,7 @@ import com.smartscrm.server.web.vo.MessageSearchVO;
 import com.smartscrm.server.web.vo.MessageStatsVO;
 import com.smartscrm.server.web.vo.MessageVO;
 import com.smartscrm.server.web.vo.SearchHitVO;
+import com.smartscrm.server.web.vo.UnreadTotalVO;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeParseException;
@@ -293,6 +294,16 @@ public class MessageQueryService {
     }
 
     // ============ 未读与会话头修复 ============
+
+    /**
+     * 租户级未读汇总（任务栏角标）。这里不做账号解析：角标问的是"这个应用有没有事"，
+     * 而 {@link MessageService#resolveAccount} 是账号维度查询的入口，没有可解析的对象——
+     * 一个租户可以同时挂 WhatsApp 与 Telegram，逐账号取再相加会把一次汇总变成 N 次请求。
+     */
+    public UnreadTotalVO unreadTotal(Long tenantId) {
+        Map<String, Object> row = conversationMapper.unreadTotals(tenantId);
+        return new UnreadTotalVO(num(row, "total"), num(row, "conversations"));
+    }
 
     @Transactional
     public int markRead(Long tenantId, Long conversationId) {

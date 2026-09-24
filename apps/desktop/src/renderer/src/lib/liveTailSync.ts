@@ -3,12 +3,19 @@ import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-quer
 import { msgService } from '@/services/msgService'
 import {
   flattenRows,
+  invalidateUnreadTotal,
   queryKeys,
   rowOfPending,
   type MessagePageVO,
   type ThreadRow
 } from '@/api/messages'
-import { advanceStatus, furtherStatus, mergeTail, pendingKey, settlePending } from '@shared/liveTail'
+import {
+  advanceStatus,
+  furtherStatus,
+  mergeTail,
+  pendingKey,
+  settlePending
+} from '@shared/liveTail'
 import type { BridgeState, LiveFrame, SendReceipt, StatusFrame } from '@shared/chatTypes'
 import { ipcFailureText, outcomeOf, sendErrorLogText } from './sendError'
 
@@ -87,6 +94,9 @@ function scheduleListInvalidation(qc: QueryClient): void {
       listInvalidations.delete(qc)
       void qc.invalidateQueries({ queryKey: queryKeys.conversationsRoot })
       void qc.invalidateQueries({ queryKey: queryKeys.statsRoot })
+      // 第三条跟着一起失效的是任务栏角标那份未读总量：合流的理由与上面两条相同
+      //（补底一次上百帧，逐帧催就是逐帧一次请求）。
+      invalidateUnreadTotal(qc)
     }, LIST_INVALIDATE_MS)
   )
 }
@@ -116,9 +126,8 @@ const STATUS_KEYS_MAX = 200
  */
 export function applyLiveFrame(qc: QueryClient, frame: LiveFrame): FrameLanding {
   // 类型上 `message` 一定在，运行时它是页内拼出来再一路传上来的：这里按未知形状对待。
-  const msg:
-    | { chatKey?: unknown; msgKey?: unknown; msgTimeEpochSec?: unknown }
-    | undefined = frame.message
+  const msg: { chatKey?: unknown; msgKey?: unknown; msgTimeEpochSec?: unknown } | undefined =
+    frame.message
   const at = msg?.msgTimeEpochSec
   if (
     !Number.isInteger(frame.accountId) ||

@@ -14,6 +14,8 @@ import {
  */
 export interface AppSettings {
   theme: ThemePref
+  /** 任务栏未读角标的总开关（Windows 红点 / mac/Linux 数字都归它管）。 */
+  badgeEnabled: boolean
 }
 
 /** 交给渲染层的完整快照：`effective` 由主进程解析，页面只负责挂类名。 */
@@ -23,19 +25,30 @@ export interface ThemeSnapshot {
   systemDark: boolean
 }
 
-const DEFAULTS: AppSettings = { theme: 'system' }
+const DEFAULTS: AppSettings = { theme: 'system', badgeEnabled: true }
 
 const settingsFile = (): string => join(app.getPath('userData'), 'scrm-settings.json')
 
 let current: AppSettings = { ...DEFAULTS }
 
-function sanitize(raw: unknown): AppSettings {
-  const next: AppSettings = { ...DEFAULTS }
+/**
+ * 逐键校验后并进 base：未知键、类型不对的值一律不采信（也就不落盘）。
+ * 读盘与 `settings:set` 共用它——两处各写一份判定的话，加第三个设置项时一定会漏掉一处，
+ * 而漏掉的那处的表现是"这个键能被写进文件，但没人读得回来"。
+ */
+function mergeKnown(base: AppSettings, raw: unknown): AppSettings {
+  const next: AppSettings = { ...base }
   if (raw && typeof raw === 'object') {
-    const theme = (raw as Partial<AppSettings>).theme
-    if (isThemePref(theme)) next.theme = theme
+    const patch = raw as Partial<AppSettings>
+    if (isThemePref(patch.theme)) next.theme = patch.theme
+    // 开关只认真布尔：`0` / `'false'` 这类"看着像假"的值不采信，否则一个布尔项会悄悄变成三态。
+    if (typeof patch.badgeEnabled === 'boolean') next.badgeEnabled = patch.badgeEnabled
   }
   return next
+}
+
+function sanitize(raw: unknown): AppSettings {
+  return mergeKnown({ ...DEFAULTS }, raw)
 }
 
 /**
@@ -64,10 +77,7 @@ export function getSettings(): AppSettings {
 
 /** 只认已知键，且值要过判定；其余一律不采信也不落盘。返回合并后的全量设置。 */
 export function patchSettings(patch: unknown): AppSettings {
-  if (patch && typeof patch === 'object') {
-    const theme = (patch as Partial<AppSettings>).theme
-    if (isThemePref(theme)) current = { ...current, theme }
-  }
+  current = mergeKnown(current, patch)
   try {
     writeFileSync(settingsFile(), JSON.stringify(current, null, 2), 'utf-8')
   } catch (error) {

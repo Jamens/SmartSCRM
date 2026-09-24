@@ -1,6 +1,13 @@
 import { BrowserWindow, ipcMain, nativeTheme } from 'electron'
 import { windowBackgroundOf } from '@shared/theme'
-import { clearSession, getDeviceId, getSession, saveSession, type StoredSession } from './state/session'
+import type { BadgeEcho } from '@shared/badge'
+import {
+  clearSession,
+  getDeviceId,
+  getSession,
+  saveSession,
+  type StoredSession
+} from './state/session'
 import {
   applyThemeSource,
   getSettings,
@@ -10,6 +17,7 @@ import {
 } from './state/settings'
 import { bridgeStates, requestBackfill, sendText } from './services/msgBridge'
 import { getMainWindow, showMainWindow } from './window/mainWindow'
+import { setUnreadBadge } from './window/badge'
 import { registerViewIpc } from './webContentsView/ipc'
 import type { SendRequest } from '@shared/chatTypes'
 
@@ -25,6 +33,16 @@ function broadcastTheme(): void {
   win.webContents.send('theme:changed', snapshot)
 }
 
+/**
+ * 整份设置广播。与 `theme:changed` 分开两条通道：档位翻转（操作系统改了偏好）只动主题，
+ * 不该让设置类订阅者以为开关也被人改过；反过来设置变了必然带上主题，所以 `settings:set` 两条都发。
+ */
+function broadcastSettings(): void {
+  const win = getMainWindow()
+  if (!win || win.isDestroyed()) return
+  win.webContents.send('settings:changed', getSettings())
+}
+
 export function registerIpcHandlers(): void {
   registerViewIpc()
 
@@ -34,10 +52,16 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('settings:set', (_event, patch: Partial<AppSettings>) => {
     const next = patchSettings(patch)
     applyThemeSource(next)
+    broadcastSettings()
     broadcastTheme()
     return next
   })
   ipcMain.handle('theme:get', () => themeSnapshot())
+
+  // 未读角标：渲染层算该报几（`@shared/badge` 的规则），这里只管推给平台并如实回执。
+  ipcMain.handle('badge:set', (_event, count: unknown): BadgeEcho =>
+    setUnreadBadge(getMainWindow(), count)
+  )
 
   // system 档下操作系统的深浅偏好会在运行中翻转，主进程是唯一的真值来源，所以由它推。
   // 事件名是 `updated`（不是 `update`）——写错的话 typecheck 会拦，运行时不会有任何提示。
