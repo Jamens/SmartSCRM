@@ -131,6 +131,7 @@ scrm:msg:send  {accountId, chatKey, text, localId}
 - 重试 = 新 localId 重发，幂等仍靠 `uk_msg`（对端真实重复由平台消息 id 区分，属产品可接受的"真重发"）。
 - **先译再发**：回复框是普通 textarea，复用 P5 翻译 HTTP 通道与中文拦截；`sendLangSetting` 全局开关语义照旧。
 - **按客户语向**：`translation_setting.scope/scope_key` 启用 `scope='customer'`（P5 已留列）；解析顺序固定为 **显式 `customerId` → 会话投影 → 全局**，会话投影是显式值的缺省填充，不是能压过它的另一条通道。生效面有两处：① 记录页回复框（渲染层已知 `customerId`，直接带上）；② 内嵌页气泡——由**主进程**按 `viewId` 给翻译请求盖 `accountId` + `chatKey`（前者取自账号目录、后者取自该视图此刻的活跃会话），后端拿 `(tenant_id, account_id, chat_key)` 在 `chat_conversation` 上精确匹配投影出 `customer_id`，再走同一个解析口。**页面上报的账号与会话一律不进后端**：注入层只有一个页内的 `chatHint`，它只用于把本页的 inflight 请求去重键按会话分开，语种判定不依赖它。投影查不到行（陌生会话、平台错配、桥未挂上）时回落全局，与 ① 的缺省态同一个语义。缓存 key 含 from/to，语向切换天然分键，不新增失效逻辑。
+  - **本阶段兑现口径（P6 Task 19 验收）**：生效面 ①（记录页回复框）由 **Task 6** 兑现，生效面 ②（内嵌页气泡）由 **Task 17b** 兑现；两处都以 `ScopeSettings.resolve` 为**唯一解析口**，不各写一套取语向逻辑。② 的 `customerId` 来自 `(tenant_id, account_id, chat_key)` 在 `chat_conversation` 上的**会话投影**，不是页面声明——页面说不出账号与会话。① 的显式 `customerId` 压过 ② 的会话投影。两面的实测结论分别记在 `docs/notes/2026-09-20-p6-chat-history-verification.md`「客户级语向：两处生效面」一节与 Task 6 / 17b 的验证表。
 
 ## 6. 陌生号码 → 客户
 
@@ -263,13 +264,15 @@ P5 的注入层 TG 适配器现有类名是**未验证的猜测**（`.Imgs` 判�
 
 ## 12. 验证方案（每条都要能区分"生效 / 没动"）
 
-| 层 | 手段 |
-|---|---|
-| 后端 | JUnit：batch 幂等（重发同批→duplicated 计数）、游标、搜索过滤、stats、link-customer 回填；curl 契约 8 条全过 |
-| 桥/WA | 真实登录态：小参数补底（N=5）前后 DB 行数与 msg_key 集合比对；发送自聊一条→状态推进到 delivered→**删除测试消息**；native 页手发一条→事件流入库（证明双入口同源）；断线重挂后增量续采不重不漏 |
-| TG | 分两档，**不混算**。**A 档（本期可出绿灯）**：本地 fixture 页 `apps/desktop/test/tg-fixture.html` **由 Task 12a 探针抓下的真实 DOM 快照裁剪而成**（同一批类名、同一层嵌套、同样的行属性，不靠记忆手写），再用脚本化时间线驱动：打开会话 → 往 `messageList` 里注入 3 条 `in`（其中一条正文与库里已存行完全相同，用来区分"去重生效"和"根本没采"）→ 应用内回复 → 造出那条 `out` 行。归一化纯函数走 JS 单测，整链走 CDP：采集 → `/api/messages/batch` → 记录页出现单聊与一个 `-100…` 群会话 → 回执推进到 `sent`。**B 档（前置是用户扫一次码）**：TG 视图指到 `/k/` 后需重新扫码（11.0 第 1 行：不钉路径会落到 `/a/`，两条路径不共用会话）→ Task 12a 在真登录态跑探针、产出清单与快照 → 12b 的气泡译文、12c 的补底与实时、12d 的发送各出一条可核对的证据（DB 行数、`msg_key` 集合、native 页手发一条能入库）。B 档不再是"永久未验证"，但**没扫码就是没跑**，扫之前一律如实标未验证。另留一条反向断言：TG 那一档没跑时，`chat_message` 里不该出现 `platform='telegram'` 的行 |
-| 渲染层 | CDP 回归：列表/翻页/live 尾去重/回复（先译再发开、关两态）/语向弹层/陌生建客户闭环/搜索跳转/统计卡数字与库内 COUNT 一致 |
-| 输入路径 | 涉及页内交互的断言一律真实鼠标/键盘事件（P5e 教训），不接受 `element.click()` 独证 |
+| 层 | 手段 | 实测（2026-09-25，Task 19） |
+|---|---|---|
+| 后端 | JUnit：batch 幂等（重发同批→duplicated 计数）、游标、搜索过滤、stats、link-customer 回填；curl 契约 8 条全过 | **PASS**：`./mvnw test` 52/0/0；契约 `p6a-contract 16/16`、`p6b-customer 13/13`、`p6c-chatkey-direction 8/8` 原样绿。两条非"原样绿"经根因直查为环境/档位、非回归：`p6b-query 16/17`（`#1` TG 空基线写死 `length===0` 早于任何 TG 数据，过滤正确、未放宽）、`p6b-scope-contract 9/10`（`#4` "无中文"是 channel=5 百度专属，默认 channel=1 模拟引擎结构性不可能，其 P6 半条 `to=vi degraded=false` 在 channel=1 即绿；在线整条由 `p24-online-baidu.mjs`@ch5 单证） |
+| 桥/WA | 真实登录态：小参数补底（N=5）前后 DB 行数与 msg_key 集合比对；发送自聊一条→状态推进到 delivered→**删除测试消息**；native 页手发一条→事件流入库（证明双入口同源）；断线重挂后增量续采不重不漏 | **PASS**（Step 2 + Step 3，`p6g-e2e.mjs`/`p6g-send.mjs` exit 0）：同步历史经 IPC 非 HTTP、`uk_msg`+`INSERT IGNORE` 去重、native 手发入库 `source=native_send`、reload 重挂不重不漏、自聊真发 ⏱→✓✓ 同节点、乐观~localId 换真 msgKey 3s 内可配、连发两条各配平。唯 **⏱→✓→✓✓ 真第三方设备回执档 blocked**（自聊不产生真 ack，守 C4 不往真人发） |
+| TG | 分两档，**不混算**。**A 档（本期可出绿灯）**：本地 fixture 页 `apps/desktop/test/tg-fixture.html` **由 Task 12a 探针抓下的真实 DOM 快照裁剪而成**（同一批类名、同一层嵌套、同样的行属性，不靠记忆手写），再用脚本化时间线驱动：打开会话 → 往 `messageList` 里注入 3 条 `in`（其中一条正文与库里已存行完全相同，用来区分"去重生效"和"根本没采"）→ 应用内回复 → 造出那条 `out` 行。归一化纯函数走 JS 单测，整链走 CDP：采集 → `/api/messages/batch` → 记录页出现单聊与一个 `-100…` 群会话 → 回执推进到 `sent`。**B 档（前置是用户扫一次码）**：TG 视图指到 `/k/` 后需重新扫码（11.0 第 1 行：不钉路径会落到 `/a/`，两条路径不共用会话）→ Task 12a 在真登录态跑探针、产出清单与快照 → 12b 的气泡译文、12c 的补底与实时、12d 的发送各出一条可核对的证据（DB 行数、`msg_key` 集合、native 页手发一条能入库）。B 档不再是"永久未验证"，但**没扫码就是没跑**，扫之前一律如实标未验证。另留一条反向断言：TG 那一档没跑时，`chat_message` 里不该出现 `platform='telegram'` 的行 | **未验证（两档皆不成立，非本轮疏漏）**：A 档依赖 Task 12a 真机 DOM 快照，12a 需一次 TG 扫码、本机无账号 → 快照从未产出 → fixture 页与 A 档驱动**从未存在**，不假装复跑；B 档真实站点未验证（无账号）。反向断言部分成立：现库 `platform='telegram'` 行仅由 HTTP batch 手工种（`990000001`，Task 15 驱动），非任何 TG 采集实现产物 |
+| 渲染层 | CDP 回归：列表/翻页/live 尾去重/回复（先译再发开、关两态）/语向弹层/陌生建客户闭环/搜索跳转/统计卡数字与库内 COUNT 一致 | **PASS**：Step 4 行1（补底×live 并发 `[data-msg-key]` 无重复、尾巴不留副本）、行2（陌生→建客户→立刻搜正文 `customerId` 已=新 id→「只看当前客户」筛出）、Task 14–16 表复跑绿。语向弹层/抽屉时间线在各自任务表已绿 |
+| 输入路径 | 涉及页内交互的断言一律真实鼠标/键盘事件（P5e 教训），不接受 `element.click()` 独证 | **PASS**：Step 3/4/5 全部走 `Input.dispatchMouseEvent/KeyEvent` + 页内 `execCommand('insertText')`；先译再发「用译文替换输入框」回归（`p5s-replace.mjs`）确认真点写入整串译文非首字符（P5 #66 修复现场复跑绿） |
+
+> P5 回归（Step 5，P6 动过 P5 的三处 + 两个 P5e 修复）：试译走全局语向 / `LangSelect` 提取 / 翻译中心开关不回弹 / 先译再发用译文替换 —— 全 exit 0 绿，详见 `docs/notes/2026-09-20-p6-chat-history-verification.md`。
 
 ## 13. 与相邻模块的缝
 
