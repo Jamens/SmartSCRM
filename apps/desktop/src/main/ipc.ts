@@ -16,6 +16,7 @@ import {
   type AppSettings
 } from './state/settings'
 import { bridgeStates, requestBackfill, sendText } from './services/msgBridge'
+import { readMachineProfile, readStorageUsage } from './services/machineProfile'
 import { getMainWindow, showMainWindow } from './window/mainWindow'
 import { setUnreadBadge } from './window/badge'
 import { registerViewIpc } from './webContentsView/ipc'
@@ -47,6 +48,11 @@ export function registerIpcHandlers(): void {
   registerViewIpc()
 
   ipcMain.handle('app:get-device-id', () => getDeviceId())
+
+  // 设备信息（A14）。两条通道分开：这十个字段是进程里的常量，同步就有；
+  // 目录占用要遍历磁盘，可能上百毫秒，让它单独转，别把前半张卡片一起拖住。
+  ipcMain.handle('app:get-machine-profile', () => readMachineProfile())
+  ipcMain.handle('app:get-storage-usage', () => readStorageUsage())
 
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', (_event, patch: Partial<AppSettings>) => {

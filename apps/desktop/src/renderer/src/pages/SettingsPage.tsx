@@ -1,8 +1,11 @@
 import { useEffect, useState } from 'react'
-import { BellRing, MonitorSmartphone, Moon, Palette, Sun } from 'lucide-react'
+import { BellRing, HardDrive, MonitorSmartphone, Moon, Palette, Sun } from 'lucide-react'
 import { useUnreadTotal } from '@/api/messages'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
+import { useDeviceInfo } from '@/lib/deviceInfo'
+import { API_BASE } from '@/lib/http'
+import { useAuthStore } from '@/stores/auth'
 import {
   applyThemeClass,
   loadThemeState,
@@ -26,6 +29,12 @@ export default function SettingsPage(): React.JSX.Element {
   const badge = useBadgeEnabled()
   // 卡片上那行现状读的是角标自己那份查询（同一个缓存键，不会多打一次请求）。
   const unread = useUnreadTotal()
+  const device = useDeviceInfo()
+  const user = useAuthStore((s) => s.user)
+  // 当前身份直接读 store：这台机器上"登的是谁"只有一个来源，多一条查询就多一次说不一致的机会。
+  const who = user
+    ? `${user.nickname || user.username}（${user.role}）· 租户 ${user.tenantName} · 邀请码 ${user.inviteCode}`
+    : '未登录'
 
   useEffect(() => {
     void loadThemeState().then(setState)
@@ -132,6 +141,47 @@ export default function SettingsPage(): React.JSX.Element {
                 checked={badge.enabled}
                 onCheckedChange={(v) => badge.setEnabled(v === true)}
               />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <HardDrive className="size-4 text-primary" />
+                设备信息
+              </CardTitle>
+              <CardDescription>
+                这台机器与这个应用的现状。机器码与系统版本按登录时上报后端 `device`
+                那份口径取，所以卡片上写的与库里存的应当是同一串。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              {device.loading ? (
+                // 没取到之前不画那一排：先闪一排「未知」再闪回真值，读起来像数据在抖。
+                <p className="text-xs text-muted-foreground" data-testid="device-loading">
+                  读取中…
+                </p>
+              ) : (
+                <dl
+                  className="grid grid-cols-[7.5rem_1fr] gap-x-4 gap-y-1.5 text-xs"
+                  data-testid="device-rows"
+                >
+                  {device.rows.map((row) => (
+                    <div key={row.key} className="contents" data-device-key={row.key}>
+                      <dt className="text-muted-foreground">{row.label}</dt>
+                      <dd className="min-w-0 break-all font-mono text-foreground select-text">
+                        {row.value}
+                      </dd>
+                    </div>
+                  ))}
+                </dl>
+              )}
+              <p className="text-xs text-muted-foreground">
+                当前登录：<span data-testid="device-identity">{who}</span> · 服务地址{' '}
+                <span data-testid="device-api" className="font-mono select-text">
+                  {API_BASE}
+                </span>
+              </p>
             </CardContent>
           </Card>
         </div>
