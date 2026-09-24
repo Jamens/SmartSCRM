@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { BridgeState, LiveFrame, SendReceipt, SendRequest, StatusFrame } from '@shared/chatTypes'
+import type { AppSettings, ThemeSnapshot } from '../main/state/settings'
 
 export interface StoredSession {
   accessToken: string
@@ -35,6 +36,21 @@ const scrm = {
     save: (session: StoredSession): Promise<boolean> => ipcRenderer.invoke('session:save', session),
     get: (): Promise<StoredSession | null> => ipcRenderer.invoke('session:get'),
     clear: (): Promise<boolean> => ipcRenderer.invoke('session:clear')
+  },
+  /**
+   * 用户设置。档位存在主进程，渲染层只是它的一个客户端——
+   * 窗口底色与 nativeTheme 都由主进程解析，页面只拿到已经定好的 `effective`。
+   */
+  settings: {
+    get: (): Promise<AppSettings> => ipcRenderer.invoke('settings:get'),
+    set: (patch: Partial<AppSettings>): Promise<AppSettings> =>
+      ipcRenderer.invoke('settings:set', patch),
+    theme: (): Promise<ThemeSnapshot> => ipcRenderer.invoke('theme:get'),
+    onThemeChanged: (callback: (snapshot: ThemeSnapshot) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, snapshot: ThemeSnapshot): void => callback(snapshot)
+      ipcRenderer.on('theme:changed', listener)
+      return () => ipcRenderer.removeListener('theme:changed', listener)
+    }
   },
   win: {
     minimize: (): Promise<void> => ipcRenderer.invoke('win:minimize'),
