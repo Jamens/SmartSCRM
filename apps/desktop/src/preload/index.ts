@@ -1,7 +1,14 @@
 import { contextBridge, ipcRenderer, type IpcRendererEvent } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
-import type { BridgeState, LiveFrame, SendReceipt, SendRequest, StatusFrame } from '@shared/chatTypes'
+import type {
+  BridgeState,
+  LiveFrame,
+  SendReceipt,
+  SendRequest,
+  StatusFrame
+} from '@shared/chatTypes'
 import type { AppSettings, ThemeSnapshot } from '../main/state/settings'
+import type { BadgeEcho } from '@shared/badge'
 
 export interface StoredSession {
   accessToken: string
@@ -47,10 +54,24 @@ const scrm = {
       ipcRenderer.invoke('settings:set', patch),
     theme: (): Promise<ThemeSnapshot> => ipcRenderer.invoke('theme:get'),
     onThemeChanged: (callback: (snapshot: ThemeSnapshot) => void): (() => void) => {
-      const listener = (_event: IpcRendererEvent, snapshot: ThemeSnapshot): void => callback(snapshot)
+      const listener = (_event: IpcRendererEvent, snapshot: ThemeSnapshot): void =>
+        callback(snapshot)
       ipcRenderer.on('theme:changed', listener)
       return () => ipcRenderer.removeListener('theme:changed', listener)
+    },
+    // 与 `onThemeChanged` 分开的两条通道：操作系统翻深浅偏好只会发 theme，不会发这里。
+    onChanged: (callback: (settings: AppSettings) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, settings: AppSettings): void => callback(settings)
+      ipcRenderer.on('settings:changed', listener)
+      return () => ipcRenderer.removeListener('settings:changed', listener)
     }
+  },
+  /**
+   * 任务栏未读角标。计数由渲染层算（未读总量 + 焦点 + 开关都只在渲染层齐全），
+   * 返回值是主进程的回执，用来区分"平台不支持"与"调了但没成"，不是给界面看的。
+   */
+  badge: {
+    set: (count: number): Promise<BadgeEcho> => ipcRenderer.invoke('badge:set', count)
   },
   win: {
     minimize: (): Promise<void> => ipcRenderer.invoke('win:minimize'),
@@ -64,21 +85,22 @@ const scrm = {
     }
   },
   view: {
-    create: (viewId: string, url: string): Promise<boolean> => ipcRenderer.invoke('wcv-create', viewId, url),
+    create: (viewId: string, url: string): Promise<boolean> =>
+      ipcRenderer.invoke('wcv-create', viewId, url),
     destroy: (viewId: string): Promise<void> => ipcRenderer.invoke('wcv-destroy', viewId),
     show: (viewId: string): Promise<void> => ipcRenderer.invoke('wcv-show', viewId),
     hideAll: (): Promise<void> => ipcRenderer.invoke('wcv-hide-all'),
-    setBounds: (viewId: string, rect: ViewBounds): Promise<void> => ipcRenderer.invoke('wcv-set-bounds', viewId, rect),
+    setBounds: (viewId: string, rect: ViewBounds): Promise<void> =>
+      ipcRenderer.invoke('wcv-set-bounds', viewId, rect),
     reload: (viewId: string): Promise<void> => ipcRenderer.invoke('wcv-reload', viewId),
-    navigate: (viewId: string, url: string): Promise<void> => ipcRenderer.invoke('wcv-navigate', viewId, url),
-    executeJS: <T>(viewId: string, code: string): Promise<T> => ipcRenderer.invoke('wcv-execute-js', viewId, code),
+    navigate: (viewId: string, url: string): Promise<void> =>
+      ipcRenderer.invoke('wcv-navigate', viewId, url),
+    executeJS: <T>(viewId: string, code: string): Promise<T> =>
+      ipcRenderer.invoke('wcv-execute-js', viewId, code),
     getOpenIds: (): Promise<string[]> => ipcRenderer.invoke('wcv-get-open-ids'),
     getActiveId: (): Promise<string | null> => ipcRenderer.invoke('wcv-get-active-id'),
-    inject: (
-      viewId: string,
-      channel: string,
-      config: Record<string, unknown>
-    ): Promise<void> => ipcRenderer.invoke('wcv-inject', viewId, channel, config),
+    inject: (viewId: string, channel: string, config: Record<string, unknown>): Promise<void> =>
+      ipcRenderer.invoke('wcv-inject', viewId, channel, config),
     uninject: (viewId: string): Promise<void> => ipcRenderer.invoke('wcv-uninject', viewId),
     sendToView: (viewId: string, channel: string, payload: unknown): Promise<boolean> =>
       ipcRenderer.invoke('wcv-send-to-view', viewId, channel, payload),
@@ -99,7 +121,8 @@ const scrm = {
    */
   msg: {
     send: (req: SendRequest): Promise<SendReceipt> => ipcRenderer.invoke('msg:send', req),
-    syncHistory: (accountId: number): Promise<boolean> => ipcRenderer.invoke('msg:sync-history', accountId),
+    syncHistory: (accountId: number): Promise<boolean> =>
+      ipcRenderer.invoke('msg:sync-history', accountId),
     bridges: (): Promise<BridgeState[]> => ipcRenderer.invoke('msg:bridges'),
     onLive: (callback: (frame: LiveFrame) => void): (() => void) => {
       const listener = (_event: IpcRendererEvent, frame: LiveFrame): void => callback(frame)

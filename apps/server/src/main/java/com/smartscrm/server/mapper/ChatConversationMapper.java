@@ -2,8 +2,10 @@ package com.smartscrm.server.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.smartscrm.server.entity.ChatConversation;
+import java.util.Map;
 import org.apache.ibatis.annotations.Insert;
 import org.apache.ibatis.annotations.Param;
+import org.apache.ibatis.annotations.Select;
 import org.apache.ibatis.annotations.Update;
 
 public interface ChatConversationMapper extends BaseMapper<ChatConversation> {
@@ -37,6 +39,23 @@ public interface ChatConversationMapper extends BaseMapper<ChatConversation> {
 
     @Update("UPDATE chat_conversation SET unread_count = 0 WHERE id = #{id} AND tenant_id = #{tenantId}")
     int clearUnread(@Param("tenantId") Long tenantId, @Param("id") Long id);
+
+    /**
+     * 租户级未读汇总，给任务栏角标用。
+     * <p>
+     * 按租户汇总而不是按账号：角标是"这个应用有没有事"，而一个租户可以同时挂 WhatsApp 与
+     * Telegram 两个账号；现有 {@code /stats} 是账号维度的（accountId 必填），拼不出这个数。
+     * <p>
+     * 两条都包 COALESCE：租户一条会话头都没有时这里是空集聚合，MySQL 给 SUM 返回 NULL，
+     * 不兜底就会在拆箱处抛 NPE，而"没有会话"是最正常的初始状态。
+     * {@code SUM(unread_count > 0)} 是 MySQL 的布尔求和（真为 1），用来把"总量 0"分成两种情况：
+     * 会话数为 0 = 还没采集过；会话数 &gt; 0 而总量 0 = 都读过了。角标只看总量，但两个数一起回才
+     * 分得开这两种 0 —— 只给一个 0 的接口，验证时连"表是空的"和"查询没生效"都对不上账。
+     */
+    @Select("SELECT COALESCE(SUM(unread_count), 0) AS total,"
+        + " COALESCE(SUM(unread_count > 0), 0) AS conversations"
+        + " FROM chat_conversation WHERE tenant_id = #{tenantId}")
+    Map<String, Object> unreadTotals(@Param("tenantId") Long tenantId);
 
     /** 运维兜底：会话头按消息重算（spec §3「错乱可由重算接口修复」）。摘要与 upsertHead 同样截到 512。 */
     @Update("UPDATE chat_conversation c SET last_msg_time ="

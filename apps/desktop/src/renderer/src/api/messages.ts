@@ -1,4 +1,10 @@
-import { useInfiniteQuery, useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useInfiniteQuery,
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type QueryClient
+} from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { http } from '@/lib/http'
 // 搜索门槛只有一份字面量：`SearchPanel` 用它写"至少几个字"的提示，这里用它决定 `enabled`。
@@ -42,17 +48,46 @@ export interface MessageVO {
   sendLocalId: string | null
 }
 
-export interface ConversationPageVO { records: ConversationVO[]; nextCursor: string | null; hasMore: boolean }
-export interface MessagePageVO { records: MessageVO[]; nextCursor: string | null; hasMore: boolean }
-export interface SearchHitVO { message: MessageVO; conversationId: number | null; chatTitle: string | null }
-export interface MessageSearchVO { records: SearchHitVO[]; nextCursor: string | null; hasMore: boolean }
-export interface DayCountVO { day: string; inCount: number; outCount: number }
+export interface ConversationPageVO {
+  records: ConversationVO[]
+  nextCursor: string | null
+  hasMore: boolean
+}
+export interface MessagePageVO {
+  records: MessageVO[]
+  nextCursor: string | null
+  hasMore: boolean
+}
+export interface SearchHitVO {
+  message: MessageVO
+  conversationId: number | null
+  chatTitle: string | null
+}
+export interface MessageSearchVO {
+  records: SearchHitVO[]
+  nextCursor: string | null
+  hasMore: boolean
+}
+export interface DayCountVO {
+  day: string
+  inCount: number
+  outCount: number
+}
 export interface MessageStatsVO {
   total: number
   inCount: number
   outCount: number
   activeConversations: number
   perDay: DayCountVO[]
+}
+/**
+ * 租户级未读汇总，任务栏角标的数据源。
+ * 两个数一起回而不是只回 `total`：`total === 0` 有第二种读法（查询失败前的空表、租户写错了），
+ * 只有 `conversations` 同时在现场才能把它区分开——与 `useUnreadTotal` 的 A 档断言是一对。
+ */
+export interface UnreadTotalVO {
+  total: number
+  conversations: number
 }
 export interface CustomerTimelineVO {
   messages: MessageVO[]
@@ -100,6 +135,8 @@ export const queryKeys = {
   search: (p: SearchQuery, cursor: string | null) => ['msg', 'search', p, cursor] as const,
   stats: (accountId: number | null, days: number) => ['msg', 'stats', accountId, days] as const,
   timeline: (id: number | null, size: number) => ['msg', 'timeline', id, size] as const,
+  /** 租户级未读总量：整片只有一份，不按账号分（角标要的是"这个应用总共有多少没读的"）。 */
+  unreadTotal: ['msg', 'unread-total'] as const,
   bridges: ['msg', 'bridges'] as const,
   /** 失效用的前缀：新消息会让整张列表与所有天数的统计同时过期，逐个 days 点名会漏。 */
   conversationsRoot: ['msg', 'conversations'] as const,
@@ -201,6 +238,37 @@ export function useCustomerTimeline(id: number | null, size = 20) {
   })
 }
 
+/** 角标轮询周期，与 `liveTailSync` 的 1s 合流是两个不同的量级：那边防的是翻页风暴，这边是空闲时的上限。 */
+export const UNREAD_TOTAL_POLL_MS = 30_000
+
+/**
+ * 任务栏角标的取数。两条更新路：定时轮询 + `invalidateUnreadTotal`（live 帧落地、清了未读时催）。
+ *
+ * `refetchIntervalInBackground: true` 是这条 hook 的关键，不是顺手加的：TanStack 默认会在
+ * 页面不可见时暂停轮询，而窗口最小化正是 `document.visibilityState === 'hidden'`——
+ * 角标最有用的那一刻（人不在应用里）恰好是默认行为会停止取数的那一刻。
+ *
+ * 轮询本身也不可省：手机侧读掉的消息平台不会推给我们（`msg:live` 只覆盖桥连着的新消息），
+ * 那些未读只能靠这一轮追平。30s 是"最小化半小时后角标还准"与"不给会话表加常驻读压力"之间的取值。
+ */
+export function useUnreadTotal() {
+  return useQuery({
+    queryKey: queryKeys.unreadTotal,
+    queryFn: () => http.get<UnreadTotalVO>('/api/messages/unread-total'),
+    refetchInterval: UNREAD_TOTAL_POLL_MS,
+    refetchIntervalInBackground: true
+  })
+}
+
+/**
+ * 未读总量的失效入口，两个现场都要它：清完一个会话的未读（下面 `useMarkRead`）、
+ * live 帧批量落地（`liveTailSync` 的合流失效）。收成一处而不是各处 `invalidateQueries`：
+ * 漏掉一处就是"应用里的红点没了、任务栏角标还挂着"，而且只在某一条路径上出现。
+ */
+export function invalidateUnreadTotal(qc: QueryClient): void {
+  void qc.invalidateQueries({ queryKey: queryKeys.unreadTotal })
+}
+
 export function useMarkRead() {
   const qc = useQueryClient()
   return useMutation({
@@ -208,17 +276,24 @@ export function useMarkRead() {
       http.post<{ cleared: number }>(`/api/conversations/${conversationId}/read`),
     onSuccess: (_data, conversationId) => {
       // 本地就把角标抹掉：等 refetch 会慢一拍，用户已经在看这个会话了。
-      qc.setQueriesData<{ pages: ConversationPageVO[] }>({ queryKey: queryKeys.conversationsRoot }, (data) =>
-        data
-          ? {
-              ...data,
-              pages: data.pages.map((page) => ({
-                ...page,
-                records: page.records.map((c) => (c.id === conversationId ? { ...c, unreadCount: 0 } : c))
-              }))
-            }
-          : data
+      qc.setQueriesData<{ pages: ConversationPageVO[] }>(
+        { queryKey: queryKeys.conversationsRoot },
+        (data) =>
+          data
+            ? {
+                ...data,
+                pages: data.pages.map((page) => ({
+                  ...page,
+                  records: page.records.map((c) =>
+                    c.id === conversationId ? { ...c, unreadCount: 0 } : c
+                  )
+                }))
+              }
+            : data
       )
+      // 上面那段本地改写只碰会话列表；任务栏那份是另一个查询键，必须点名催一次，
+      // 否则清完未读后角标会一直挂着，直到下一轮 30s 轮询才自己掉下来。
+      invalidateUnreadTotal(qc)
     }
   })
 }
@@ -241,18 +316,20 @@ export function useLinkCustomer() {
         { customerId: input.customerId }
       ),
     onSuccess: (r, input) => {
-      qc.setQueriesData<{ pages: ConversationPageVO[] }>({ queryKey: queryKeys.conversationsRoot }, (data) =>
-        data
-          ? {
-              ...data,
-              pages: data.pages.map((page) => ({
-                ...page,
-                records: page.records.map((c) =>
-                  c.id === input.conversationId ? { ...c, customerId: r.customerId } : c
-                )
-              }))
-            }
-          : data
+      qc.setQueriesData<{ pages: ConversationPageVO[] }>(
+        { queryKey: queryKeys.conversationsRoot },
+        (data) =>
+          data
+            ? {
+                ...data,
+                pages: data.pages.map((page) => ({
+                  ...page,
+                  records: page.records.map((c) =>
+                    c.id === input.conversationId ? { ...c, customerId: r.customerId } : c
+                  )
+                }))
+              }
+            : data
       )
     }
   })
