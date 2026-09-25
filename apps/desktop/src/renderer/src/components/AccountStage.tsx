@@ -1,12 +1,14 @@
 import { useRef, useState } from 'react'
-import { Languages, LoaderCircle, MonitorOff, RotateCw } from 'lucide-react'
+import { Languages, LoaderCircle, MonitorOff, RotateCw, SlidersHorizontal } from 'lucide-react'
 import { platformOf } from '@/lib/platform'
+import { useBridgeOf } from '@/lib/liveTailSync'
 import { isElectron } from '@/services/viewService'
 import { useWebContentsView, type ActiveView } from '@/hooks/useWebContentsView'
 import { useAuthStore } from '@/stores/auth'
 import { API_BASE } from '@/lib/http'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
+import ConversationSettingsDialog from '@/components/translation/ConversationSettingsDialog'
 import type { PlatformAccount } from '@/stores/accounts'
 
 interface Props {
@@ -36,6 +38,15 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
         }
       : null
   const { loading, reload } = useWebContentsView(containerRef, active)
+
+  // P-02：活动会话从既有那条链上来（按 accountId 筛 + 只有 `ready` 才算数），不新建 hook。
+  // 桥不在、或挑到的那条 `activeChatKey === null`，都落到同一个禁用条件——后者在桥掉线时本就是 null，
+  // 两个条件同源。不能拿"最后一条"或"任意一条"：多个账号视图同时在线（最多 7 个）时
+  // 那会把语向写到另一个账号的同名会话上（spec §6）。
+  const stageAccountId = account?.id ?? null
+  const bridge = useBridgeOf(stageAccountId)
+  const activeChatKey = bridge?.activeChatKey ?? null
+  const [settingsOpen, setSettingsOpen] = useState(false)
 
   if (!account) {
     return (
@@ -67,6 +78,18 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
           />
           {account.status === 1 ? '在线' : '离线'}
         </Badge>
+        <Button
+          variant="outline"
+          size="sm"
+          className="h-8 gap-1.5 px-2 text-xs"
+          data-p7-stage-settings=""
+          disabled={activeChatKey === null}
+          title={activeChatKey === null ? '会话未在线' : '为当前会话设置语向与线路'}
+          onClick={() => setSettingsOpen(true)}
+        >
+          <SlidersHorizontal className="size-4" />
+          会话设置
+        </Button>
         <Button
           variant={injectOn ? 'secondary' : 'ghost'}
           size="sm"
@@ -111,6 +134,22 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
           </div>
         )}
       </div>
+
+      {/* 拿不到 chatKey 就不挂载（spec §7）：禁用态已经把入口挡住了，这里再挡一次是为了让
+          "弹层里揣着一条空会话键"这种状态在代码里不存在。`account.id` 就是后端那列
+          `platform_account.id`（= `accountId`），不是 `account.viewId`。
+          key 带上会话：换会话要让弹层重挂并重新铺一次表单——`activeChatKey` 是主进程推来的活值，
+          而 Radix 的模态挡不住下面那颗原生视图，用户能在弹层开着时点进另一条会话；不重挂的话
+          `draft` 还揣着上一条会话的值，保存就会把它写到新会话的键上。 */}
+      {stageAccountId !== null && activeChatKey !== null && (
+        <ConversationSettingsDialog
+          key={`${stageAccountId}:${activeChatKey}`}
+          accountId={stageAccountId}
+          chatKey={activeChatKey}
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+        />
+      )}
     </section>
   )
 }
