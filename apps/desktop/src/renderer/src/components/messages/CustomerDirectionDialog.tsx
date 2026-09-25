@@ -11,50 +11,16 @@ import {
   DialogHeader,
   DialogTitle
 } from '@/components/ui/dialog'
-import { Switch } from '@/components/ui/switch'
-import { LangSelect } from '@/components/translation/LangSelect'
+import { LangRow } from '@/components/translation/DirectionLangRows'
 import {
   settingsInputOf,
   useResetCustomerTranslationSettings,
   useTranslationSettings,
   useUpdateTranslationSettings
 } from '@/api/translation'
-import { sourceLanguagesFor, targetLanguagesFor } from '@/lib/langData'
 import { ApiError } from '@/lib/http'
-import { customerRefOf } from '@/lib/scopeLabel'
+import { customerRefOf, settingsScopeOf } from '@/lib/scopeLabel'
 import { draftOf, dirtyCount, type DirectionDraft } from '@/lib/directionDraft'
-
-function LangRow({
-  title,
-  enabled,
-  onEnabled,
-  from,
-  to,
-  onFrom,
-  onTo,
-  channel
-}: {
-  title: string
-  enabled: boolean
-  onEnabled: (v: boolean) => void
-  from: string
-  to: string
-  onFrom: (v: string) => void
-  onTo: (v: string) => void
-  channel: string
-}): React.JSX.Element {
-  return (
-    <div className="grid grid-cols-[52px_64px_minmax(0,1fr)_14px_minmax(0,1fr)] items-center gap-2">
-      <span className="text-xs text-muted-foreground">{title}</span>
-      <div>
-        <Switch checked={enabled} onCheckedChange={(v) => onEnabled(v === true)} />
-      </div>
-      <LangSelect value={from} allowAuto options={sourceLanguagesFor(channel)} onChange={onFrom} />
-      <span className="text-center text-xs text-muted-foreground">→</span>
-      <LangSelect value={to} options={targetLanguagesFor(channel)} onChange={onTo} />
-    </div>
-  )
-}
 
 interface Props {
   customerId: number
@@ -96,7 +62,12 @@ export default function CustomerDirectionDialog({
   const submit = (): void => {
     if (!data || !draft) return
     save.mutate(
-      settingsInputOf(data, { ...draft, scope: 'customer', scopeKey: String(customerId) }),
+      settingsInputOf(data, {
+        ...draft,
+        // 定位那一档的形状由 `scopeLabel` 一处成形（Task 7）：这里再手写一遍 `scopeKey`，
+        // 就会有第二个"客户档的键长什么样"的作者。
+        ...settingsScopeOf(customerRefOf(customerId))
+      }),
       {
         // 成功就关掉：`inherited` 从 true 翻成 false 是这次操作唯一"看得见做完了"的信号，
         // 而它只在重新打开时才该被读一次。留在原地等它翻，等于让表单和缓存赛跑。
@@ -114,7 +85,8 @@ export default function CustomerDirectionDialog({
             该客户的语向
           </DialogTitle>
           <DialogDescription>
-            只作用于记录页回复框的「先译再发」；内嵌 WhatsApp 页里的气泡仍按全局语向翻译。
+            只改这位客户的语向。页内气泡与记录页回复框都按「会话 → 客户 → 全局」取第一条命中的档，
+            所以这一份覆盖实际作用到哪一层，看上方那枚徽标与回复框旁的「本会话专属」标注。
           </DialogDescription>
         </DialogHeader>
 
@@ -147,7 +119,7 @@ export default function CustomerDirectionDialog({
               to={draft.receiveToLang}
               onFrom={(v) => patch({ receiveFromLang: v })}
               onTo={(v) => patch({ receiveToLang: v })}
-              channel={data.channel}
+              channel={draft.channel}
             />
             <LangRow
               title="发信"
@@ -157,7 +129,7 @@ export default function CustomerDirectionDialog({
               to={draft.sendToLang}
               onFrom={(v) => patch({ sendFromLang: v })}
               onTo={(v) => patch({ sendToLang: v })}
-              channel={data.channel}
+              channel={draft.channel}
             />
 
             {/* 码属性与 `CreateCustomerDialog` 的错误出口同一口径：中文给人读，属性给人判
