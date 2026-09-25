@@ -3,9 +3,11 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { directionSummary, dirtyCount, draftOf, type DirectionSource } from './directionDraft.ts'
 
-/** 一份"完整设置"：语向七个字段（含线路）之外还有 server / serverMode / previewEnabled 等，弹层一个都不许带走。 */
+/** 一份"完整设置"：语向七个字段（含线路）之外还有 server / serverMode / previewEnabled 等，弹层一个都不许带走。
+ *  `channel: '1'` 取的是真实线路码（`TRANSLATION_CHANNELS` 的取值域，也是 `translation_setting.channel` 的列默认值）：
+ *  `draftOf` 现在会原样带出这一格，夹具里放一个编出来的值就会教下一个人以为那是存过的线路。 */
 const WHOLE = {
-  channel: 'simulate',
+  channel: '1',
   server: 'node-a',
   serverMode: 'auto',
   previewEnabled: true,
@@ -32,7 +34,7 @@ test('draftOf 取那七个字段（含线路：会话档弹层要能改线路）
     'sendToLang'
   ])
   assert.equal(draftOf(WHOLE).receiveToLang, 'zh-CN')
-  assert.equal(draftOf(WHOLE).channel, 'simulate')
+  assert.equal(draftOf(WHOLE).channel, '1')
 })
 
 test('同义值不算改动：P5 的下拉写 `""`，Task 6 的契约写 `"auto"`，两者都是"自动检测"', () => {
