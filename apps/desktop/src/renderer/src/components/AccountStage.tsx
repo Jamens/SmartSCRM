@@ -15,6 +15,9 @@ interface Props {
   account: PlatformAccount | null
 }
 
+/** 「会话设置」点开那一刻定下的目标：一条会话由 `accountId` + 平台侧 `chatKey` 定位（spec §3.1）。 */
+type SettingsTarget = { accountId: number; chatKey: string }
+
 export default function AccountStage({ account }: Props): React.JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null)
   const [injectOn, setInjectOn] = useState(true)
@@ -46,7 +49,13 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
   const stageAccountId = account?.id ?? null
   const bridge = useBridgeOf(stageAccountId)
   const activeChatKey = bridge?.activeChatKey ?? null
-  const [settingsOpen, setSettingsOpen] = useState(false)
+  // 「会话设置」的目标在**点开那一刻**定死，不攥活值。`activeChatKey` 是主进程推来的活值，而 Radix 的
+  // 模态挡不住下面那颗原生视图——用户能在弹层开着时点进另一条会话。攥活值有两种坏法：弹层原地换目标
+  // （`draft` 还是上一条的，保存就把上一条编辑出的语向写到新会话的键上），或目标消失时整棵卸载、
+  // `open` 旗标却留在这一层（切回该账号，弹层自己开了回来）。定死后两条都不成立：弹层的 props
+  // 一生只描述一条会话，关闭就是把这一格抹成 null。顺带少一类请求——没点开就不挂载，也就没有
+  // "每切一次会话打一次 GET /settings"（挂载着的组件里那个 `useTranslationSettings` 是会发的）。
+  const [settingsTarget, setSettingsTarget] = useState<SettingsTarget | null>(null)
 
   if (!account) {
     return (
@@ -85,7 +94,12 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
           data-p7-stage-settings=""
           disabled={activeChatKey === null}
           title={activeChatKey === null ? '会话未在线' : '为当前会话设置语向与线路'}
-          onClick={() => setSettingsOpen(true)}
+          onClick={() => {
+            // 禁用态已经挡掉了"没有活动会话"，这一句是为了让类型上也拿不到 null：
+            // 写进 `settingsTarget` 的那一条，必须是点开这一刻真实存在的会话。
+            if (stageAccountId === null || activeChatKey === null) return
+            setSettingsTarget({ accountId: stageAccountId, chatKey: activeChatKey })
+          }}
         >
           <SlidersHorizontal className="size-4" />
           会话设置
@@ -135,19 +149,22 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
         )}
       </div>
 
-      {/* 拿不到 chatKey 就不挂载（spec §7）：禁用态已经把入口挡住了，这里再挡一次是为了让
+      {/* 拿不到会话就不挂载（spec §7）：禁用态已经把入口挡住了，这里再挡一次是为了让
           "弹层里揣着一条空会话键"这种状态在代码里不存在。`account.id` 就是后端那列
           `platform_account.id`（= `accountId`），不是 `account.viewId`。
-          key 带上会话：换会话要让弹层重挂并重新铺一次表单——`activeChatKey` 是主进程推来的活值，
-          而 Radix 的模态挡不住下面那颗原生视图，用户能在弹层开着时点进另一条会话；不重挂的话
-          `draft` 还揣着上一条会话的值，保存就会把它写到新会话的键上。 */}
-      {stageAccountId !== null && activeChatKey !== null && (
+          目标取自 `settingsTarget` 而不是活值，所以一个实例存续期内 props 恒定；`key` 再钉一道：
+          换成另一条会话必须是新实例，不能就地换 props——`draft` 只在初值那一次铺，props 变了
+          而 draft 没变就是把上一条会话编辑出的语向写到新会话的键上。今天这一格靠"先关才可能再开"
+          走不到（模态挡着工具条），但那道论证在弹层外面，不写进结构里就等着哪天被人推翻。 */}
+      {settingsTarget !== null && (
         <ConversationSettingsDialog
-          key={`${stageAccountId}:${activeChatKey}`}
-          accountId={stageAccountId}
-          chatKey={activeChatKey}
-          open={settingsOpen}
-          onOpenChange={setSettingsOpen}
+          key={`${settingsTarget.accountId}:${settingsTarget.chatKey}`}
+          accountId={settingsTarget.accountId}
+          chatKey={settingsTarget.chatKey}
+          open
+          onOpenChange={(o) => {
+            if (!o) setSettingsTarget(null)
+          }}
         />
       )}
     </section>
