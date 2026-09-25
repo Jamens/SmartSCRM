@@ -4,6 +4,7 @@ import { getMainWindow } from '../window/mainWindow'
 import { requestTranslation } from '../services/translationBridge'
 import { handleBridgeReport, observeLoginStatus, activeChatOf } from '../services/msgBridge'
 import { accountOfView } from '../services/msgBridge/accountDirectory'
+import { activeChatKeyOf } from '@shared/chatKeys'
 
 /** Channels an embedded page is allowed to push up to the host window. */
 const ALLOWED_HOST_CHANNELS = new Set<string>([
@@ -111,9 +112,10 @@ export function registerViewIpc(): void {
       // （桥的 `active_chat` 事件 + 命令驱动上报）。切了会话而事件没到时，气泡会按上一个会话的客户
       // 语向多译一次；下一轮扫描 msgId 变了自然纠正。不为此加页内轮询，也不加"会话切换"专属的失效广播。
       const entry = accountOfView(viewId)
-      const activeChat = activeChatOf(viewId)
+      // 裁剪与广播共用 `activeChatKeyOf`（Task 6 Step 6）。原来这里内联了一份 `length <= 128`，
+      // 两处各写一遍就会分叉成"按钮点亮了、后端却从没用上这个 chatKey"。
       // 后端那列是 VARCHAR(128)，超长会让整次翻译 400、页内只看得见"没译文"，所以在盖章处就丢掉。
-      const chatKey = activeChat && activeChat.length <= 128 ? activeChat : undefined
+      const chatKey = activeChatKeyOf(activeChatOf(viewId)) ?? undefined
       return requestTranslation(
         {
           text,

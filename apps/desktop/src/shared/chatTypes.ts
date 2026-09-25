@@ -73,7 +73,20 @@ export interface BridgeState {
   /** 进入当前 phase 的时刻（epoch ms），UI 用来显示"上次心跳"。 */
   since: number
   detail: string | null
+  /**
+   * 这个视图正在看哪个会话（按 `activeChatKeyOf()` 裁过）；桥不在线、没选中会话、或页内报来即不成形 → null。
+   * 与 `LiveFrame.activeChatKey` 同一个叫法、同一份来源（`msgBridge/index.ts` 的 `activeChat` map），不引入第二个名字。
+   * 组装只发生在 `bridgeStates()` 一处，那是 `msg:state` 与 `msg:bridges` 的共同出口（spec §5 / D-04）。
+   */
+  activeChatKey: string | null
 }
+
+/**
+ * `BridgeMount` 手里的那一半：它只有 phase/since/detail，`activeChat` 那张 map 在 index 里，
+ * 必填字段会让 `bridgeMount.ts` 的 `state()` 直接编译不过。所以装配返回这一份，
+ * `activeChatKey` 由 `bridgeStates()` 补齐——"只有一个组装口"这条要求仍然成立（P-08）。
+ */
+export type BridgeStateCore = Omit<BridgeState, 'activeChatKey'>
 
 export interface SendRequest {
   accountId: number
