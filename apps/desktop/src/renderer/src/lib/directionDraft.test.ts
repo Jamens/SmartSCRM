@@ -3,7 +3,7 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { directionSummary, dirtyCount, draftOf, type DirectionSource } from './directionDraft.ts'
 
-/** 一份"完整设置"：语向六字段之外还有 channel / server / previewEnabled 等，弹层一个都不许带走。 */
+/** 一份"完整设置"：语向七个字段（含线路）之外还有 server / serverMode / previewEnabled 等，弹层一个都不许带走。 */
 const WHOLE = {
   channel: 'simulate',
   server: 'node-a',
@@ -21,8 +21,9 @@ const WHOLE = {
   disableChinesePreventSend: false
 }
 
-test('draftOf 只取那六个字段', () => {
+test('draftOf 取那七个字段（含线路：会话档弹层要能改线路）', () => {
   assert.deepEqual(Object.keys(draftOf(WHOLE)).sort(), [
+    'channel',
     'receiveEnabled',
     'receiveFromLang',
     'receiveToLang',
@@ -31,6 +32,7 @@ test('draftOf 只取那六个字段', () => {
     'sendToLang'
   ])
   assert.equal(draftOf(WHOLE).receiveToLang, 'zh-CN')
+  assert.equal(draftOf(WHOLE).channel, 'simulate')
 })
 
 test('同义值不算改动：P5 的下拉写 `""`，Task 6 的契约写 `"auto"`，两者都是"自动检测"', () => {
@@ -51,4 +53,15 @@ test('摘要文案：源为空显示 auto，目标为空显示未配置', () => 
   assert.equal(directionSummary({ ...draftOf(WHOLE), receiveFromLang: '' }, 'receive'), 'auto → zh-CN')
   assert.equal(directionSummary(draftOf(WHOLE), 'send'), 'zh-CN → vi')
   assert.equal(directionSummary({ ...draftOf(WHOLE), sendToLang: '' }, 'send'), '未配置')
+})
+
+test('线路算一处改动：只改线路时保存按钮该亮', () => {
+  const base = draftOf(WHOLE)
+  assert.equal(dirtyCount(base, { ...base, channel: '2' }), 1)
+  assert.equal(dirtyCount(base, { ...base, channel: base.channel }), 0)
+})
+
+test('线路不进摘要文案（摘要答的是"哪两个语种"，与走哪条线路无关）', () => {
+  const base = draftOf(WHOLE)
+  assert.equal(directionSummary({ ...base, channel: '2' }, 'send'), 'zh-CN → vi')
 })

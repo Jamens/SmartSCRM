@@ -1,6 +1,12 @@
 // src/renderer/src/lib/directionDraft.ts
-/** 语向弹层能改的全部字段：收 / 发各一条「启用 + 源 + 目标」。 */
+/** 语向弹层能改的全部字段：收 / 发各一条「启用 + 源 + 目标」，外加整档共用的线路。 */
 export interface DirectionDraft {
+  /**
+   * 线路是**一整档一个值**：它同时决定收发两侧的可选语种，所以塞进 `LangRow` 会变成
+   * 两格各带一份线路。会话档弹层有控件（Task 9），客户档弹层没有——那里 `draft.channel`
+   * 恒等于打开时读到的那一份，提交时带回去是同一个值（P-07 的"行为逐字段不变"，由 Task 10 CDP 第 6 行兜）。
+   */
+  channel: string
   receiveEnabled: boolean
   receiveFromLang: string
   receiveToLang: string
@@ -15,6 +21,7 @@ export type DirectionSource = DirectionDraft
 /** 显式逐字段挑，不用 rest 剔除：以后 VO 多一个字段时必须在这里表态一次。 */
 export function draftOf(s: DirectionSource): DirectionDraft {
   return {
+    channel: s.channel,
     receiveEnabled: s.receiveEnabled,
     receiveFromLang: s.receiveFromLang,
     receiveToLang: s.receiveToLang,
@@ -45,6 +52,8 @@ export function dirtyCount(base: DirectionSource, next: DirectionSource): number
   if (b.sendEnabled !== n.sendEnabled) count += 1
   if (!same(b.sendFromLang, n.sendFromLang)) count += 1
   if (!same(b.sendToLang, n.sendToLang)) count += 1
+  // 线路不进 `same()`：它没有"自动检测"那种同义写法，`''` 也不是合法线路码。
+  if (b.channel !== n.channel) count += 1
   return count
 }
 
