@@ -41,11 +41,7 @@ export const conversationRefOf = (accountId: number, chatKey: string): Conversat
  * 一个数组能表达的东西换成一条需要转义的字面量。**键段不含 `customerId`**（P-01）：会话档读到的
  * 那一行由它决定不了，客户档由后端按同一条 chat 现算（spec §3.2）。
  */
-export const settingsKeyOf = (
-  ref: SettingsRef
-): readonly (
-  'translation-settings' | 'global' | 'customer' | 'conversation' | number | string
-)[] => {
+export const settingsKeyOf = (ref: SettingsRef): readonly (string | number)[] => {
   if (ref.kind === 'customer') return ['translation-settings', 'customer', ref.customerId] as const
   if (ref.kind === 'conversation')
     return ['translation-settings', 'conversation', ref.accountId, ref.chatKey] as const

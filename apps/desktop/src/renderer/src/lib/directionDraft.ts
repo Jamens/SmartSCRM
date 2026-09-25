@@ -48,7 +48,7 @@ export function dirtyCount(base: DirectionSource, next: DirectionSource): number
   return count
 }
 
-/** 会话头那颗按钮上的「这一位客户的发信语向」摘要。 */
+/** 发信/收信语向的一句话摘要。两个消费方：会话头那颗按钮，与回复框那一行的生效档摘要。 */
 export function directionSummary(s: DirectionSource, kind: 'receive' | 'send'): string {
   const from = kind === 'receive' ? s.receiveFromLang : s.sendFromLang
   const to = kind === 'receive' ? s.receiveToLang : s.sendToLang

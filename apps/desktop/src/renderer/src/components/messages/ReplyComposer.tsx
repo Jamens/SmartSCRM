@@ -56,6 +56,9 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
     // 重入闸：Enter 这条路不受按钮上那个 `disabled={busy}` 保护，等回执期间再敲一次就是
     // 两条一样的消息发出去两次（客户那边看得一清二楚）。键位与按钮两条路必须同一个闸。
     if (busy) return
+    // 这一句说明的是**这一次尝试**按哪一档译出，所以每次尝试一开始就先抹掉：被闸门挡掉、
+    // 翻译失败、发送失败那几条早退路上都没有第二次赋值，不清就是拿上一轮的档位替这一轮说话。
+    setSentScope(null)
     const decision = decideDraft(draft, settings)
     if (decision.kind === 'empty') return
     if (decision.kind === 'tooLong') {
@@ -85,8 +88,6 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
         // §4③ 的第二个来源：这次**实际**用了哪一档。它可能与上面那枚徽标不同——弹层改档位与
         // 后端解析之间隔着一次缓存失效，所以两处都要，不是重复标注。
         setSentScope(result.scope)
-      } else {
-        setSentScope(null)
       }
       const outcome = await send(text)
       if (outcome.ok) {

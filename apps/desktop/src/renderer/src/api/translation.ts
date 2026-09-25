@@ -1,4 +1,9 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult
+} from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import {
   settingsKeyOf,
@@ -210,7 +215,12 @@ export function useResetCustomerTranslationSettings() {
  * 这里交出去的是 `accountId` + `chatKey`，不是那条成形键（spec §3.4），所以拼键的那一处只有一个作者。
  * 走 query 不进路径段：`chatKey` 里带 `@` 与 `.`。`cleared === 0` 也是成功（本来就没有这一档的行）。
  */
-export function useResetConversationTranslationSettings() {
+export function useResetConversationTranslationSettings(): UseMutationResult<
+  { cleared: number },
+  Error,
+  ConversationSettingsRef,
+  unknown
+> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (ref: ConversationSettingsRef) =>
