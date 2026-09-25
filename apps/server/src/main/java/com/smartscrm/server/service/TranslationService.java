@@ -5,12 +5,14 @@ import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.ChatConversation;
 import com.smartscrm.server.entity.Customer;
+import com.smartscrm.server.entity.PlatformAccount;
 import com.smartscrm.server.entity.TranslationCache;
 import com.smartscrm.server.entity.TranslationCredential;
 import com.smartscrm.server.entity.TranslationNode;
 import com.smartscrm.server.entity.TranslationSetting;
 import com.smartscrm.server.mapper.ChatConversationMapper;
 import com.smartscrm.server.mapper.CustomerMapper;
+import com.smartscrm.server.mapper.PlatformAccountMapper;
 import com.smartscrm.server.mapper.TranslationCacheMapper;
 import com.smartscrm.server.mapper.TranslationCredentialMapper;
 import com.smartscrm.server.mapper.TranslationNodeMapper;
@@ -61,12 +63,14 @@ public class TranslationService {
     private final TranslationCredentialMapper credentialMapper;
     private final CustomerMapper customerMapper;
     private final ChatConversationMapper conversationMapper;
+    private final PlatformAccountMapper accountMapper;
     private final SimulatedTranslationEngine engine;
     private final Map<String, TranslationProvider> providers;
 
     public TranslationService(TranslationSettingMapper settingMapper, TranslationNodeMapper nodeMapper,
                               TranslationCacheMapper cacheMapper, TranslationCredentialMapper credentialMapper,
                               CustomerMapper customerMapper, ChatConversationMapper conversationMapper,
+                              PlatformAccountMapper accountMapper,
                               SimulatedTranslationEngine engine, List<TranslationProvider> providerBeans) {
         this.settingMapper = settingMapper;
         this.nodeMapper = nodeMapper;
@@ -74,6 +78,7 @@ public class TranslationService {
         this.credentialMapper = credentialMapper;
         this.customerMapper = customerMapper;
         this.conversationMapper = conversationMapper;
+        this.accountMapper = accountMapper;
         this.engine = engine;
         this.providers = providerBeans.stream()
             .collect(Collectors.toMap(TranslationProvider::providerId, Function.identity()));
@@ -105,35 +110,64 @@ public class TranslationService {
         return ScopeSettings.resolve(null, customer, requireSettings(tenantId));
     }
 
+    /** 全局档：唯一不需要定位参数的档位，"库里还没有全局行"由 requireSettings 兜底建行。 */
+    @Transactional
     public TranslationSettingVO updateSettings(Long tenantId, TranslationSettingInput input) {
         return saveInto(requireSettings(tenantId), tenantId, input);
     }
 
-    /** 保存：scope=customer 时从全局整份复制后覆盖，保证"整行取用"成立。 */
+    /**
+     * 客户档：从**全局行**整份复制后覆盖。这里的"整份"是 P6 定下的语义（未提交的列不能是 NULL，
+     * 得是复制那一刻全局的值），复制源不含会话档——客户那一行是全局给这位客户的默认，
+     * 与某一条会话里改过什么无关。
+     * customerId 由控制器解好数字（P-06：档位形态的判定只在一处），所以这里判 null 只可能是
+     * 调用方漏了参数，直接 40000。
+     */
     @Transactional
-    public TranslationSettingVO updateScopedSettings(Long tenantId, String scope, Long scopeKey,
-                                                     TranslationSettingInput input) {
-        if (!"global".equals(scope) && !"customer".equals(scope)) {
-            throw new BizException(40000, "scope 只能是 global 或 customer");
-        }
-        if ("global".equals(scope)) {
-            return updateSettings(tenantId, input);
-        }
-        if (scopeKey == null) {
+    public TranslationSettingVO updateCustomerSettings(Long tenantId, Long customerId, TranslationSettingInput input) {
+        if (customerId == null) {
             throw new BizException(40000, "scope=customer 时必须带 scopeKey");
         }
         Customer customer = customerMapper.selectOne(new LambdaQueryWrapper<Customer>()
-            .eq(Customer::getTenantId, tenantId).eq(Customer::getId, scopeKey).last("LIMIT 1"));
+            .eq(Customer::getTenantId, tenantId).eq(Customer::getId, customerId).last("LIMIT 1"));
         if (customer == null) {
-            throw new BizException(40404, "客户不存在: " + scopeKey);
+            throw new BizException(40404, "客户不存在: " + customerId);
         }
-        TranslationSetting existing = customerRow(tenantId, scopeKey);
+        TranslationSetting existing = customerRow(tenantId, customerId);
         if (existing == null) {
-            existing = copyOf(requireSettings(tenantId), tenantId, scopeKey);
+            existing = copyOf(requireSettings(tenantId), tenantId, "customer", String.valueOf(customerId));
             settingMapper.insert(existing);
         }
-        // updateSettings 只认全局行，这里复用它同样的校验 + 赋值：把行 id 换掉即可。
+        // saveInto 只认"改哪些字段"，行由调用方给：三档共用同一份校验 + 赋值（R5：规则不出现两份）。
         return saveInto(existing, tenantId, input);
+    }
+
+    /**
+     * 会话档。键在 service 内合成（P-06 裁定）：spec §3.3 要求复制源是"这一条会话此刻的生效值"
+     * = `cust ?? global`，而找那位客户要的是 `accountId` + `chatKey` 的投影——只给一条成形键就
+     * 必须反解析它。键只整串比对、不反解析，比参数形态的字面一致更重要。
+     * <p>
+     * 首次建行抄的是 `customerRow ?? global`：从弹层里第一次保存时前端手里那份就是 resolve 的结果，
+     * 整份复制让"新出现的会话行"与"用户此刻看到的值"逐字段相同。合成链与读侧同一条
+     * （`customerOfChat` → `customerRow` → `requireSettings`），所以第一次 PUT 建出的行，
+     * 与 PUT 之前 GET 读到的那一行只差本次改动的那几个字段。
+     */
+    @Transactional
+    public TranslationSettingVO updateConversationSettings(Long tenantId, TranslationSettingInput input) {
+        Long accountId = requireAccount(tenantId, input.accountId());
+        String key = ConversationScopeKey.compose(accountId, input.chatKey());
+        TranslationSetting existing = settingRow(tenantId, "conversation", key);
+        if (existing != null) {
+            return saveInto(existing, tenantId, input);
+        }
+        Long projected = customerOfChat(tenantId, accountId, input.chatKey());
+        TranslationSetting source = projected == null ? null : customerRow(tenantId, projected);
+        if (source == null) {
+            source = requireSettings(tenantId);
+        }
+        TranslationSetting created = copyOf(source, tenantId, "conversation", key);
+        settingMapper.insert(created);
+        return saveInto(created, tenantId, input);
     }
 
     @Transactional
@@ -145,8 +179,48 @@ public class TranslationService {
     }
 
     /**
-     * 校验 + 逐字段赋值 + 写库，全局行与客户行共用同一份（R5：规则不出现两份）。
-     * current 由调用方给：requireSettings 的兜底行，或 updateScopedSettings 的复制行。
+     * 删会话覆盖行 = 这条会话回到"客户档，没有客户档再回全局"。
+     * 形状判定用 `rejectReason` 而不是 `compose`：两者抛的都是 40000，但这条方法要把
+     * "参数不合法"与"库里没有这一行"分开报（C12）——后者是 `cleared:0` 的正常成功，
+     * 拿异常去表达它，界面读到的就是"按钮坏了"。
+     */
+    @Transactional
+    public int clearConversationSettings(Long tenantId, Long accountId, String chatKey) {
+        String reason = ConversationScopeKey.rejectReason(accountId, chatKey);
+        if (reason != null) {
+            throw new BizException(40000, reason);
+        }
+        requireAccount(tenantId, accountId);
+        return settingMapper.delete(new LambdaQueryWrapper<TranslationSetting>()
+            .eq(TranslationSetting::getTenantId, tenantId)
+            .eq(TranslationSetting::getScope, "conversation")
+            .eq(TranslationSetting::getScopeKey, ConversationScopeKey.compose(accountId, chatKey)));
+    }
+
+    /**
+     * 会话档的定位半边之一：`accountId` 必须是**本租户**的账号。判 40000 而不是 40404（spec §7），
+     * 因为调用方拿到的是"你给的这半件配不成一条键"，不是"某个资源不见了"。
+     * <p>
+     * 不拦的后果不自愈：合成出的 `scope_key` 挂在别人家账号名下，读侧按同一条合成链永远查不到这一行，
+     * 界面表现为「保存成功、徽标却不动」，而后端一句不响。
+     */
+    private Long requireAccount(Long tenantId, Long accountId) {
+        if (accountId == null) {
+            throw new BizException(40000, "scope=conversation 时必须带 accountId");
+        }
+        Long owned = accountMapper.selectCount(new LambdaQueryWrapper<PlatformAccount>()
+            .eq(PlatformAccount::getTenantId, tenantId)
+            .eq(PlatformAccount::getId, accountId));
+        if (owned == 0) {
+            throw new BizException(40000, "accountId 不属于本租户: " + accountId);
+        }
+        return accountId;
+    }
+
+    /**
+     * 校验 + 逐字段赋值 + 写库，三档共用同一份（R5：规则不出现两份）。
+     * current 由调用方给：这一档此刻该写的那一行——全局兜底行、客户档的复制行、会话档按合成键
+     * 定位到（或新建）的行。档位判定不在这里，所以这里不可能把行写到别的档上。
      */
     private TranslationSettingVO saveInto(TranslationSetting current, Long tenantId, TranslationSettingInput input) {
         String channel = defaultIfBlank(input.channel(), current.getChannel());
@@ -183,26 +257,30 @@ public class TranslationService {
         return toVO(saved, saved.getScope(), "global".equals(saved.getScope()));
     }
 
-    /** 从全局整份复制一条客户覆盖行——除定位列外的全部字段照抄，之后由 saveInto 打上本次改动。 */
-    private static TranslationSetting copyOf(TranslationSetting global, Long tenantId, Long customerId) {
+    /**
+     * 整份复制一条覆盖行：除定位列外的全部字段照抄，之后由 saveInto 打上本次改动。
+     * `source` 不必是全局行——客户档从全局复制，会话档从"该会话此刻的生效行"复制（见调用处），
+     * 所以源与目标档位都是参数。
+     */
+    private static TranslationSetting copyOf(TranslationSetting source, Long tenantId, String scope, String scopeKey) {
         TranslationSetting row = new TranslationSetting();
         row.setTenantId(tenantId);
-        row.setScope("customer");
-        row.setScopeKey(String.valueOf(customerId));
-        row.setServer(global.getServer());
-        row.setServerMode(global.getServerMode());
-        row.setChannel(global.getChannel());
-        row.setReceiveEnabled(global.getReceiveEnabled());
-        row.setReceiveFromLang(global.getReceiveFromLang());
-        row.setReceiveToLang(global.getReceiveToLang());
-        row.setSendEnabled(global.getSendEnabled());
-        row.setSendFromLang(global.getSendFromLang());
-        row.setSendToLang(global.getSendToLang());
-        row.setVoiceEnabled(global.getVoiceEnabled());
-        row.setPreviewEnabled(global.getPreviewEnabled());
-        row.setEnterToSend(global.getEnterToSend());
-        row.setDisableChinese(global.getDisableChinese());
-        row.setDisableChinesePreventSend(global.getDisableChinesePreventSend());
+        row.setScope(scope);
+        row.setScopeKey(scopeKey);
+        row.setServer(source.getServer());
+        row.setServerMode(source.getServerMode());
+        row.setChannel(source.getChannel());
+        row.setReceiveEnabled(source.getReceiveEnabled());
+        row.setReceiveFromLang(source.getReceiveFromLang());
+        row.setReceiveToLang(source.getReceiveToLang());
+        row.setSendEnabled(source.getSendEnabled());
+        row.setSendFromLang(source.getSendFromLang());
+        row.setSendToLang(source.getSendToLang());
+        row.setVoiceEnabled(source.getVoiceEnabled());
+        row.setPreviewEnabled(source.getPreviewEnabled());
+        row.setEnterToSend(source.getEnterToSend());
+        row.setDisableChinese(source.getDisableChinese());
+        row.setDisableChinesePreventSend(source.getDisableChinesePreventSend());
         return row;
     }
 

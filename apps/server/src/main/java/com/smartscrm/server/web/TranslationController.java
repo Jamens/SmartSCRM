@@ -4,6 +4,7 @@ import com.smartscrm.server.common.ApiResponse;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.security.AuthPrincipal;
 import com.smartscrm.server.service.TranslationService;
+import com.smartscrm.server.service.msg.ConversationScopeKey;
 import com.smartscrm.server.web.dto.CredentialTestDTO;
 import com.smartscrm.server.web.dto.TranslateDTO;
 import com.smartscrm.server.web.dto.TranslationCredentialInput;
@@ -56,21 +57,58 @@ public class TranslationController {
     public ApiResponse<TranslationSettingVO> updateSettings(@AuthenticationPrincipal AuthPrincipal principal,
                                                             @Valid @RequestBody TranslationSettingInput input) {
         String scope = input.scope() == null || input.scope().isBlank() ? "global" : input.scope();
-        Long scopeKey = null;
-        if (input.scopeKey() != null && !input.scopeKey().isBlank()) {
-            try {
-                scopeKey = Long.valueOf(input.scopeKey().trim());
-            } catch (NumberFormatException e) {
-                throw new BizException(40000, "scopeKey 必须是数字客户 id: " + input.scopeKey());
+        return switch (scope) {
+            // 全局档无定位参数；库里没有全局行时由 requireSettings 建。
+            case "global" -> ApiResponse.ok(service.updateSettings(principal.tenantId(), input));
+            // 客户档的键就是客户 id 的十进制形态，数字解析留在这里（P-06：service 只认解好的 id）。
+            case "customer" -> ApiResponse.ok(
+                service.updateCustomerSettings(principal.tenantId(), customerScopeKey(input), input));
+            // 会话档：先就地判形状（`compose` 抛的也是 40000，但这里能给出更好的分派时机），
+            // 再显式拒掉"带 scopeKey"的请求——那条键的形态只有 Java 知道，让调用方递一条成形键进来,
+            // 等于把"键可以拼"这件事重新开放出去（spec §3.4）。
+            case "conversation" -> {
+                String reason = ConversationScopeKey.rejectReason(input.accountId(), input.chatKey());
+                if (reason != null) {
+                    throw new BizException(40000, reason);
+                }
+                if (input.scopeKey() != null && !input.scopeKey().isBlank()) {
+                    throw new BizException(40000, "scope=conversation 用 accountId + chatKey 定位，不接受 scopeKey");
+                }
+                yield ApiResponse.ok(service.updateConversationSettings(principal.tenantId(), input));
             }
+            default -> throw new BizException(40000, "scope 只能是 global / customer / conversation");
+        };
+    }
+
+    /** 客户档的键：既有语义（数字客户 id 的字符串形态），只是从 `updateScopedSettings` 里搬了出来。 */
+    private static Long customerScopeKey(TranslationSettingInput input) {
+        if (input.scopeKey() == null || input.scopeKey().isBlank()) {
+            return null;
         }
-        return ApiResponse.ok(service.updateScopedSettings(principal.tenantId(), scope, scopeKey, input));
+        try {
+            return Long.valueOf(input.scopeKey().trim());
+        } catch (NumberFormatException e) {
+            throw new BizException(40000, "scopeKey 必须是数字客户 id: " + input.scopeKey());
+        }
     }
 
     @DeleteMapping("/settings/customer/{customerId}")
     public ApiResponse<Map<String, Integer>> clearCustomer(@AuthenticationPrincipal AuthPrincipal principal,
                                                            @PathVariable Long customerId) {
         return ApiResponse.ok(Map.of("cleared", service.clearCustomerSettings(principal.tenantId(), customerId)));
+    }
+
+    /**
+     * 两个参数都 `required = false`：少了哪半件都要回 40000 且文案指名道姓（`rejectReason` 供），
+     * 而 Spring 的 `MissingServletRequestParameterException` 到不了那个形状。
+     * 删除的幂等由 `{cleared:0|1}` 如实表达，"本来就没有"不报成失败。
+     */
+    @DeleteMapping("/settings/conversation")
+    public ApiResponse<Map<String, Integer>> clearConversation(@AuthenticationPrincipal AuthPrincipal principal,
+                                                               @RequestParam(required = false) Long accountId,
+                                                               @RequestParam(required = false) String chatKey) {
+        return ApiResponse.ok(Map.of("cleared",
+            service.clearConversationSettings(principal.tenantId(), accountId, chatKey)));
     }
 
     @GetMapping("/nodes")
