@@ -18,7 +18,7 @@ import {
   useTranslationSettings,
   useUpdateTranslationSettings
 } from '@/api/translation'
-import { scopeBadgeOf, settingsScopeOf, type ConversationSettingsRef } from '@/lib/scopeLabel'
+import { conversationRefOf, scopeBadgeOf, settingsScopeOf } from '@/lib/scopeLabel'
 import { ApiError } from '@/lib/http'
 import { draftOf, dirtyCount, type DirectionDraft } from '@/lib/directionDraft'
 
@@ -42,7 +42,8 @@ export default function ConversationSettingsDialog({
   open,
   onOpenChange
 }: Props): React.JSX.Element {
-  const ref: ConversationSettingsRef = { kind: 'conversation', accountId, chatKey }
+  // 档位定位那一格由 `conversationRefOf` 一处成形（与读侧、缓存键、URL 参数同一作者），不在这里手写第二份。
+  const ref = conversationRefOf(accountId, chatKey)
   const { data } = useTranslationSettings(ref)
   const save = useUpdateTranslationSettings()
   const reset = useResetConversationTranslationSettings()
@@ -50,14 +51,16 @@ export default function ConversationSettingsDialog({
 
   // 与 `CustomerDirectionDialog` 同一套铺法：只在打开那一瞬间抓一次初值。
   // 按 `data` 无条件重铺的话，保存后的整前缀失效会触发一次 refetch，把用户改到一半的表单抹回库里值。
-  // `save` / `reset` 不进依赖：`useMutation` 每次渲染回的都是新对象，而 `reset()` 一定 notify 一次，
-  // 把它们写进依赖就是"关闭态下每帧重跑本效应"的死循环。换会话由调用方按 `accountId:chatKey` 重挂本组件，
-  // 不靠这里的依赖数组铺新表单。
+  // `save` / `reset` 不进依赖：`useMutation` 每次渲染回的都是新对象，而 `mutationObserver.reset()`
+  // 无条件 notify 一次，把它们写进依赖就是"关闭态下每帧重跑本效应"的无限重渲染。
+  // 本组件的 `accountId` / `chatKey` 由调用方在点开那一刻定死（`AccountStage` 的 `settingsTarget`），
+  // 存续期内不会换会话，所以初值只需要铺一次；关闭即整棵卸载，下一次点开是新实例。
   useEffect(() => {
     if (!open) {
       setDraft(null)
-      // Radix 关闭只卸载 `DialogContent`，组件本体常驻：不清错误态的话，重开弹层第一眼看过去的
-      // "保存失败"是上一轮的残留，那是假话。
+      // 本舞台的调用方是"关闭即卸载"，走不到这一支；留着是给以后改成常驻复用（像客户档那个弹层，
+      // Radix 关闭只卸载 `DialogContent`、组件本体常驻）的调用方兜底：不清错误态的话，重开弹层
+      // 第一眼看过去的"保存失败"是上一轮的残留，那是假话。
       save.reset()
       reset.reset()
       return
@@ -71,6 +74,14 @@ export default function ConversationSettingsDialog({
   // 所以第一次打开时它多半写着「沿用全局」——那正是下面那句提示要交代的东西。
   const badge = data ? scopeBadgeOf(data.scope) : '…'
   const ownRow = data?.scope === 'conversation'
+  // 那句"谁不动"按后端答的 `scope` 判，不拿徽标文案去比：文案是给人读的，改一个字就会让
+  // "该客户的设置不动"悄悄变成"全局设置不动"。`scope` 认不出来时如实说未识别，不替它猜一档。
+  const inheritHint =
+    data?.scope === 'customer'
+      ? '该客户的设置不动'
+      : data?.scope === 'global'
+        ? '全局设置不动'
+        : '生效档未识别，保存只写这一档'
 
   const submit = (): void => {
     if (!data || !draft) return
@@ -97,8 +108,8 @@ export default function ConversationSettingsDialog({
             >
               {chatKey}
             </span>
-            未关联客户时这是这条会话的唯一标识。只改语种与线路：开关位（先译再发 / 接收翻译 / 输入框预览 /
-            中文拦截）本阶段仍是全局那一份。
+            未关联客户时这是这条会话的唯一标识。只改语种与线路：开关位（先译再发 / 接收翻译 /
+            输入框预览 / 中文拦截）本阶段仍是全局那一份。
           </DialogDescription>
         </DialogHeader>
 
@@ -121,7 +132,7 @@ export default function ConversationSettingsDialog({
               <span className="text-[11px] text-muted-foreground">
                 {ownRow
                   ? '这一档已有覆盖行，保存会整份覆盖它。'
-                  : `保存后只为这条会话建一份覆盖，${badge === '该客户专属' ? '该客户的设置' : '全局设置'}不动。`}
+                  : `保存后只为这条会话建一份覆盖，${inheritHint}。`}
               </span>
             </div>
 
