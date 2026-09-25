@@ -3,6 +3,7 @@ import { getSession } from '../../state/session'
 import { getMainWindow } from '../../window/mainWindow'
 import { viewManager } from '../../webContentsView/manager'
 import { platformOfAccountType } from '@shared/chatPlatform'
+import { activeChatKeyOf } from '@shared/chatKeys'
 import type {
   BridgeCommand,
   BridgeReport,
@@ -68,8 +69,16 @@ function broadcastState(): void {
   getMainWindow()?.webContents.send('msg:state', states)
 }
 
+/**
+ * 桥状态的唯一组装口：`msg:state` 广播（`broadcastState`）与 `msg:bridges` 初次拉取（`main/ipc.ts`）
+ * 都读这里，所以两个出口不可能给渲染层两份不同的"最后已知值"。
+ * `activeChatKey` 在这一处补上，不在 `BridgeMount.state()` 里——那条 map 不属于单条桥（P-08）。
+ */
 export function bridgeStates(): BridgeState[] {
-  return [...mounts.values()].map((m) => m.state())
+  return [...mounts.values()].map((m) => {
+    const core = m.state()
+    return { ...core, activeChatKey: activeChatKeyOf(activeChatOf(core.viewId)) }
+  })
 }
 
 export function activeChatOf(viewId: string): string | null {
@@ -115,7 +124,13 @@ export function observeLoginStatus(viewId: string, isLogin: boolean): void {
     console.log(`[msgBridge] login-status view=${viewId} isLogin=${isLogin}`)
   }
   if (!isLogin) {
+    // 登出这一刻，主进程手里就不再有"这个视图在看哪条会话"的可靠答案：清掉，并让渲染层看见这次清除。
+    // 广播条件读的是**当前值**而不是"这一帧有没有登录翻转"：注入层每 3s 报一次登录态，
+    // 无条件广播会把"登出静置"变成每 3s 一帧 IPC；而只在第一次翻转时广播又会漏掉
+    // "先有会话、后报登出"这一格。判"有值可清"两边都-cover：清完即 null，下一次自然不播。
+    const had = activeChatOf(viewId)
     activeChat.set(viewId, null)
+    if (had !== null) broadcastState()
     return
   }
   const known = accountOfView(viewId)
@@ -278,6 +293,12 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
   }
   if (report.kind === 'active_chat') {
     activeChat.set(viewId, report.chatKey ?? null)
+    // 切会话要让工作台那颗按钮跟着翻。不新开 `active-chat-changed` 通道（D-04）：
+    // `msg:state` 是"最后已知值"的单一来源，再开一条就等于同一件事有两个真值。
+    // 代价是每次切会话多广播一帧（最多 7 个视图、一帧 IPC）。这一支不会被 3s 心跳触发：
+    // 页侧只有两处发 `active_chat`——wa-js 的 `chat.active_chat` 事件与 `open_chat` 命令回执
+    // （`bridge/whatsapp/collect.ts` 的 `reportActiveChat` / `watchActiveChat`），都是事件驱动。
+    broadcastState()
     return
   }
   mount?.handle(report)

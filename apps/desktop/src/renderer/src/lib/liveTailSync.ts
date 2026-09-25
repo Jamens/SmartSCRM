@@ -250,6 +250,13 @@ interface P6Probe {
   settle: (input: { accountId: number; chatKey: string; localId: string; msgKey?: string }) => void
   read: (accountId: number, chatKey: string) => ThreadRow[]
   bridgeStates: () => BridgeState[]
+  /**
+   * 手喂一份桥状态进渲染层那份缓存（dev-only）。spec §8 CDP 行 1 要断**两种失败形态分得开**，
+   * 而 `ready===true && activeChatKey===null` 那一格在没有真 WhatsApp 登录的机器上造不出来。
+   * 写的是 `useBridgeOf` 读的同一个键，所以消费链是真的；布景本身不是——它证明"渲染层读对了这两个字段"，
+   * 不证明"真桥会不会给值"（后者仍是真实登录档，Task 11）。
+   */
+  setBridges: (states: BridgeState[]) => void
 }
 
 /**
@@ -280,7 +287,8 @@ export function useLiveTailSync(): void {
           settleLocalId(qc, input),
         read: (accountId: number, chatKey: string) =>
           qc.getQueryData<ThreadRow[]>(tailKey(accountId, chatKey)) ?? [],
-        bridgeStates: () => qc.getQueryData<BridgeState[]>(queryKeys.bridges) ?? []
+        bridgeStates: () => qc.getQueryData<BridgeState[]>(queryKeys.bridges) ?? [],
+        setBridges: (states: BridgeState[]) => qc.setQueryData<BridgeState[]>(queryKeys.bridges, states)
       }
     }
     return () => {

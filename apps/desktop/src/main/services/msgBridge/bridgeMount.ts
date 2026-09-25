@@ -3,7 +3,7 @@ import { createHash } from 'crypto'
 import { readFileSync, statSync } from 'fs'
 import { join } from 'path'
 import { app, type WebContents } from 'electron'
-import type { BridgeCommand, BridgeInstallConfig, BridgeReport, BridgeState } from '@shared/chatTypes'
+import type { BridgeCommand, BridgeInstallConfig, BridgeReport, BridgeState, BridgeStateCore } from '@shared/chatTypes'
 
 const READY_TIMEOUT_MS = 10_000
 const HEARTBEAT_MS = 30_000
@@ -61,7 +61,7 @@ export interface MountOptions {
   platform: BridgeInstallConfig['platform']
   historyLimit: number
   webContents: WebContents
-  onState: (state: BridgeState) => void
+  onState: (state: BridgeStateCore) => void
   /** 主 → 页的唯一下行出口，由 index 传 `viewManager.sendToView`。 */
   pushToView: (viewId: string, cmd: BridgeCommand) => void
 }
@@ -91,7 +91,7 @@ export class BridgeMount {
     return this.phase === 'ready'
   }
 
-  state(): BridgeState {
+  state(): BridgeStateCore {
     return {
       viewId: this.opts.viewId,
       accountId: this.opts.accountId,

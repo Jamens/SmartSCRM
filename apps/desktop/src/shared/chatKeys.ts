@@ -17,3 +17,28 @@ export function peerPhoneOfChatKey(chatKey: string | null | undefined): string |
   const m = WA_PEER.exec(chatKey)
   return m ? m[1] : null
 }
+
+/** 与后端 `ConversationScopeKey.CHAT_KEY_MAX` 同一个数字，也是 `chat_conversation.chat_key` 的列宽。 */
+export const CHAT_KEY_MAX = 128
+
+// eslint-disable-next-line no-control-regex
+const UNUSABLE = /[\s\x00-\x1f\x7f]/
+
+/**
+ * 「这个视图此刻正在看哪个会话」的唯一裁剪处。主进程两个出口共用它：
+ * 翻译请求的盖章（`webContentsView/ipc.ts`）与桥状态广播（`msgBridge/index.ts` 的 `bridgeStates()`）。
+ *
+ * 判定只做两件事：空白 / 含任何空白或控制符 / 超过 128 → `null`，其余**原样**。
+ * 不 trim、不折叠大小写、不按后缀分平台——`scope_key` 与 `chat_key` 两列都是二进制比较，
+ * 这里"顺手 normalize"一次，盖章处与入库处就差一个字符。
+ *
+ * 与 Java 那道闸的差别只朝安全方向开：JS 的 `\s` 认全角空格与 U+00A0，Java 的 `\s` 不认。
+ * 于是这类键在页内会被丢掉（按钮不亮、翻译不带 chatKey），而直接打 HTTP 仍可写入。
+ * 别反过来把这边放宽去对齐——那会打开"按钮点亮了但那条会话从没被采到过"的方向。
+ */
+export function activeChatKeyOf(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  if (raw.length > CHAT_KEY_MAX) return null
+  if (UNUSABLE.test(raw)) return null
+  return raw
+}
