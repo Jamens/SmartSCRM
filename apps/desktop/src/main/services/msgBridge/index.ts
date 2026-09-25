@@ -351,10 +351,12 @@ export function requestBackfill(accountId: number): boolean {
 export function unmountView(viewId: string): void {
   const mount = mounts.get(viewId)
   lastLoginSeen.delete(viewId)
+  // 清 map 不依赖"这条视图曾经挂上过桥"：mount 不在也要把活动会话抹掉，
+  // 否则同一 viewId 重挂时，上一次的会话会先被广播当成当前值。
+  activeChat.delete(viewId)
   if (!mount) return
   mount.dispose()
   mounts.delete(viewId)
-  activeChat.delete(viewId)
   broadcastState()
 }
 
