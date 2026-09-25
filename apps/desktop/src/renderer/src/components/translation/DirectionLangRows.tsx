@@ -18,35 +18,32 @@ const GRID_NO_SWITCH = 'grid-cols-[52px_minmax(0,1fr)_14px_minmax(0,1fr)]'
  * 语向的一行（收 / 发各一行）。从 `CustomerDirectionDialog` 原位提出，两个弹层共用一份控件——
  * 会话档那一行**没有开关**（spec §6：那里的开关位既不在后端设闸也不在页内生效，
  * 给了就是一颗按了没反应的按钮；值由 §3.3 的整份复制从生效行带过去）。
- * `enabled` 缺省时那一整列不渲染，其余部分（标题、两个语种下拉）与带开关时逐字段同形，
- * 所以两个弹层里"收信"那一行的语种位置不会错位一格。
+ * 不给开关时那一整列不渲染：语种下拉因此比带开关时左移一格（64px + 8px 的列宽），
+ * 所以**同一个弹层里两种形态不要混用**——对齐的单位是弹层，不是弹层之间。
+ * 带开关时的标记结构与提出之前逐字段相同（列宽、子节点顺序、`v === true` 的收窄、只有源侧 `allowAuto`）。
  */
-export function LangRow({
-  title,
-  enabled,
-  onEnabled,
-  from,
-  to,
-  onFrom,
-  onTo,
-  channel
-}: {
+type LangRowProps = {
   title: string
-  enabled?: boolean
-  onEnabled?: (v: boolean) => void
   from: string
   to: string
   onFrom: (v: string) => void
   onTo: (v: string) => void
   channel: string
-}): React.JSX.Element {
-  const hasSwitch = enabled !== undefined && onEnabled !== undefined
+} & (
+  | { enabled: boolean; onEnabled: (v: boolean) => void }
+  // `?: never`：只给两个字段里的一个是类型错误，而不是"静默少一列"。
+  | { enabled?: never; onEnabled?: never }
+)
+
+export function LangRow(props: LangRowProps): React.JSX.Element {
+  const { title, from, to, onFrom, onTo, channel } = props
+  const sw = props.enabled !== undefined ? props : null
   return (
-    <div className={`grid ${hasSwitch ? GRID_WITH_SWITCH : GRID_NO_SWITCH} items-center gap-2`}>
+    <div className={`grid ${sw ? GRID_WITH_SWITCH : GRID_NO_SWITCH} items-center gap-2`}>
       <span className="text-xs text-muted-foreground">{title}</span>
-      {hasSwitch && (
+      {sw && (
         <div>
-          <Switch checked={enabled} onCheckedChange={(v) => onEnabled(v === true)} />
+          <Switch checked={sw.enabled} onCheckedChange={(v) => sw.onEnabled(v === true)} />
         </div>
       )}
       <LangSelect value={from} allowAuto options={sourceLanguagesFor(channel)} onChange={onFrom} />
