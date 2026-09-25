@@ -34,6 +34,10 @@ class ConversationScopeKeyTest {
             () -> ConversationScopeKey.compose(null, "8613800001001@c.us")).getCode());
         assertEquals(40000, assertThrows(BizException.class,
             () -> ConversationScopeKey.compose(5L, null)).getCode());
+        // 空串是"chatKey 缺一个"的另一种字面形态（spec §7 第一行按 40000 处理的那件事），必须与 null 同等对待：
+        // 放过去就写出一条 "5:" 的行——没有任何真实会话等于它，保存报成功而这一档永远不生效（spec §3.4）。
+        assertEquals(40000, assertThrows(BizException.class,
+            () -> ConversationScopeKey.compose(5L, "")).getCode(), "空 chatKey 不能成形成「5:」");
         assertEquals(40000, assertThrows(BizException.class,
             () -> ConversationScopeKey.compose(5L, "   ")).getCode());
     }
@@ -48,6 +52,10 @@ class ConversationScopeKeyTest {
 
     @Test
     void rejectsOverlongChatKey() {
+        // 本类的其它用例一律隔着 CHAT_KEY_MAX 看这个数字，所以它自己必须在这里被钉一次：
+        // 它是 chat_conversation.chat_key 的列宽，也是 160 那道键宽（19 + 1 + 128 = 148）的加数之一。
+        assertEquals(128, ConversationScopeKey.CHAT_KEY_MAX,
+            "chat_conversation.chat_key 列宽；改这里要同改 V8 与 @shared/chatKeys.ts");
         String atLimit = "x".repeat(ConversationScopeKey.CHAT_KEY_MAX);
         String over = "x".repeat(ConversationScopeKey.CHAT_KEY_MAX + 1);
         assertEquals("5:" + atLimit, ConversationScopeKey.compose(5L, atLimit));
@@ -86,9 +94,11 @@ class ConversationScopeKeyTest {
     @Test
     void rejectReasonStatesAReasonInsteadOfJustRefusing() {
         assertNull(ConversationScopeKey.rejectReason(5L, "8613800001001@c.us"), "可成形时必须回 null");
+        String empty = ConversationScopeKey.rejectReason(5L, "");
         String[] reasons = {
             ConversationScopeKey.rejectReason(null, "8613800001001@c.us"),
             ConversationScopeKey.rejectReason(5L, null),
+            empty,
             ConversationScopeKey.rejectReason(5L, "   "),
             ConversationScopeKey.rejectReason(5L, "8613800001001@c.us "),
             ConversationScopeKey.rejectReason(5L, "861380000100 1@c.us"),
@@ -97,5 +107,18 @@ class ConversationScopeKeyTest {
         for (String reason : reasons) {
             assertTrue(reason != null && !reason.isBlank(), "每条不成形都得带回一句话，空串到前端就是一片空白: " + reason);
         }
+        // 四道闸各钉一句文案：只断 40000 的话四道闸在测试里是同一个数字，看不出此刻是哪道闸在岗。
+        // 撤掉 `chatKey.isBlank()` 那道闸，"" 会一路走到成形（compose 直接回 "5:"，写出一条幻影行），
+        // 而 "   " 改由末尾的 FORBIDDEN 顺手拦下——同样是 40000，两句必须分得开才对得上 §3.4。
+        assertEquals("scope=conversation 时必须带 accountId",
+            ConversationScopeKey.rejectReason(null, "8613800001001@c.us"));
+        assertEquals("scope=conversation 时必须带 chatKey", empty,
+            "空串归「缺 chatKey」那道闸管，不算 FORBIDDEN");
+        assertEquals("scope=conversation 时必须带 chatKey", ConversationScopeKey.rejectReason(5L, "   "),
+            "整串空白也归「缺 chatKey」那道闸管");
+        assertEquals("chatKey 最长 " + ConversationScopeKey.CHAT_KEY_MAX + " 字符",
+            ConversationScopeKey.rejectReason(5L, "x".repeat(ConversationScopeKey.CHAT_KEY_MAX + 1)));
+        assertEquals("chatKey 不能含空白或控制字符",
+            ConversationScopeKey.rejectReason(5L, "861380000100 1@c.us"));
     }
 }
