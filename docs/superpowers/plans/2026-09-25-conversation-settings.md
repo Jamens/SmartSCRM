@@ -49,7 +49,7 @@
 | 层 | 谁来做 | 通过标准 |
 |---|---|---|
 | 迁移 | 启动日志 + 老行仍读得到 | Flyway 打印应用到 version `9`；`GET /api/translation/settings` 回到同一份全局行（**区分"应用了"与"重建空了"**）；列宽/排序规则无直接证据，由 Task 5 第 1 行的行为差异充当 |
-| Java 纯函数 | scoped `./mvnw test -Dtest='ConversationScopeKeyTest,ScopeSettingsTest'`（Task 2/3）、全量 `./mvnw test`（Task 10） | `ConversationScopeKeyTest` 6 条 + `ScopeSettingsTest` 4 条（三档组合），全量 `Failures: 0, Errors: 0` |
+| Java 纯函数 | scoped `./mvnw test -Dtest='ConversationScopeKeyTest,ScopeSettingsTest'`（Task 2/3）、全量 `./mvnw test`（Task 10） | `ConversationScopeKeyTest` 8 条 + `ScopeSettingsTest` 4 条（三档组合），全量 `Failures: 0, Errors: 0` |
 | 后端契约 | `tmp/p7a-conv-settings.mjs`（Node，打 8180，中文载荷走 UTF-8 文件） | 16 条 `check` 全绿：spec §8 那 8 行（大小写敏感、三档优先级、回落、整份复制源、缓存分键、开关位不设闸、DELETE 幂等）+ 边界五例 `5a..5e` + 收尾三条；打印 `ALL PASS (16/16)`，exit 1=断言失败 / exit 2=前提不成立 |
 | TS 纯函数 | `pnpm --dir apps/desktop test:unit` | `activeChatKeyOf` 9 条（Task 6）+ `scopeLabel` 18 条（Task 7）+ `directionDraft` 线路新增 2 条（Task 8，另有一条既有断言随 `channel` 改形）全绿，计数 = 实测基线 + 29（C14）；TS 侧**不得**出现会话键拼装函数（出现即实现越了 spec §3.4 的范围） |
 | 渲染层 | CDP `tmp/p7a-stage-dialog.mjs`，真实鼠标/键盘（C10） | **六行 32 条**：禁用链两种形态分别断言、真实改语种→保存→徽标翻成本会话专属**且从后端按同键读回**、恢复继承翻回它下面那一档、切会话后回复框生效档徽标跟着变、回复框开关写回会话档那一行而全局与客户行一字未动、客户档弹层保存后线路一字未动（P-07 的回归口） |
@@ -344,7 +344,11 @@ cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.
   ./mvnw test -Dtest='ConversationScopeKeyTest' 2>&1 | grep -E "Tests run|BUILD" | tail -4
 ```
 
-期望：`Tests run: 6, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`。
+期望：`Tests run: 8, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`。
+
+（实测 8 条，不是本计划推演的 6 条：brief 那 6 条之外，实现阶段补了 2 条尾随空白的判据——
+`utf8mb4_bin` 是 PAD SPACE 排序规则，`"…:AA@c.us "` 与 `"…:AA@c.us"` 在唯一键里相等，
+唯一能挡的地方就是这里。变异取证见 `.superpowers/sdd/…/task-2-report.md`。）
 
 - [ ] **Step 5: Commit**
 
@@ -704,7 +708,7 @@ cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.
   ./mvnw test 2>&1 | grep -E "Tests run:|BUILD|ERROR" | tail -12
 ```
 
-期望：`BUILD SUCCESS`，`Tests run` 汇总里 `Failures: 0, Errors: 0`，且 `ScopeSettingsTest` 4 条 + `ConversationScopeKeyTest` 6 条都在跑（`-Dtest` 不带时是全量，P6 那六个测试类一条都不能少）。
+期望：`BUILD SUCCESS`，`Tests run` 汇总里 `Failures: 0, Errors: 0`，且 `ScopeSettingsTest` 4 条 + `ConversationScopeKeyTest` 8 条都在跑（`-Dtest` 不带时是全量，P6 那六个测试类一条都不能少）。
 
 **没有 `@SpringBootTest`**（`src/test/.../mapper/` 是空的），所以 service 构造器与 bean 装配的错**只有启动时才暴露**——本任务恰好动了 `toVO` / `resolveSetting`，必须真起一次：
 
@@ -1027,7 +1031,7 @@ import 区补 `com.smartscrm.server.entity.PlatformAccount` 与 `com.smartscrm.s
 cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.18" && set -o pipefail && ./mvnw test 2>&1 | grep -E "Tests run:|BUILD|ERROR" | tail -8
 ```
 
-期望：`BUILD SUCCESS`、`Failures: 0, Errors: 0`，`ConversationScopeKeyTest` 6 条与 `ScopeSettingsTest` 4 条都在跑，P6/P5 那八个测试类一条不少。
+期望：`BUILD SUCCESS`、`Failures: 0, Errors: 0`，`ConversationScopeKeyTest` 8 条与 `ScopeSettingsTest` 4 条都在跑，P6/P5 那八个测试类一条不少。
 
 然后按 C8 重启（**这一条不能跳**：`PlatformAccountMapper` 是新增的构造参数，Spring 装配错只在启动时暴露，`./mvnw test` 里没有 `@SpringBootTest`，测不出它）：
 
