@@ -8,12 +8,13 @@ public record TranslateDTO(
     @NotBlank(message = "type 不能为空") String type,
     Boolean input,
     Boolean noCache,
-    /** 可空：带上即按该客户的语向解析（scope=customer 覆盖行优先，缺省回全局）。 */
+    /** 可空：会话档没命中时用它定位客户档；不带则由 `accountId` + `chatKey` 投影出会话挂的客户。 */
     Long customerId,
     /**
      * 可空：不带即按全局译，P5 的调用方一字不改。
-     * 生效语向的解析顺序固定为 显式 customerId -> (tenantId, accountId, chatKey) 的会话投影 -> 全局，
-     * 会话投影是显式 customerId 的缺省填充，不是能压过它的另一条通道。
+     * 生效档的解析顺序固定为 conversation 档 -> customer 档 -> global（spec §3.2 / 裁定 D-01），
+     * 与请求带了哪几个字段无关：`accountId` + `chatKey` 齐备就先查会话档，命中即止；
+     * 没命中才取 `customerId`（显式带的那一个，或由 `chatKey` 投影出来的那一位）查客户档。
      * 128 与 `chat_conversation.chat_key` 同宽：主进程在盖章处已经裁过一刀，这一层是给
      * 直接打 HTTP 的调用方（记录页、契约脚本）留的兜底，超长只可能是坏请求而不是长会话。
      */

@@ -39,10 +39,17 @@ public class TranslationController {
         this.service = service;
     }
 
+    /**
+     * 三个作用域参数按 spec §3 的形态给：都不带 = 全局；带 `customerId` = 客户档优先；
+     * `accountId` + `chatKey` **齐备** = 会话档优先。只带其中一个等于没带（`composeOrNull` 回 null，
+     * 不查这一档、也不报错——读取那条链的容错口径见 Task 2 那条 javadoc）。
+     */
     @GetMapping("/settings")
     public ApiResponse<TranslationSettingVO> getSettings(@AuthenticationPrincipal AuthPrincipal principal,
-                                                         @RequestParam(required = false) Long customerId) {
-        return ApiResponse.ok(service.getSettings(principal.tenantId(), customerId));
+                                                         @RequestParam(required = false) Long customerId,
+                                                         @RequestParam(required = false) Long accountId,
+                                                         @RequestParam(required = false) String chatKey) {
+        return ApiResponse.ok(service.getSettings(principal.tenantId(), customerId, accountId, chatKey));
     }
 
     @PutMapping("/settings")
