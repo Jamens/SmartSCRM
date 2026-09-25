@@ -49,12 +49,15 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
   const stageAccountId = account?.id ?? null
   const bridge = useBridgeOf(stageAccountId)
   const activeChatKey = bridge?.activeChatKey ?? null
-  // 「会话设置」的目标在**点开那一刻**定死，不攥活值。`activeChatKey` 是主进程推来的活值，而 Radix 的
-  // 模态挡不住下面那颗原生视图——用户能在弹层开着时点进另一条会话。攥活值有两种坏法：弹层原地换目标
-  // （`draft` 还是上一条的，保存就把上一条编辑出的语向写到新会话的键上），或目标消失时整棵卸载、
-  // `open` 旗标却留在这一层（切回该账号，弹层自己开了回来）。定死后两条都不成立：弹层的 props
-  // 一生只描述一条会话，关闭就是把这一格抹成 null。顺带少一类请求——没点开就不挂载，也就没有
-  // "每切一次会话打一次 GET /settings"（挂载着的组件里那个 `useTranslationSettings` 是会发的）。
+  // 「会话设置」的目标在**点开那一刻**定死，不攥活值。`activeChatKey` 是主进程 `msg:state` 推来的活值，
+  // 而推送链不受弹层管辖：桥掉线、WhatsApp 退出登录都会推来一帧 null。（"用户点开弹层后还能点进另一条
+  // 会话"这一条**不成立**——浮层出现时 `useWebContentsView` 会 `viewService.hideAll()` 收起原生视图。
+  // 但结构不能靠那道外部保证撑着，因为攥活值的两种坏法各自都不需要谁去点：）
+  // ① 目标原地换掉：`draft` 还是上一条会话的，保存就把上一条编辑出的语向写到新会话的键上；
+  // ② 目标消失（null）时整棵子树被卸载，"开着"这件事却留在这一层——切回该账号，弹层自己开了回来。
+  // 定死后两条都不成立：一个实例的 props 一生只描述一条会话，关闭就是把这一格抹成 null。
+  // 顺带少一类请求——没点开就不挂载，也就没有"每切一次会话打一次 GET /settings"
+  //（挂载着的组件里那个 `useTranslationSettings` 是会发的）。
   const [settingsTarget, setSettingsTarget] = useState<SettingsTarget | null>(null)
 
   if (!account) {
@@ -155,8 +158,13 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
           目标取自 `settingsTarget` 而不是活值，所以一个实例存续期内 props 恒定；`key` 再钉一道：
           换成另一条会话必须是新实例，不能就地换 props——`draft` 只在初值那一次铺，props 变了
           而 draft 没变就是把上一条会话编辑出的语向写到新会话的键上。今天这一格靠"先关才可能再开"
-          走不到（模态挡着工具条），但那道论证在弹层外面，不写进结构里就等着哪天被人推翻。 */}
-      {settingsTarget !== null && (
+          走不到（浮层收起原生视图、也盖住工具条），但那道论证在弹层外面，不写进结构里就等着哪天被人推翻。
+          `settingsTarget.accountId === stageAccountId` 那一格挡的是同一类的另一半：上面那道
+          `if (!account)` 提前返回也是一次渲染路径上的卸载（侧栏删掉这个账号、背景 refetch 让这一行消失
+          都会走到）。卸载不会替我们把 `settingsTarget` 抹掉，于是账号回来时弹层自己开回来，
+          而且可能开在另一个账号名下——那一刻写的是 `settingsTarget` 里的账号，用户看的却是另一个。
+          不匹配即不挂载，等于把"这一档还属于眼前这个舞台"做成挂载条件的一部分。 */}
+      {settingsTarget !== null && settingsTarget.accountId === stageAccountId && (
         <ConversationSettingsDialog
           key={`${settingsTarget.accountId}:${settingsTarget.chatKey}`}
           accountId={settingsTarget.accountId}

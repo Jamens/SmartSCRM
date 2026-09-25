@@ -96,7 +96,7 @@ export default function ConversationSettingsDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <SlidersHorizontal className="size-4 text-primary" />
-            当前会话的语向
+            这一条会话的语向
           </DialogTitle>
           <DialogDescription>
             只作用于这一条会话，优先级高于该客户的语向与全局设置。
