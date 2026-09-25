@@ -40,6 +40,7 @@ import {
   type TranslationSettingInput,
   type TranslationSettingVO
 } from '@/api/translation'
+import { GLOBAL_REF } from '@/lib/scopeLabel'
 import {
   ENGINE_LANGUAGES,
   TRANSLATION_CHANNELS,
@@ -65,7 +66,7 @@ function delayText(delay: number | null): string {
 }
 
 export default function TranslationPage(): React.JSX.Element {
-  const settingsQuery = useTranslationSettings()
+  const settingsQuery = useTranslationSettings(GLOBAL_REF)
   const nodesQuery = useTranslationNodes()
   const statsQuery = useTranslationCacheStats()
   const credentialsQuery = useTranslationCredentials()

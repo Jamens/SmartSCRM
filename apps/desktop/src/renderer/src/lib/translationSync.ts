@@ -1,5 +1,6 @@
 import { useEffect, useRef } from 'react'
 import { useTranslationSettings, type TranslationSettingVO } from '@/api/translation'
+import { GLOBAL_REF } from '@/lib/scopeLabel'
 import { viewService } from '@/services/viewService'
 
 const CHANNEL = 'update-translation-flags'
@@ -59,7 +60,7 @@ export async function broadcastTranslationFlags(settings: TranslationSettingVO):
  * including views created after the last settings change (spec §5.4).
  */
 export function useTranslationSync(): void {
-  const settingsQuery = useTranslationSettings()
+  const settingsQuery = useTranslationSettings(GLOBAL_REF)
   const pushed = useRef(false)
 
   useEffect(() => {

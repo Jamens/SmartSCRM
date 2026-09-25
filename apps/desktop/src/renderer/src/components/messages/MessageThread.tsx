@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button'
 import MessageBubble from '@/components/messages/MessageBubble'
 import { useMarkRead, useMessages, type ConversationVO } from '@/api/messages'
 import { useTranslationSettings } from '@/api/translation'
+import { conversationRefOf } from '@/lib/scopeLabel'
 import { gateDraft, TOO_LONG_HINT } from '@/lib/sendDraft'
 import { useSendText, useThreadRows } from '@/lib/liveTailSync'
 import { dayLabel, groupByDay } from '@/lib/chatDays'
@@ -47,12 +48,15 @@ export default function MessageThread({
   const sections = useMemo(() => groupByDay(rows), [rows])
   /**
    * 失败气泡的「重试」走同一条发送链（新 localId = 新气泡），不另开一条路。
-   * 设置读的是回复框那一层（同一个 `customerId`、同一份缓存条目，TanStack 会去重），因为
+   * 设置读的是回复框那一层（同一个 `accountId + chatKey`、同一份缓存条目，TanStack 会去重——
+   * 去重靠的是缓存键，两个组件传的是同一个会话 ref，所以还是同一条缓存），因为
    * **重试也必须过闸**：`MessageBubble` 的失败插槽对任何 `out` + `failed` 的行都会出现，
    * 里面包含 `source:'native_send'`（在页面里发的、本应用从没判过正文的那一类），
    * 那些正文从没走过 `decideDraft`。不闸一次，就是"中文拦截开着时点一下重试，中文原样出去"。
    */
-  const { data: settings } = useTranslationSettings(conversation.customerId)
+  const { data: settings } = useTranslationSettings(
+    conversationRefOf(accountId, conversation.chatKey)
+  )
   const { send } = useSendText(accountId, conversation.chatKey)
   /**
    * 重入闸：**每个失败行一个在飞名额**，第二次激活是空操作。

@@ -24,7 +24,9 @@
     "src/renderer/src/lib/directionDraft.ts",
     "src/renderer/src/lib/directionDraft.test.ts",
     "src/renderer/src/lib/chatTimeline.ts",
-    "src/renderer/src/lib/chatTimeline.test.ts"
+    "src/renderer/src/lib/chatTimeline.test.ts",
+    "src/renderer/src/lib/scopeLabel.ts",
+    "src/renderer/src/lib/scopeLabel.test.ts"
   ],
   "compilerOptions": {
     "composite": false,

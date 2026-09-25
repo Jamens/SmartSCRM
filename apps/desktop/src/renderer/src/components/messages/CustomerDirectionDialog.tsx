@@ -21,6 +21,7 @@ import {
 } from '@/api/translation'
 import { sourceLanguagesFor, targetLanguagesFor } from '@/lib/langData'
 import { ApiError } from '@/lib/http'
+import { customerRefOf } from '@/lib/scopeLabel'
 import { draftOf, dirtyCount, type DirectionDraft } from '@/lib/directionDraft'
 
 function LangRow({
@@ -66,7 +67,7 @@ export default function CustomerDirectionDialog({
   open,
   onOpenChange
 }: Props): React.JSX.Element {
-  const { data } = useTranslationSettings(customerId)
+  const { data } = useTranslationSettings(customerRefOf(customerId))
   const save = useUpdateTranslationSettings()
   const reset = useResetCustomerTranslationSettings()
   const [draft, setDraft] = useState<DirectionDraft | null>(null)
