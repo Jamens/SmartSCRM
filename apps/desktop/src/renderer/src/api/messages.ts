@@ -7,6 +7,7 @@ import {
 } from '@tanstack/react-query'
 import dayjs from 'dayjs'
 import { http } from '@/lib/http'
+import { SETTINGS_KEY } from '@/api/translation'
 // 搜索门槛只有一份字面量：`SearchPanel` 用它写"至少几个字"的提示，这里用它决定 `enabled`。
 // 依赖方向是 api → lib（`chatSearch` 是纯模块，不 import 本文件，否则闸门里 `node --test` 会被
 // react-query 整套依赖拖住），所以常量放在 `chatSearch` 两侧都读得到。
@@ -331,6 +332,10 @@ export function useLinkCustomer() {
               }
             : data
       )
+      // 建/关联客户会改变**会话档**那份缓存的回落结果：会话档没有行时，读到的那一档从"全局"
+      // 变成"这位客户"。缓存键里没有 customerId（P-01），所以不失效就会有一段窗口——
+      // 徽标写着「沿用全局」而下一次翻译按客户档走。整前缀一次，代价是每条在用的档各自 refetch。
+      void qc.invalidateQueries({ queryKey: SETTINGS_KEY })
     }
   })
 }

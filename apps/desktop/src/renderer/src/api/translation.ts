@@ -1,5 +1,11 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
+import {
+  settingsKeyOf,
+  settingsParamsOf,
+  type ConversationSettingsRef,
+  type SettingsRef
+} from '@/lib/scopeLabel'
 
 export type TranslateType = 'receive' | 'send'
 
@@ -19,9 +25,9 @@ export interface TranslationSettingVO {
   enterToSend: boolean
   disableChinese: boolean
   disableChinesePreventSend: boolean
-  /** 'global' | 'customer'：这次拿到的设置属于哪一层。 */
+  /** 'global' | 'customer' | 'conversation'：这次拿到的设置属于哪一层。 */
   scope: string
-  /** scope='customer' 时是客户 id 的字符串形式；全局为 null。 */
+  /** scope='customer' 时是客户 id 的字符串形式；scope='conversation' 时是后端成形的会话键（只显示、不解析）；全局为 null。 */
   scopeKey: string | null
   /** true = 该客户没有覆盖行，这份是继承来的全局。 */
   inherited: boolean
@@ -50,6 +56,9 @@ export interface TranslationSettingInput {
   /** 缺省即写全局；写客户覆盖行时与 `scopeKey` 成对出现。 */
   scope?: string
   scopeKey?: string
+  /** 会话档靠这两个字段定位（spec §3.4：不接受客户端拼好的 `scopeKey`）。 */
+  accountId?: number
+  chatKey?: string
 }
 
 export interface TranslationNodeVO {
@@ -80,6 +89,8 @@ export interface TranslateVO {
   degraded: boolean
   /** 降级原因：未配置密钥或厂商报错；正常时为 null */
   degradeReason: string | null
+  /** 这次翻译**实际**用的那一档：`global` | `customer` | `conversation`（spec §3.1 / §4③）。 */
+  scope: string
 }
 
 export interface TranslationCredentialVO {
@@ -117,22 +128,23 @@ export interface TranslationCacheStatsVO {
   top: TranslationCacheEntryVO[]
 }
 
-const SETTINGS_KEY = ['translation-settings'] as const
+/** 整前缀：一档一条缓存，保存/删除后要失效的是"每一档"。导出常量而不是 `settingsKeyOf`，是为了让失效方只能按前缀点名。 */
+export const SETTINGS_KEY = ['translation-settings'] as const
 const NODES_KEY = ['translation-nodes'] as const
 const DELAYS_KEY = ['translation-delays'] as const
 const STATS_KEY = ['translation-cache-stats'] as const
 
-/** 一层一条缓存：global 与某个客户的覆盖行可以同时挂在屏上（回复框读客户、推送读全局）。 */
-export const settingsKeyOf = (customerId?: number | null): readonly ['translation-settings', number | 'global'] =>
-  [SETTINGS_KEY[0], customerId ?? 'global'] as const
-
-export function useTranslationSettings(customerId?: number | null) {
+/**
+ * 读**这一个作用域下的生效行**（不是"这一档有没有行"）。参数必填：每个读设置的地方都要写清它读哪一档，
+ * 少写一档就是 P6 那条 bug 类的翻版（`useTranslationSettings(null)` 会静默退化成读全局，
+ * 而调用方以为拿到的是"这一位/这一条"的值）。
+ */
+export function useTranslationSettings(ref: SettingsRef) {
+  const params = settingsParamsOf(ref)
   return useQuery({
-    queryKey: settingsKeyOf(customerId),
+    queryKey: settingsKeyOf(ref),
     queryFn: () =>
-      http.get<TranslationSettingVO>(
-        `/api/translation/settings${customerId ? `?customerId=${customerId}` : ''}`
-      )
+      http.get<TranslationSettingVO>(`/api/translation/settings${params ? `?${params}` : ''}`)
   })
 }
 
@@ -193,11 +205,35 @@ export function useResetCustomerTranslationSettings() {
   })
 }
 
+/**
+ * 删掉会话档 = 这一条会话回到它下面那一档（客户档，或全局）。与 `useTranslationSettings` 的读侧同一句：
+ * 这里交出去的是 `accountId` + `chatKey`，不是那条成形键（spec §3.4），所以拼键的那一处只有一个作者。
+ * 走 query 不进路径段：`chatKey` 里带 `@` 与 `.`。`cleared === 0` 也是成功（本来就没有这一档的行）。
+ */
+export function useResetConversationTranslationSettings() {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (ref: ConversationSettingsRef) =>
+      http.del<{ cleared: number }>(
+        `/api/translation/settings/conversation?${settingsParamsOf(ref)}`
+      ),
+    onSuccess: () => {
+      void qc.invalidateQueries({ queryKey: SETTINGS_KEY })
+      void qc.invalidateQueries({ queryKey: STATS_KEY })
+    }
+  })
+}
+
 export function useTrialTranslate() {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (input: { text: string; type: TranslateType; customerId?: number | null }) =>
-      http.post<TranslateVO>('/api/translation/translate', input),
+    mutationFn: (input: {
+      text: string
+      type: TranslateType
+      customerId?: number | null
+      accountId?: number
+      chatKey?: string
+    }) => http.post<TranslateVO>('/api/translation/translate', input),
     onSuccess: () => void qc.invalidateQueries({ queryKey: STATS_KEY })
   })
 }

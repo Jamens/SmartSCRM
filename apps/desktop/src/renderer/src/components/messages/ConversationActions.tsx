@@ -7,18 +7,20 @@ import CustomerDirectionDialog from '@/components/messages/CustomerDirectionDial
 import CreateCustomerDialog from '@/components/messages/CreateCustomerDialog'
 import { useCustomer } from '@/api/customers'
 import { useTranslationSettings } from '@/api/translation'
+import { customerRefOf } from '@/lib/scopeLabel'
 import type { ConversationVO } from '@/api/messages'
 import { directionSummary } from '@/lib/directionDraft'
 import { canCreateCustomer } from '@/lib/createCustomerPrefill'
 
 /**
  * 已关联会话的身份 + 语向入口。单独成组件是为了让两个按 customerId 取数的 hook
- * 只在"真的有一位客户"时挂载：`useTranslationSettings(null)` 会退化成读**全局**设置
- * （`settingsKeyOf` 的 null 分支），未关联的会话拿它显示"该客户的语向"就是假信息。
+ * 只在"真的有一位客户"时挂载：`useTranslationSettings` 的新签名只收具体档位
+ * （`customerRefOf(customerId)`），未关联的会话根本没有 customer id 可包——拿别的档
+ * 去显示"这位客户的语向"就是假信息，所以这个组件还是按 `customerId` 挂载。
  */
 function LinkedIdentity({ customerId }: { customerId: number }): React.JSX.Element {
   const [open, setOpen] = useState(false)
-  const { data: settings } = useTranslationSettings(customerId)
+  const { data: settings } = useTranslationSettings(customerRefOf(customerId))
   const { data: customer } = useCustomer(customerId)
   return (
     <>
