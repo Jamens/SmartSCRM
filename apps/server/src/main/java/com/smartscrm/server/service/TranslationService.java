@@ -15,6 +15,7 @@ import com.smartscrm.server.mapper.TranslationCacheMapper;
 import com.smartscrm.server.mapper.TranslationCredentialMapper;
 import com.smartscrm.server.mapper.TranslationNodeMapper;
 import com.smartscrm.server.mapper.TranslationSettingMapper;
+import com.smartscrm.server.service.msg.ConversationScopeKey;
 import com.smartscrm.server.service.msg.ScopeSettings;
 import com.smartscrm.server.service.provider.Credentials;
 import com.smartscrm.server.service.provider.ProviderException;
@@ -80,15 +81,28 @@ public class TranslationService {
 
     // ============ settings ============
 
-    public TranslationSettingVO getSettings(Long tenantId) {
-        return getSettings(tenantId, null);
+    /**
+     * 生效行解析：会话档 -> 客户档 -> 全局。**GET 与 translate 共用这一处**（spec §3.2），
+     * 所以两个入口不可能读出不同的生效值——回复框旁的摘要与那次发送真正用的语向是同一份。
+     * <p>
+     * 答的是"这个作用域下的生效行"，不是"这一档有没有行"：会话档不存在时回落到生效档，
+     * `inherited` 按 resolve 的结论（spec §3.1 的三态表）。
+     */
+    public TranslationSettingVO getSettings(Long tenantId, Long customerId, Long accountId, String chatKey) {
+        ScopeSettings.Resolved resolved = resolveSetting(tenantId, customerId, accountId, chatKey);
+        return toVO(resolved.setting(), resolved.scope(), resolved.inherited());
     }
 
-    /** 带 customerId 就按 客户覆盖行 -> 全局 解析；不带与 P5 完全一致（inherited=true）。 */
-    public TranslationSettingVO getSettings(Long tenantId, Long customerId) {
-        TranslationSetting customer = customerId == null ? null : customerRow(tenantId, customerId);
-        ScopeSettings.Resolved resolved = ScopeSettings.resolve(customerId, customer, requireSettings(tenantId));
-        return toVO(resolved.setting(), resolved.inherited());
+    private ScopeSettings.Resolved resolveSetting(Long tenantId, Long customerId, Long accountId, String chatKey) {
+        String key = ConversationScopeKey.composeOrNull(accountId, chatKey);
+        TranslationSetting conversation = key == null ? null : settingRow(tenantId, "conversation", key);
+        if (conversation != null) {
+            // 命中就不再往下查：优先级与下面两档无关（spec §3.2），传 null 是把"未被咨询"写进调用形状。
+            return ScopeSettings.resolve(conversation, null, null);
+        }
+        Long projected = customerId != null ? customerId : customerOfChat(tenantId, accountId, chatKey);
+        TranslationSetting customer = projected == null ? null : customerRow(tenantId, projected);
+        return ScopeSettings.resolve(null, customer, requireSettings(tenantId));
     }
 
     public TranslationSettingVO updateSettings(Long tenantId, TranslationSettingInput input) {
@@ -165,7 +179,8 @@ public class TranslationService {
             ? current.getDisableChinesePreventSend() : input.disableChinesePreventSend());
         settingMapper.updateById(current);
         TranslationSetting saved = settingMapper.selectById(current.getId());
-        return toVO(saved, "global".equals(saved.getScope()));
+        // 刚写入的那行：档位就是它自己的列值，`inherited` 只有全局行算真。
+        return toVO(saved, saved.getScope(), "global".equals(saved.getScope()));
     }
 
     /** 从全局整份复制一条客户覆盖行——除定位列外的全部字段照抄，之后由 saveInto 打上本次改动。 */
@@ -228,8 +243,9 @@ public class TranslationService {
     }
 
     /**
-     * 生效面 ②：把"当前会话"换成客户 id。三种情况一律返回 null 回落全局——
+     * 客户档的会话投影：把"当前会话"换成客户 id。三种情况一律返回 null 回落全局——
      * 请求没带齐 accountId/chatKey、查不到会话行、行上没挂客户。
+     * `resolveSetting` 只在**会话档没命中**时才调它（D-01：会话档优先，与投影无关）。
      * 只按 uk_conv 的三列精确匹配，不做前缀模糊：猜错语向译出的是别人家的语言，
      * 比"没译"更难排查。
      * <p>
@@ -289,15 +305,13 @@ public class TranslationService {
         if (!"receive".equals(dto.type()) && !"send".equals(dto.type())) {
             throw new BizException(40000, "type 只能是 receive 或 send");
         }
-        Long customerId = dto.customerId() != null
-            ? dto.customerId()
-            : customerOfChat(tenantId, dto.accountId(), dto.chatKey());
-        TranslationSetting customer = customerId == null ? null : customerRow(tenantId, customerId);
-        ScopeSettings.Resolved resolved = ScopeSettings.resolve(customerId, customer, requireSettings(tenantId));
+        ScopeSettings.Resolved resolved = resolveSetting(tenantId, dto.customerId(), dto.accountId(), dto.chatKey());
         TranslationSetting s = resolved.setting();
+        // 生效档随响应带出去：记录页要在"这一条实际按哪一档译出"上说一句话（spec §4③）。
+        // 档位取 resolve 的结论而不是行上的列——列写坏了也不该让这里报出一个不存在的档。
+        String scope = resolved.scope();
         // 缓存 key 不变：key 里已经含 type + channel + from + to（buildCacheKey），
-        // 语向不同天然分键，所以按客户切换语向不需要新增失效逻辑（spec §5）。
-        // 生效面 ② 走的是同一条口子：会话投影换出来的还是那两列语种，键自然就分开了。
+        // 语向不同天然分键，所以按客户 / 按会话切换语向都不需要新增失效逻辑（spec §5）。
         String fromLang = "receive".equals(dto.type()) ? s.getReceiveFromLang() : s.getSendFromLang();
         String toLang = "receive".equals(dto.type()) ? s.getReceiveToLang() : s.getSendToLang();
         String channel = s.getChannel();
@@ -318,14 +332,14 @@ public class TranslationService {
                     .setSql("hit_count = hit_count + 1"));
                 return new TranslateVO(hit.getTargetText(), true, Boolean.TRUE.equals(hit.getPartial()),
                     containsChinese(hit.getTargetText()), dto.type(), channel,
-                    displayFrom(fromLang, hit.getFromLang()), toLang, cacheKey, false, null);
+                    displayFrom(fromLang, hit.getFromLang()), toLang, cacheKey, false, null, scope);
             }
         }
 
         // R7: same in and out language — hand back the source, and do not cache it.
         if (fromLang != null && fromLang.equals(toLang)) {
             return new TranslateVO(normalized, false, false, containsChinese(normalized), dto.type(), channel,
-                fromLang, toLang, cacheKey, false, null);
+                fromLang, toLang, cacheKey, false, null, scope);
         }
 
         String providerId = CHANNEL_TO_PROVIDER.get(channel);
@@ -340,7 +354,7 @@ public class TranslationService {
                     }
                     return new TranslateVO(online.translation(), false, false,
                         containsChinese(online.translation()), dto.type(), channel,
-                        displayFrom(fromLang, online.detectedFrom()), toLang, cacheKey, false, null);
+                        displayFrom(fromLang, online.detectedFrom()), toLang, cacheKey, false, null, scope);
                 } catch (ProviderException e) {
                     // The request already carries a 4s timeout; one fall-through to the
                     // simulated engine, with the vendor error surfaced instead of swallowed.
@@ -348,7 +362,7 @@ public class TranslationService {
                         engine.translate(normalized, fromLang, toLang, channel);
                     return new TranslateVO(fallback.translation(), false, fallback.partial(),
                         containsChinese(fallback.translation()), dto.type(), channel,
-                        fallback.fromLang(), toLang, cacheKey, true, e.getMessage());
+                        fallback.fromLang(), toLang, cacheKey, true, e.getMessage(), scope);
                 }
             }
             SimulatedTranslationEngine.EngineResult fallback =
@@ -356,7 +370,7 @@ public class TranslationService {
             return new TranslateVO(fallback.translation(), false, fallback.partial(),
                 containsChinese(fallback.translation()), dto.type(), channel,
                 fallback.fromLang(), toLang, cacheKey, true,
-                providerId + " 未配置密钥，此结果来自本地模拟引擎");
+                providerId + " 未配置密钥，此结果来自本地模拟引擎", scope);
         }
 
         SimulatedTranslationEngine.EngineResult result = engine.translate(normalized, fromLang, toLang, channel);
@@ -365,7 +379,7 @@ public class TranslationService {
                 normalized, result.translation(), result.partial());
         }
         return new TranslateVO(result.translation(), false, result.partial(), containsChinese(result.translation()),
-            dto.type(), channel, result.fromLang(), toLang, cacheKey, false, null);
+            dto.type(), channel, result.fromLang(), toLang, cacheKey, false, null, scope);
     }
 
     private void writeCache(Long tenantId, String cacheKey, String type, String channel, String fromLang,
@@ -509,12 +523,17 @@ public class TranslationService {
         return (value == null || value.isBlank()) ? fallback : value.trim();
     }
 
-    private TranslationSettingVO toVO(TranslationSetting s, boolean inherited) {
+    /**
+     * VO 上那一格 `scope` 写的是"这次生效的是哪一档"，由调用方给：读侧给 `ScopeSettings.resolve`
+     * 的结论，写侧给刚写入那行自己的列值。不再从 `s.getScope()` 反推——优先级的唯一定义是 resolve，
+     * 让 VO 从列上猜会绕开它（spec §3.1 / §3.2）。
+     */
+    private TranslationSettingVO toVO(TranslationSetting s, String scope, boolean inherited) {
         return new TranslationSettingVO(s.getId(), s.getServer(), s.getServerMode(), s.getChannel(),
             s.getReceiveEnabled(), s.getReceiveFromLang(), s.getReceiveToLang(),
             s.getSendEnabled(), s.getSendFromLang(), s.getSendToLang(),
             s.getVoiceEnabled(), s.getPreviewEnabled(), s.getEnterToSend(),
             s.getDisableChinese(), s.getDisableChinesePreventSend(),
-            s.getScope(), s.getScopeKey(), inherited);
+            scope, s.getScopeKey(), inherited);
     }
 }
