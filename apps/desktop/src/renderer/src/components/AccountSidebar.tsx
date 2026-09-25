@@ -67,6 +67,7 @@ export default function AccountSidebar(): React.JSX.Element {
             return (
               <div
                 key={account.id}
+                data-p7-account-row={account.id}
                 onClick={() => select(account.id)}
                 className={`group flex cursor-pointer items-center gap-2.5 rounded-lg px-2.5 py-2 transition-colors ${
                   active ? 'bg-primary text-primary-foreground shadow-sm' : 'hover:bg-muted'
