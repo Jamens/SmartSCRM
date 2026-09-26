@@ -6,15 +6,15 @@
 
 ## 总体结论（不是"全部通过"）
 
-Task 1–10 的机械面本轮在 HEAD `314577f` 之上**全部复跑并绿**：Java 单测、后端 HTTP 契约、TS 单测、typecheck、渲染层 CDP 六行。Task 11 自己那一步要的那格证据——**真桥到底会不会给出 `activeChatKey`、给了会不会跟着 WhatsApp 里的切会话走**——本轮**未跑**：Step 1 的第三件前置不成立（现场没有真人可以在 WhatsApp 里切会话，而两棒的结构就是"第二棒要人在 A 棒之后手动切过去"），所以 `tmp/p7b-live.mjs` 一棒都没开火。
+Task 1–10 的机械面本轮在 HEAD `314577f` 之上**全部复跑并绿**：Java 单测、后端 HTTP 契约、TS 单测、typecheck、渲染层 CDP 六行（同日 F1 那一棒把它扩成七行，数在下面按各自的跑记）。Task 11 自己那一步要的那格证据——**真桥到底会不会给出 `activeChatKey`、给了会不会跟着 WhatsApp 里的切会话走**——本轮**未跑**：Step 1 的第三件前置不成立（现场没有真人可以在 WhatsApp 里切会话，而两棒的结构就是"第二棒要人在 A 棒之后手动切过去"），所以 `tmp/p7b-live.mjs` 一棒都没开火。
 
 于是各处证据词按下面这样定，不往上抬：
 
 | 面 | 本轮证据词 | 一句话 |
 |---|---|---|
-| 后端三级解析 / 写侧分派 / 边界闸 | **实测** | `./mvnw test` 63 条 + `tmp/p7a-conv-settings.mjs` 31 条（F2 修复轮加了真并发那两行，见"后端"一节），全在真库 `smartscrm_react` 上跑 |
+| 后端三级解析 / 写侧分派 / 边界闸 | **实测** | `./mvnw test` 63 条 + `tmp/p7a-conv-settings.mjs` 32 条（F2 加了真并发那两行、F4 补上客户档那一支的同形并发，见"后端"一节），全在真库 `smartscrm_react` 上跑 |
 | V9 那一次列宽变更 | **读码 + 行为实测** | 列宽本身无直查证据（本机无 mysql CLI），能拿到的只有"只差大小写的两条键存成两行"这一条行为差异，见下节 |
-| 渲染层三档生效面（禁用链 / 冻结目标 / 写回哪一档 / 缓存分键） | **实测（布景为 A 档手喂）** | `tmp/p7a-stage-dialog.mjs` 六行 44 条全绿；它证的是"渲染层读对了那两个字段"，**不**证"真桥会不会给值" |
+| 渲染层三档生效面（禁用链 / 冻结目标 / 写回哪一档 / 缓存分键 / 徽标所指那位客户） | **实测（布景为 A 档手喂）** | `tmp/p7a-stage-dialog.mjs` 七行 58 条全绿（F1 那一棒把驱动从六行 44 条扩到七行，加了行 7 与它的夹具）；它证的是"渲染层读对了那两个字段"，**不**证"真桥会不会给值" |
 | 生效面 ① · 内嵌页气泡按会话档出译文 | **读码成立**（本轮维持 spec §8 原话） | 一棒都没跑，够不上"读码 + 部分实测"那一档（那一档要 A5/B4 至少绿）；页内那一半（A6/B5）**待验证** |
 | 真桥给不给得出 `activeChatKey` / 切会话跟不跟 | **待验证** | A1/A2/B2 三格本轮没有实跑数；本轮只量到"这一拍真桥给的是 `null`"，两者不是同一句话 |
 | Telegram 会话档 | **待验证** | 只到 fixture，P6 Task 12a 那条真机 DOM 链未做，本阶段不声称 TG 生效 |
@@ -43,24 +43,28 @@ exit 2。`[]` 是它从 `window.__p6f.bridgeStates()`（渲染层那份桥缓存
 Step 1 那三件事据此逐件判：
 
 1. **代理 + WA 可达：成立**（表第 2、3、5 行）。
-2. **dev app 是主进程改动之后起的：成立**。判据不是进程启动时刻与提交时刻比大小，而是**帧里有没有 `activeChatKey` 这一格**：那一格由 `bridgeStates()` 组装（`services/msgBridge/index.ts:77-82`，`21871e7` 引入，Task 6），旧构建根本不会带这个键，而表第 5 行现拉的帧里它确实在（值是 `null`，字段在）。渲染层那一侧另有一条形码：`tmp/p7a-stage-dialog.mjs` 本轮 44/44 要求 `[data-p7-stage-settings]` / `[data-p7-conv-dialog]` 在页上存在，那两个标记是 Task 9 的。
+2. **dev app 是主进程改动之后起的：成立**。判据不是进程启动时刻与提交时刻比大小，而是**帧里有没有 `activeChatKey` 这一格**：那一格由 `bridgeStates()` 组装（`services/msgBridge/index.ts:77-82`，`21871e7` 引入，Task 6），旧构建根本不会带这个键，而表第 5 行现拉的帧里它确实在（值是 `null`，字段在）。渲染层那一侧另有一条形码：`tmp/p7a-stage-dialog.mjs` 的每一次跑（本棒记的 44/44 与 F1 之后的 58/58，见"渲染层"一节）都要求 `[data-p7-stage-settings]` / `[data-p7-conv-dialog]` 在页上存在，那两个标记是 Task 9 的。
 3. **该账号真的登录 + 两条单聊各有中文可看 + 第二棒要真人切会话：不成立**。登录是真的（表第 3 行）、会话数量是够的（表第 6 行），但**此刻视图里没打开任何会话**（`#main` 不存在），而页侧 `active_chat` 只有两处发布者、都是事件驱动（`bridge/whatsapp/collect.ts:78-92` 的 wa-js `chat.active_chat` 事件与 `open_chat` 命令回执；主进程那一支见 `services/msgBridge/index.ts:294-302`），本阶段没有驱动侧的 `open_chat` 通路（那是 P6 Task 12a，未做）。于是：A 棒的 A1 只会量到"这一拍没人切过会话"，B 棒的"切到另一条"更是要人在 A 棒之后亲手做。**这一件不成立就不开火**，按 Step 1 给的出口直接进 Step 5 记未验证。
 
 ## 逐步实测
 
 ### 后端（V9 行为证据 / `ConversationScopeKeyTest` + `ScopeSettingsTest` / `tmp/p7a-conv-settings.mjs`）
 
-证据词一律 **实测**（本轮真跑，日志 `tmp/p7b-gate-java.log`、`tmp/p7b-gate-conv.log`）：
+证据词一律 **实测**（Task 11 那一轮真跑的日志是 `tmp/p7b-gate-java.log`、`tmp/p7b-gate-conv.log`；同日 F2/F4 两个修复轮各在下面的条目里点名自己的工件）：
 
 - `./mvnw test` → `Tests run: 63, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`。其中 B16 新增的两份是 `ConversationScopeKeyTest` `Tests run: 8` 与 `ScopeSettingsTest` `Tests run: 4`（三档组合：conv 命中 → `conversation`+`inherited=false`；仅 cust → `customer`+`false`；只有 global → `global`+`true`）。
 - `tmp/p7a-conv-settings.mjs` → `ALL PASS (29/29)  [brief 的 16 条 + extra 13 条；HTTP 往返 65 次]`。C14：计划推演写的是"那 16 条"，实跑是 29 条，多出来的 13 条是评审轮加的边界与"未越层"对照（`5a–5i` 八条闸与文案、`X1–X9` 的客户档/全局行逐列未变与分辨力对照、`X7` 的 `code` ⇔ HTTP 码全跑配对）。以实跑为准。
 - 契约里三档语义的现场值（本轮日志）：`#2 会话档存在时 GET 读会话档（th），客户档那一份 hi 被压过`、`#4 POST /translate 带 customerId 仍按会话档出译文（两个入口同一条 resolve）`、`#8 同 text 两条会话（会话档 vs 客户档）→ cacheKey 不同`、`#6` 关到底仍出译文（§4①b 那条负面断言）。
 - **F2 修复轮（同日，改动落在 `7fafe4e` 与 `fc72dc1` 两个提交上，本次实跑跑的就是这两处的内容）**：驱动加两行后 `ALL PASS (31/31)  [brief 的 16 条 + extra 15 条；HTTP 往返 70 次]`，exit 0（`tmp/p7a-f2-conv-run2.log`）。新增的是真并发那一格与它的清理对照：
   - `X10`：同一条从未建过档的会话，两个 `PUT` 用 `Promise.all` 同时发出 ⇒ 两边都 `code:0` + HTTP 200，且两边报的是**同一行 id**（现场 `id=325`）。这一条不是幂等检查——两发都要真进过 create 分支才算竞态，判据在第二通道：`tmp/p7-server.log` 里这个 scopeKey 有**两条** `TranslationSettingMapper.insert`（14:45:29.787 / .788，线程 exec-8 / exec-5，两条前面各自的 `LIMIT 1` 都读到 `Total: 0`），随后失败那支的 `LIMIT 1 FOR UPDATE` 读到 `Total: 1`，两支的 `updateById` 都以 `325(Long)` 结尾。
-    同一形状在本日三次连跑（14:36 / 14:40 / 14:45，行 id 312 / 318 / 325）里每次都出现两发 insert ⇒ 撞键那一支不是靠运气命中的单次事件。
+    同一形状在本日四次连跑（14:36 / 14:40 / 14:45 三跑由实施席，14:55:36 那一跑由评审席独立复跑，行 id 312 / 318 / 325 / 332）里每次都出现两发 insert ⇒ 撞键那一支不是靠运气命中的单次事件。第四跑的日志是 `tmp/p7a-f4-review-run.log`（`ALL PASS (31/31)`，那次驱动还是 31 行）。
   - `X11`：清理网对那一键回 `cleared:1`，即"这一键名下确实只有一行"。它单列而不并进收尾1 的聚合，因为收尾1 只断每条键各清各的。
   - 这两行抓到过一次真的坏行为：M-3 的初版写成"撞键后用快照读 `settingRow` 重读"，第一跑 `29/31` exit 1， loser 回的是 `HTTP=400 code=40901`（`tmp/p7a-f2-conv-run1-40901.log`）。根因与修法见提交 `fix(P7/B16): F2·M-3 …`：REPEATABLE READ 下本事务的普通 SELECT 读的是快照，撞键之后仍然看不见对手刚提交的那一行，只有 `FOR UPDATE` 是当前读。`X7` 的配对表因此加了一格 `[40901, 400]`——记的是重试臂的形状，不是用来消红的。
   - `X10` 只证后端解析链在真并发下不串档，**不**证"两个窗口同时点保存"这条 UI 路径；后者要真实登录档那一棒（见下）。
+- **F4 收口轮（同日，评审推翻当时的 R-22：客户档那一支与会话档同形的"先查后插"不能只修一处）**：两支现在共用同一个私有口子 `insertOrAdopt`，驱动再加一行后 `ALL PASS (32/32)  [brief 的 16 条 + extra 16 条；HTTP 往返 75 次]`，exit 0（`tmp/p7a-f4-conv.log`，15:16:53）。同轮 Java 侧改后再跑仍是 `Tests run: 63, Failures: 0` + `BUILD SUCCESS`（日志 `tmp/p7a-f4-mvnw-test.log`；F2 那一轮的 63 只留在 `apps/server/target/surefire-reports/` 里，没另存 tmp 工件——这是当时记漏，不是没跑）。
+  - `X10c`：同一位**开跑前没有覆盖行**的客户（本跑选到 `id=43`；候选取 `GET /api/customers` 里 `CUST` 之外的全部，逐个用 `inherited:true` 现场判"这一档还没行"，一位都没有则按前提不成立退 2，不设"跳过"分支），两个 `scope=customer` 的 `PUT` 用 `Promise.all` 同时发出 ⇒ 两边都 `code:0` + HTTP 200、同一个 `data.id`（现场 `id=341`）、`scopeKey` 都是 `"43"`；独立 GET 读回落在这位客户自己那一行（`scope=customer`、`inherited=false`、`sendToLang="id"` ∈ 两提交值）；随后的清理 `DELETE` 回 `cleared:1`（那一键名下只有一行）。
+  - 第二通道同一套判据（`tmp/p7-server.log`）：`exec-2` / `exec-4` 两支各自的 `LIMIT 1` 都读到 `Total: 0`，15:16:53.239 两发 `INSERT … 1(Long), customer(String), 43(String)` 都发了出去，`exec-2` 先 `Updates: 1`；`exec-4` 在 15:16:53.250（约 11ms 后）发出带 `FOR UPDATE` 的当前读、读到 `Total: 1`，两支的 `updateById` 随后都以那一行收尾。会话档与客户端那一支在同一跑里各留了一条 `FOR UPDATE`（15:16:53.204 / .250），所以"当前读真的被走到"这一格现在是两档各有一份现场值，不是只有一份。
+  - `X10c` 与 `X10` 一样，**只证解析链在真并发下不串档**，不证"同一个人在客户抽屉与记录页会话头两处同时点保存"这条 UI 路径。
 
 **V9 的列宽没有直接证据**（本机无 mysql CLI，全程只走 HTTP API）。这一格不能写成"迁移成功"就完事，证据形态只有一条行为差异：
 
@@ -74,22 +78,24 @@ PASS | #1 只差大小写的两条会话档 → 两条行、两个值（unicode_
 **V9 的回滚代价**（记下来，是为了别把这次变更当成"随时可退"）：
 
 1. Flyway 社区版没有 undo 迁移——`V9` 一旦 apply 过，就不存在一条自动往回走的路径。
-2. 宽度收回 `VARCHAR(64)` 在数据到位之后是**结构性做不到**的：会话档键的形状是 `accountId ≤ 19 位 + ':' + chatKey ≤ 128`（V9 注释里那条算式，上界 148），只要库里存在一条超过 64 字符的键，任何改窄的 DDL 都会在那一行上失败。所以回滚只有两条路：**恢复备份**，或先删掉 `scope='conversation'` 那些行、再上一条 V10 去改列。
+2. 宽度收回 `VARCHAR(64)` 在数据到位之后是**结构性做不到**的：会话档键的形状是 `accountId ≤ 19 位 + ':' + chatKey ≤ 128`（V9 注释里那条算式，上界 148），只要库里存在一条超过 64 字符的键，任何改窄的 DDL 都会在那一行上失败——**前提是 strict `sql_mode`**（MySQL 8 默认带 `STRICT_TRANS_TABLES`；本机没有直查该变量的通道，这一句按默认值说，属**读码**）。非严格模式下改窄不报错而是**静默截断**，那比失败更糟：两条不同的键会截成同一条，再撞唯一键。所以回滚只有两条路：**恢复备份**，或先删掉 `scope='conversation'` 那些行、再上一条 V10 去改列。
 3. 排序规则那一侧要分两个方向说。**往前（V9 本身）不是数据完整性风险**：表默认是 `utf8mb4_unicode_ci`，而唯一键 `uk_tset_tenant_scope` 里"只差大小写的两条键"在那套判等下本来不可能同时存在，所以把这一列改成 `utf8mb4_bin`（判等更严、允许并存的行更多）不会让任何既有行突然变成重复。**往后（改回 `ci`）则是另一道硬拦**：一旦库里真并存了两条只差大小写的会话档键，`bin → ci` 的那次 `ALTER` 会在唯一键上直接报 `Duplicate entry` 而失败。所以宽度与判等各是一道独立的拦条——要回到 V9 之前，得先把超宽的键和只在大小写上不同的键对都清掉。
-4. `MODIFY COLUMN` 带排序规则变更是 copy-table 重建，期间该表写入阻塞。这里的代价小，只因为那张表每租户每一档最多一行；不是"ALTER 本身便宜"。
+4. `MODIFY COLUMN` 带排序规则变更是 copy-table 重建，期间该表写入阻塞。**代价小的理由是行数，不是"ALTER 本身便宜"**，而行数由键数决定：`uk_tset_tenant_scope` 限的是"每一档**每一键**最多一行"，所以这张表的行数 = 各档键数之和——global 每租户一行、customer 每位建过档的客户一行、**conversation 每条建过档的会话一行**（一次契约跑就在同一租户、同一 `scope='conversation'` 下铺开多条：本轮实测 ACCT 名下登记 9 条键、其中 5 条真落库并各删回 `cleared:1`；F2 那一跑是 6 条）。当前量级：本次 `X10c` 建出的那行自增 `id=341`，而 `id` 是 `AUTO_INCREMENT`（`V5` 的 DDL，MySQL 8 的重启也不回退），所以"插入尝试次数 ≥ 341、现存行数 ≤ 341"，几百行以内 ⇒ 这次重建便宜。**会话档真被用起来之后这一句就不再成立**：届时要么接受一次写阻塞窗口，要么先按上面第 2 条删行再改。
 
-### 渲染层（`activeChatKeyOf` 9 条 + `scopeLabel` 18 条 + `directionDraft` 线路 2 条 / `tmp/p7a-stage-dialog.mjs` 六行）
+### 渲染层（`activeChatKeyOf` 9 条 + `scopeLabel` 18 条 + `directionDraft` 线路 2 条 / `tmp/p7a-stage-dialog.mjs` 七行）
 
-- `pnpm --dir apps/desktop test:unit` → `pass 181`、`fail 0`（日志 `tmp/p7b-gate-unit.log`）。本轮按文件核对过归属：`shared/chatKeys.test.ts` 里 `activeChatKeyOf` 是 9 条（同文件另有 4 条属 P6 的群判定/号码形态），`lib/scopeLabel.test.ts` 18 条，`lib/directionDraft.test.ts` 6 条里"线路"那 2 条。
-- `pnpm -r typecheck` → `apps/desktop` 四段（node/web/inject/unit）与 `packages/shared` 全 `Done`，无诊断输出。
-- `node tmp/p7a-stage-dialog.mjs` → `ALL PASS (44/44)`（exit 0；本轮连跑两轮都是 44/44，日志 `tmp/p7b-gate-stagedialog.log`）。C14 要说白：**计划里这一行的推演分母是 32 条，实跑是 44 条**，多出来的是评审轮加的——`1e2`（反序那一帧确实换了渲染层手里那一格）与两种帧序各一遍的其余几条、`2.5a–c`（恢复失败与保存失败两条出口分得开）、`6a–c`（客户档弹层里没有线路那一格）、`1k–1n`（会话目标在点开那一刻冻住）。文档只收 44 这个数。
+- `pnpm --dir apps/desktop test:unit` → `pass 181`、`fail 0`（Task 11 那一轮记在 `tmp/p7b-gate-unit.log`；F4 收口轮重跑仍是 181/0）。本轮按文件核对过归属：`shared/chatKeys.test.ts` 里 `activeChatKeyOf` 是 9 条（同文件另有 4 条属 P6 的群判定/号码形态），`lib/scopeLabel.test.ts` 18 条，`lib/directionDraft.test.ts` 6 条里"线路"那 2 条。
+- `pnpm -r typecheck` → `apps/desktop` 四段（node/web/inject/unit）与 `packages/shared` 全 `Done`，无诊断输出（Task 11 与 F4 两轮各一次）。
+- `node tmp/p7a-stage-dialog.mjs` → 六行那一版 `ALL PASS (44/44)`（exit 0；本轮连跑两轮都是 44/44，日志 `tmp/p7b-gate-stagedialog.log`）。C14 要说白：**计划里这一行的推演分母是 32 条，实跑是 44 条**，多出来的是评审轮加的——`1e2`（反序那一帧确实换了渲染层手里那一格）与两种帧序各一遍的其余几条、`2.5a–c`（恢复失败与保存失败两条出口分得开）、`6a–c`（客户档弹层里没有线路那一格）、`1k–1n`（会话目标在点开那一刻冻住）。
+- **F1 那一棒（同日）把驱动扩到七行 58 条**：新增行 7 = 建/关联客户之后，回复框那颗开关写的就是**徽标所指的那一位**客户（夹具由该行自己合成一条会话，不消耗真实会话）。实跑 `ALL PASS (58/58)`、exit 0，日志 `tmp/p7a-t10-row7.log`（14:16；同批还有 run1…run4 四份）。**这一格的跑记归 F1 那一席**：本席没有重跑它——重跑要 CDP 与一个"主进程改动之后起的"应用窗口，而 M-2/F4 之后那个窗口需要用户重启主进程（那是用户的手）。所以 58/58 证的是 `314577f` + F1 的那一版，**早于** F2 的 M-2 主进程改动；M-2 只改主进程两条实时帧的赋值表达式，不经渲染层，覆盖它的是同轮的 typecheck / 181 条单测 / `pnpm --filter desktop build`。
+- **行 2 下拉那一格的判据本身被反证过**（M-9，日志 `tmp/p7a-t10-m9probe.log`，11:44，`EXIT=1` 是那一跑设计成那样的，不是没跑完）：三腿各证一件事——`old` 判据（"全文档数到 0"）碰上别人留下的残留 → **假红复现**，红在判据上；`new` 判据（回到本次点选开始前的基线计数）碰同一种残留 → 不红；`new` 判据碰上**本应用自己没退场的浮层** → 仍以**计数过的断言失败**红（exit 1，不是 exit 2 的"前置不满足"）。那份"别人留下的残留"是人造的（屏幕外、无子节点、`pointer-events:none` 的一份 closed `select-content`），它吃不到任何命中测试，所以那一腿只要红，原因只可能在判据。这一格留下的结论不变：浮层退场期间仍吃命中测试，按 spec §10 D-12 记为应用侧已知缺陷，B16 不改。
 
-**A 档与 B 档要分开写**（C11），这六行两样都占：
+**A 档与 B 档要分开写**（C11），这几行两样都占：
 
 - **A 档（手喂布景）**：桥帧由 `__p6f.setBridges` 手喂、会话档与客户档行由 HTTP 预先 PUT 出来。手喂的是"哪一帧在场"，不是行为。
 - **B 档（真实行为）**：真实 `Input.dispatchMouseEvent` / `dispatchKeyEvent` 点开的下拉与保存按钮、真实 `PUT`/`DELETE` 落到 `smartscrm_react`、后端按同一 `accountId`+`chatKey` 读回。
-- **这六行覆盖到的**：禁用链两种坏法分不分得开、多账号时按 `accountId` 筛哪一帧（变异验过：去掉筛账号那半条，驱动以 41/44 收场，见 spec §8）、弹层显示与冻结的是哪条会话、改动写到的是哪一档、缓存按 `accountId+chatKey` 分键所以两档不互铺、开关位不级联到全局/客户行。
-- **这六行没覆盖的**：**真桥会不会给出 `activeChatKey`**、给的键与 `chat_conversation.chat_key` 同不同源、切会话之后它跟不跟着换。这三格分别只有 A1、A2、B2 能回答，而它们属真实登录档，本轮未跑。所以 44/44 不能写成"真桥已验"。
+- **这几行覆盖到的**：禁用链两种坏法分不分得开、多账号时按 `accountId` 筛哪一帧（变异验过：去掉筛账号那半条，驱动在 44 条那一版上以 41/44 收场，见 spec §8）、弹层显示与冻结的是哪条会话、改动写到的是哪一档、缓存按 `accountId+chatKey` 分键所以两档不互铺、开关位不级联到全局/客户行，以及行 7 那一格"界面建客户 + 关联之后，落下来的客户档那一行就是徽标所指的那一位"。
+- **这几行没覆盖的**：**真桥会不会给出 `activeChatKey`**、给的键与 `chat_conversation.chat_key` 同不同源、切会话之后它跟不跟着换。这三格分别只有 A1、A2、B2 能回答，而它们属真实登录档，本轮未跑。所以 58/58 不能写成"真桥已验"。
 
 ### 真实登录档（`tmp/p7b-live.mjs` A 棒 6 条 / B 棒 7 条，两棒之间由人切会话）
 
@@ -124,11 +130,17 @@ PASS | #1 只差大小写的两条会话档 → 两条行、两个值（unicode_
 3. **渲染层那份桥缓存没有观察者续命，真实登录档的驱动开局会读到 `[]`**（本轮实测）：`lib/liveTailSync.ts:304-317` 的注释就是这件事的另一面——写缓存的 `useLiveTailSync` 只用 `setQueryData`、不是这条 query 的观察者，条目按 `gcTime`（默认 5 分钟）被收走；dev 探针 `__p6f.bridgeStates()` 读的正是这一格。应用自己不受影响（`useBridgeOf` 一挂载就 refetch），但 `tmp/p7b-prereq.mjs` / `tmp/p7b-live.mjs` 在应用空闲几分钟后跑就会按"没有 ready 的桥"退出，报的是缓存而不是桥。下一轮跑之前先让页面重新一拉（开一次舞台或选一条会话），或按本轮那样直接读 `msg:bridges` 现拉值做对照；这不是应用缺陷，是驱动前置的口径。
 4. **V9 的列宽没有直查证据**（本机无 mysql CLI、验收只走 HTTP）：能给的只有"大小写两条键存成两行"与"128 接受 / 129 拒绝"这两条行为差异，`VARCHAR(160)` 与 `utf8mb4_bin` 本身维持读码。
 5. **真实登录档整档未跑**：§4① 本轮维持"读码成立"，A1/A2/B2 那三格（真桥给不给键、键同不同源、切会话跟不跟）本轮无证据。跑它的前置不是"再点一次运行"，是一次真人切会话的动作。
+6. **全局行 `requireSettings` 那一支仍是"先查后插"**（F4 裁定：刻意不修，记下来）：它被**读路径**（`GET /settings` / `POST /translate`）也调用，而那两个入口没有 `@Transactional`，那一次 `insert` 跑在 autocommit 里——既没有"撞键后在本事务内改用当前读"的前提，也不该为了这一格给 GET 加事务。它只在"该租户的第一条全局行"时可达，而现网 DEMO 租户那一行由 `V5` 末尾的种子建好（读码）。真撞上的话就是 50000 + 重试，与会话档/客户档修前的形状同级。
+7. **≥3 发同一毫秒首存同一键，仍可能被 InnoDB 选为死锁牺牲者**：两支都会在重复键错误上持住那条记录的 S 锁、再各自要 `FOR UPDATE` 的 X 锁，S→X 升级是经典死锁形状；被选中的那支**整个事务**已被 InnoDB 回滚，所以 `insertOrAdopt` 里单挡了一支 `ConcurrencyFailureException` → 40901 + 请重试，而不是并进撞键那一支继续写。这一支**未被实跑触发**（两发不死锁：四次会话档 + 一次客户档的实测里，loser 都只在 `insert` 上等约 10ms 后拿到重复键），属**读码**的兜底。
+8. **`X10` / `X10c` 的"两发真的并发了"那一半是人工判据**：驱动只断两边 200 + 同一行 id + `cleared:1`。若后端把两发串行了，第二发走的是正常更新路径，两条照样全绿——所以那一半只能从 `tmp/p7-server.log` 里"同一 scopeKey 有两条 insert"读出来（人工）。没有第三条通道可用：驱动自己去读 `tmp/` 或 `target/` 会把契约验证绑到本机文件布局上。
+9. **`M-2`（两条实时帧也过 `activeChatKeyOf`）的行为差异面要分两半说**：未读判定与落库结果**无可观察差异**（`chat_key` 入库前有 `ChatKeys.matchesPlatform` 与 `@Size(max=128)` 两道闸，库里的值永远良构，裁剪只影响非成形值）；非成形值那一格的**批次划分会合并**——旧版 `acct|坏值` 与 `acct|` 是两个桶，新版都归到后者，于是一次 `POST /messages/batch` 替代两次，每行仍带着自己的 `chatKey` 入库。两半都是**读码**，不是实测。
 
 ## 交付与提交范围
 
 - 本次提交**只有两份文档**：本文与 `docs/superpowers/specs/2026-09-25-conversation-settings-design.md`（§8 只补"真实登录档未跑原因"与验收文档指向，§4① 的证据词维持原样；§10 裁定表未重开）。零 shipped-code 变更。
-- 上一句的"零 shipped-code"只界定 **Task 11 收官那一次提交**，不覆盖同日的 F2 修复轮：那一轮改了源码，分三个提交落库——`refa:`（M-1/M-2/M-4/M-5/M-6：键成形处与活动会话出口各归一、两份单测的指针改指提交物）、`fix:`（M-3：会话档首存撞键改走 `FOR UPDATE` 当前读）、`update:`（本文的 V9 回滚段与 F2 实跑数）。F2 的驱动行（X10/X11）同样只在 gitignore 的 `tmp/` 下。
+- 上一句的"零 shipped-code"只界定 **Task 11 收官那一次提交**，不覆盖同日的 F2 / F4 两个修复轮。F2 那一轮改了源码，落库四个提交——`refa:`（M-1/M-2/M-4/M-5/M-6：键成形处与活动会话出口各归一、两份单测的指针改指提交物）、`fix:`（M-3：会话档首存撞键改走 `FOR UPDATE` 当前读）、`update:` × 2（本文的 V9 回滚段与 F2 实跑数，以及随后把现场值对齐到被引用那份日志的一次更正）。
+- **F4 收口轮（本轮，评审席推翻当时的 R-22）** 落两个提交：`fix:` 是源码侧（会话档与客户档两支首存合并成同一个 `insertOrAdopt`，加一支 `ConcurrencyFailureException` → 40901；三份注释的因果/清单/指针改正：`TranslationService` 的 `winner == null` 那一支与 `settingRowForUpdate` 的锁范围、`chatKeys.ts` 的"四个出口"、两份单测指针的"按类别列出"），`update:` 是本文（I-1 的假前提、N-6/N-7 的工件与跑数、F4 的 X10c 现场值、已知限制加到 9 条）。评审席点名的另一处同类指针 `service/provider/TencentProvider.java:23` **不在本批清**：它指的那条探针事实（腾讯 `InvalidAction`）目前没有任何提交物记录，删掉就等于让那句结论没有出处——先补出处再删指针，那是 P5 文档的一次独立收口。
+- 两轮的驱动行（F2 的 `X10`/`X11`、F4 的 `X10c`）同样只在 gitignore 的 `tmp/` 下；契约日志 `tmp/p7a-f2-conv*.log`、`tmp/p7a-f4-conv.log`、`tmp/p7a-f4-mvnw-test.log`、`tmp/p7a-f4-package.log` 与 `tmp/p7-server.log` 一并如此。
 - `tmp/p7b-prereq.mjs`、`tmp/p7b-live.mjs`、`tmp/p7b-step1-probe.mjs`、`tmp/p7b-wa-dom.mjs` 与本轮四份闸门日志（`tmp/p7b-gate-*.log`）都在 gitignore 的 `tmp/` 下，不进提交；`tmp/p7b-live-state.json` 未产生（A 棒没跑）。
 - `docs/notes/2026-09-22-legacy-feature-gap.md` 按仓库约定不入库。
 - **push 由用户手动执行，助手不 push。**
