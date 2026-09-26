@@ -64,7 +64,7 @@ public class TranslationController {
             case "customer" -> ApiResponse.ok(
                 service.updateCustomerSettings(principal.tenantId(), customerScopeKey(input), input));
             // 会话档：先就地判形状（`compose` 抛的也是 40000，但这里能给出更好的分派时机），
-            // 再显式拒掉"带 scopeKey"的请求——那条键的形态只有 Java 知道，让调用方递一条成形键进来,
+            // 再显式拒掉"带 scopeKey"的请求——那条键的形态只有 Java 知道，让调用方递一条成形键进来，
             // 等于把"键可以拼"这件事重新开放出去（spec §3.4）。
             case "conversation" -> {
                 String reason = ConversationScopeKey.rejectReason(input.accountId(), input.chatKey());

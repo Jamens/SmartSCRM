@@ -127,7 +127,7 @@ export function observeLoginStatus(viewId: string, isLogin: boolean): void {
     // 登出这一刻，主进程手里就不再有"这个视图在看哪条会话"的可靠答案：清掉，并让渲染层看见这次清除。
     // 广播条件读的是**当前值**而不是"这一帧有没有登录翻转"：注入层每 3s 报一次登录态，
     // 无条件广播会把"登出静置"变成每 3s 一帧 IPC；而只在第一次翻转时广播又会漏掉
-    // "先有会话、后报登出"这一格。判"有值可清"两边都-cover：清完即 null，下一次自然不播。
+    // "先有会话、后报登出"这一格。判"有值可清"两边都覆盖：清完即 null，下一次自然不播。
     const had = activeChatOf(viewId)
     activeChat.set(viewId, null)
     if (had !== null) broadcastState()
@@ -168,7 +168,7 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
       viewId,
       accountId: entry.accountId,
       platform: entry.platform ?? 'whatsapp',
-      activeChatKey: activeChatOf(viewId),
+      activeChatKey: activeChatKeyOf(activeChatOf(viewId)),
       message: attribution.stamp(viewId, report.message)
     }
     hub.push(frame)
@@ -191,7 +191,7 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
         viewId,
         accountId: entry.accountId,
         platform: entry.platform ?? 'whatsapp',
-        activeChatKey: activeChatOf(viewId),
+        activeChatKey: activeChatKeyOf(activeChatOf(viewId)),
         message: {
           chatKey: meta.chatKey,
           msgKey: report.msgKey,

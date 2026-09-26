@@ -48,13 +48,14 @@ public final class ConversationScopeKey {
         return null;
     }
 
-    /** 写入口用的那条：不成形就是坏请求，40000。 */
+    /** 写入口用的那条：不成形就是坏请求，40000。键的形态本身只在 {@link #composeOrNull} 里出现一次。 */
     public static String compose(Long accountId, String chatKey) {
         String reason = rejectReason(accountId, chatKey);
-        if (reason != null) {
+        String key = composeOrNull(accountId, chatKey);
+        if (key == null) {
             throw new BizException(40000, reason);
         }
-        return accountId + ":" + chatKey;
+        return key;
     }
 
     /**
