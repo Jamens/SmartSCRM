@@ -56,7 +56,8 @@ Step 1 那三件事据此逐件判：
 - `tmp/p7a-conv-settings.mjs` → `ALL PASS (29/29)  [brief 的 16 条 + extra 13 条；HTTP 往返 65 次]`。C14：计划推演写的是"那 16 条"，实跑是 29 条，多出来的 13 条是评审轮加的边界与"未越层"对照（`5a–5i` 八条闸与文案、`X1–X9` 的客户档/全局行逐列未变与分辨力对照、`X7` 的 `code` ⇔ HTTP 码全跑配对）。以实跑为准。
 - 契约里三档语义的现场值（本轮日志）：`#2 会话档存在时 GET 读会话档（th），客户档那一份 hi 被压过`、`#4 POST /translate 带 customerId 仍按会话档出译文（两个入口同一条 resolve）`、`#8 同 text 两条会话（会话档 vs 客户档）→ cacheKey 不同`、`#6` 关到底仍出译文（§4①b 那条负面断言）。
 - **F2 修复轮（同日，改动落在 `7fafe4e` 与 `fc72dc1` 两个提交上，本次实跑跑的就是这两处的内容）**：驱动加两行后 `ALL PASS (31/31)  [brief 的 16 条 + extra 15 条；HTTP 往返 70 次]`，exit 0（`tmp/p7a-f2-conv-run2.log`）。新增的是真并发那一格与它的清理对照：
-  - `X10`：同一条从未建过档的会话，两个 `PUT` 用 `Promise.all` 同时发出 ⇒ 两边都 `code:0` + HTTP 200，且两边报的是**同一行 id**（现场 `id=312`）。这一条不是幂等检查——两发都要真进过 create 分支才算竞态，判据在第二通道：`tmp/p7-server.log` 里这个 scopeKey 有**两条** `TranslationSettingMapper.insert`（14:36:21.612，线程 exec-5 / exec-6），随后失败那支的 `LIMIT 1 FOR UPDATE` 读到 `Total: 1`，两支的 `updateById` 都以 `312(Long)` 结尾。
+  - `X10`：同一条从未建过档的会话，两个 `PUT` 用 `Promise.all` 同时发出 ⇒ 两边都 `code:0` + HTTP 200，且两边报的是**同一行 id**（现场 `id=325`）。这一条不是幂等检查——两发都要真进过 create 分支才算竞态，判据在第二通道：`tmp/p7-server.log` 里这个 scopeKey 有**两条** `TranslationSettingMapper.insert`（14:45:29.787 / .788，线程 exec-8 / exec-5，两条前面各自的 `LIMIT 1` 都读到 `Total: 0`），随后失败那支的 `LIMIT 1 FOR UPDATE` 读到 `Total: 1`，两支的 `updateById` 都以 `325(Long)` 结尾。
+    同一形状在本日三次连跑（14:36 / 14:40 / 14:45，行 id 312 / 318 / 325）里每次都出现两发 insert ⇒ 撞键那一支不是靠运气命中的单次事件。
   - `X11`：清理网对那一键回 `cleared:1`，即"这一键名下确实只有一行"。它单列而不并进收尾1 的聚合，因为收尾1 只断每条键各清各的。
   - 这两行抓到过一次真的坏行为：M-3 的初版写成"撞键后用快照读 `settingRow` 重读"，第一跑 `29/31` exit 1， loser 回的是 `HTTP=400 code=40901`（`tmp/p7a-f2-conv-run1-40901.log`）。根因与修法见提交 `fix(P7/B16): F2·M-3 …`：REPEATABLE READ 下本事务的普通 SELECT 读的是快照，撞键之后仍然看不见对手刚提交的那一行，只有 `FOR UPDATE` 是当前读。`X7` 的配对表因此加了一格 `[40901, 400]`——记的是重试臂的形状，不是用来消红的。
   - `X10` 只证后端解析链在真并发下不串档，**不**证"两个窗口同时点保存"这条 UI 路径；后者要真实登录档那一棒（见下）。
