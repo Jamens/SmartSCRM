@@ -12,7 +12,7 @@ Task 1–10 的机械面本轮在 HEAD `314577f` 之上**全部复跑并绿**：
 
 | 面 | 本轮证据词 | 一句话 |
 |---|---|---|
-| 后端三级解析 / 写侧分派 / 边界闸 | **实测** | `./mvnw test` 63 条 + `tmp/p7a-conv-settings.mjs` 32 条（F2 加了真并发那两行、F4 补上客户档那一支的同形并发，见"后端"一节），全在真库 `smartscrm_react` 上跑 |
+| 后端三级解析 / 写侧分派 / 边界闸 | **实测** | `./mvnw test` 68 条（63 条到 F4 收口为止，`TranslationServiceRaceTest` 那 5 条是复评自查后补的）+ `tmp/p7a-conv-settings.mjs` 32 条（F2 加了真并发那两行、F4 补上客户档那一支的同形并发，见"后端"一节），全在真库 `smartscrm_react` 上跑 |
 | V9 那一次列宽变更 | **读码 + 行为实测** | 列宽本身无直查证据（本机无 mysql CLI），能拿到的只有"只差大小写的两条键存成两行"这一条行为差异，见下节 |
 | 渲染层三档生效面（禁用链 / 冻结目标 / 写回哪一档 / 缓存分键 / 徽标所指那位客户） | **实测（布景为 A 档手喂）** | `tmp/p7a-stage-dialog.mjs` 七行 58 条全绿（F1 那一棒把驱动从六行 44 条扩到七行，加了行 7 与它的夹具）；它证的是"渲染层读对了那两个字段"，**不**证"真桥会不会给值" |
 | 生效面 ① · 内嵌页气泡按会话档出译文 | **读码成立**（本轮维持 spec §8 原话） | 一棒都没跑，够不上"读码 + 部分实测"那一档（那一档要 A5/B4 至少绿）；页内那一半（A6/B5）**待验证** |
@@ -65,6 +65,9 @@ Step 1 那三件事据此逐件判：
   - `X10c`：同一位**开跑前没有覆盖行**的客户（本跑选到 `id=43`；候选取 `GET /api/customers` 里 `CUST` 之外的全部，逐个用 `inherited:true` 现场判"这一档还没行"，一位都没有则按前提不成立退 2，不设"跳过"分支），两个 `scope=customer` 的 `PUT` 用 `Promise.all` 同时发出 ⇒ 两边都 `code:0` + HTTP 200、同一个 `data.id`（现场 `id=341`）、`scopeKey` 都是 `"43"`；独立 GET 读回落在这位客户自己那一行（`scope=customer`、`inherited=false`、`sendToLang="id"` ∈ 两提交值）；随后的清理 `DELETE` 回 `cleared:1`（那一键名下只有一行）。
   - 第二通道同一套判据（`tmp/p7-server.log`）：`exec-2` / `exec-4` 两支各自的 `LIMIT 1` 都读到 `Total: 0`，15:16:53.239 两发 `INSERT … 1(Long), customer(String), 43(String)` 都发了出去，`exec-2` 先 `Updates: 1`；`exec-4` 在 15:16:53.250（约 11ms 后）发出带 `FOR UPDATE` 的当前读、读到 `Total: 1`，两支的 `updateById` 随后都以那一行收尾。会话档与客户端那一支在同一跑里各留了一条 `FOR UPDATE`（15:16:53.204 / .250），所以"当前读真的被走到"这一格现在是两档各有一份现场值，不是只有一份。
   - `X10c` 与 `X10` 一样，**只证解析链在真并发下不串档**，不证"同一个人在客户抽屉与记录页会话头两处同时点保存"这条 UI 路径。
+- **F4 复评自查（同日更晚，`10465c1` 之后）**：上面那支"≥3 发会死锁"的兜底**写错了位置**——`ConcurrencyFailureException` 的兄弟 catch 罩不住 `catch (DuplicateKeyException)` **体内**抛出的异常，而死锁恰恰发生在体内那发 `FOR UPDATE` 上（各支持着重复键记录的 S 锁、再互相要 X 锁）。也就是说：那一格坏法没被消掉，仍会冒成 50000。这一格用真库凑不出来，所以补了第一份 mock 版单测 `TranslationServiceRaceTest`（5 条，把 mapper 桩的异常形状喂进那四条出口）——**先红后修**：新增那次"当前读被选为牺牲者"的用例在修之前就是 `Unexpected exception type thrown, expected BizException but was DeadlockLoserDataAccessException`，修之后 5 条全绿。
+  - 修完按 C8 重建重启（`tmp/p7a-f4fix-package.log` → jar 16:08 → `tmp/p7-server.log`，PID 24632），契约驱动在新 jar 上复跑仍是 `ALL PASS (32/32)`、exit 0、HTTP 往返 75 次（`tmp/p7a-f4fix-conv.log`，16:08:46）。这一跑的现场值：会话档那一行 `id=357`（两边 200 + 同 id，读回 `sendToLang="vi"`）、客户档那一行 `id=359`（`scopeKey="43"`，读回 `inherited=false` / `sendToLang="id"`、清理 `cleared:1`）。第二通道在同一份日志里两档各留一份：`16:08:46.415` 两支对 `conversation / 7:P7A-7-RACE@c.us` 各发一发 `INSERT`，`16:08:46.528` 撞键那支发 `... LIMIT 1 FOR UPDATE`；`16:08:46.565` 两支对 `customer / 43` 各发一发 `INSERT`，`16:08:46.577` 撞键那支发 `FOR UPDATE`（本跑 `LIMIT 1 FOR UPDATE` 共 2 条，正是这两处）。
+  - Java 侧从这一跑起是 **68 条**（`./mvnw test` → `Tests run: 68, Failures: 0, Errors: 0` + `BUILD SUCCESS`，日志 `tmp/p7a-f4fix-mvn-test.log`）：63 是 F4 之前的数，`TranslationServiceRaceTest` 那 5 条是本次加的。
 
 **V9 的列宽没有直接证据**（本机无 mysql CLI，全程只走 HTTP API）。这一格不能写成"迁移成功"就完事，证据形态只有一条行为差异：
 
@@ -80,7 +83,7 @@ PASS | #1 只差大小写的两条会话档 → 两条行、两个值（unicode_
 1. Flyway 社区版没有 undo 迁移——`V9` 一旦 apply 过，就不存在一条自动往回走的路径。
 2. 宽度收回 `VARCHAR(64)` 在数据到位之后是**结构性做不到**的：会话档键的形状是 `accountId ≤ 19 位 + ':' + chatKey ≤ 128`（V9 注释里那条算式，上界 148），只要库里存在一条超过 64 字符的键，任何改窄的 DDL 都会在那一行上失败——**前提是 strict `sql_mode`**（MySQL 8 默认带 `STRICT_TRANS_TABLES`；本机没有直查该变量的通道，这一句按默认值说，属**读码**）。非严格模式下改窄不报错而是**静默截断**，那比失败更糟：两条不同的键会截成同一条，再撞唯一键。所以回滚只有两条路：**恢复备份**，或先删掉 `scope='conversation'` 那些行、再上一条 V10 去改列。
 3. 排序规则那一侧要分两个方向说。**往前（V9 本身）不是数据完整性风险**：表默认是 `utf8mb4_unicode_ci`，而唯一键 `uk_tset_tenant_scope` 里"只差大小写的两条键"在那套判等下本来不可能同时存在，所以把这一列改成 `utf8mb4_bin`（判等更严、允许并存的行更多）不会让任何既有行突然变成重复。**往后（改回 `ci`）则是另一道硬拦**：一旦库里真并存了两条只差大小写的会话档键，`bin → ci` 的那次 `ALTER` 会在唯一键上直接报 `Duplicate entry` 而失败。所以宽度与判等各是一道独立的拦条——要回到 V9 之前，得先把超宽的键和只在大小写上不同的键对都清掉。
-4. `MODIFY COLUMN` 带排序规则变更是 copy-table 重建，期间该表写入阻塞。**代价小的理由是行数，不是"ALTER 本身便宜"**，而行数由键数决定：`uk_tset_tenant_scope` 限的是"每一档**每一键**最多一行"，所以这张表的行数 = 各档键数之和——global 每租户一行、customer 每位建过档的客户一行、**conversation 每条建过档的会话一行**（一次契约跑就在同一租户、同一 `scope='conversation'` 下铺开多条：本轮实测 ACCT 名下登记 9 条键、其中 5 条真落库并各删回 `cleared:1`；F2 那一跑是 6 条）。当前量级：本次 `X10c` 建出的那行自增 `id=341`，而 `id` 是 `AUTO_INCREMENT`（`V5` 的 DDL，MySQL 8 的重启也不回退），所以"插入尝试次数 ≥ 341、现存行数 ≤ 341"，几百行以内 ⇒ 这次重建便宜。**会话档真被用起来之后这一句就不再成立**：届时要么接受一次写阻塞窗口，要么先按上面第 2 条删行再改。
+4. `MODIFY COLUMN` 带排序规则变更是 copy-table 重建，期间该表写入阻塞。**代价小的理由是行数，不是"ALTER 本身便宜"**，而行数由键数决定：`uk_tset_tenant_scope` 限的是"每一档**每一键**最多一行"，所以这张表的行数 = 各档键数之和——global 每租户一行、customer 每位建过档的客户一行、**conversation 每条建过档的会话一行**（一次契约跑就在同一租户、同一 `scope='conversation'` 下铺开多条：本轮实测 ACCT 名下登记 9 条键、其中 5 条真落库并各删回 `cleared:1`；F2 那一跑是 6 条）。当前量级：到本文最后那一跑（16:08:46）为止，`X10c` 建出的那行自增到了 `id=359`（同一跑里 15:16 那一跑是 341），而 `id` 是 `AUTO_INCREMENT`（`V5` 的 DDL，MySQL 8 的重启也不回退），所以"插入尝试次数 ≥ 359、现存行数 ≤ 359"，几百行以内 ⇒ 这次重建便宜。**这一格没有 `COUNT(*)` 可查**（本机无 mysql CLI、验收只走 HTTP），用的是自增 id 给的上界：它只大不小，所以是个**单调变松**的界，跑得越多越不准，别把它当现值。**会话档真被用起来之后"便宜"这一句就不再成立**：届时要么接受一次写阻塞窗口，要么先按上面第 2 条删行再改。
 
 ### 渲染层（`activeChatKeyOf` 9 条 + `scopeLabel` 18 条 + `directionDraft` 线路 2 条 / `tmp/p7a-stage-dialog.mjs` 七行）
 
@@ -131,16 +134,20 @@ PASS | #1 只差大小写的两条会话档 → 两条行、两个值（unicode_
 4. **V9 的列宽没有直查证据**（本机无 mysql CLI、验收只走 HTTP）：能给的只有"大小写两条键存成两行"与"128 接受 / 129 拒绝"这两条行为差异，`VARCHAR(160)` 与 `utf8mb4_bin` 本身维持读码。
 5. **真实登录档整档未跑**：§4① 本轮维持"读码成立"，A1/A2/B2 那三格（真桥给不给键、键同不同源、切会话跟不跟）本轮无证据。跑它的前置不是"再点一次运行"，是一次真人切会话的动作。
 6. **全局行 `requireSettings` 那一支仍是"先查后插"**（F4 裁定：刻意不修，记下来）：它被**读路径**（`GET /settings` / `POST /translate`）也调用，而那两个入口没有 `@Transactional`，那一次 `insert` 跑在 autocommit 里——既没有"撞键后在本事务内改用当前读"的前提，也不该为了这一格给 GET 加事务。它只在"该租户的第一条全局行"时可达，而现网 DEMO 租户那一行由 `V5` 末尾的种子建好（读码）。真撞上的话就是 50000 + 重试，与会话档/客户档修前的形状同级。
-7. **≥3 发同一毫秒首存同一键，仍可能被 InnoDB 选为死锁牺牲者**：两支都会在重复键错误上持住那条记录的 S 锁、再各自要 `FOR UPDATE` 的 X 锁，S→X 升级是经典死锁形状；被选中的那支**整个事务**已被 InnoDB 回滚，所以 `insertOrAdopt` 里单挡了一支 `ConcurrencyFailureException` → 40901 + 请重试，而不是并进撞键那一支继续写。这一支**未被实跑触发**（两发不死锁：四次会话档 + 一次客户档的实测里，loser 都只在 `insert` 上等约 10ms 后拿到重复键），属**读码**的兜底。
+7. **≥3 发同一毫秒首存同一键，仍可能被 InnoDB 选为死锁牺牲者**：两支都会在重复键错误上持住那条记录的 S 锁、再各自要 `FOR UPDATE` 的 X 锁，S→X 升级是经典死锁形状；被选中的那支**整个事务**已被 InnoDB 回滚，所以 `insertOrAdopt` 里把 `ConcurrencyFailureException` 挡成 40901 + 请重试，而不是并进撞键那一支继续写。它挡在**两个位置**（`insert` 那一发自己等锁超时；撞键之后那次当前读被选为牺牲者），因为 Java 的兄弟 catch 罩不住兄弟体内抛出的异常——只写外面那一支等于没挡死锁这一格，这是 F4 复评自查发现自己上一版写错的地方。真库那一格**未被实跑触发**（两发不死锁：五次会话档 + 两次客户档的实测里，loser 都只在 `insert` 上等约 10ms 后拿到重复键），InnoDB 真会这么走属**读码**；出口的**形状**（哪一种 DAO 异常 → 哪一个业务码）有单测钉住，见限制 10。
 8. **`X10` / `X10c` 的"两发真的并发了"那一半是人工判据**：驱动只断两边 200 + 同一行 id + `cleared:1`。若后端把两发串行了，第二发走的是正常更新路径，两条照样全绿——所以那一半只能从 `tmp/p7-server.log` 里"同一 scopeKey 有两条 insert"读出来（人工）。没有第三条通道可用：驱动自己去读 `tmp/` 或 `target/` 会把契约验证绑到本机文件布局上。
 9. **`M-2`（两条实时帧也过 `activeChatKeyOf`）的行为差异面要分两半说**：未读判定与落库结果**无可观察差异**（`chat_key` 入库前有 `ChatKeys.matchesPlatform` 与 `@Size(max=128)` 两道闸，库里的值永远良构，裁剪只影响非成形值）；非成形值那一格的**批次划分会合并**——旧版 `acct|坏值` 与 `acct|` 是两个桶，新版都归到后者，于是一次 `POST /messages/batch` 替代两次，每行仍带着自己的 `chatKey` 入库。两半都是**读码**，不是实测。
+10. **`TranslationServiceRaceTest` 是本项目第一份用 mock 的后端单测，它钉的只有"异常形状 → 业务码"这一格**：桩喂的是 `DuplicateKeyException` / `DeadlockLoserDataAccessException` / `CannotAcquireLockException`，所以它**不**证明 MySQL 会抛这些异常、**不**证明撞键那一支发的真是 `LIMIT 1 FOR UPDATE`（尾串要 MP 的 lambda 列缓存才解析得动，离线环境没有）、也**不**证明两发真的并发了。前两者的真凭据仍是服务端日志里的 SQL 原文与那两发 `INSERT`，即限制 8 那条人工判据。为这一格把 `insertOrAdopt` 从 `private` 放宽到包私有——除这一处之外本仓的服务类没有为测试放宽过可见性。
 
 ## 交付与提交范围
 
 - 本次提交**只有两份文档**：本文与 `docs/superpowers/specs/2026-09-25-conversation-settings-design.md`（§8 只补"真实登录档未跑原因"与验收文档指向，§4① 的证据词维持原样；§10 裁定表未重开）。零 shipped-code 变更。
 - 上一句的"零 shipped-code"只界定 **Task 11 收官那一次提交**，不覆盖同日的 F2 / F4 两个修复轮。F2 那一轮改了源码，落库四个提交——`refa:`（M-1/M-2/M-4/M-5/M-6：键成形处与活动会话出口各归一、两份单测的指针改指提交物）、`fix:`（M-3：会话档首存撞键改走 `FOR UPDATE` 当前读）、`update:` × 2（本文的 V9 回滚段与 F2 实跑数，以及随后把现场值对齐到被引用那份日志的一次更正）。
-- **F4 收口轮（本轮，评审席推翻当时的 R-22）** 落两个提交：`fix:` 是源码侧（会话档与客户档两支首存合并成同一个 `insertOrAdopt`，加一支 `ConcurrencyFailureException` → 40901；三份注释的因果/清单/指针改正：`TranslationService` 的 `winner == null` 那一支与 `settingRowForUpdate` 的锁范围、`chatKeys.ts` 的"四个出口"、两份单测指针的"按类别列出"），`update:` 是本文（I-1 的假前提、N-6/N-7 的工件与跑数、F4 的 X10c 现场值、已知限制加到 9 条）。评审席点名的另一处同类指针 `service/provider/TencentProvider.java:23` **不在本批清**：它指的那条探针事实（腾讯 `InvalidAction`）目前没有任何提交物记录，删掉就等于让那句结论没有出处——先补出处再删指针，那是 P5 文档的一次独立收口。
-- 两轮的驱动行（F2 的 `X10`/`X11`、F4 的 `X10c`）同样只在 gitignore 的 `tmp/` 下；契约日志 `tmp/p7a-f2-conv*.log`、`tmp/p7a-f4-conv.log`、`tmp/p7a-f4-mvnw-test.log`、`tmp/p7a-f4-package.log` 与 `tmp/p7-server.log` 一并如此。
+- **F4 收口轮（本轮，评审席推翻当时的 R-22）** 落四个提交，两组"源码 + 文档"：
+  - 第一组——`fix:`（会话档与客户档两支首存合并成同一个 `insertOrAdopt`，加一支 `ConcurrencyFailureException` → 40901；三份注释的因果/清单/指针改正：`TranslationService` 的 `winner == null` 那一支与 `settingRowForUpdate` 的锁范围、`chatKeys.ts` 的"四个出口"、两份单测指针的"按类别列出"）+ `update:`（本文的 I-1 假前提、N-6/N-7 的工件与跑数、F4 的 `X10c` 现场值、已知限制加到 9 条）。
+  - 第二组是这一组自己留下的坏法被复评自查抓到之后补的——`fix:`（那支 `ConcurrencyFailureException` 的**位置**：死锁发生在撞键体内那次当前读上，兄弟 catch 罩不住，于是一整格 50000 没被消掉；改法是当前读那一发单独套一层同码出口，并加本仓第一份 mock 单测 `TranslationServiceRaceTest` 5 条，先红后修）+ `update:`（本文：后端一节加 F4 复评自查那三小条、Java 侧从 63 到 68、已知限制加到 10 条）。
+  - 评审席点名的另一处同类指针 `service/provider/TencentProvider.java:23` **不在本批清**：它指的那条探针事实（腾讯 `InvalidAction`）目前没有任何提交物记录，删掉就等于让那句结论没有出处——先补出处再删指针，那是 P5 文档的一次独立收口。
+- 三轮的驱动行（F2 的 `X10`/`X11`、F4 的 `X10c`）同样只在 gitignore 的 `tmp/` 下；契约与闸门日志 `tmp/p7a-f2-conv*.log`、`tmp/p7a-f4-conv.log`、`tmp/p7a-f4fix-conv.log`、`tmp/p7a-f4-mvnw-test.log`、`tmp/p7a-f4fix-mvn-test.log`、`tmp/p7a-f4fix-package.log`、`tmp/p7a-f4-review-run.log` 与 `tmp/p7-server.log` 一并如此。
 - `tmp/p7b-prereq.mjs`、`tmp/p7b-live.mjs`、`tmp/p7b-step1-probe.mjs`、`tmp/p7b-wa-dom.mjs` 与本轮四份闸门日志（`tmp/p7b-gate-*.log`）都在 gitignore 的 `tmp/` 下，不进提交；`tmp/p7b-live-state.json` 未产生（A 棒没跑）。
 - `docs/notes/2026-09-22-legacy-feature-gap.md` 按仓库约定不入库。
 - **push 由用户手动执行，助手不 push。**
