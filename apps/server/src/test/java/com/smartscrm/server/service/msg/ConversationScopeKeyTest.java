@@ -10,7 +10,9 @@ import org.junit.jupiter.api.Test;
 
 /**
  * 会话档 `scope_key` 形态的离线证据：本项目的后端里只有这里能把 (accountId, chatKey) 变成一条键，
- * 只有这一处断得清它什么时候不该变成键。跑不到的部分全在 tmp/p7a-conv-settings.mjs 的 8 行里。
+ * 只有这一处断得清它什么时候不该变成键。跑不到的部分在
+ * `docs/notes/2026-09-25-conversation-settings-verification.md` 的"后端"一节里逐条列出（驱动本体在
+ * gitignore 的 `tmp/` 下，不作为提交物里的指针）。
  */
 class ConversationScopeKeyTest {
 
