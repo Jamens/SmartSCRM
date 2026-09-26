@@ -12,7 +12,7 @@ Task 1–10 的机械面本轮在 HEAD `314577f` 之上**全部复跑并绿**：
 
 | 面 | 本轮证据词 | 一句话 |
 |---|---|---|
-| 后端三级解析 / 写侧分派 / 边界闸 | **实测** | `./mvnw test` 63 条 + `tmp/p7a-conv-settings.mjs` 29 条，全在真库 `smartscrm_react` 上跑 |
+| 后端三级解析 / 写侧分派 / 边界闸 | **实测** | `./mvnw test` 63 条 + `tmp/p7a-conv-settings.mjs` 31 条（F2 修复轮加了真并发那两行，见"后端"一节），全在真库 `smartscrm_react` 上跑 |
 | V9 那一次列宽变更 | **读码 + 行为实测** | 列宽本身无直查证据（本机无 mysql CLI），能拿到的只有"只差大小写的两条键存成两行"这一条行为差异，见下节 |
 | 渲染层三档生效面（禁用链 / 冻结目标 / 写回哪一档 / 缓存分键） | **实测（布景为 A 档手喂）** | `tmp/p7a-stage-dialog.mjs` 六行 44 条全绿；它证的是"渲染层读对了那两个字段"，**不**证"真桥会不会给值" |
 | 生效面 ① · 内嵌页气泡按会话档出译文 | **读码成立**（本轮维持 spec §8 原话） | 一棒都没跑，够不上"读码 + 部分实测"那一档（那一档要 A5/B4 至少绿）；页内那一半（A6/B5）**待验证** |
@@ -55,6 +55,11 @@ Step 1 那三件事据此逐件判：
 - `./mvnw test` → `Tests run: 63, Failures: 0, Errors: 0, Skipped: 0` + `BUILD SUCCESS`。其中 B16 新增的两份是 `ConversationScopeKeyTest` `Tests run: 8` 与 `ScopeSettingsTest` `Tests run: 4`（三档组合：conv 命中 → `conversation`+`inherited=false`；仅 cust → `customer`+`false`；只有 global → `global`+`true`）。
 - `tmp/p7a-conv-settings.mjs` → `ALL PASS (29/29)  [brief 的 16 条 + extra 13 条；HTTP 往返 65 次]`。C14：计划推演写的是"那 16 条"，实跑是 29 条，多出来的 13 条是评审轮加的边界与"未越层"对照（`5a–5i` 八条闸与文案、`X1–X9` 的客户档/全局行逐列未变与分辨力对照、`X7` 的 `code` ⇔ HTTP 码全跑配对）。以实跑为准。
 - 契约里三档语义的现场值（本轮日志）：`#2 会话档存在时 GET 读会话档（th），客户档那一份 hi 被压过`、`#4 POST /translate 带 customerId 仍按会话档出译文（两个入口同一条 resolve）`、`#8 同 text 两条会话（会话档 vs 客户档）→ cacheKey 不同`、`#6` 关到底仍出译文（§4①b 那条负面断言）。
+- **F2 修复轮（同日，改动落在 `7fafe4e` 与 `fc72dc1` 两个提交上，本次实跑跑的就是这两处的内容）**：驱动加两行后 `ALL PASS (31/31)  [brief 的 16 条 + extra 15 条；HTTP 往返 70 次]`，exit 0（`tmp/p7a-f2-conv-run2.log`）。新增的是真并发那一格与它的清理对照：
+  - `X10`：同一条从未建过档的会话，两个 `PUT` 用 `Promise.all` 同时发出 ⇒ 两边都 `code:0` + HTTP 200，且两边报的是**同一行 id**（现场 `id=312`）。这一条不是幂等检查——两发都要真进过 create 分支才算竞态，判据在第二通道：`tmp/p7-server.log` 里这个 scopeKey 有**两条** `TranslationSettingMapper.insert`（14:36:21.612，线程 exec-5 / exec-6），随后失败那支的 `LIMIT 1 FOR UPDATE` 读到 `Total: 1`，两支的 `updateById` 都以 `312(Long)` 结尾。
+  - `X11`：清理网对那一键回 `cleared:1`，即"这一键名下确实只有一行"。它单列而不并进收尾1 的聚合，因为收尾1 只断每条键各清各的。
+  - 这两行抓到过一次真的坏行为：M-3 的初版写成"撞键后用快照读 `settingRow` 重读"，第一跑 `29/31` exit 1， loser 回的是 `HTTP=400 code=40901`（`tmp/p7a-f2-conv-run1-40901.log`）。根因与修法见提交 `fix(P7/B16): F2·M-3 …`：REPEATABLE READ 下本事务的普通 SELECT 读的是快照，撞键之后仍然看不见对手刚提交的那一行，只有 `FOR UPDATE` 是当前读。`X7` 的配对表因此加了一格 `[40901, 400]`——记的是重试臂的形状，不是用来消红的。
+  - `X10` 只证后端解析链在真并发下不串档，**不**证"两个窗口同时点保存"这条 UI 路径；后者要真实登录档那一棒（见下）。
 
 **V9 的列宽没有直接证据**（本机无 mysql CLI，全程只走 HTTP API）。这一格不能写成"迁移成功"就完事，证据形态只有一条行为差异：
 
@@ -64,6 +69,13 @@ PASS | #1 只差大小写的两条会话档 → 两条行、两个值（unicode_
 ```
 
 同一账号下两条只差大小写的键拿到两个不同自增 id、读回两个不同值 ⇒ `scope_key` 那一列按大小写敏感存了两行（`V9` 改 `utf8mb4_bin` 的效果，读码）。宽度那一侧能拿到的最接近的证据是 `5g PUT chatKey 恰好 128 字符 → 接受 + 独立 GET 读回同一行` 与 `5b PUT chatKey 129 字符 → 40000`：**这两条断的是应用层那道闸与列宽同口径**（`shared/chatKeys.ts` 的 `activeChatKeyOf` 与 Java 侧同一上限，D-11），**不是** `SHOW CREATE TABLE` 里的 `VARCHAR(160)`。列宽数值本身维持 **读码**。
+
+**V9 的回滚代价**（记下来，是为了别把这次变更当成"随时可退"）：
+
+1. Flyway 社区版没有 undo 迁移——`V9` 一旦 apply 过，就不存在一条自动往回走的路径。
+2. 宽度收回 `VARCHAR(64)` 在数据到位之后是**结构性做不到**的：会话档键的形状是 `accountId ≤ 19 位 + ':' + chatKey ≤ 128`（V9 注释里那条算式，上界 148），只要库里存在一条超过 64 字符的键，任何改窄的 DDL 都会在那一行上失败。所以回滚只有两条路：**恢复备份**，或先删掉 `scope='conversation'` 那些行、再上一条 V10 去改列。
+3. 排序规则那一侧要分两个方向说。**往前（V9 本身）不是数据完整性风险**：表默认是 `utf8mb4_unicode_ci`，而唯一键 `uk_tset_tenant_scope` 里"只差大小写的两条键"在那套判等下本来不可能同时存在，所以把这一列改成 `utf8mb4_bin`（判等更严、允许并存的行更多）不会让任何既有行突然变成重复。**往后（改回 `ci`）则是另一道硬拦**：一旦库里真并存了两条只差大小写的会话档键，`bin → ci` 的那次 `ALTER` 会在唯一键上直接报 `Duplicate entry` 而失败。所以宽度与判等各是一道独立的拦条——要回到 V9 之前，得先把超宽的键和只在大小写上不同的键对都清掉。
+4. `MODIFY COLUMN` 带排序规则变更是 copy-table 重建，期间该表写入阻塞。这里的代价小，只因为那张表每租户每一档最多一行；不是"ALTER 本身便宜"。
 
 ### 渲染层（`activeChatKeyOf` 9 条 + `scopeLabel` 18 条 + `directionDraft` 线路 2 条 / `tmp/p7a-stage-dialog.mjs` 六行）
 
@@ -115,6 +127,7 @@ PASS | #1 只差大小写的两条会话档 → 两条行、两个值（unicode_
 ## 交付与提交范围
 
 - 本次提交**只有两份文档**：本文与 `docs/superpowers/specs/2026-09-25-conversation-settings-design.md`（§8 只补"真实登录档未跑原因"与验收文档指向，§4① 的证据词维持原样；§10 裁定表未重开）。零 shipped-code 变更。
+- 上一句的"零 shipped-code"只界定 **Task 11 收官那一次提交**，不覆盖同日的 F2 修复轮：那一轮改了源码，分三个提交落库——`refa:`（M-1/M-2/M-4/M-5/M-6：键成形处与活动会话出口各归一、两份单测的指针改指提交物）、`fix:`（M-3：会话档首存撞键改走 `FOR UPDATE` 当前读）、`update:`（本文的 V9 回滚段与 F2 实跑数）。F2 的驱动行（X10/X11）同样只在 gitignore 的 `tmp/` 下。
 - `tmp/p7b-prereq.mjs`、`tmp/p7b-live.mjs`、`tmp/p7b-step1-probe.mjs`、`tmp/p7b-wa-dom.mjs` 与本轮四份闸门日志（`tmp/p7b-gate-*.log`）都在 gitignore 的 `tmp/` 下，不进提交；`tmp/p7b-live-state.json` 未产生（A 棒没跑）。
 - `docs/notes/2026-09-22-legacy-feature-gap.md` 按仓库约定不入库。
 - **push 由用户手动执行，助手不 push。**
