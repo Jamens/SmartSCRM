@@ -190,6 +190,8 @@ P6 客户档的写入是"从全局整份复制后叠加"。会话档的源改成
 
 **真实登录档（需你在场：代理 + WhatsApp 已登录）**：在 WhatsApp 里给会话 A 设 `en`、会话 B 设 `vi`，切换会话看气泡是否跟着变。这档未跑完之前，§4① 只能标"读码成立"。
 
+**未跑原因（Task 11 本轮：前置不成立，不是断言失败）**：两棒都没开火，所以这一档本轮没有实跑数，上面那句原话照旧成立。当场量到的是——代理开着（`ProxyEnable=1` / `127.0.0.1:7892`）、WhatsApp 视图已登录（`#pane-side` 在、0 颗 QR 画布、无登录面板）、主进程确实是 Task 6 之后的构建（现拉的 `msg:bridges` 帧里带 `activeChatKey` 这一格，那一格只由 `bridgeStates()` 组装），可用单聊 33 条（键非空、≤128、非群），全局行 `scope=global recv=zh-CN send=en channel=1`。坏在第三件前置：视图里此刻没打开任何会话（`#main` 不存在），而页侧 `active_chat` 只有两个发布者、都是事件驱动（`bridge/whatsapp/collect.ts` 的 wa-js `chat.active_chat` 事件与 `open_chat` 命令回执），本阶段没有驱动侧的 `open_chat` 通路，于是"真桥给不给得出键"这一格只能由一次真人切会话来回答；B 棒的结构本身就是"人在 A 棒之后亲手切到同账号另一条会话"。真人不在场 ⇒ 按 Step 1 给的出口记未验证。另记一句本轮量到的形状，免得下一轮误读：那一格现拉值是 `null`，说的是"这一拍没人切过会话"，不是"真桥给不出键"——两者的分别正是 A1 要做成断言而不是前置的原因。逐件读数、闸门抄录与 `tmp/p7b-prereq.mjs` 那一次 `BLOCKED(premise) … —— []` 的原文，见 `docs/notes/2026-09-25-conversation-settings-verification.md`。
+
 **已知验证缺口**：Telegram 会话档只能到 fixture（Task 12a 未做），本阶段不声称 TG 生效。
 
 ## 9. 不在本阶段
