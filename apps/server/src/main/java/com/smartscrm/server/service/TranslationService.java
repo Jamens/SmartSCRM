@@ -174,7 +174,8 @@ public class TranslationService {
 
     /**
      * 建一行覆盖档，并把"并发首存"这一格处理成业务码而不是 50000（C12）。会话档与客户档共用它
-     * （R5：同一份竞态规则不写两遍）。三条出口：
+     * （R5：同一份竞态规则不写两遍）。出口有四条：下面 {@code <ol>} 里那三条（建成 / 撞键后采纳 /
+     * 撞键后行又没了），加上段末那支并发失败——末条不写在 {@code <ol>} 里，因为它有两个抛出点。
      * <ol>
      *   <li><b>建成</b> —— 返回手里这条新行，调用方继续 {@code saveInto} 打上本次改动。</li>
      *   <li><b>撞键</b>（{@link org.springframework.dao.DuplicateKeyException}）—— 另一个窗口把同一键的
@@ -189,7 +190,8 @@ public class TranslationService {
      * 各支都会在重复键错误上持住那条记录的 S 锁，再各自要 {@code FOR UPDATE} 的 X 锁 —— S→X 升级是
      * InnoDB 的经典死锁形状，被选为牺牲者那支的**整个事务**已被 InnoDB 回滚，所以这里不能"继续往下写"
      * （写的就不是本事务读到的值了），只能回 40901 让调用方重试。两发不死锁：loser 拿到重复键时
-     * winner 已经提交并放锁，实测（2026-09-26 四次真并发跑）loser 只在 insert 上等约 10ms。
+     * winner 已经提交并放锁；真并发每一跑的现场值（loser 只在那一发 {@code insert} 上等约 10ms）逐条记在
+     * 验收文档"后端"一节，次数不写进注释——它每复跑一次就要漂。
      * <p>
      * 这一支**写在两个位置**，不是冗余：{@code ConcurrencyFailureException} 的抛出点一处是上面那次
      * {@code insert}（等对手的写锁等到 {@code innodb_lock_wait_timeout}），另一处是撞键之后那次当前读
@@ -428,12 +430,18 @@ public class TranslationService {
     /**
      * 全局行：读不到就建一条（P5 起的兜底行为，不改）。
      * <p>
-     * 这一支与 {@link #insertOrAdopt} 修掉的是同一个"先查后插"形状，**刻意不套那个口子**，两条理由：
-     * 它同时被读路径（{@code resolveSetting} → GET / translate）调用，而那两个入口没有 {@code @Transactional}，
-     * insert 跑在 autocommit 里——"事务内改用当前读"的前提在这里不成立，为它给 GET 加事务是反向的代价。
-     * 而可达窗口只有一次：该租户**第一条**全局行（现网库里的行由 {@code V5} 末尾那句
-     * {@code INSERT INTO translation_setting (tenant_id)} 建好，正常运营下不再走到）。
-     * 真撞上了就是 {@code 50000} + 重试，数据不坏。已按这一口径记进验收文档的"已知限制"。
+     * 这一支与 {@link #insertOrAdopt} 修掉的是同一个"先查后插"形状，**刻意不套那个口子**。撑住这一
+     * 裁定的第一条是**可达窗口只有一次**：只有"该租户的**第一条**全局行"那一瞬可能撞上，而 {@code V5}
+     * 末尾那句种子只给**种子租户**建了行（{@code INSERT INTO translation_setting (tenant_id) VALUES (@tid)}），
+     * 所以**每接入一个新租户仍会走到这一发 {@code insert} 一次**——撞不撞，取决于那一瞬有没有第二个并发者。
+     * <p>
+     * 第二条理由要按调用方分档说，别一句罩全：**读路径**（{@code getSettings} / {@code translate} →
+     * {@code resolveSetting}）没有 {@code @Transactional}，那一次 insert 跑在 autocommit 里，"撞键后在本事务内
+     * 改用当前读"的前提不成立，为它给 GET 加事务是反向的代价。但**三个写入口**（{@link #updateSettings}、
+     * {@link #updateCustomerSettings}、{@link #updateConversationSettings}）都是 {@code @Transactional} 的，
+     * 它们经 {@code copyOf(requireSettings(…))} 也走同一发 insert，那里"当前读"的前提本来是成立的——
+     * 所以那一支没套口子是**裁定**（概率与代价），不是"技术上做不到"。真撞上了就是 {@code 50000} + 重试，
+     * 数据不坏。已按这一口径记进验收文档"已知限制"第 6 条。
      */
     private TranslationSetting requireSettings(Long tenantId) {
         TranslationSetting setting = settingRow(tenantId, "global", null);
