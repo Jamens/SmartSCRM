@@ -166,7 +166,21 @@ public class TranslationService {
             source = requireSettings(tenantId);
         }
         TranslationSetting created = copyOf(source, tenantId, "conversation", key);
-        settingMapper.insert(created);
+        try {
+            settingMapper.insert(created);
+        } catch (org.springframework.dao.DuplicateKeyException race) {
+            // 另一个窗口把同一条会话档同时首次保存了：这一格是"你要建的行已经存在"，属 40901，
+            // 不该以 50000 收场（C12）。InnoDB 的重复键只回滚该语句、事务仍可继续，而撞键这个事实
+            // 本身就说明对手已经提交（撞键判定要等它的写锁），所以这里用**当前读**去拿那一行——
+            // 快照读拿不到，见 `settingRowForUpdate` 的注释。拿到就把本次 input 落到它上面，
+            // 与不撞键时的行为逐字相同（整份覆盖的既有语义）；拿不到只可能是对手回滚了，
+            // 那时库里确实没有行，40901 + "请重试"是唯一诚实的答复。
+            TranslationSetting winner = settingRowForUpdate(tenantId, "conversation", key);
+            if (winner == null) {
+                throw new BizException(40901, "该会话的语向行刚被别处创建，请重试");
+            }
+            return saveInto(winner, tenantId, input);
+        }
         return saveInto(created, tenantId, input);
     }
 
@@ -302,6 +316,25 @@ public class TranslationService {
 
     // 1) 取设置：按 scope 定位，global 保持 P5 的兜底建行行为不变
     private TranslationSetting settingRow(Long tenantId, String scope, String scopeKey) {
+        return settingMapper.selectOne(settingQuery(tenantId, scope, scopeKey).last("LIMIT 1"));
+    }
+
+    /**
+     * 同一条定位条件的**当前读**（{@code FOR UPDATE}）。只给撞键那一支用：
+     * MySQL 默认 REPEATABLE READ 下，事务里的普通 SELECT 读的是本事务第一次读建立的快照，
+     * 所以"对手刚提交的那一行"在撞键之后仍然看不见——实测（2026-09-26，
+     * {@code tmp/p7a-f2-conv.log} 的 X10）：撞键那支重读拿到 {@code null}，只能退回 40901。
+     * 加锁读走的是当前读，看得见对手已提交的行，因此本次保存能落到那一行上（后写覆盖，两边都 200）。
+     * 锁的代价是有的（这一读持锁到本事务结束），但范围就是这一条唯一键命中的那一行，
+     * 而拿到锁之后本来就要写它。
+     */
+    private TranslationSetting settingRowForUpdate(Long tenantId, String scope, String scopeKey) {
+        return settingMapper.selectOne(settingQuery(tenantId, scope, scopeKey).last("LIMIT 1 FOR UPDATE"));
+    }
+
+    /** 三档共用的那条定位条件。尾串（{@code LIMIT} / {@code FOR UPDATE}）由各调用方自己接——
+     *  MyBatis-Plus 的 {@code last()} 是覆盖式的，在这儿先占就会被后面那次 {@code last()} 抹掉。 */
+    private LambdaQueryWrapper<TranslationSetting> settingQuery(Long tenantId, String scope, String scopeKey) {
         LambdaQueryWrapper<TranslationSetting> query = new LambdaQueryWrapper<TranslationSetting>()
             .eq(TranslationSetting::getTenantId, tenantId)
             .eq(TranslationSetting::getScope, scope);
@@ -312,7 +345,7 @@ public class TranslationService {
         } else {
             query.eq(TranslationSetting::getScopeKey, scopeKey);
         }
-        return settingMapper.selectOne(query.last("LIMIT 1"));
+        return query;
     }
 
     /** 客户行的读取：不建行。没有覆盖行就是"跟随全局"。 */
