@@ -190,22 +190,44 @@ public class TranslationService {
      * InnoDB 的经典死锁形状，被选为牺牲者那支的**整个事务**已被 InnoDB 回滚，所以这里不能"继续往下写"
      * （写的就不是本事务读到的值了），只能回 40901 让调用方重试。两发不死锁：loser 拿到重复键时
      * winner 已经提交并放锁，实测（2026-09-26 四次真并发跑）loser 只在 insert 上等约 10ms。
-     * 这一支未被实跑触发（要 ≥3 发同一毫秒、且 InnoDB 恰好选牺牲者），属**读码**的兜底。
+     * <p>
+     * 这一支**写在两个位置**，不是冗余：{@code ConcurrencyFailureException} 的抛出点一处是上面那次
+     * {@code insert}（等对手的写锁等到 {@code innodb_lock_wait_timeout}），另一处是撞键之后那次当前读
+     * （S→X 升级真死锁时就在这里）。后者落在 {@code catch (DuplicateKeyException)} 的**体内**，而 Java 的
+     * 兄弟 catch 罩不住兄弟体内抛出的异常——把它"合并成外面那一个 catch"就等于让死锁那一格重新冒成
+     * 50000（{@code TranslationServiceRaceTest} 钉的就是这一格）。
+     * <p>
+     * 死锁这一格未被真库实跑触发（要 ≥3 发同一毫秒、且 InnoDB 恰好选牺牲者）：形状的兜底是单测
+     * （{@code TranslationServiceRaceTest}，桩喂异常），InnoDB 真会不会这么走属**读码**。
+     * <p>
+     * 包私有而非 {@code private}：这四条出口（建成 / 撞键后采纳 / 当前读拿到 null / 并发失败）在真库上
+     * 没法稳定凑出来，用桩把异常形状喂进去才钉得住；真并发那一格仍由契约驱动 {@code X10} / {@code X10c}
+     * 在真 MySQL 上跑（驱动在 gitignore 的 {@code tmp/} 下）。
      */
-    private TranslationSetting insertOrAdopt(TranslationSetting draft, Long tenantId, String scope,
-                                             String noun, String scopeKey) {
+    TranslationSetting insertOrAdopt(TranslationSetting draft, Long tenantId, String scope,
+                                     String noun, String scopeKey) {
         try {
             settingMapper.insert(draft);
             return draft;
         } catch (org.springframework.dao.DuplicateKeyException race) {
-            TranslationSetting winner = settingRowForUpdate(tenantId, scope, scopeKey);
+            TranslationSetting winner;
+            try {
+                winner = settingRowForUpdate(tenantId, scope, scopeKey);
+            } catch (org.springframework.dao.ConcurrencyFailureException lock) {
+                throw concurrentFirstSave(noun);
+            }
             if (winner == null) {
                 throw new BizException(40901, noun + "的语向行刚被别处创建又被删除，请重试");
             }
             return winner;
         } catch (org.springframework.dao.ConcurrencyFailureException lock) {
-            throw new BizException(40901, noun + "的语向刚被别处改动，请重试");
+            throw concurrentFirstSave(noun);
         }
+    }
+
+    /** 两处 catch 走同一个出口文案与同一个码（R5：同一份规则不出现两份字面量）。 */
+    private static BizException concurrentFirstSave(String noun) {
+        return new BizException(40901, noun + "的语向刚被别处改动，请重试");
     }
 
     @Transactional
