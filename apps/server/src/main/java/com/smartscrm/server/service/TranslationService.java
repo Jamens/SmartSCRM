@@ -134,9 +134,12 @@ public class TranslationService {
             throw new BizException(40404, "客户不存在: " + customerId);
         }
         TranslationSetting existing = customerRow(tenantId, customerId);
+        // 客户档与会话档共用同一个"撞键就 adopts 对手那一行"的口子（R5：规则不出现两份）。
+        // 现实概率并不比会话档低：这一档的两个写入口（客户抽屉、记录页会话头）落在同一个人身上是日常态。
         if (existing == null) {
-            existing = copyOf(requireSettings(tenantId), tenantId, "customer", String.valueOf(customerId));
-            settingMapper.insert(existing);
+            String key = String.valueOf(customerId);
+            existing = insertOrAdopt(copyOf(requireSettings(tenantId), tenantId, "customer", key),
+                tenantId, "customer", "该客户", key);
         }
         // saveInto 只认"改哪些字段"，行由调用方给：三档共用同一份校验 + 赋值（R5：规则不出现两份）。
         return saveInto(existing, tenantId, input);
@@ -166,22 +169,43 @@ public class TranslationService {
             source = requireSettings(tenantId);
         }
         TranslationSetting created = copyOf(source, tenantId, "conversation", key);
+        return saveInto(insertOrAdopt(created, tenantId, "conversation", "该会话", key), tenantId, input);
+    }
+
+    /**
+     * 建一行覆盖档，并把"并发首存"这一格处理成业务码而不是 50000（C12）。会话档与客户档共用它
+     * （R5：同一份竞态规则不写两遍）。三条出口：
+     * <ol>
+     *   <li><b>建成</b> —— 返回手里这条新行，调用方继续 {@code saveInto} 打上本次改动。</li>
+     *   <li><b>撞键</b>（{@link org.springframework.dao.DuplicateKeyException}）—— 另一个窗口把同一键的
+     *       那一行同时首存了。InnoDB 的重复键只回滚该语句、事务仍可继续，而撞键这个事实本身就说明对手
+     *       已经提交（重复键判定要等它的写锁），所以用**当前读**去拿那一行、把本次改动落到它上面——
+     *       与不撞键时的行为逐字相同（整份覆盖的既有语义：两边都 200，后写胜出）。
+     *       快照读拿不到那一行，见 {@link #settingRowForUpdate} 的注释。</li>
+     *   <li><b>撞键但那一行已经没了</b> —— 只可能是撞键之后有人并发删了它（{@code DELETE} 那两个口）。
+     *       此时库里确实没有行，回 40901 + 请重试。</li>
+     * </ol>
+     * 另外单独挡一支 {@link org.springframework.dao.ConcurrencyFailureException}：≥3 发同时首存同一键时，
+     * 各支都会在重复键错误上持住那条记录的 S 锁，再各自要 {@code FOR UPDATE} 的 X 锁 —— S→X 升级是
+     * InnoDB 的经典死锁形状，被选为牺牲者那支的**整个事务**已被 InnoDB 回滚，所以这里不能"继续往下写"
+     * （写的就不是本事务读到的值了），只能回 40901 让调用方重试。两发不死锁：loser 拿到重复键时
+     * winner 已经提交并放锁，实测（2026-09-26 四次真并发跑）loser 只在 insert 上等约 10ms。
+     * 这一支未被实跑触发（要 ≥3 发同一毫秒、且 InnoDB 恰好选牺牲者），属**读码**的兜底。
+     */
+    private TranslationSetting insertOrAdopt(TranslationSetting draft, Long tenantId, String scope,
+                                             String noun, String scopeKey) {
         try {
-            settingMapper.insert(created);
+            settingMapper.insert(draft);
+            return draft;
         } catch (org.springframework.dao.DuplicateKeyException race) {
-            // 另一个窗口把同一条会话档同时首次保存了：这一格是"你要建的行已经存在"，属 40901，
-            // 不该以 50000 收场（C12）。InnoDB 的重复键只回滚该语句、事务仍可继续，而撞键这个事实
-            // 本身就说明对手已经提交（撞键判定要等它的写锁），所以这里用**当前读**去拿那一行——
-            // 快照读拿不到，见 `settingRowForUpdate` 的注释。拿到就把本次 input 落到它上面，
-            // 与不撞键时的行为逐字相同（整份覆盖的既有语义）；拿不到只可能是对手回滚了，
-            // 那时库里确实没有行，40901 + "请重试"是唯一诚实的答复。
-            TranslationSetting winner = settingRowForUpdate(tenantId, "conversation", key);
+            TranslationSetting winner = settingRowForUpdate(tenantId, scope, scopeKey);
             if (winner == null) {
-                throw new BizException(40901, "该会话的语向行刚被别处创建，请重试");
+                throw new BizException(40901, noun + "的语向行刚被别处创建又被删除，请重试");
             }
-            return saveInto(winner, tenantId, input);
+            return winner;
+        } catch (org.springframework.dao.ConcurrencyFailureException lock) {
+            throw new BizException(40901, noun + "的语向刚被别处改动，请重试");
         }
-        return saveInto(created, tenantId, input);
     }
 
     @Transactional
@@ -320,13 +344,16 @@ public class TranslationService {
     }
 
     /**
-     * 同一条定位条件的**当前读**（{@code FOR UPDATE}）。只给撞键那一支用：
+     * 同一条定位条件的**当前读**（{@code FOR UPDATE}）。只给 {@link #insertOrAdopt} 撞键那一支用：
      * MySQL 默认 REPEATABLE READ 下，事务里的普通 SELECT 读的是本事务第一次读建立的快照，
-     * 所以"对手刚提交的那一行"在撞键之后仍然看不见——实测（2026-09-26，
-     * {@code tmp/p7a-f2-conv.log} 的 X10）：撞键那支重读拿到 {@code null}，只能退回 40901。
+     * 所以"对手刚提交的那一行"在撞键之后仍然看不见——2026-09-26 一次真并发跑里，撞键那支的快照读
+     * 拿到的就是 {@code null}，只能退回 40901，而库里那一行明明已经存在（逐条现场值见
+     * {@code docs/notes/2026-09-25-conversation-settings-verification.md} 的"后端"一节）。
      * 加锁读走的是当前读，看得见对手已提交的行，因此本次保存能落到那一行上（后写覆盖，两边都 200）。
-     * 锁的代价是有的（这一读持锁到本事务结束），但范围就是这一条唯一键命中的那一行，
-     * 而拿到锁之后本来就要写它。
+     * 锁的代价：三列等值正好覆盖唯一键 {@code uk_tset_tenant_scope} 的全部列，查到行时锁的就是那一条
+     * 索引记录，且拿到锁之后本来就要写它——等于把 {@code updateById} 的 X 锁提前到读的位置；
+     * 查不到行时（并发删除那一格）锁的是该键位置上的**间隙**，随后抛 {@code BizException} 触发回滚、
+     * 毫秒级释放。两种情形的持有时长都到本事务结束。
      */
     private TranslationSetting settingRowForUpdate(Long tenantId, String scope, String scopeKey) {
         return settingMapper.selectOne(settingQuery(tenantId, scope, scopeKey).last("LIMIT 1 FOR UPDATE"));
@@ -376,6 +403,16 @@ public class TranslationService {
         return conv == null ? null : conv.getCustomerId();
     }
 
+    /**
+     * 全局行：读不到就建一条（P5 起的兜底行为，不改）。
+     * <p>
+     * 这一支与 {@link #insertOrAdopt} 修掉的是同一个"先查后插"形状，**刻意不套那个口子**，两条理由：
+     * 它同时被读路径（{@code resolveSetting} → GET / translate）调用，而那两个入口没有 {@code @Transactional}，
+     * insert 跑在 autocommit 里——"事务内改用当前读"的前提在这里不成立，为它给 GET 加事务是反向的代价。
+     * 而可达窗口只有一次：该租户**第一条**全局行（现网库里的行由 {@code V5} 末尾那句
+     * {@code INSERT INTO translation_setting (tenant_id)} 建好，正常运营下不再走到）。
+     * 真撞上了就是 {@code 50000} + 重试，数据不坏。已按这一口径记进验收文档的"已知限制"。
+     */
     private TranslationSetting requireSettings(Long tenantId) {
         TranslationSetting setting = settingRow(tenantId, "global", null);
         if (setting != null) {

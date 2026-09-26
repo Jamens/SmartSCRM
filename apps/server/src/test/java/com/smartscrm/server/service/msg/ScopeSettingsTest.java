@@ -11,8 +11,8 @@ import org.junit.jupiter.api.Test;
 /**
  * 优先级只有这一处定义（spec §3.2），所以这三档的组合是全项目"生效档正确"唯一的离线证据。
  * 跑得起来的部分到此为止：行能不能命中、键对不对，见
- * `docs/notes/2026-09-25-conversation-settings-verification.md` 的"后端"一节逐条列出的实跑行（驱动本体在
- * gitignore 的 `tmp/` 下，不作为提交物里的指针）。
+ * `docs/notes/2026-09-25-conversation-settings-verification.md` 的"后端"一节按类别列出的实跑行
+ * （逐条文案以驱动输出为准；驱动与它的日志都在 gitignore 的 `tmp/` 下，不作为提交物里的指针）。
  */
 class ScopeSettingsTest {
 

@@ -25,8 +25,10 @@ export const CHAT_KEY_MAX = 128
 const UNUSABLE = /[\s\x00-\x1f\x7f]/
 
 /**
- * 「这个视图此刻正在看哪个会话」的唯一裁剪处。主进程两个出口共用它：
- * 翻译请求的盖章（`webContentsView/ipc.ts`）与桥状态广播（`msgBridge/index.ts` 的 `bridgeStates()`）。
+ * 「这个视图此刻正在看哪个会话」的唯一裁剪处。主进程四个出口共用它：翻译请求的盖章
+ * （`webContentsView/ipc.ts:118`）、桥状态广播（`msgBridge/index.ts` 的 `bridgeStates()`，:80）、
+ * 两条实时帧的 `activeChatKey`（同一文件 :171 的 message 帧、:194 的 send_result 帧）。
+ * 四个出口只许读同一个 map、只许过同一道裁剪——留一处不过，下一个读者就得猜哪一份是权威的。
  *
  * 判定只做两件事：空白 / 含任何空白或控制符 / 超过 128 → `null`，其余**原样**。
  * 不 trim、不折叠大小写、不按后缀分平台——`scope_key` 与 `chat_key` 两列都是二进制比较，
