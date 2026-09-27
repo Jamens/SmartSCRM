@@ -5,6 +5,7 @@ import { requestTranslation } from '../services/translationBridge'
 import { handleBridgeReport, observeLoginStatus, activeChatOf } from '../services/msgBridge'
 import { accountOfView } from '../services/msgBridge/accountDirectory'
 import { activeChatKeyOf } from '@shared/chatKeys'
+import { platformMsgIdOf } from '@shared/msgIds'
 
 /** Channels an embedded page is allowed to push up to the host window. */
 const ALLOWED_HOST_CHANNELS = new Set<string>([
@@ -104,15 +105,9 @@ export function registerViewIpc(): void {
       if (!text || text.length > 5000) return null
       const type = req?.type === 'send' ? 'send' : 'receive'
       const msgIdRaw = typeof req?.msgId === 'string' ? req.msgId : ''
-      // 与后端 `TranslationService.platformMsgId` 判同一件事：非空、≤128、可见 ASCII，再挡掉 SQL LIKE
-      // 的通配符 `%`/`_` 与转义符 `\`（后端把 msgId 裸拼进 `msg_key LIKE`，三者会把"这一条"放大成"任意一条"）。
-      // 两层各判一遍是有意的：主进程这一层不合格就直接丢键，后端那层是权威。两边放宽时必须一起放宽。
-      const msgIdShapeOk =
-        msgIdRaw.length > 0 &&
-        msgIdRaw.length <= 128 &&
-        /^[\x21-\x7e]+$/.test(msgIdRaw) &&
-        !/[%_\\]/.test(msgIdRaw)
-      const msgId = msgIdShapeOk ? msgIdRaw : undefined
+      // 形状闸在 `@shared/msgIds` 里（与后端 `TranslationService.platformMsgId` 成对，用例同处一份）。
+      // 不合格只丢键：翻译照常做，只是这一条不参与消息级回显与回写。
+      const msgId = platformMsgIdOf(msgIdRaw) ?? undefined
       const apiBase = viewManager.getInjectConfig(viewId)?.apiBase
       // 口径①：后端只认主进程盖的章。真正把页面字段挡在门外的是下面 `requestTranslation` 里那份
       // **重建的 body 字面量**（只把 `text`/`type`/`input`/`noCache`/`msgId` 逐个挑进去）——页面多报的字段
