@@ -3,7 +3,8 @@
 **日期**：2026-09-27
 **规格**：`docs/superpowers/specs/2026-09-27-message-level-translation-persistence-design.md`
 **计划**：`docs/superpowers/plans/2026-09-27-message-level-translation-persistence.md`
-**提交区间**：`ebf89fa`（spec/计划落档）→ `cb6aa6a`（整枝终审 Major 修复轮），本验收文档随后入 commit
+**提交区间**：起点 `ebf89fa`（spec/计划落档），到本提交为止；逐提交枚举 `git log --oneline ebf89fa..HEAD`
+（其中 G1 修复轮 = `cb6aa6a` + `8a4eb3c`，G2 回评轮 = `b92fc4f` 及本提交）
 **证据词口径**：实测 = 本轮真跑过并读到输出；读码 = 只从源码得出；推断 = 由环境事实推出；待验证 = 没跑过，不当结论用。
 
 ---
