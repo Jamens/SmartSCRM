@@ -10,6 +10,8 @@ export interface TranslateRequest {
   noCache?: boolean
   /** 页内此刻看的会话提示。只用于本页 inflight 去重；到后端的那份由主进程重新盖章。 */
   chatHint?: string | null
+  /** 页内 data-id（裸平台消息 id）。进 inflight 去重键，并由主进程透传给后端做消息级回显定位。 */
+  msgId?: string
 }
 
 export interface TranslateResponse {
