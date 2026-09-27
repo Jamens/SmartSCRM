@@ -522,13 +522,16 @@ public class TranslationService {
         boolean keepInCache = !Boolean.TRUE.equals(dto.input());
 
         // —— 消息级译文回显（spec §3）：命中即从库里回显、根本不问厂商，也不碰内容缓存。
-        // 只有主进程盖了 accountId+chatKey、页给了形状合格的 msgId、且这次没按"跳过缓存"重试键时才启用；
-        // 作用域永远是主进程盖的，msgId 只在这把作用域内再缩小。msgId 的形状闸必须在调 mapper 之前——
+        // 只有主进程盖了 accountId+chatKey、页给了形状合格的 msgId 时才定位行；作用域永远是主进程盖的，
+        // msgId 只在这把作用域内再缩小。msgId 的形状闸必须在调 mapper 之前——
         // findForTranslation 把它裸拼进 LIKE，空串/'%'/'_'/'\\' 会放大匹配拉到任意行（Task 1 记的契约）。
         // body 与本次文本归一化一致是"别命中到别人的行"的第二道闸；messageMapper 为 null 是测试缝形状，整段关闭。
+        // 读回显与回写刻意解耦（spec §4"点通了才入库"）：noCache=true（降级后的手动重试）也要定位行，
+        // 这样重试撞上厂商/模拟成功时 echoTranslation 才写得进去；noCache 只拦下面那一个"直接回显旧译文"
+        // 的提前返回——它的语义是"别吃缓存、要新算"，不是"别落库"。降级出口不调回写，行不会被写脏。
         ChatMessage msgRow = null;
         if (messageMapper != null && dto.accountId() != null && dto.chatKey() != null
-                && platformMsgId(dto.msgId()) && !Boolean.TRUE.equals(dto.noCache())) {
+                && platformMsgId(dto.msgId())) {
             msgRow = messageMapper.findForTranslation(tenantId, dto.accountId(), dto.chatKey(), dto.msgId());
             if (msgRow != null) {
                 String rowBody = SimulatedTranslationEngine.normalize(msgRow.getBody() == null ? "" : msgRow.getBody());
@@ -536,12 +539,14 @@ public class TranslationService {
                     // 错位/伪造：定位到的不是这条消息的行——当作没定位到，既不回显也不回写。
                     msgRow = null;
                 } else if (msgRow.getTranslatedBody() != null
-                        && toLang != null && toLang.equals(msgRow.getTranslatedLang())) {
+                        && toLang != null && toLang.equals(msgRow.getTranslatedLang())
+                        && !Boolean.TRUE.equals(dto.noCache())) {
                     return new TranslateVO(msgRow.getTranslatedBody(), true, false,
                         containsChinese(msgRow.getTranslatedBody()), dto.type(), channel,
                         fromLang, toLang, cacheKey, false, null, scope);
                 }
-                // 语种不符或还没有已存译文 → 保留 msgRow 但不回显：走正常路径，成功后覆盖/首写（spec §3.5/§4）。
+                // 语种不符、还没有已存译文、或 noCache 强制新算 → 保留 msgRow 但不回显：
+                // 走正常路径，非降级成功后覆盖/首写（spec §3.5/§4）。
             }
         }
 
