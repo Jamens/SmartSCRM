@@ -128,3 +128,24 @@ test('补底行的真实形状（字段在原型上）：不能靠展开复制�
   assert.equal(row?.body, 'hello')
   assert.equal(row?.msgTimeEpochSec, 1_789_775_757)
 })
+
+test('msgId = 裸 id.id，与序列化的 msgKey 解耦（in 行无 _out 尾）', () => {
+  const row = normalizeWa(
+    { id: { _serialized: 'false_861380001001@c.us_HXD123', id: 'HXD123' },
+      from: '861380001001@c.us', to: '8610000000000@c.us', body: 'hola', t: 1_700_000_000, isFromMe: false, ack: 3 },
+    ctx
+  )
+  assert.equal(row?.msgKey, 'false_861380001001@c.us_HXD123')
+  assert.equal(row?.msgId, 'HXD123')
+})
+
+test('out 行：msgKey 带 _out 尾，msgId 仍是中段裸 id', () => {
+  const row = normalizeWa(
+    { id: { _serialized: 'true_861380001001@c.us_ABC9_out', id: 'ABC9' },
+      from: '8610000000000@c.us', to: '861380001001@c.us', body: 'ok', t: 1_700_000_000, isFromMe: true, ack: 2 },
+    ctx
+  )
+  assert.equal(row?.direction, 'out')
+  assert.equal(row?.msgKey, 'true_861380001001@c.us_ABC9_out')
+  assert.equal(row?.msgId, 'ABC9')
+})

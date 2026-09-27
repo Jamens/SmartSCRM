@@ -8,6 +8,7 @@ import jakarta.validation.constraints.Size;
 public record MessageItemDTO(
     @NotBlank @Size(max = 128) String chatKey,
     @NotBlank @Size(max = 128) String msgKey,
+    @Size(max = 128) String msgId,
     @NotBlank String direction,
     @Size(max = 128) String senderKey,
     @Size(max = 128) String senderName,

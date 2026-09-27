@@ -111,6 +111,7 @@ public class MessageService {
             row.setPlatform(account.platform());
             row.setChatKey(item.chatKey());
             row.setMsgKey(item.msgKey());
+            row.setMsgId(item.msgId());
             row.setDirection(item.direction());
             String ck = item.chatKey();
             if (!customerByChat.containsKey(ck)) {
