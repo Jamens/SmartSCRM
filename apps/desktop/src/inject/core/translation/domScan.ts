@@ -77,6 +77,14 @@ export function startMessageTranslation(injector: BaseInjector): () => void {
       }
       return
     }
+    // 降级稳态：上次拿到的是本地模拟引擎的原样回显（在线线路掉了/未配密钥）。
+    // 它不是译文，所以 `saved.translation` 是 null、上面那条重绘分支不会命中；这里也不发请求，
+    // 只把「翻译失败 · 点此重试」重新挂回锚点——滚出可视区再滚回来按钮还在，不再整行悄悄消失。
+    if (saved && saved.degraded === true && saved.text === text && saved.type === type) {
+      if (!hasTranslationNode(msgId)) renderDegradedRetry(msgId, anchor, text, type)
+      state.markTranslated(msgId)
+      return
+    }
     // 重试预算花完：停成一个按钮，不是一个循环（同一语向才作数）。
     if (saved && saved.text === text && saved.type === type && saved.retryCount >= MAX_RETRY) {
       if (!hasTranslationNode(msgId))
@@ -91,10 +99,34 @@ export function startMessageTranslation(injector: BaseInjector): () => void {
     renderPendingTranslation(msgId, anchor)
     // 会话提示进请求：同一句话在两个会话里可能走两个语向（生效面 ②），共用了 inflight
     // 就会把上一个会话的语种画到这一会话的气泡上。它只用于页内去重，不出页。
-    const result = await requestTranslate(injector, { text, type, chatHint: adapter.chatHint() })
+    // msgId 是页内 data-id（裸平台消息 id）：后端按它 + 主进程盖的会话作用域取这条消息已存过的译文。
+    const result = await requestTranslate(injector, {
+      text,
+      type,
+      chatHint: adapter.chatHint(),
+      msgId
+    })
     if (stopped || !row.isConnected) return
 
     if (result) {
+      if (result.degraded) {
+        // 降级那份「译文」是模拟引擎的原样回显：存成 translation 就等于把回显登记成真译文，
+        // 下一轮扫描/重绘会把它当译文画出来——那正是本次要治的静默降级，只是换了个地方复发。
+        // 所以 translation 记 null、只记 degraded 这个稳态；markTranslated 挡住扫描循环反复追问厂商。
+        saveMessageState({
+          msgId,
+          text,
+          type,
+          channel: result.channel,
+          toLang: result.toLangCode,
+          translation: null,
+          retryCount: 0,
+          degraded: true
+        })
+        state.markTranslated(msgId)
+        renderDegradedRetry(msgId, anchor, text, type)
+        return
+      }
       state.markTranslated(msgId)
       saveMessageState({
         msgId,
@@ -105,7 +137,7 @@ export function startMessageTranslation(injector: BaseInjector): () => void {
         translation: result.translation,
         retryCount: 0
       })
-      // 同语言气泡（R7 直接返回原文）撤掉「翻译中…」占位，只留原文不留重复行（R10）。
+      // 非降级才会走到这里：同语言气泡（R7 直接返回原文）撤掉「翻译中…」占位，只留原文不留重复行（R10）。
       if (isNoopTranslation(text, result.translation)) removeTranslation(msgId)
       else renderTranslation(msgId, anchor, result.translation)
       return
@@ -122,6 +154,51 @@ export function startMessageTranslation(injector: BaseInjector): () => void {
       translation: null,
       retryCount: (saved && saved.text === text ? saved.retryCount : 0) + 1
     })
+  }
+
+  /**
+   * 降级那条按钮：文案照规格 §5，点开是一次 `noCache: true` 的强制重译——在线线路恢复后
+   * 走缓存只会拿回同一份回显，必须点名问厂商。点通了才按正常成功态入库，下次直接回显。
+   */
+  function renderDegradedRetry(
+    msgId: string,
+    anchor: HTMLElement,
+    text: string,
+    type: 'send' | 'receive'
+  ): void {
+    const onRetry = (): void => {
+      void requestTranslate(injector, {
+        text,
+        type,
+        chatHint: adapter.chatHint(),
+        msgId,
+        noCache: true
+      })
+        .then((r) => {
+          if (stopped) return
+          if (!r || r.degraded) {
+            // 又降级了（或这次连响应都没有）：按钮刚被点掉，原样挂回去，不留一片空白。
+            renderDegradedRetry(msgId, anchor, text, type)
+            return
+          }
+          if (isNoopTranslation(text, r.translation)) removeTranslation(msgId)
+          else renderTranslation(msgId, anchor, r.translation)
+          saveMessageState({
+            msgId,
+            text,
+            type,
+            channel: r.channel,
+            toLang: r.toLangCode,
+            translation: r.translation,
+            retryCount: 0
+          })
+          state.markTranslated(msgId)
+        })
+        .catch(() => {
+          if (!stopped) renderDegradedRetry(msgId, anchor, text, type)
+        })
+    }
+    renderManualButton(msgId, anchor, onRetry, '翻译失败 · 点此重试')
   }
 
   function retry(msgId: string, text: string, type: 'send' | 'receive'): void {
