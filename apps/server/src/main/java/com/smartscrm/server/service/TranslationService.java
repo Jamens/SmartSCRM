@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.ChatConversation;
+import com.smartscrm.server.entity.ChatMessage;
 import com.smartscrm.server.entity.Customer;
 import com.smartscrm.server.entity.PlatformAccount;
 import com.smartscrm.server.entity.TranslationCache;
@@ -11,6 +12,7 @@ import com.smartscrm.server.entity.TranslationCredential;
 import com.smartscrm.server.entity.TranslationNode;
 import com.smartscrm.server.entity.TranslationSetting;
 import com.smartscrm.server.mapper.ChatConversationMapper;
+import com.smartscrm.server.mapper.ChatMessageMapper;
 import com.smartscrm.server.mapper.CustomerMapper;
 import com.smartscrm.server.mapper.PlatformAccountMapper;
 import com.smartscrm.server.mapper.TranslationCacheMapper;
@@ -43,6 +45,7 @@ import java.util.function.Function;
 import java.util.regex.Pattern;
 import java.util.stream.Collectors;
 import net.openhft.hashing.LongHashFunction;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -64,13 +67,16 @@ public class TranslationService {
     private final CustomerMapper customerMapper;
     private final ChatConversationMapper conversationMapper;
     private final PlatformAccountMapper accountMapper;
+    /** 消息级译文回显的读写口（spec §3/§4）。null = 测试缝形状（见 9 参构造），消息级路径整段不启用。 */
+    private final ChatMessageMapper messageMapper;
     private final SimulatedTranslationEngine engine;
     private final Map<String, TranslationProvider> providers;
 
+    @Autowired
     public TranslationService(TranslationSettingMapper settingMapper, TranslationNodeMapper nodeMapper,
                               TranslationCacheMapper cacheMapper, TranslationCredentialMapper credentialMapper,
                               CustomerMapper customerMapper, ChatConversationMapper conversationMapper,
-                              PlatformAccountMapper accountMapper,
+                              PlatformAccountMapper accountMapper, ChatMessageMapper messageMapper,
                               SimulatedTranslationEngine engine, List<TranslationProvider> providerBeans) {
         this.settingMapper = settingMapper;
         this.nodeMapper = nodeMapper;
@@ -79,9 +85,24 @@ public class TranslationService {
         this.customerMapper = customerMapper;
         this.conversationMapper = conversationMapper;
         this.accountMapper = accountMapper;
+        this.messageMapper = messageMapper;
         this.engine = engine;
         this.providers = providerBeans.stream()
             .collect(Collectors.toMap(TranslationProvider::providerId, Function.identity()));
+    }
+
+    /**
+     * 测试缝的既有 9 参形状（{@code TranslationServiceRaceTest} 的"其余协作者给 null 即未被咨询"）。
+     * 委托时把 {@code messageMapper} 置 null：走这一格的实例上消息级回显整段关闭，
+     * {@code translate()} 的启用条件里显式判它——生产装配永远走上面那个 10 参构造。
+     */
+    TranslationService(TranslationSettingMapper settingMapper, TranslationNodeMapper nodeMapper,
+                       TranslationCacheMapper cacheMapper, TranslationCredentialMapper credentialMapper,
+                       CustomerMapper customerMapper, ChatConversationMapper conversationMapper,
+                       PlatformAccountMapper accountMapper,
+                       SimulatedTranslationEngine engine, List<TranslationProvider> providerBeans) {
+        this(settingMapper, nodeMapper, cacheMapper, credentialMapper, customerMapper, conversationMapper,
+            accountMapper, null, engine, providerBeans);
     }
 
     // ============ settings ============
@@ -500,6 +521,30 @@ public class TranslationService {
         String cacheKey = buildCacheKey(dto.type(), channel, fromLang, toLang, normalized);
         boolean keepInCache = !Boolean.TRUE.equals(dto.input());
 
+        // —— 消息级译文回显（spec §3）：命中即从库里回显、根本不问厂商，也不碰内容缓存。
+        // 只有主进程盖了 accountId+chatKey、页给了形状合格的 msgId、且这次没按"跳过缓存"重试键时才启用；
+        // 作用域永远是主进程盖的，msgId 只在这把作用域内再缩小。msgId 的形状闸必须在调 mapper 之前——
+        // findForTranslation 把它裸拼进 LIKE，空串/'%'/'_'/'\\' 会放大匹配拉到任意行（Task 1 记的契约）。
+        // body 与本次文本归一化一致是"别命中到别人的行"的第二道闸；messageMapper 为 null 是测试缝形状，整段关闭。
+        ChatMessage msgRow = null;
+        if (messageMapper != null && dto.accountId() != null && dto.chatKey() != null
+                && platformMsgId(dto.msgId()) && !Boolean.TRUE.equals(dto.noCache())) {
+            msgRow = messageMapper.findForTranslation(tenantId, dto.accountId(), dto.chatKey(), dto.msgId());
+            if (msgRow != null) {
+                String rowBody = SimulatedTranslationEngine.normalize(msgRow.getBody() == null ? "" : msgRow.getBody());
+                if (!rowBody.equals(normalized)) {
+                    // 错位/伪造：定位到的不是这条消息的行——当作没定位到，既不回显也不回写。
+                    msgRow = null;
+                } else if (msgRow.getTranslatedBody() != null
+                        && toLang != null && toLang.equals(msgRow.getTranslatedLang())) {
+                    return new TranslateVO(msgRow.getTranslatedBody(), true, false,
+                        containsChinese(msgRow.getTranslatedBody()), dto.type(), channel,
+                        fromLang, toLang, cacheKey, false, null, scope);
+                }
+                // 语种不符或还没有已存译文 → 保留 msgRow 但不回显：走正常路径，成功后覆盖/首写（spec §3.5/§4）。
+            }
+        }
+
         if (!Boolean.TRUE.equals(dto.noCache())) {
             TranslationCache hit = cacheMapper.selectOne(new LambdaQueryWrapper<TranslationCache>()
                 .eq(TranslationCache::getTenantId, tenantId)
@@ -516,6 +561,8 @@ public class TranslationService {
 
         // R7: same in and out language — hand back the source, and do not cache it.
         if (fromLang != null && fromLang.equals(toLang)) {
+            // 它就是这条消息"译文=原文"的规范结论：照样回写，下次直接回显、省一次重算（spec §3）。
+            echoTranslation(msgRow, dto.msgId(), normalized, toLang);
             return new TranslateVO(normalized, false, false, containsChinese(normalized), dto.type(), channel,
                 fromLang, toLang, cacheKey, false, null, scope);
         }
@@ -530,6 +577,8 @@ public class TranslationService {
                         writeCache(tenantId, cacheKey, dto.type(), channel, fromLang, toLang,
                             normalized, online.translation(), false);
                     }
+                    // 厂商成功（非降级）：按消息回写译文 + 语种，并懒填 msg_id。
+                    echoTranslation(msgRow, dto.msgId(), online.translation(), toLang);
                     return new TranslateVO(online.translation(), false, false,
                         containsChinese(online.translation()), dto.type(), channel,
                         displayFrom(fromLang, online.detectedFrom()), toLang, cacheKey, false, null, scope);
@@ -556,6 +605,8 @@ public class TranslationService {
             writeCache(tenantId, cacheKey, dto.type(), channel, fromLang, toLang,
                 normalized, result.translation(), result.partial());
         }
+        // 模拟引擎成功（非降级）：同样按消息回写（spec §3④）。
+        echoTranslation(msgRow, dto.msgId(), result.translation(), toLang);
         return new TranslateVO(result.translation(), false, result.partial(), containsChinese(result.translation()),
             dto.type(), channel, result.fromLang(), toLang, cacheKey, false, null, scope);
     }
@@ -588,6 +639,40 @@ public class TranslationService {
         long hash = LongHashFunction.xx().hashChars(normalized);
         String from = (fromLang == null || fromLang.isBlank()) ? "auto" : fromLang;
         return type + "-" + channel + "-" + from + "-" + toLang + "-" + String.format("%016x", hash);
+    }
+
+    /**
+     * 成功译文按消息回显：只有定位到行（body 已校验一致）才写，写译文 + 语种，并懒填 msg_id
+     * （COALESCE 在 SQL 侧把关，只补空不覆盖）。降级/厂商失败与内容缓存命中不调这里——
+     * "降级永不入库"与内容缓存同一口径（spec §0 红线）。msgId 再过一次形状闸是纵深防御：
+     * msgRow 非空本身就蕴含闸已过（查询只在闸后发生），两处判定共用 {@link #platformMsgId}（R5）。
+     */
+    private void echoTranslation(ChatMessage msgRow, String msgId, String translation, String toLang) {
+        if (msgRow != null && platformMsgId(msgId)) {
+            messageMapper.saveTranslation(msgRow.getId(), msgId, translation, toLang);
+        }
+    }
+
+    /**
+     * msgId 的形状闸，是 {@code ChatMessageMapper.findForTranslation} 契约的服务层执行方：
+     * 那条 SQL 把 msgId 裸拼进 `msg_key LIKE CONCAT('%', msgId)`，空串会放大成 `'%'` 命中该会话
+     * 每一行，`%`/`_` 是 LIKE 通配符、`\` 是其转义符——三者都会把"这一条消息"变成"任意一条消息"，
+     * 进而把译文写进别人的行。所以只有纯可见 ASCII（0x21..0x7E）、不含通配/转义、≤128（与
+     * `chat_message.msg_id` 同宽；DTO 的 @Size 先挡一刀，这里是权威）的 token 才准进消息级路径；
+     * 不合格的请求照常走"内容缓存 → 厂商"，只是永不参与按消息定位与回写。
+     * 实形为 32 位十六进制平台 id，空格/控制字符/非 ASCII 一并挡在闸外。
+     */
+    private static boolean platformMsgId(String msgId) {
+        if (msgId == null || msgId.isBlank() || msgId.length() > 128) {
+            return false;
+        }
+        for (int i = 0; i < msgId.length(); i++) {
+            char c = msgId.charAt(i);
+            if (c < 0x21 || c > 0x7E || c == '%' || c == '_' || c == '\\') {
+                return false;
+            }
+        }
+        return true;
     }
 
     // ============ stats ============
