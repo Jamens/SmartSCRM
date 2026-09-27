@@ -18,13 +18,16 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
      * 返回值 = 真正插入的行数；duplicated = 提交条数 - 返回值。
      * 2026-09-20 一次性探针实测过这四种形态：单行新增 1、单行重复 0、两行里一条重复 1、
      * 两行全重复 0 —— 也就是整批调用给的是"插进去几行"，不是"整批成没成"。
+     * 列清单含 {@code msg_id}（实体序里紧跟 {@code msg_key}）：spec §2/§4 要求采集即落
+     * 平台消息 id，它是 {@link #findForTranslation} 等值支的规范键；缺了这列，新行只能靠
+     * msg_key 尾部或 saveTranslation 的 COALESCE 懒填，"入库即有 msg_id"的前提就不成立。
      */
     @Insert({"<script>",
         "INSERT IGNORE INTO chat_message",
-        "(tenant_id, account_id, platform, chat_key, msg_key, direction, customer_id, sender_key, sender_name,",
+        "(tenant_id, account_id, platform, chat_key, msg_key, msg_id, direction, customer_id, sender_key, sender_name,",
         " body, media_type, media_summary, msg_time, status, source, send_local_id) VALUES",
         "<foreach collection='list' item='m' separator=','>",
-        "(#{m.tenantId}, #{m.accountId}, #{m.platform}, #{m.chatKey}, #{m.msgKey}, #{m.direction},",
+        "(#{m.tenantId}, #{m.accountId}, #{m.platform}, #{m.chatKey}, #{m.msgKey}, #{m.msgId}, #{m.direction},",
         " #{m.customerId}, #{m.senderKey}, #{m.senderName}, #{m.body}, #{m.mediaType}, #{m.mediaSummary},",
         " #{m.msgTime}, #{m.status}, #{m.source}, #{m.sendLocalId})",
         "</foreach>",
