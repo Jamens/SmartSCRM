@@ -20,6 +20,13 @@ public record TranslateDTO(
      */
     @Size(max = 128, message = "chatKey 最长 128 字符") String chatKey,
     /** 与 chatKey 成对出现：只有 accountId 没有 chatKey 时后端不做投影。 */
-    Long accountId
+    Long accountId,
+    /**
+     * 可空：页内 `data-id`（= 裸平台消息 id），内容标识、不是作用域。带上时后端在
+     * `accountId`+`chatKey` 的作用域内按消息级译文回显（spec §3）；缺省即按现有"内容缓存 → 厂商"走。
+     * 128 与 `chat_message.msg_id` 同宽；实际形如 32 位十六进制，可见 ASCII。
+     * 形状闸（非空、无 LIKE 通配符）在 `TranslationService.platformMsgId`——这里只挡长度。
+     */
+    @Size(max = 128, message = "msgId 最长 128 字符") String msgId
 ) {
 }
