@@ -76,11 +76,15 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
      * （msg_key 序列化为 `<fromMe>_<chatKey>_<id.id>[_out]`，id.id 在尾部），命中后由 saveTranslation 懒填。
      * 这里只回判定要用的列，不回正文大字段。body 是否等于本次文本由调用方（服务层）归一化后比对，
      * 挡住错位/伪造的 msgId 命中到别人的行。
+     * 调用方契约（Task 3 服务层把关，契约测试断言）：`msgId` 必须先形状校验为非空、可见 ASCII 的平台 id
+     * ——空串会让 `msg_key LIKE '%'` 命中该会话的每一行，`%`/`_` 会放大匹配，都不可接受。
+     * ORDER BY 让规范行（msg_id 已填）优先于靠 msg_key 尾部认出的老行：两条谓词同时成立时取确定的一行，
+     * 不把译文写进行扫描顺序随机挑中的另一行。
      */
     @Select("SELECT id, body, msg_id, translated_body, translated_lang FROM chat_message"
         + " WHERE tenant_id = #{tenantId} AND account_id = #{accountId} AND chat_key = #{chatKey}"
         + " AND (msg_id = #{msgId} OR msg_key LIKE CONCAT('%', #{msgId}))"
-        + " LIMIT 1")
+        + " ORDER BY (msg_id = #{msgId}) DESC LIMIT 1")
     ChatMessage findForTranslation(@Param("tenantId") Long tenantId, @Param("accountId") Long accountId,
                                    @Param("chatKey") String chatKey, @Param("msgId") String msgId);
 
