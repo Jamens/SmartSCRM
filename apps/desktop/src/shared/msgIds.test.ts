@@ -1,7 +1,7 @@
 // src/shared/msgIds.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { MSG_ID_MAX, platformMsgIdOf } from './msgIds.ts'
+import { MSG_ID_MAX, msgIdOfSerializedKey, platformMsgIdOf } from './msgIds.ts'
 
 /**
  * 这批字面量同时是后端 `TranslationService.platformMsgId` 的判据：两边喂同一批输入，结果必须一致。
@@ -60,4 +60,27 @@ test('可见 ASCII 的两端：0x21 与 0x7E 各算一个合格字符，0x20 与
   assert.equal(platformMsgIdOf(at(0x7e)), at(0x7e))
   assert.equal(platformMsgIdOf(at(0x20)), null)
   assert.equal(platformMsgIdOf(at(0x7f)), null)
+})
+
+// —— 从序列化的 msgKey 反取裸 id：send_result 补写那一行唯一的裸 id 来源 ——
+
+test('发出行的键去掉 _out 尾再取末段：形状与 normalize.test.ts 钉的那条一致', () => {
+  assert.equal(msgIdOfSerializedKey('true_261963795943523@lid_ACBEDD_out'), 'ACBEDD')
+})
+
+test('收到行的键没有 _out 尾，末段就是裸 id', () => {
+  assert.equal(msgIdOfSerializedKey('false_261963795943523@lid_ACBEDD'), 'ACBEDD')
+})
+
+test('非 WA 形状（没有 true_/false_ 前缀）→ null：不许按 _ 切一刀造出假 id', () => {
+  assert.equal(msgIdOfSerializedKey('tg_msg_12345'), null)
+  assert.equal(msgIdOfSerializedKey(''), null)
+  assert.equal(msgIdOfSerializedKey(null), null)
+  assert.equal(msgIdOfSerializedKey(undefined), null)
+})
+
+test('末段过不了形状闸的键 → null：带通配符/空白/超长的都不当裸 id', () => {
+  assert.equal(msgIdOfSerializedKey('true_1@c.us_a%b'), null)
+  assert.equal(msgIdOfSerializedKey('true_1@c.us_'), null)
+  assert.equal(msgIdOfSerializedKey('true_1@c.us_' + 'x'.repeat(MSG_ID_MAX + 1)), null)
 })

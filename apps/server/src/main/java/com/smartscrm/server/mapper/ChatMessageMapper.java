@@ -74,22 +74,43 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
                                           @Param("from") LocalDateTime from);
 
     /**
-     * 消息级译文回显的候选行：作用域用主进程盖的 tenant/account/chat_key，再用页给的 msgId 缩小。
-     * msg_id 命中规范行（本计划采集链已写入）；msg_id 为空的老行靠 msg_key 尾部含 msgId 认出
-     * （msg_key 序列化为 `<fromMe>_<chatKey>_<id.id>[_out]`，id.id 在尾部），命中后由 saveTranslation 懒填。
+     * 消息级译文回显的候选行，两条定位谓词拆成两次调用（{@link #findForTranslationByMsgId} 先、
+     * {@link #findForTranslationByMsgKeyTail} 后）：作用域用主进程盖的 tenant/account/chat_key，
+     * 再用页给的 msgId 缩小。
+     * <p>
+     * 按消息定位需要两条模式，因为 msg_key 的尾巴按方向有两种形状（spec §1 实测 / V10 注释同口径）：
+     * 收到的是 `<fromMe>_<chatKey>_<id>`，裸 id 在尾部；发出的是同一串再多一段 `_out`，
+     * 尾部那个 token 是字符串 `out` 而不是 `<id>`。只写尾锚 `%<id>` 的那一支对发出行必不中，
+     * 于是本应用自己发出去的气泡与 V10 之前入库的发出行永远定位不到——两支各一条模式，缺一不可。
+     * `msg_id` 命中规范行（本计划采集链已写入），它为空的老行靠尾部模式认出，命中后由 saveTranslation 懒填。
+     * <p>
      * 这里只回判定要用的列，不回正文大字段。body 是否等于本次文本由调用方（服务层）归一化后比对，
      * 挡住错位/伪造的 msgId 命中到别人的行。
      * 调用方契约（Task 3 服务层把关，契约测试断言）：`msgId` 必须先形状校验为非空、可见 ASCII 的平台 id
      * ——空串会让 `msg_key LIKE '%'` 命中该会话的每一行，`%`/`_` 会放大匹配，都不可接受。
-     * ORDER BY 让规范行（msg_id 已填）优先于靠 msg_key 尾部认出的老行：两条谓词同时成立时取确定的一行，
-     * 不把译文写进行扫描顺序随机挑中的另一行。
+     * <p>
+     * 为什么拆成两条而不是一条 OR：`msg_key LIKE` 那条没进任何索引，合成一条后优化器只能按
+     * (tenant, account, chat_key) 前缀把该会话的行全扫一遍再逐行回表过滤，每颗气泡都要付一次
+     * 会话规模的扫描；拆开后的第一趟是 {@code idx_msg_msgid} 上的点查，也是常态路径。
      */
     @Select("SELECT id, body, msg_id, translated_body, translated_lang FROM chat_message"
         + " WHERE tenant_id = #{tenantId} AND account_id = #{accountId} AND chat_key = #{chatKey}"
-        + " AND (msg_id = #{msgId} OR msg_key LIKE CONCAT('%', #{msgId}))"
-        + " ORDER BY (msg_id = #{msgId}) DESC LIMIT 1")
-    ChatMessage findForTranslation(@Param("tenantId") Long tenantId, @Param("accountId") Long accountId,
-                                   @Param("chatKey") String chatKey, @Param("msgId") String msgId);
+        + " AND msg_id = #{msgId} LIMIT 1")
+    ChatMessage findForTranslationByMsgId(@Param("tenantId") Long tenantId, @Param("accountId") Long accountId,
+                                          @Param("chatKey") String chatKey, @Param("msgId") String msgId);
+
+    /**
+     * 第二趟（第一趟没命中时才发）：靠 msg_key 尾部认 V10 之前入库、`msg_id` 还为空的老行。
+     * 两条模式各管一个方向（收到 `<…>_<id>` / 发出 `<…>_<id>_out`），谁也不能省。
+     * 定序由调用方保证（先规范列、再尾部），所以这里不再需要 `ORDER BY (msg_id = ?) DESC`
+     * 那类表达式排序：两条谓词同时成立时取的是第一趟那一行，语义与拆分前一致。
+     */
+    @Select("SELECT id, body, msg_id, translated_body, translated_lang FROM chat_message"
+        + " WHERE tenant_id = #{tenantId} AND account_id = #{accountId} AND chat_key = #{chatKey}"
+        + " AND (msg_key LIKE CONCAT('%', #{msgId}) OR msg_key LIKE CONCAT('%_', #{msgId}, '_out'))"
+        + " LIMIT 1")
+    ChatMessage findForTranslationByMsgKeyTail(@Param("tenantId") Long tenantId, @Param("accountId") Long accountId,
+                                               @Param("chatKey") String chatKey, @Param("msgId") String msgId);
 
     /**
      * 成功译文回写定位到的那一行；只动 translated_* 与（仅当原来为空时）msg_id。

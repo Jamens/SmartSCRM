@@ -4,6 +4,7 @@ import { getMainWindow } from '../../window/mainWindow'
 import { viewManager } from '../../webContentsView/manager'
 import { platformOfAccountType } from '@shared/chatPlatform'
 import { activeChatKeyOf } from '@shared/chatKeys'
+import { msgIdOfSerializedKey } from '@shared/msgIds'
 import type {
   BridgeCommand,
   BridgeReport,
@@ -187,6 +188,10 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
       // 补写那行的 status: 'pending' 是刻意的：这一刻主进程只知道"平台收了单"，之后的
       // sent/delivered/read 由 ack 事件推进（Task 11 Step 6）——落库走 `postStatuses`，页面走
       // 下面 ack 分支广播的 `msg:status`，两条各自单调（`canAdvance` 与后端 `advanceStatus` 同形）。
+      // 这一行是主进程手写的 NormalizedMessage 字面量（不是事件流那份），所以裸 id 得自己从
+      // 回执的 `_serialized` 里取：少了它，本应用自己发出去的那行 `msg_id` 会是 NULL，
+      // 后端按消息定位只能靠 `msg_key` 尾部的 `_out` 模式认它（那两条谓词的分工见 mapper 注释）。
+      const msgId = msgIdOfSerializedKey(report.msgKey)
       const frame: LiveFrame = {
         viewId,
         accountId: entry.accountId,
@@ -195,6 +200,7 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
         message: {
           chatKey: meta.chatKey,
           msgKey: report.msgKey,
+          ...(msgId ? { msgId } : {}),
           direction: 'out',
           body: meta.text,
           mediaType: 'text',
