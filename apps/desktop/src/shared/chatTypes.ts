@@ -24,6 +24,8 @@ export const MEDIA_TYPES: readonly MediaType[] = [
 export interface NormalizedMessage {
   chatKey: string
   msgKey: string
+  /** 裸平台消息 id（WA: wa-js `id.id`；= 页内 `data-id`），与序列化的 `msgKey` 解耦，供译文按消息回显对齐。 */
+  msgId?: string
   direction: Direction
   senderKey?: string
   senderName?: string

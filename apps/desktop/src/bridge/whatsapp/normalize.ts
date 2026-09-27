@@ -106,6 +106,7 @@ export function normalizeWa(raw: WaMsgModel, ctx: NormalizeCtx): NormalizedMessa
   return {
     chatKey,
     msgKey,
+    msgId: raw.id?.id,
     direction,
     // 群里的 author 才是"谁说的"；单聊不填 senderKey，让会话标题去承担"是谁"。
     ...(senderKey !== undefined ? { senderKey } : {}),
