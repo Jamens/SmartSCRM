@@ -157,8 +157,11 @@ export function startMessageTranslation(injector: BaseInjector): () => void {
   }
 
   /**
-   * 降级那条按钮：文案照规格 §5，点开是一次 `noCache: true` 的强制重译——在线线路恢复后
-   * 走缓存只会拿回同一份回显，必须点名问厂商。点通了才按正常成功态入库，下次直接回显。
+   * 降级那条按钮：文案照规格 §5，点开是一次 `noCache: true` 的强制重译。
+   * 要 `noCache` 不是为了绕开"这次失败存下来的东西"——降级既不写内容缓存也不回写消息级译文，
+   * 它什么都没存。真正会拦这次重试的是**另一条消息**留下的内容缓存：同一句文本只要在别处
+   * 成功译过一次，走缓存就会在回写之前提前返回，这条消息的 `translated_body` 永远补不上。
+   * `noCache` 保证这一次真的问到厂商，"点通了才入库"（规格 §5）才有落点。
    */
   function renderDegradedRetry(
     msgId: string,
