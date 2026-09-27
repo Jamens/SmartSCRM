@@ -17,11 +17,14 @@ public class ChatMessage {
     private String platform;
     private String chatKey;
     private String msgKey;
+    private String msgId;
     private String direction;
     private Long customerId;
     private String senderKey;
     private String senderName;
     private String body;
+    private String translatedBody;
+    private String translatedLang;
     private String mediaType;
     private String mediaSummary;
     private LocalDateTime msgTime;

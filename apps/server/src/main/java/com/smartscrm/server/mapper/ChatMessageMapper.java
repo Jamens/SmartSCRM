@@ -69,4 +69,27 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
     List<Map<String, Object>> statsPerDay(@Param("tenantId") Long tenantId,
                                           @Param("accountId") Long accountId,
                                           @Param("from") LocalDateTime from);
+
+    /**
+     * 消息级译文回显的候选行：作用域用主进程盖的 tenant/account/chat_key，再用页给的 msgId 缩小。
+     * msg_id 命中规范行（本计划采集链已写入）；msg_id 为空的老行靠 msg_key 尾部含 msgId 认出
+     * （msg_key 序列化为 `<fromMe>_<chatKey>_<id.id>[_out]`，id.id 在尾部），命中后由 saveTranslation 懒填。
+     * 这里只回判定要用的列，不回正文大字段。body 是否等于本次文本由调用方（服务层）归一化后比对，
+     * 挡住错位/伪造的 msgId 命中到别人的行。
+     */
+    @Select("SELECT id, body, msg_id, translated_body, translated_lang FROM chat_message"
+        + " WHERE tenant_id = #{tenantId} AND account_id = #{accountId} AND chat_key = #{chatKey}"
+        + " AND (msg_id = #{msgId} OR msg_key LIKE CONCAT('%', #{msgId}))"
+        + " LIMIT 1")
+    ChatMessage findForTranslation(@Param("tenantId") Long tenantId, @Param("accountId") Long accountId,
+                                   @Param("chatKey") String chatKey, @Param("msgId") String msgId);
+
+    /**
+     * 成功译文回写定位到的那一行；只动 translated_* 与（仅当原来为空时）msg_id。
+     * 降级/厂商失败不调用这里（服务层把关）。COALESCE 保证懒填只补空、不覆盖既有规范 id。
+     */
+    @Update("UPDATE chat_message SET translated_body = #{translatedBody}, translated_lang = #{translatedLang},"
+        + " msg_id = COALESCE(msg_id, #{msgId}) WHERE id = #{id}")
+    int saveTranslation(@Param("id") Long id, @Param("msgId") String msgId,
+                        @Param("translatedBody") String translatedBody, @Param("translatedLang") String translatedLang);
 }
