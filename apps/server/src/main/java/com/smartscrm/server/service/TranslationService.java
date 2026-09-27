@@ -524,7 +524,7 @@ public class TranslationService {
         // —— 消息级译文回显（spec §3）：命中即从库里回显、根本不问厂商，也不碰内容缓存。
         // 只有主进程盖了 accountId+chatKey、页给了形状合格的 msgId 时才定位行；作用域永远是主进程盖的，
         // msgId 只在这把作用域内再缩小。msgId 的形状闸必须在调 mapper 之前——
-        // findForTranslation 把它裸拼进 LIKE，空串/'%'/'_'/'\\' 会放大匹配拉到任意行（Task 1 记的契约）。
+        // findForTranslation 把它不转义地带进 LIKE 模式，空串/'%'/'_'/'\\' 会放大匹配拉到任意行（mapper 上那段契约注释）。
         // body 与本次文本归一化一致是"别命中到别人的行"的第二道闸；messageMapper 为 null 是测试缝形状，整段关闭。
         // 读回显与回写刻意解耦（spec §4"点通了才入库"）：noCache=true（降级后的手动重试）也要定位行，
         // 这样重试撞上厂商/模拟成功时 echoTranslation 才写得进去；noCache 只拦下面那一个"直接回显旧译文"
@@ -660,7 +660,8 @@ public class TranslationService {
 
     /**
      * msgId 的形状闸，是 {@code ChatMessageMapper.findForTranslation} 契约的服务层执行方：
-     * 那条 SQL 把 msgId 裸拼进 `msg_key LIKE CONCAT('%', msgId)`，空串会放大成 `'%'` 命中该会话
+     * 那条 SQL 用绑定变量把 msgId 原样带进 LIKE 模式（`msg_key LIKE CONCAT('%', #{msgId})`，拼的是模式不是 SQL 文本），
+     * 空串会放大成 `'%'` 命中该会话
      * 每一行，`%`/`_` 是 LIKE 通配符、`\` 是其转义符——三者都会把"这一条消息"变成"任意一条消息"，
      * 进而把译文写进别人的行。所以只有纯可见 ASCII（0x21..0x7E）、不含通配/转义、≤128（与
      * `chat_message.msg_id` 同宽；DTO 的 @Size 先挡一刀，这里是权威）的 token 才准进消息级路径；
