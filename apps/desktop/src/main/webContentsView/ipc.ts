@@ -97,16 +97,25 @@ export function registerViewIpc(): void {
       if (!arg || !ALLOWED_INVOKE_CHANNELS.has(arg.channel)) return null
       const viewId = viewManager.getViewIdByWebContents(event.sender.id)
       if (!viewId || rateLimited(viewId)) return null
-      const req = arg.data as Partial<{ text: string; type: string; input: boolean; noCache: boolean }> | undefined
+      const req = arg.data as
+        | Partial<{ text: string; type: string; input: boolean; noCache: boolean; msgId: string }>
+        | undefined
       const text = typeof req?.text === 'string' ? req.text : ''
       if (!text || text.length > 5000) return null
       const type = req?.type === 'send' ? 'send' : 'receive'
+      const msgIdRaw = typeof req?.msgId === 'string' ? req.msgId : ''
+      // 只接受平台 msgId 实形（32 位十六进制一类）：长度 ≤128、可见 ASCII。页多报的别的字段仍被挡。
+      const msgId = msgIdRaw.length > 0 && msgIdRaw.length <= 128 && /^[\x21-\x7e]+$/.test(msgIdRaw)
+        ? msgIdRaw
+        : undefined
       const apiBase = viewManager.getInjectConfig(viewId)?.apiBase
       // 口径①：后端只认主进程盖的章。真正把页面字段挡在门外的是下面 `requestTranslation` 里那份
-      // **重建的 body 字面量**（只把 `text`/`type`/`input`/`noCache` 逐个挑进去）——页面多报的字段
+      // **重建的 body 字面量**（只把 `text`/`type`/`input`/`noCache`/`msgId` 逐个挑进去）——页面多报的字段
       // （包括它的 `chatHint`）不会被复制进去，自然进不了后端。上面那行 `as Partial<{...}>` 只是
-      // 个类型标注、编译期就擦掉，**不提供任何运行时过滤**，别把它当安全边界读。`accountId` 与 `chatKey`
-      // 由这里按 `event.sender` 反查出的 `viewId` 自己填。于是页面永远说不出"我属于哪个账号的
+      // 个类型标注、编译期就擦掉，**不提供任何运行时过滤**，别把它当安全边界读。`msgId` 现在是这份
+      // 显式白名单里的内容标识字段（非作用域；校验见上，不合格即丢成 undefined、不影响翻译本身）；
+      // 作用域两字段 `accountId` 与 `chatKey` 仍**只由主进程盖**——按 `event.sender` 反查出的 `viewId`
+      // 自己填。于是页面永远说不出"我属于哪个账号的
       // 哪个会话"，一个错映射最多让语向选错，不会让它读到别人的客户行（后端查询还额外带 tenant_id）。
       // 口径②：投影即时效。`activeChatOf` 是主进程手里"这个视图正在看哪个会话"的最后一份已知值
       // （桥的 `active_chat` 事件 + 命令驱动上报）。切了会话而事件没到时，气泡会按上一个会话的客户
@@ -121,7 +130,8 @@ export function registerViewIpc(): void {
           text,
           type,
           ...(req?.input === true ? { input: true } : {}),
-          ...(req?.noCache === true ? { noCache: true } : {})
+          ...(req?.noCache === true ? { noCache: true } : {}),
+          ...(msgId ? { msgId } : {})
         },
         {
           ...(entry ? { accountId: entry.accountId } : {}),
