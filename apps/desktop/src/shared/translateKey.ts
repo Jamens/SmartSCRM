@@ -4,6 +4,7 @@ export interface TranslateKeyInput {
   input?: boolean
   chatHint?: string | null
   text: string
+  msgId?: string
 }
 
 /**
@@ -16,8 +17,12 @@ export interface TranslateKeyInput {
  * 提示撞车（两个会话同名）时最多退化成今天的共用一次 promise，不会比现状更坏。
  * `chatHint` 走 `encodeURIComponent`：它是页内自由文本，可能自带 `|`。不编码时 `chatHint='a|b', text='c'`
  * 与 `chatHint='a', text='b|c'` 会拼成同一个键，把两个不同请求并进一次 inflight——编码只消掉这种跨字段撞车，
- * 同名会话仍编码成同名（退化行为不变）。`text` 是末段，后面没有别的字段可撞，保持原样。
+ * 同名会话仍编码成同名（退化行为不变）。
+ * `msgId` 让"同一会话里两条同文本消息"不再共用一次 inflight；仍只是页内提示级去重，真正的定位在后端由主进程盖章作用域完成。
+ * 它是可选末段：缺省时键与旧形逐字节相同（不给现有调用方制造新键），有值时以 `#` 分隔拼在最末并 `encodeURIComponent`
+ * ——编码消掉 msgId 里的 `#`/`|`，不让它伪装成段边界撞车。`text` 后没有别的必选字段可撞，`#` 分隔保持原样。
  */
 export function translateKey(req: TranslateKeyInput): string {
-  return `${req.type}|${req.input === true ? 'i' : 'f'}|${encodeURIComponent(req.chatHint ?? '')}|${req.text}`
+  const head = `${req.type}|${req.input === true ? 'i' : 'f'}|${encodeURIComponent(req.chatHint ?? '')}|${req.text}`
+  return req.msgId ? `${head}#${encodeURIComponent(req.msgId)}` : head
 }

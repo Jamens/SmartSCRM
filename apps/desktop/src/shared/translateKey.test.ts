@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 
-import { translateKey } from './translateKey.ts'
+import { translateKey, type TranslateKeyInput } from './translateKey.ts'
 
 test('same text in two chats are two requests', () => {
   const a = translateKey({ type: 'receive', chatHint: 'Alice', text: 'Good morning' })
@@ -30,4 +30,16 @@ test('input preview never shares a slot with a bubble', () => {
     translateKey({ type: 'send', input: true, chatHint: 'Alice', text: '你好' }),
     translateKey({ type: 'send', chatHint: 'Alice', text: '你好' })
   )
+})
+
+const base: TranslateKeyInput = { type: 'receive', text: 'hi', chatHint: 'C' }
+
+test('msgId 计入去重键：同文本不同 msgId 不并进同一次 inflight', () => {
+  const a = translateKey({ ...base, msgId: 'A1' })
+  const b = translateKey({ ...base, msgId: 'B2' })
+  assert.notEqual(a, b)
+})
+
+test('msgId 缺省时回退到旧形（不给现有调用方制造新键）', () => {
+  assert.equal(translateKey(base), `receive|f|${encodeURIComponent('C')}|hi`)
 })
