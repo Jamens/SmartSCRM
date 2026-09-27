@@ -5,6 +5,8 @@ export interface TranslateRequest {
   type: 'receive' | 'send'
   input?: boolean
   noCache?: boolean
+  /** 页内 data-id（裸平台消息 id）。不是作用域；后端在主进程盖章的作用域内用它定位消息级译文。 */
+  msgId?: string
 }
 
 /**
