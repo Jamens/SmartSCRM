@@ -13,7 +13,7 @@
 | 档 | 覆盖什么 | 结论 | 证据词 |
 | --- | --- | --- | --- |
 | 后端契约 | `/translate` 的消息级回显、成功回写、懒填 `msg_id`、降级永不回写 | 35/35 全绿（exit 0） | 实测 |
-| 后端契约·发出方向 | `msg_key` 尾带 `_out` 的发出行按消息定位、回写、再回显（含收侧不回归） | 6/6 全绿（exit 0）；修复前同一驱动 O2 必红（见 §8） | 实测 |
+| 后端契约·发出方向 | `msg_key` 尾带 `_out` 的发出行按消息定位、回写、再回显（含收侧不回归、尾锚是字面下划线） | 7/7 全绿（exit 0）；修复前同一驱动 O2 必红、加锚前后 O7 必红（见 §2b） | 实测 |
 | 单测（Java + node:test） | 迁移后服务行为、消息级三条不变量、纯函数（`normalizeWa` 产 msgId、`translateKey` 计入 msgId、`msgIds` 形状闸与 `_serialized` 反解） | Java 75/75 + BUILD SUCCESS；前端 197/197 | 实测 |
 | 注入层 CDP | 降级气泡显可点重试、点击发一次 `noCache`、恢复后入库、下次直接回显、滚出滚回不重问厂商 | **待验证**（驱动已就绪，等真人点开会话） | 待验证 |
 | 真实登录档 | 上面那一条链跑在真实登录的 WhatsApp 会话上、零发消息 | **待验证** | 待验证 |
@@ -46,7 +46,7 @@
 ### 2b. 发出方向那一支（修复轮新补，实测）
 
 驱动：`tmp/p7f-outmsg-echo.mjs`（不入库）。上一份驱动种的全部是收侧行（`false_<chatKey>_<id>`），
-所以"发出方向能不能按消息定位"在它里从头到尾没被问过——本档补的就是那一侧，6 条 PASS、exit 0：
+所以"发出方向能不能按消息定位"在它里从头到尾没被问过——本档补的就是那一侧，7 条 PASS、exit 0：
 
 - **O1**：只给 `msg_key = true_<chatKey>_<id>_out`、`msg_id` 留空的一行发出消息，在模拟通道上首译成功。
 - **O2**：把会话档切到无凭据厂商通道（重算必降级）后同请求 → `cached=true && degraded=false`，
@@ -56,11 +56,20 @@
 - **O5/O6**：收侧行（无 `_out` 尾、`msg_id` 也为空）同路径首译 + 必降级探针仍回显 ——
   定位拆成两条查询后，收侧那一支没被改坏。正文特意与 O1 不同（尾巴加 `x`）：同会话里两行文本相同时，
   服务层的 body 等值闸会把命中判给先扫到的那一条，两档就分不清自己验的是哪一侧。
+- **O7**：另起一个会话种一条**诱饵**行，`msg_key` 尾巴是 `<id>Zout`（`Z` 不是下划线）。第二趟那条尾锚
+  若写成裸 `_`（`LIKE CONCAT('%_', id, '_out')`），`_` 在 LIKE 里是"任意一个字符"，诱饵行会被当成发出行命中、
+  译文写进一条形状并不相符的行；写成 `\_` 之后它不该再被定位到。断言方式是沿用 O2/O3 的判别：
+  模拟通道首译 → 切必降级通道探针，**探针必为 `degraded=true && cached=false`**。
 
-**修复前的同一驱动必红**：把 `ChatMessageMapper` / `TranslationService` 两个文件 `git stash` 回
-`5d7bed1` 的形状、`./mvnw package` 出旧 jar、重启后端再跑本驱动 → `O2 FAIL / 其余 PASS / exit 1`
-（现场输出 `tmp/p7f-outmsg-prefix.out`）。也就是说 O2 分辨的是这次改的那一条谓词，不是环境碰巧答对了。
-恢复修复后重跑：`O1–O6 全 PASS、exit 0`，且上一份契约驱动 35 条仍全绿。
+**两次"改前必红"的对照（都是实测，同一驱动只换 jar）**：
+
+1. Major 1 本体：把 `ChatMessageMapper` / `TranslationService` 两个文件 `git stash` 回 `5d7bed1` 的形状、
+   `./mvnw package` 出旧 jar、重启后跑本驱动 → `O2 FAIL / 其余 PASS / exit 1`（现场 `tmp/p7f-outmsg-prefix.out`）。
+   恢复修复后重跑：`O1–O6 全 PASS、exit 0`，且上一份契约驱动 35 条仍全绿。
+2. 尾锚的字面化：G1 修复轮**已含 `_out` 分支但仍是裸 `_`** 的那版 jar 上跑加进 O7 的同一驱动
+   → `O1–O6 PASS / O7 FAIL（cached=true）/ exit 1`（现场 `tmp/p7f-outmsg-esc-before.txt`）；
+   改成 `\_` 重建后 → `O1–O7 全 PASS / exit 0`（`tmp/p7f-outmsg-esc-after.txt`），契约驱动 35 条仍全绿
+   （`tmp/p7f-contract-esc.txt`）。也就是说 O7 分辨的是"锚是字面下划线"这一处，不是环境碰巧答对了。
 
 ---
 
@@ -178,6 +187,28 @@ ALTER TABLE `chat_message`
 任务级评审里剩下的三条在那一轮就判过不拦（重复的成功收尾分支、`channel`/`toLang` 记了没人读、`domScan.ts` 涨到 238 行），
 本修复轮不重开；"按钮在自己的请求在飞时会重挂"那一条的可达性否定，理由记在 ledger。
 
+### 8b. 修复轮的回评（G2，一次 scoped re-review）
+
+回评席只看 `5d7bed1..8a4eb3c` 这一段子与上面八条：**八条全部 ADDRESSED，无新增 Critical/Important**，
+另挑出三处它自己范围内的 Minor，本轮一并收掉（收法与证据都在 §2b 与下面的实测段里）：
+
+1. `insertIgnoreBatch` 的 javadoc 还指向被改名的 `findForTranslation`（死链）→ 改指 `findForTranslationByMsgId`
+   与 `findForTranslationByMsgKeyTail`。仓库无 javadoc 插件 / `-Xdoclint`，所以它是注释层的错，不影响构建（读码）。
+2. 第二趟尾锚里的 `_` 是 LIKE 的单字符通配，而注释写的是字面 `<…>_<id>_out` → SQL 改 `\_`，两边对齐；
+   这一处**不只改注释**，由 O7 的改前必红 / 改后全绿守住（§2b 对照 2）。
+3. `msgIds.ts` 头注释还说"后端**那条** SQL"（拆两条之后单数已不成立），且 `msgIdOfSerializedKey` 的
+   "含 `_` 就过不了形状闸"在反解方向上是循环论证（含 `_` 的 id 会被**截短**而不是判 `null`）→ 两条都改写，
+   并把"前提破了由谁兜"落到服务层那次 `body` 逐字比对上。纯注释，无行为改动。
+
+回评同时记下的、**不在本轮范围内**的四条（进 ledger，不在这里扩大射程）：
+
+- 页内 `data-id` 的实形仍未复核：若它是序列化形（`false_…`）而不是裸 id，形状闸会把每颗键丢掉，
+  整条消息级链在生产里就是惰性的。这一格只有 CDP 那五组（尤其 R5）能定，见 §4。
+- `send_result` 补写的那行 `body` 是实发文本；发出方向的回显要求页内请求文本与它逐字相等才走得到。
+- Major 2 的"第二个洞"仍未收：注入层的降级状态机没有入 commit 的单测（`test:unit` 的 glob 不含 `src/inject`）。
+- 条数对账：终审报告读到的契约驱动是 28 条，本轮同一驱动是 35 条（驱动按仓库约定不入库，无法逐条比）。
+  差的是那几组判别断言，不是"同一批断言跑红过"——记为口径差，不当缺陷。
+
 ---
 
 ## 9. 本轮收尾
@@ -185,7 +216,7 @@ ALTER TABLE `chat_message`
 - [x] `./mvnw test` 75/75 + BUILD SUCCESS（实测，含修复轮新增的 `MessageTranslationEchoTest` 7 条）
 - [x] `test:unit` 197/197（实测）
 - [x] `tmp/p7f-translate-contract.mjs` 35 条 PASS / 0 FAIL / exit 0（实测）
-- [x] `tmp/p7f-outmsg-echo.mjs` 6 条 PASS / exit 0，且**修复前同一驱动 O2 必红**（实测，见 §2b）
+- [x] `tmp/p7f-outmsg-echo.mjs` 7 条 PASS / exit 0，且**两处改前对照各自必红**（O2 对 Major 1、O7 对尾锚字面化，实测见 §2b）
 - [x] `typecheck` 四路通过；`lint`：修复轮改动的 3 个桌面端文件 `eslint --quiet` exit 0（全仓 `pnpm run lint` 的崩法与既有 138 条 error 另记，见 §3）
 - [ ] `tmp/p7f-domscan-cdp.mjs all` 全绿 → 第 4、5 档升为"实测"
 - [ ] 可选：`tmp/p7f-domscan-cdp.mjs fresh`（整页重载那一格；跑完要真人再点一次会话）

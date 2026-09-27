@@ -19,8 +19,8 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
      * 2026-09-20 一次性探针实测过这四种形态：单行新增 1、单行重复 0、两行里一条重复 1、
      * 两行全重复 0 —— 也就是整批调用给的是"插进去几行"，不是"整批成没成"。
      * 列清单含 {@code msg_id}（实体序里紧跟 {@code msg_key}）：spec §2/§4 要求采集即落
-     * 平台消息 id，它是 {@link #findForTranslation} 等值支的规范键；缺了这列，新行只能靠
-     * msg_key 尾部或 saveTranslation 的 COALESCE 懒填，"入库即有 msg_id"的前提就不成立。
+     * 平台消息 id，它是 {@link #findForTranslationByMsgId} 那一趟点查的规范键；缺了这列，新行只能靠
+     * {@link #findForTranslationByMsgKeyTail} 或 saveTranslation 的 COALESCE 懒填，"入库即有 msg_id"的前提就不成立。
      */
     @Insert({"<script>",
         "INSERT IGNORE INTO chat_message",
@@ -102,12 +102,14 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
     /**
      * 第二趟（第一趟没命中时才发）：靠 msg_key 尾部认 V10 之前入库、`msg_id` 还为空的老行。
      * 两条模式各管一个方向（收到 `<…>_<id>` / 发出 `<…>_<id>_out`），谁也不能省。
+     * 分隔用的下划线写成 `\_` 而不是裸 `_`：裸的在 LIKE 里是"任意一个字符"的通配，那会让
+     * `<id>Xout` 这类形状也算命中，与注释里说的"两种形状"对不上（驱动 O1–O6 实测两种尾形各自命中自己）。
      * 定序由调用方保证（先规范列、再尾部），所以这里不再需要 `ORDER BY (msg_id = ?) DESC`
      * 那类表达式排序：两条谓词同时成立时取的是第一趟那一行，语义与拆分前一致。
      */
     @Select("SELECT id, body, msg_id, translated_body, translated_lang FROM chat_message"
         + " WHERE tenant_id = #{tenantId} AND account_id = #{accountId} AND chat_key = #{chatKey}"
-        + " AND (msg_key LIKE CONCAT('%', #{msgId}) OR msg_key LIKE CONCAT('%_', #{msgId}, '_out'))"
+        + " AND (msg_key LIKE CONCAT('%', #{msgId}) OR msg_key LIKE CONCAT('%\\_', #{msgId}, '\\_out'))"
         + " LIMIT 1")
     ChatMessage findForTranslationByMsgKeyTail(@Param("tenantId") Long tenantId, @Param("accountId") Long accountId,
                                                @Param("chatKey") String chatKey, @Param("msgId") String msgId);
