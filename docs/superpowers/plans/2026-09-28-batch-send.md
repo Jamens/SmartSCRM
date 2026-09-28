@@ -476,12 +476,18 @@ public final class BatchRender {
         return s == null || s.isBlank() ? null : s;
     }
 
-    /** 不足 4 位就用整串：尾 4 位是为"认个人"，不是为"凑长度"。 */
+    /**
+     * 先剥掉 `@` 之后的平台段再取尾 4 位：客户 open_id 与 chat_key 同形（`8613800001001@c.us`），
+     * 不剥就会给每个无昵称的客户渲染出同一个 "c.us"。不足 4 位用整串——尾 4 位是为"认个人"，
+     * 不是为"凑长度"。
+     */
     private static String openIdTail(String openId) {
         if (openId == null) {
             return "";
         }
-        return openId.length() <= 4 ? openId : openId.substring(openId.length() - 4);
+        int at = openId.indexOf('@');
+        String local = at < 0 ? openId : openId.substring(0, at);
+        return local.length() <= 4 ? local : local.substring(local.length() - 4);
     }
 }
 ```
