@@ -49,7 +49,7 @@ export interface ThrottledReporter {
   cancel(): void
 }
 
-/** 背压：live 帧在补底期间可能成百上千，按 kind 合帧上报，避免打爆 IPC。 */
+/** 背压：补底期间进度帧可能成百上千，这里只合 `backfill_progress` 这一种 kind，其余每条直发，避免打爆 IPC。 */
 export function makeThrottledReporter(intervalMs = 200): ThrottledReporter {
   const latest = new Map<string, BridgeReport>()
   let timer: ReturnType<typeof setTimeout> | null = null
