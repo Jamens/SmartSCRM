@@ -977,7 +977,7 @@ public final class BatchJson {
 }
 ```
 
-- [ ] **Step 6：全量单测** `./mvnw test`，期望总数 = Task 1 基线 + 22，0 failures。
+- [ ] **Step 6：全量单测** `./mvnw test`，期望总数 = Task 1 基线 + 22，0 failures。（整枝修复轮之后这一列的真实分母是 **115** = 81 + 22 + 12，见 Task 16 Step 1。）
 - [ ] **Step 7：提交。** `git commit -m "feat(P7/群发): 上限/间隔规则、任务状态机与两个 JSON 列编解码"`（正文写一句：违规一次全回、下限只咬真发、unknown 无撤回资格）。
 
 ---
@@ -1639,7 +1639,7 @@ git commit -m "feat(P7/群发): 运行面端点齐了，状态迁移只有一个
 cancel 顺带 skipAllPending；reconcile 先判 unknown 再转 paused；allHalted 把 running 打成 error。"
 ```
 
-## Task 6: 后端契约驱动 `tmp/p7b-batch-contract.mjs`（27 个编号 / 30 条断言，全程 dryRun）
+## Task 6: 后端契约驱动 `tmp/p7b-batch-contract.mjs`（29 个编号 / 33 条断言，全程 dryRun）
 
 **Files:**
 - Create: `tmp/p7b-batch-contract.mjs`（gitignored，永不进提交）
@@ -1647,17 +1647,19 @@ cancel 顺带 skipAllPending；reconcile 先判 unknown 再转 paused；allHalte
 
 **Interfaces:**
 - Consumes: Task 4/5 的全部端点与错误码。
-- Produces: 一份可重复运行的台账：**27 个编号、一次运行 30 条 `check`、30 个调用点**（`#24` 三条、`#26` 两条 `#26a`/`#26b`；`#5` 以前是 if/else 取其一、每次有一条 `check(..., true, ...)` 的恒真行占着 pass，现在收件人夹具实测可选，写成一调一断）。终端表格按 `rows.length` 打印 + 退出码。
+- Produces: 一份可重复运行的台账：**29 个编号、一次运行 33 条 `check`、33 个调用点**（`#24` 三条、`#26` 两条 `#26a`/`#26b`、`#29` 两条 `#29a`/`#29b`；`#5` 以前是 if/else 取其一、每次有一条 `check(..., true, ...)` 的恒真行占着 pass，现在收件人夹具实测可选，写成一调一断）。终端表格按 `rows.length` 打印 + 退出码。
 
 - [ ] **Step 1：写驱动骨架。** 形制照 `tmp/p6b-scope-contract.mjs`（读码：同一个 `check/req/get/post`、同一种退出码约定）。整文件开头：
 
 ```js
 // tmp/p7b-batch-contract.mjs — P7/B7 群发后端契约（全程 dryRun=1，不碰页面）
 // 用法：node tmp/p7b-batch-contract.mjs   （后端需已在 :8180 上跑本计划的构建）
-// 退出码：0=30 条 check 全过（27 个编号，#24 三条 / #26 两条）；1=有断言失败；2=前置条件不满足（没有可用账号/会话，不算产品失败）
+// 退出码：0=33 条 check 全过（29 个编号 / 33 个调用点：#24 三条、#26 两条、#29 两条，其余一编号一条）；1=有断言失败；2=前置条件不满足（没有可用账号/会话/客户夹具，不算产品失败）
+// 用时：#29b 要等心跳阈值（后端定义的 60 s）真的过去，所以整跑比上一版多花 60~70 s；那一腿是轮询到判出来为止，不是固定 sleep。
 // 收尾：#26b 需要一条 dryRun:false 的任务才有撤回资格，所以本脚本确实会建非演练单——但从不 start 它
 //       （#18~#24 的 start/pause/resume/cancel 链全部打在 dryRun:true 的 T/T2/T3 上）。创建的每个 taskId 进
 //       createdTasks，结尾逐个 POST /cancel（取消会把 pending 置 skipped），并打印取消结果。
+//       整个腿段落包在 try/finally 里：抛错也照样逐个 cancel，退出路径不留活任务。
 const BASE = 'http://127.0.0.1:8180';
 const rows = [];
 const responses = {};
@@ -2030,9 +2032,72 @@ check('#27 八跳对不存在的任务都回 40404，心跳回 code=0/updated=0'
   ghostCodes.length === 8 && ghostCodes.every((x) => x.endsWith('=40404'))
     && rGhostHb.code === 0 && rGhostHb.data?.updated === 0,
   '8 段全 =40404 + heartbeat updated=0', `${ghostCodes.join(' ')} heartbeat=${rGhostHb.code}/${rGhostHb.data?.updated}`);
+
+// #28 第二个租户（QA0002/qa）打租户 1 的真 taskId：八跳 + 两个 GET 全部 40404。
+//     R40 之前 /details 那一格回的是「空的一页」，与「这一档筛选下确实没有行」在响应体上分不出来；
+//     这里用真 id（不是 9000001 那种不存在的 id），为的是让 SQL 里的租户守卫也当一次证人。
+const ownRead = (await get(`/api/batch-send/tasks/${T}`)).code; // 先确认这个 id 在本租户手上读得到
+const tokA = tok;
+const loginB = await post('/api/auth/login', {
+  inviteCode: 'QA0002', username: 'qa', password: 'qa12345', deviceId: 'p7t6-batch-b',
+});
+tok = loginB?.data?.accessToken;
+const foreignCodes = [];
+if (tok) {
+  for (const [seg, body] of ghostCalls) {
+    foreignCodes.push(`${seg}=${(await post(`/api/batch-send/tasks/${T}/${seg}`, body)).code}`);
+  }
+  foreignCodes.push(`GET_task=${(await get(`/api/batch-send/tasks/${T}`)).code}`);
+  foreignCodes.push(`GET_details=${(await get(`/api/batch-send/tasks/${T}/details?size=2`)).code}`);
+}
+tok = tokA;
+check('#28 换号后八跳 + 两个 GET 打别人的真任务全是 40404（本租户读得到同一个 id）',
+  ownRead === 0 && loginB?.data?.accessToken != null
+    && foreignCodes.length === 10 && foreignCodes.every((x) => x.endsWith('=40404')),
+  '本租户 code=0 + 换号 10 段全 =40404', `${ownRead} ${foreignCodes.join(' ')}`);
+
+// #29 R4 的两拍打在真库上（T5 是 dryRun，全程没有引擎、没有按下过任何页面）：
+//     #29a 刚点下「开始」的任务不该被 reconcile 判成陈旧（R39 的证人：搬进 running 那一跳就续了心跳。
+//          少了那一拍，heartbeat_at 一直是空，而 reconcile 的判据是「为空或早于 60 s」——当场就把它打死）；
+//     #29b 心跳停过阈值之后，一次 reconcile 要同时留下两个结论：那条 sending 变 unknown、任务变 paused。
+//          两拍顺序换了就只剩第二个结论——markStaleSendingUnknown 的守卫是「所属任务仍是 running」。
+//     先把 T3 打成 paused：它手上没有引擎，干等着只会一起变陈旧，那会让 #29b 的计数读不出是几行。
+await post(`/api/batch-send/tasks/${T3}/pause`);
+await post('/api/batch-send/reconcile'); // 先把上一次运行遗留的陈旧 running 行扫掉，再读基线
+const T5 = (await makeTask()).data.taskId;
+const ids5 = (await detailsOf(T5)).map((d) => d.id);
+await post(`/api/batch-send/tasks/${T5}/start`);
+await post(`/api/batch-send/tasks/${T5}/reports`, {
+  allHalted: false,
+  items: [{ detailId: ids5[0], sendStatus: 'sending', localId: 'L5' }],
+});
+const recEarly = (await post('/api/batch-send/reconcile')).data;
+check('#29a 刚 start（心跳已续上）时 reconcile 两拍都不动这一行与这一任务',
+  recEarly?.markedUnknown === 0 && recEarly?.pausedTasks === 0,
+  'markedUnknown=0 pausedTasks=0', JSON.stringify(recEarly));
+
+// 阈值定义在后端（STALE_SECONDS=60），引擎侧什么都不传，所以这里只能等它真的过去：
+// 轮询到 reconcile 判出来为止，上限 90 s；到点还没判出来就把当时的读数当失败打出来（不是「跳过」）。
+const staleDeadline = Date.now() + 90000;
+let recLate = recEarly;
+while (Date.now() < staleDeadline) {
+  recLate = (await post('/api/batch-send/reconcile')).data ?? recLate;
+  if ((recLate?.markedUnknown ?? 0) >= 1) break;
+  await new Promise((r) => setTimeout(r, 3000));
+}
+const d5b = await detailsOf(T5);
+const t5b = (await get(`/api/batch-send/tasks/${T5}`)).data;
+check('#29b 心跳停过阈值后：那一行 sending→unknown(ENGINE_LOST)、任务 running→paused',
+  recLate?.markedUnknown === 1 && recLate?.pausedTasks === 1
+    && d5b[0]?.sendStatus === 'unknown' && d5b[0]?.errorCode === 'ENGINE_LOST'
+    && d5b[1]?.sendStatus === 'pending' && t5b?.status === 'paused',
+  'markedUnknown=1/pausedTasks=1/[unknown,pending,…]/paused',
+  JSON.stringify({ r: recLate, s: d5b.map((x) => [x.sendStatus, x.errorCode]), st: t5b?.status }));
 ```
 
-> 编号到 `#27`，其中 `#24` 有三条 `check`（收尾跳 / 单条重发唤醒 / cancelled 不唤醒）、`#26` 有两条（`#26a`/`#26b`）：台账是 **27 个编号、一次运行 30 条 `check`、30 个调用点**，收尾表格按 `rows.length` 打印。`#5` 曾经写成 if/else 两个调用点、无客户那一支是 `check(..., true, ...)`——它占着一个 pass 却永远为真，等于台账虚报一格；现在收件人夹具（挂存活客户的那条会话）实测可选，就写成一调一断，一条都不许恒真。
+> 编号到 `#29`，其中 `#24` 有三条 `check`（收尾跳 / 单条重发唤醒 / cancelled 不唤醒）、`#26` 有两条（`#26a`/`#26b`）、`#29` 有两条（`#29a`/`#29b`）：台账是 **29 个编号、一次运行 33 条 `check`、33 个调用点**，收尾表格按 `rows.length` 打印。`#5` 曾经写成 if/else 两个调用点、无客户那一支是 `check(..., true, ...)`——它占着一个 pass 却永远为真，等于台账虚报一格；现在收件人夹具（挂存活客户的那条会话）实测可选，就写成一调一断，一条都不许恒真。
+>
+> `#28`（第二租户扫真 id）与 `#29a`/`#29b`（reconcile 两拍与 `start` 那一拍心跳）是整枝终审补进来的三格：R38 要在自动化里留下「最贵的两个错」的证人——跨租户读到别人的任务、以及两拍顺序颠倒导致的重复发送。`#29a` 与 `#29b` 是一正一反的一对：只有前者通过，才说明后者的 0/0 不是「reconcile 什么都没做」。
 
 - [ ] **Step 5：收尾与打印（每条退出路径都还原）。**
 
@@ -4064,7 +4129,7 @@ cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.
 cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 ```
 
-期望：unit `pass` = 212 + 10(Task 7) + 9(Task 8) + 8(Task 9) + 5(Task 10) + 8(Task 11) = **252**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
+期望：unit `pass` = 212 + 10(Task 7) + 9(Task 8) + 8(Task 9) + 5(Task 10) + 8(Task 11) = **252**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = **115**（实测 = Task 1 基线 81 + 群发纯函数 22 + 整枝修复轮的 12 条证人，其中 `BatchSendServiceTest` 8 条）、0 failures；契约驱动 `33/33 passed`（29 个编号）且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
 
 - [ ] **Step 2：CDP 演练腿（全程 dryRun，不碰页面）。** 前提：主进程改过，dev 必须已被用户重启过一次（dev watcher 不重载 `src/main`）。先 `powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p5c-top.ps1` 断言 `visibilityState==='visible'`，然后跑 `tmp/p7b-dry-run.mjs`，八条：
 
