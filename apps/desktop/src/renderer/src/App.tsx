@@ -7,6 +7,7 @@ import MessagesPage from '@/pages/MessagesPage'
 import CustomersPage from '@/pages/CustomersPage'
 import LabelsPage from '@/pages/LabelsPage'
 import AudiencesPage from '@/pages/AudiencesPage'
+import { BroadcastPage } from '@/pages/BroadcastPage'
 import QuickRepliesPage from '@/pages/QuickRepliesPage'
 import MaterialsPage from '@/pages/MaterialsPage'
 import TranslationPage from '@/pages/TranslationPage'
@@ -49,6 +50,7 @@ function App(): React.JSX.Element {
           <Route path="/customers" element={<CustomersPage />} />
           <Route path="/labels" element={<LabelsPage />} />
           <Route path="/audiences" element={<AudiencesPage />} />
+          <Route path="/broadcast" element={<BroadcastPage />} />
           <Route path="/quick-replies" element={<QuickRepliesPage />} />
           <Route path="/materials" element={<MaterialsPage />} />
           <Route path="/translation" element={<TranslationPage />} />

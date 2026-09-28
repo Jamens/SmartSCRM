@@ -3,6 +3,7 @@ import {
   History,
   Languages,
   LayoutDashboard,
+  Megaphone,
   MessagesSquare,
   Settings,
   Target,
@@ -25,6 +26,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/customers', label: '客户', icon: Users },
   { path: '/labels', label: '标签', icon: Tags },
   { path: '/audiences', label: '人群包', icon: Target },
+  // 群发消费人群包选出的收件人，所以紧跟在人群包之后。
+  { path: '/broadcast', label: '批量群发', icon: Megaphone },
   { path: '/quick-replies', label: '快捷回复', icon: MessagesSquare },
   { path: '/materials', label: '素材库', icon: FolderOpen },
   { path: '/translation', label: '翻译中心', icon: Languages },
