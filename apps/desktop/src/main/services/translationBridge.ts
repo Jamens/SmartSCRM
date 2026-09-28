@@ -30,6 +30,11 @@ export interface TranslateResponse {
   /** 线上线路失败或未配置密钥时为 true：译文来自本地模拟引擎，且该结果不入缓存 */
   degraded: boolean
   degradeReason: string | null
+  /**
+   * 降级重试得了吗：false = 配置性死路。后端 JSON 原样透传，这里补的是类型形状
+   * （主进程不改写响应字段），真正的分岔发生在抛出点 `ProviderException.retryable()`。
+   */
+  degradeRetryable: boolean
 }
 
 /**

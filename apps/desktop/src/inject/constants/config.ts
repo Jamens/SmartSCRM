@@ -17,6 +17,8 @@ export const CSS_CLASSES = {
   TRANSLATE_ERROR: `${CSS_PREFIX}-translate-error`,
   VOICE_TEXT: `${CSS_PREFIX}-voice-text`,
   MASK: `${CSS_PREFIX}-mask`,
+  /** 配置性死路那一句话：长得像提示，不像那颗点得动的按钮。 */
+  DEGRADE_NOTE: `${CSS_PREFIX}-degrade-note`,
   LOADING: `${CSS_PREFIX}-loading`
 }
 

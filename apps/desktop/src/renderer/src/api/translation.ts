@@ -94,6 +94,8 @@ export interface TranslateVO {
   degraded: boolean
   /** 降级原因：未配置密钥或厂商报错；正常时为 null */
   degradeReason: string | null
+  /** 这次降级重试得了吗：false = 配置性死路。只在 `degraded` 为真时有意义。 */
+  degradeRetryable: boolean
   /** 这次翻译**实际**用的那一档：`global` | `customer` | `conversation`（spec §3.1 / §4③）。 */
   scope: string
 }

@@ -129,6 +129,17 @@ class TencentProviderTest {
         ProviderException e = assertThrows(ProviderException.class,
             () -> provider().translate(CREDS, "habari", "sw", "en"));
         assertTrue(e.getMessage().contains("sw"));
+        // 与百度同一格判据：语种不在表上是配置性死路，不是瞬时故障
+        assertFalse(e.retryable(), "语种不支持要判成死路: " + e.getMessage());
+        assertEquals(0, bodies.size());
+    }
+
+    @Test
+    void blankCredentialsAreADeadEndToo() {
+        ProviderException e = assertThrows(ProviderException.class,
+            () -> provider().translate(new Credentials("", "", null), "你好", "zh-CN", "en"));
+        assertTrue(e.getMessage().contains("未配置密钥"), e.getMessage());
+        assertFalse(e.retryable(), "没有密钥时重试一万次也不会好: " + e.getMessage());
         assertEquals(0, bodies.size());
     }
 

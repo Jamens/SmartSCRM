@@ -21,7 +21,9 @@ export function ensureTranslationStyle(): void {
     `.${CSS_CLASSES.TRANSLATED} .${TEXT_CLASS}{display:block}`,
     `.${CSS_CLASSES.TRANSLATING}{opacity:.5}`,
     `.${CSS_CLASSES.TRANSLATE_ERROR}{opacity:.8}`,
-    `.${CSS_CLASSES.MASK}{display:inline-block;margin-top:2px;font-size:12px;color:#00a884;cursor:pointer;border-bottom:1px dashed currentColor}`
+    `.${CSS_CLASSES.MASK}{display:inline-block;margin-top:2px;font-size:12px;color:#00a884;cursor:pointer;border-bottom:1px dashed currentColor}`,
+    // 与 MASK 同一字号同一位置，但没有 pointer、没有下划线：那颗是入口，这一句是结论。
+    `.${CSS_CLASSES.DEGRADE_NOTE}{display:inline-block;margin-top:2px;font-size:12px;color:#faa724}`
   ].join('\n')
   document.head.appendChild(style)
 }

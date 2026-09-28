@@ -549,7 +549,7 @@ public class TranslationService {
                         && !Boolean.TRUE.equals(dto.noCache())) {
                     return new TranslateVO(msgRow.getTranslatedBody(), true, false,
                         containsChinese(msgRow.getTranslatedBody()), dto.type(), channel,
-                        fromLang, toLang, cacheKey, false, null, scope);
+                        fromLang, toLang, cacheKey, false, null, scope, false);
                 }
                 // 语种不符、还没有已存译文、或 noCache 强制新算 → 保留 msgRow 但不回显：
                 // 走正常路径，非降级成功后覆盖/首写（spec §3.5/§4）。
@@ -566,7 +566,7 @@ public class TranslationService {
                     .setSql("hit_count = hit_count + 1"));
                 return new TranslateVO(hit.getTargetText(), true, Boolean.TRUE.equals(hit.getPartial()),
                     containsChinese(hit.getTargetText()), dto.type(), channel,
-                    displayFrom(fromLang, hit.getFromLang()), toLang, cacheKey, false, null, scope);
+                    displayFrom(fromLang, hit.getFromLang()), toLang, cacheKey, false, null, scope, false);
             }
         }
 
@@ -575,7 +575,7 @@ public class TranslationService {
             // 它就是这条消息"译文=原文"的规范结论：照样回写，下次直接回显、省一次重算（spec §3）。
             echoTranslation(msgRow, dto.msgId(), normalized, toLang);
             return new TranslateVO(normalized, false, false, containsChinese(normalized), dto.type(), channel,
-                fromLang, toLang, cacheKey, false, null, scope);
+                fromLang, toLang, cacheKey, false, null, scope, false);
         }
 
         String providerId = CHANNEL_TO_PROVIDER.get(channel);
@@ -592,23 +592,25 @@ public class TranslationService {
                     echoTranslation(msgRow, dto.msgId(), online.translation(), toLang);
                     return new TranslateVO(online.translation(), false, false,
                         containsChinese(online.translation()), dto.type(), channel,
-                        displayFrom(fromLang, online.detectedFrom()), toLang, cacheKey, false, null, scope);
+                        displayFrom(fromLang, online.detectedFrom()), toLang, cacheKey, false, null, scope, false);
                 } catch (ProviderException e) {
                     // The request already carries a 4s timeout; one fall-through to the
                     // simulated engine, with the vendor error surfaced instead of swallowed.
+                    // 重试与否由抛出点判（未配密钥/语种不支持 = 死路），页面照那个布尔决定给不给按钮。
                     SimulatedTranslationEngine.EngineResult fallback =
                         engine.translate(normalized, fromLang, toLang, channel);
                     return new TranslateVO(fallback.translation(), false, fallback.partial(),
                         containsChinese(fallback.translation()), dto.type(), channel,
-                        fallback.fromLang(), toLang, cacheKey, true, e.getMessage(), scope);
+                        fallback.fromLang(), toLang, cacheKey, true, e.getMessage(), scope, e.retryable());
                 }
             }
             SimulatedTranslationEngine.EngineResult fallback =
                 engine.translate(normalized, fromLang, toLang, channel);
+            // 这一格不需要问抛出点：压根没查到凭据，重试必然还是这条出口，直接判死路。
             return new TranslateVO(fallback.translation(), false, fallback.partial(),
                 containsChinese(fallback.translation()), dto.type(), channel,
                 fallback.fromLang(), toLang, cacheKey, true,
-                providerId + " 未配置密钥，此结果来自本地模拟引擎", scope);
+                providerId + " 未配置密钥，此结果来自本地模拟引擎", scope, false);
         }
 
         SimulatedTranslationEngine.EngineResult result = engine.translate(normalized, fromLang, toLang, channel);
@@ -619,7 +621,7 @@ public class TranslationService {
         // 模拟引擎成功（非降级）：同样按消息回写（spec §3④）。
         echoTranslation(msgRow, dto.msgId(), result.translation(), toLang);
         return new TranslateVO(result.translation(), false, result.partial(), containsChinese(result.translation()),
-            dto.type(), channel, result.fromLang(), toLang, cacheKey, false, null, scope);
+            dto.type(), channel, result.fromLang(), toLang, cacheKey, false, null, scope, false);
     }
 
     private void writeCache(Long tenantId, String cacheKey, String type, String channel, String fromLang,

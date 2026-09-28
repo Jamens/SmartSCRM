@@ -19,6 +19,12 @@ public record TranslateVO(
      * 与 GET /settings 的 `scope` 同一取值、同一含义，但它是**这一次翻译**的档位——
      * 记录页回复框要在译出之后如实说这一句（§4③），因为屏幕上那枚档位来自更早的一次 GET。
      */
-    String scope
+    String scope,
+    /**
+     * 这次降级重试得了吗：{@code false} = 配置性死路（未配置密钥 / 语种不支持），
+     * 页面上那颗「点此重试」点了也不会好，要换成一句说明。只在 {@code degraded} 为真时才有意义，
+     * 所以读它之前先读 {@code degraded}。分岔发生在抛出点（{@code ProviderException.retryable()}）。
+     */
+    boolean degradeRetryable
 ) {
 }

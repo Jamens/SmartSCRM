@@ -26,6 +26,8 @@ export interface TranslateResponse {
   /** 线上线路失败或未配置密钥时为 true：译文来自本地模拟引擎，且该结果不入缓存 */
   degraded: boolean
   degradeReason: string | null
+  /** false = 配置性死路（未配密钥 / 语种不支持）：重试不会好，页面上那颗按钮要换成一句说明。 */
+  degradeRetryable: boolean
 }
 
 const inflight = new Map<string, Promise<TranslateResponse | null>>()

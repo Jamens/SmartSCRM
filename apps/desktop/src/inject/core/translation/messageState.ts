@@ -13,6 +13,12 @@ export interface MsgState {
    * 它不是译文，所以 `translation` 必为 null、也绝不能当译文画出来；页面上停成一个可点的重试。
    */
   degraded?: boolean
+  /**
+   * 降级那两个字段要跟着存：滚出可视区再滚回来时画的是**同一格**，
+   * 只存 `degraded` 会把配置性死路退化成一颗永远点不亮的重试。
+   */
+  degradeReason?: string | null
+  degradeRetryable?: boolean
 }
 
 const states = new Map<string, MsgState>()
