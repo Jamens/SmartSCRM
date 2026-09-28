@@ -2083,6 +2083,9 @@ cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
   - `type BatchDetailStatus = 'pending'|'sending'|'success'|'failed'|'unknown'|'skipped'`
   - `type RecallStatus = 'none'|'recalling'|'recalled'|'recall_failed'`
   - `interface BatchTask` / `interface BatchDetail` / `interface BatchStateEvent`
+    两个 VO 接口逐列对齐后端出参（读码 `BatchTaskVO.java:10-16`、`BatchDetailVO.java:6-12`）：
+    `BatchDetail.recallDetail`（页内撤回的逐条结论，Task 10/15 要展示）、`BatchTask.createdAt`
+    （列表排序与展示，Task 14 要用）都是 `string | null` 的墙钟串，与 `sentAt`/`heartbeatAt` 同一口径。
   - `buildQueues(details: BatchDetail[], accountIds: number[]): BatchDetail[][]`
   - `gapKindFor(prev: BatchDetail | null, cur: BatchDetail): IntervalKind` + `pickIntervalSec(kind, t, rand): number`
   - `outcomeStatus(receipt: { ok: boolean; error?: string }): BatchDetailStatus`
@@ -2102,7 +2105,7 @@ cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
-  FAIL_STREAK_LIMIT, REPORT_BACKLOG_CAP, ReportBacklog, buildQueues,
+  FAIL_STREAK_LIMIT, REPORT_BACKLOG_CAP, ReportBacklog, SETTLED_DETAIL_STATUS, buildQueues,
   gapKindFor, outcomeStatus, pickIntervalSec
 } from './batchSend.ts'
 import type { BatchDetail, IntervalConfig } from './batchSend.ts'
@@ -2120,9 +2123,10 @@ test('buildQueues: 每个账号一条队列，队列内按 seq 升序', () => {
 })
 
 test('buildQueues: 没在 accountIds 里的行不进队列（账号被剔出任务不该照跑）', () => {
-  // .flat()：实现保证「每个账号一条队列」（长度 = accountIds.length），账号下没有可发行时
-  // 拿到的是 [[]] 而不是 []。这里要比的是「没有行进队列」，不是队列条数——条数由上一条钉住。
+  // 实现保证「每个账号一条队列」（长度 = accountIds.length），账号下没有可发行时
+  // 拿到的是 [[]] 而不是 []。Task 11 靠这条形状给每个账号挂一条泵，空队列也要占位。
   assert.deepEqual(buildQueues([d(1, 1, 9, 'a')], [1]).flat(), [])
+  assert.equal(buildQueues([d(1, 1, 9, 'a')], [1, 2]).length, 2)
 })
 
 test('buildQueues: 终态行不进队列（重跑一个已 done 的任务不该重发成功条目）', () => {
@@ -2130,9 +2134,24 @@ test('buildQueues: 终态行不进队列（重跑一个已 done 的任务不该�
   assert.deepEqual(buildQueues([done], [1]).flat(), [])
 })
 
+// Task 13 的状态徽标与 buildQueues 共用这一份判据，所以三个成员各自都得真的「收口」；
+// 'unknown' 在里面是 R2 的落点（超时可能已送达，算失败会诱导出再发一遍），
+// 'failed' 必须**不在**里面——单条重发靠它，漏了就让重试按钮点不动。
+test('SETTLED_DETAIL_STATUS: 只有 success/unknown/skipped 算收口，failed 仍可重发', () => {
+  assert.deepEqual([...SETTLED_DETAIL_STATUS].sort(), ['skipped', 'success', 'unknown'])
+  for (const s of SETTLED_DETAIL_STATUS) {
+    assert.deepEqual(buildQueues([{ ...d(1, 1, 1, 'a'), sendStatus: s }], [1]).flat(), [], s + ' 不该进队列')
+  }
+  assert.equal(buildQueues([{ ...d(1, 1, 1, 'a'), sendStatus: 'failed' as const }], [1]).flat().length, 1)
+})
+
 test('pickIntervalSec: 落在 [min,max] 且取整，边界两种随机数都夹得住', () => {
   assert.equal(pickIntervalSec('msg', t, () => 0), 3)
   assert.equal(pickIntervalSec('msg', t, () => 0.999999), 8)
+  // rand() 交出区间外的数（桩函数给 1、负数）时，钳制必须把它夹回区间内，
+  // 否则 max+1 秒会直接进 Task 11 的等待时长里。
+  assert.equal(pickIntervalSec('msg', t, () => 1), 8)
+  assert.equal(pickIntervalSec('msg', t, () => -0.5), 3)
   assert.equal(pickIntervalSec('chat', t, () => 0.5), 10)
   for (let i = 0; i < 200; i++) {
     const v = pickIntervalSec('msg', t, Math.random)
@@ -2207,6 +2226,8 @@ export interface BatchDetail {
   errorDetail?: string | null
   msgKey?: string | null
   recallStatus: RecallStatus
+  /** 页内撤回四态的逐条结论文案（后端 `recall_detail`）；没撤过就为空。 */
+  recallDetail?: string | null
   /** 后端 VO 的墙钟串（不带偏移），显示走 `chatMs` + `chatClock`；引擎只写不回读，所以可选。 */
   sentAt?: string | null
 }
@@ -2232,6 +2253,8 @@ export interface BatchTask {
    * 直接 `dayjs(串)` 会在非东八区机器上按浏览器时区偏一次。
    */
   heartbeatAt?: string | null
+  /** 与 `heartbeatAt` 同一口径的墙钟串（后端 `created_at` 原样透传）；列表按它排序展示，解析同样只准走 `chatMs`。 */
+  createdAt?: string | null
 }
 
 export interface IntervalConfig { msgMin: number; msgMax: number; chatMin: number; chatMax: number }
@@ -2321,7 +2344,7 @@ export class ReportBacklog<T> {
 cd /d/SmartSCRM/apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run typecheck 2>&1 | tail -8
 ```
 
-期望：`pass 212+9`（9 条 = buildQueues 3 + pickIntervalSec 2 + outcomeStatus 1 + ReportBacklog 1 + gapKindFor 1 + FAIL_STREAK_LIMIT 1）、`fail 0`；typecheck 四路 0 error。
+期望：`pass 212+10`（10 条 = buildQueues 3 + SETTLED_DETAIL_STATUS 1 + pickIntervalSec 2 + outcomeStatus 1 + ReportBacklog 1 + gapKindFor 1 + FAIL_STREAK_LIMIT 1）、`fail 0`；typecheck 四路 0 error。
 
 - [ ] **Step 6：提交。** `feat(P7/群发): shared 群发纯模型（队列/节律/熔断阈值/上报积压）`
 
@@ -3738,7 +3761,7 @@ cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.
 cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 ```
 
-期望：unit `pass` = 212 + 9(Task 7) + 5(Task 8) + 4(Task 9) + 4(Task 10) + 8(Task 11) = **242**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
+期望：unit `pass` = 212 + 10(Task 7) + 5(Task 8) + 4(Task 9) + 4(Task 10) + 8(Task 11) = **243**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
 
 - [ ] **Step 2：CDP 演练腿（全程 dryRun，不碰页面）。** 前提：主进程改过，dev 必须已被用户重启过一次（dev watcher 不重载 `src/main`）。先 `powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p5c-top.ps1` 断言 `visibilityState==='visible'`，然后跑 `tmp/p7b-dry-run.mjs`，八条：
 
