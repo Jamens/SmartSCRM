@@ -1,12 +1,12 @@
 # 消息级译文回显 + 降级可见重试 · 验收记录
 
-**日期**：2026-09-27（首跑与纠偏）／2026-09-28 上午（E1 复跑，§4d）／2026-09-28（两个弹层宿主的警示位置，§4e）／2026-09-28（降级分两种形状，§10）
+**日期**：2026-09-27（首跑与纠偏）／2026-09-28 上午（E1 复跑，§4d）／2026-09-28（两个弹层宿主的警示位置，§4e）／2026-09-28（降级分两种形状，§10）／2026-09-28（交付后复跑，§10f）
 **规格**：`docs/superpowers/specs/2026-09-27-message-level-translation-persistence-design.md`
 **计划**：`docs/superpowers/plans/2026-09-27-message-level-translation-persistence.md`
 **提交区间**：起点 `ebf89fa`（spec/计划落档），到本提交为止；逐提交枚举 `git log --oneline ebf89fa..HEAD`
-（其中 G1 修复轮 = `cb6aa6a` + `8a4eb3c`，G2 回评轮 = `b92fc4f`，真实登录视图首跑 = `1b39c7d`，E1 复跑 = 本提交）
+（其中 G1 修复轮 = `cb6aa6a` + `8a4eb3c`，G2 回评轮 = `b92fc4f`，真实登录视图首跑 = `1b39c7d`，E1 复跑 = 那一段的文档提交，§10 的形状分岔代码 = `ce82d2e`，§10f 交付后复跑 = 本提交）
 **证据词口径**：实测 = 本轮真跑过并读到输出；读码 = 只从源码得出；推断 = 由环境事实推出；待验证 = 没跑过，不当结论用。
-**本档最后两次跑（E1 复跑与弹层宿主那一跑）都只动文档与 `tmp/` 驱动，无产品代码改动**；§4b/§4c/§4d/§4e/§5 的新增结论都各自带了现场日志文件名。
+**本档最后三次跑（E1 复跑、弹层宿主那一跑、交付后复跑）都只动文档与 `tmp/` 驱动，无产品代码改动**；§4b/§4c/§4d/§4e/§5 的新增结论都各自带了现场日志文件名（§10f 带的是 `tmp/p7g-deadhttp-verify.log`、`tmp/p7g-viewscene.log`）。
 
 ---
 
@@ -604,4 +604,35 @@ D11 页内那一趟拿回的确实是 `degraded=true + retryable=false + cached=
 - **厂商错误码表**（规格 §7 记档）：被停用 / 配额耗尽的厂商账号在页面上仍显示那颗点得动的「点此重试」，用户要多点几次、读 `degradeReason` 里的原始错误才反应过来要换线路。
 - **死路那一格不给"去哪儿改"的入口**：现在只说"重试无效"并点名厂商，不链到翻译中心那张卡（恢复路径是改档位时 `translationRevision` 自增、整轮重扫）。属文案/导航设计，未批准就不做。
 - **`dead` 形状的实机腿**（§10c）：等出网 + 真人点开一条会话，跑 `node tmp/p7g-deadend.mjs` 结掉。
+
+### 10f. 交付后复跑（同日第二跑，`ce82d2e` 之后；只跑判据，无产品代码改动）
+
+**机械门全部重跑并复绿（实测）**：`./mvnw test` → `Tests run: 81, Failures: 0, Errors: 0` + `BUILD SUCCESS`；
+`test:unit` → `212/212`；`typecheck` 四路（node/web/inject/unit）无输出；改动过的 10 个桌面端文件按 `--quiet` 判，
+只有 `renderer/src/api/translation.ts` 报 10 条 `explicit-function-return-type`（行号 149…305），与 §10b 记的既有数一致——**本轮 delta 0**。
+工作树干净（只有那条既不入库也不删除的 `tsconfig.node.tsbuildinfo`）。
+**§10a 那条后端契约腿本轮复跑仍 6/6、exit 0**（`tmp/p7g-deadhttp-verify.log`）：生效档钉成 `{scope:conversation, channel:7}` 后
+`/translate` 回 `degraded=true + degradeRetryable=false + cached=false`、原因逐字 `tencent 未配置密钥，此结果来自本地模拟引擎`，
+C1 对照（同档换 channel `'1'`）回到成功出口；收尾 `[还原] 删掉本驱动建的会话档，生效档回到 global`，
+现值 `{"scope":"global","channel":"2","收":"→lo","发":"ms→zh-CN","收开关":true}` 与进入前逐字一致。
+
+**bundle 与提交源码同一性（实测）**：`pnpm run build:inject` 从 `ce82d2e` 的源码重建后 md5 逐字节一致
+（`e600a522549834fa216ea26fe2864b87`、22356 字节）⇒ 盘上这份 bundle 就是提交里那份源码的产物，不是旧物。
+`tmp/p7g-verify.mjs`（自查驱动，9 条）现在 9/9：证人属性 `data-p7-degrade`、`-degrade-note` + `#faa724`、
+死路前缀、兜底句、可重试原句、无旧文案残留、"拼接后的整句不在 bundle 里"（反面判据）、后端 JSON 里带 `degradeRetryable` 键。
+
+**这一跑里红过的是判据，不是产品（实测，如实记）**：自查驱动前两版把 B3/B5/S1 判成"文案没进 bundle"。
+取证驱动 `tmp/p7g-dumpcopy.mjs` 的读数定了性：这份 bundle 里**非 ASCII 字符 0 个**，汉字走 `\uXXXX`（122 处）、
+而 U+00B7 那个间隔号走 `\xNN`（4 处，全是 `\xB7`）——只解 `\uXXXX` 的解码器会把「翻译失败 · 点此重试」和
+「翻译失败（重试无效）· 」判成搜不到，同时把没带标点的「这条线路出不了译文」判成搜到，于是出现"三条红一条绿"这种最像产品问题的组合。
+解码补上 `\xNN`（与 `\u{...}`）后同一份 bundle 全绿。另外那条从源码现取文案的正则一开始跨行取字面量，也改成分行取。
+**结论：`dead`/`retry` 两种形状的文案都确实在线，前后两次红都是驱动自己的缺陷。**
+
+**视图现场换了，但 §10c 那一腿仍没有证人（实测）**：内嵌 WhatsApp 页已回到 `https://web.whatsapp.com/`（不再是 `chrome-error`），
+`hasInjector=true`、样式表里读得到 `degrade-note` 那条规则（新 bundle 上了身）；`#pane-side` 画出了会话列表、页面上没有扫码框。
+但 `rows=0`（`div.copyable-text`）、`errorHolders=0`、`state.currentChatId=null` ⇒ **没有打开的会话**，D 组还是无气泡可判；
+`visibilityState="hidden"`。另一件新情况：`:9223` 此刻只列出两枚内嵌页 target（WhatsApp / Telegram），
+**没有 `localhost:5173` 的主窗口 target**（dev 服务在 `[::1]:5173` 正常监听，主进程 argv 里带着 `--remote-debugging-port=9223`），
+所以 `openPage(9223)` 会 `no CDP target matched`——弹层那两条实机腿（#150/#133）这一跑同样开不了。
+要结掉 §10c 需要用户的手两下：把主窗口恢复/重启到能在 CDP 里列出、并在内嵌页里点开一条会话；之后跑 `node tmp/p7g-deadend.mjs`。
 
