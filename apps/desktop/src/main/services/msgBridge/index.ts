@@ -67,7 +67,10 @@ function broadcastState(): void {
       if (n > 0) console.log(`[msgBridge] 结清未决发送 ${n} 条 view=${s.viewId}`)
     }
   }
-  getMainWindow()?.webContents.send('msg:state', states)
+  // 与 `broadcastTheme`/`broadcastSettings` 同一条口径：`getMainWindow()` 可能给回一枚已销毁的窗口，
+  // 可选链只防 `null`，防不住它——退出时序里这一句抛过「Object has been destroyed」。
+  const win = getMainWindow()
+  if (win && !win.isDestroyed()) win.webContents.send('msg:state', states)
 }
 
 /**
