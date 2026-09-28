@@ -1054,24 +1054,35 @@ public class BatchSendService {
                 dto.getContents(), expandedTotal));
         v.addAll(BatchRules.intervalViolations(dto.getMsgIntervalMin(), dto.getMsgIntervalMax(),
                 dto.getChatIntervalMin(), dto.getChatIntervalMax(), Boolean.TRUE.equals(dto.getDryRun())));
+        if (dto.getAccountIds() == null || dto.getAccountIds().isEmpty()) {
+            // spec §3.2 的第一句「accountIds 非空」归任务头，不进 BatchRules（它的签名只管任务体）。
+            // 必须打在 requireAccountsBound 之前：空表会让那条 IN 塌成 `IN ()`，回 500 而不是 40013。
+            v.add("账号不能为空");
+        }
         if (!v.isEmpty()) {
             throw new BizException(40013, String.join("；", v));
         }
         requireAccountsBound(tenantId, dto.getAccountIds());
 
         Map<String, ChatConversation> convIndex = loadConversations(tenantId, recipients);
+        Set<Long> chosen = new HashSet<>(dto.getAccountIds());
         List<BatchExpansion.Recipient> ok = new ArrayList<>();
         List<BatchRejectedVO> rejected = new ArrayList<>();
         for (BatchRecipientDTO r : recipients) {
             ChatConversation c = convIndex.get(convKey(r.getAccountId(), r.getChatKey()));
-            if (c == null) {
+            if (!chosen.contains(r.getAccountId())) {
+                // spec §3.2 的后半句「account_id ∈ accountIds」。不拦在这里的代价是静默半跑：
+                // Task 11 的 buildQueues 按 accountIds 分组，不属于任何一组的明细行永远留在 pending，
+                // openCount 也就永远不归零、任务永远到不了 done。
+                rejected.add(new BatchRejectedVO(r.getChatKey(), r.getAccountId(), "这条会话所属的账号不在本次勾选的账号里"));
+            } else if (c == null) {
                 rejected.add(new BatchRejectedVO(r.getChatKey(), r.getAccountId(), "当前账号下没有这条会话的采集记录"));
             } else {
                 ok.add(new BatchExpansion.Recipient(r.getAccountId(), r.getChatKey(), c.getCustomerId()));
             }
         }
         if (ok.isEmpty()) {
-            throw new BizException(40012, "所有收件人都找不到对应会话");
+            throw new BizException(40012, "所有收件人都不可寻址");
         }
         Map<String, BatchRender.Fields> fieldsByKey = resolveFields(convIndex, ok);
         List<BatchExpansion.ExpandedRow> rows = BatchExpansion.expand(ok, dto.getContents(),
@@ -1221,7 +1232,7 @@ public class BatchSendService {
 
 1. 上限/间隔规则不过 → `40013`，`message` 是所有违规用「；」拼起来（Task 3 的 `violations` 一次给全）。
 2. 收件人解析走 `loadConversations` 一次查、`resolveFields` 一次查客户，**循环里没有 SQL**。
-3. 部分不可寻址照常创建并逐个点名（R8）；全员不可寻址 → `40012`。
+3. 部分不可寻址照常创建并逐个点名（R8）——两种原因分开点名：账号不在本次勾选清单里 / 该账号下没有这条会话的采集记录；全员不可寻址 → `40012`。
 4. 总数自检不等 → `40014` 抛出，`@Transactional` 回滚，库里不留半成品。
 5. `preview` 与明细正文走的是同一个 `BatchRender`（spec §4 明写"渲染规则只有后端一份"）。
 
@@ -1789,16 +1800,22 @@ const c14 = await post('/api/batch-send/tasks', base({ msgIntervalMin: 10, msgIn
 check('#14 min>max → 40013 且含"min 不能大于 max"',
   c14.code === 40013 && /min 不能大于 max/.test(c14.message ?? ''), '40013', c14.message);
 
-// #15 不存在的会话 → 点名拒绝、其余照常展开（R8）
+// #15 两种不可寻址各点名一条：账号不在本次清单里（999999 不在 accountIds，先撞这一支）、该账号下没有这条会话
 const c15 = await post('/api/batch-send/tasks', base({
-  conversations: [{ accountId: acct.id, chatKey: keys[0] }, { accountId: acct.id, chatKey: 'nope-9999@c.us' }],
+  conversations: [
+    { accountId: acct.id, chatKey: keys[0] },
+    { accountId: acct.id, chatKey: 'nope-9999@c.us' },
+    { accountId: 999999, chatKey: keys[0] },
+  ],
 }));
 const d15 = c15.code === 0 ? await get(`/api/batch-send/tasks/${c15.data.taskId}/details?pageSize=10`) : null;
-check('#15 一条查不到 → 创建成功，rejected 点名它，totalCount=2（1 人 × 2 内容）',
-  c15.code === 0 && c15.data?.rejected?.length === 1
-    && c15.data.rejected[0].chatKey === 'nope-9999@c.us' && c15.data?.totalCount === 2
+check('#15 两条不可寻址分别点名、其余照常展开，totalCount=2（1 人 × 2 内容）',
+  c15.code === 0 && c15.data?.rejected?.length === 2
+    && c15.data.rejected.some(r => r.chatKey === 'nope-9999@c.us' && /采集记录/.test(r.reason ?? ''))
+    && c15.data.rejected.some(r => r.accountId === 999999 && /不在本次勾选的账号里/.test(r.reason ?? ''))
+    && c15.data?.totalCount === 2
     && d15?.data?.records?.length === 2,
-  'rejected=[nope-9999] total=2', JSON.stringify({ code: c15.code, d: c15.data }));
+  'rejected=[nope-9999(无会话), 999999(账号不在清单)] total=2', JSON.stringify({ code: c15.code, d: c15.data }));
 ```
 
 - [ ] **Step 4：状态机与上报腿（#16–#26）。**
