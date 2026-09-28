@@ -84,7 +84,12 @@ export interface BatchProgress {
   status: BatchTaskStatus
 }
 
-/** 账号之间并行、账号内串行，所以队列形状 = 按 accountIds 顺序分组、组内 seq 升序。 */
+/**
+ * 账号之间并行、账号内串行，所以队列形状 = 按 accountIds 顺序分组、组内 seq 升序。
+ * 泵只捡 `pending` 行：进 `sending` 的唯一 arrow 是 `pending → sending`（spec:96），
+ * `failed` 要回队必须由人走 `retry-failed`（spec:136）——别把这里改成读 `SETTLED_DETAIL_STATUS`，
+ * 那一份判据答的是「人还能不能处置这一行」，拿它决定投料会把单条重发变成全部重发。
+ */
 export function buildQueues(details: BatchDetail[], accountIds: number[]): BatchDetail[][] {
   return accountIds
     .map((a) => details

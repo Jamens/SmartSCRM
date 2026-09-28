@@ -10,7 +10,7 @@ import type { RecallTarget } from './batchApi'
 import type { Dispatch, RecallDispatch, SendOutcome } from './engine'
 import type { BatchDetail, BatchStateEvent, BatchTask } from '../../../shared/batchSend'
 
-/** 心跳周期：15 s（spec §5），比后端 60 s 陈旧线短，一次丢两拍才被判死。 */
+/** 心跳周期：15 s（spec §5）。四拍打空才停泵，那条线就是下面 `HEARTBEAT_MISS_LIMIT` 的注释。 */
 const HEARTBEAT_MS = 15_000
 /**
  * 连着四拍（= 60 s）打不到后端才停泵。这个数就是后端自己的 `STALE_SECONDS`
