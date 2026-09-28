@@ -131,7 +131,8 @@ CREATE TABLE `batch_send_detail` (
 | `POST /tasks/{id}/reports` | 引擎批量回报明细结果：`[{detailId, localId, sendStatus, errorCode, errorDetail, msgKey, sentAt}]`；服务端按 `detailId` 定位行（多账号并行上报，同批内**不要求** `seq` 有序），并在同一事务里刷三计数 |
 | `POST /tasks/{id}/retry-failed` | 把 `failed` 复位为 `pending`（`unknown` 不复位），返回复位条数 |
 | `POST /tasks/{id}/recall` | 入参 `detailIds[]`，服务端筛出有撤回资格的条目并置 `recalling`，回给引擎待撤清单；无资格者逐个点名原因 |
-| `POST /tasks/{id}/recall-reports` | 撤回结果回报：`[{detailId, recalled, detail}]` |
+| `POST /tasks/{id}/recall-reports` | 撤回结果回报：`[{detailId, recalled, detail}]`；服务端逐条只结 `recall_status='recalling'` 的行，返回结掉的行数（差值即「迟到的那一报」） |
+| `POST /reconcile` | 启动时一次、不带 body：租户从 token 来，故换号驱动即可验到隔离。把陈旧 `running` 任务转 `paused`、其 `sending` 残留明细转 `unknown`（§5 R4 两拍），返回 `{pausedTasks, markedUnknown}`。陈旧判定的 **60 s 阈值由后端定义**（`STALE_SECONDS`），引擎只负责在这条上什么都不传 |
 
 租户闸、参数校验、错误码风格全部沿用既有控制器；越权与跨租户读一律走现有那条 401/403 出口（`401` 无 data 字段这条已知口径不变）。
 
@@ -159,6 +160,7 @@ type Dispatch = (d: DetailRow, viewId: string) => Promise<SendOutcome>
 
 - 引擎每 **15 s** 刷一次 `heartbeat_at`（与进度推进无关，定时器驱动），因此陈旧判定不受间隔上限（3600 s）影响。
 - 应用启动时 reconcile：`status='running'` 且 `heartbeat_at` 为空或早于 **60 s** 前 → 任务转 `paused`；其 `sending` 残留明细 → `unknown`（发没发出去真的不知道，**不自动重发**，只给人工裁决）。
+- R4 两拍有严格先后：先把 `sending` 判成 `unknown`，再把任务转 `paused`，顺序不可换。`markStaleSendingUnknown` 那条 SQL 的守卫是「所属任务当前仍是 `running`」，一旦先把任务打成 `paused`，这批 `sending` 行就再也匹配不上、原地卡在 `sending`；下一次 start 时泵会把它们连同待发行一起再发一遍，就成了重复发送事故。所以后端一次 reconcile 调用内先跑 unknown 再跑 paused。
 - 后端不可达：`reports` 落内存积压队列（上限 **500** 条，溢出丢最旧并计数），恢复后按序重报；任务不因上报失败而失败，积压计数一并写进日志。
 - 单实例锁（`src/main/index.ts:9`）保证本机只有一个引擎，所以不引入认领表与认领锁。
 

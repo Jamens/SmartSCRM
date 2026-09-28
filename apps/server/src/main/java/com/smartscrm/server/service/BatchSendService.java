@@ -1,6 +1,7 @@
 package com.smartscrm.server.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.common.PageResult;
@@ -18,21 +19,32 @@ import com.smartscrm.server.service.batch.BatchExpansion;
 import com.smartscrm.server.service.batch.BatchJson;
 import com.smartscrm.server.service.batch.BatchRender;
 import com.smartscrm.server.service.batch.BatchRules;
+import com.smartscrm.server.service.batch.BatchStatus;
+import com.smartscrm.server.service.msg.MsgTimes;
 import com.smartscrm.server.web.dto.BatchPreviewDTO;
+import com.smartscrm.server.web.dto.BatchRecallReportItemDTO;
+import com.smartscrm.server.web.dto.BatchRecallReportsDTO;
 import com.smartscrm.server.web.dto.BatchRecipientDTO;
+import com.smartscrm.server.web.dto.BatchReportItemDTO;
+import com.smartscrm.server.web.dto.BatchReportsDTO;
 import com.smartscrm.server.web.dto.BatchTaskCreateDTO;
 import com.smartscrm.server.web.vo.BatchCreateVO;
 import com.smartscrm.server.web.vo.BatchDetailVO;
 import com.smartscrm.server.web.vo.BatchPreviewVO;
+import com.smartscrm.server.web.vo.BatchRecallVO;
 import com.smartscrm.server.web.vo.BatchRejectedVO;
+import com.smartscrm.server.web.vo.BatchReportsResultVO;
 import com.smartscrm.server.web.vo.BatchTaskVO;
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.HashSet;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -42,6 +54,17 @@ public class BatchSendService {
     /** 预览只渲染前 5 个收件人：向导里要看的是"变量填得对不对"，不是"能不能刷屏"。 */
     private static final int PREVIEW_MAX_RECIPIENTS = 5;
     private static final int INSERT_CHUNK = 500;
+    /** R4：心跳断超过 60 s 即判「引擎没了」，先 unknown 后 paused。阈值定义在后端（spec §5），引擎什么都不传。 */
+    private static final int STALE_SECONDS = 60;
+
+    /** action → 目标态；action → 允许的来源态集合。两张表就是 spec §2 状态机全部代码化。 */
+    private static final Map<String, String> TARGET_OF = Map.of(
+            "start", "running", "pause", "paused", "resume", "running", "cancel", "cancelled");
+    private static final Map<String, List<String>> SOURCES_OF = Map.of(
+            "start", List.of("pending", "paused"),
+            "pause", List.of("running"),
+            "resume", List.of("paused"),
+            "cancel", List.of("pending", "running", "paused"));
 
     private final BatchSendTaskMapper taskMapper;
     private final BatchSendDetailMapper detailMapper;
@@ -174,6 +197,175 @@ public class BatchSendService {
             throw new BizException(40404, "任务不存在");
         }
         return task;
+    }
+
+    @Transactional
+    public BatchReportsResultVO transition(long tenantId, long taskId, String action) {
+        BatchSendTask task = requireOwned(tenantId, taskId);
+        String to = TARGET_OF.get(action);
+        List<String> sources = SOURCES_OF.getOrDefault(action, List.of());
+        if (to == null || !sources.contains(task.getStatus()) || !BatchStatus.canMove(task.getStatus(), to)) {
+            throw new BizException(40902,
+                    "当前状态 " + task.getStatus() + " 不能 " + action, HttpStatus.CONFLICT);
+        }
+        // 0 行 = 有人先我一步搬走了它（两个窗口同时点「继续」）。
+        if (taskMapper.moveTo(tenantId, taskId, task.getStatus(), to) == 0) {
+            throw new BizException(40902, "任务状态已被并发改变，请刷新后重试", HttpStatus.CONFLICT);
+        }
+        if ("cancel".equals(action)) {
+            detailMapper.skipAllPending(tenantId, taskId);
+        }
+        return resultOf(tenantId, taskId);
+    }
+
+    public int heartbeat(long tenantId, long taskId) {
+        return taskMapper.heartbeat(tenantId, taskId);
+    }
+
+    @Transactional
+    public BatchReportsResultVO reports(long tenantId, long taskId, BatchReportsDTO dto) {
+        requireOwned(tenantId, taskId);
+        if (dto.getItems() != null) {
+            LocalDateTime now = LocalDateTime.now(MsgTimes.CHAT_ZONE);
+            for (BatchReportItemDTO item : dto.getItems()) {
+                // 引擎是唯一写入者（单实例锁），所以这里不做状态守卫，只结这一行。
+                detailMapper.applyReport(tenantId, taskId, item.getDetailId(), item.getSendStatus(),
+                        item.getLocalId(), item.getErrorCode(), item.getErrorDetail(),
+                        item.getMsgKey(), item.getSentAtEpochSec() == null
+                                ? ("success".equals(item.getSendStatus()) ? now : null)
+                                : MsgTimes.toDbTime(item.getSentAtEpochSec(), now));
+            }
+        }
+        Map<String, Object> counts = taskMapper.recount(tenantId, taskId);
+        writeCounts(tenantId, taskId, intOf(counts, "sentCount"), intOf(counts, "failCount"));
+        BatchSendTask task = requireOwned(tenantId, taskId);
+        if ("running".equals(task.getStatus())) {
+            int open = taskMapper.openCount(tenantId, taskId);
+            if (dto.isAllHalted() && open > 0) {
+                taskMapper.moveTo(tenantId, taskId, "running", "error");
+            } else if (open == 0) {
+                taskMapper.moveTo(tenantId, taskId, "running", "done");
+            }
+        }
+        return resultOf(tenantId, taskId);
+    }
+
+    /**
+     * R3 + R11。三跳一个事务：复位 → 刷计数 → 必要时唤醒。
+     * `detailIds` 为空＝整批复位（spec §5 的 retry-failed 原语义），非空＝只复位勾选的那几条（spec §7 的单条重发）；
+     * 两种都受 `WHERE send_status='failed'` 约束，所以 unknown 永远复位不掉。
+     * 唤醒只在 done/error 上做：running 本来就有泵在捡 pending 行，把它打成 paused 是重发的副作用而不是用户意图；
+     * cancelled 不唤醒（那是人明确按下的停）。revive 与 reset 都判：一条都没复位就把终态搬走，
+     * 页面上会出现"暂停中但无事可跑"的任务。
+     */
+    @Transactional
+    public Map<String, Object> retryFailed(long tenantId, long taskId, List<Long> detailIds) {
+        BatchSendTask task = requireOwned(tenantId, taskId);
+        List<Long> ids = (detailIds == null || detailIds.isEmpty())
+                ? null
+                : List.copyOf(new LinkedHashSet<>(detailIds));
+        int reset = detailMapper.retryFailed(tenantId, taskId, ids);
+        if (reset > 0) {
+            Map<String, Object> counts = taskMapper.recount(tenantId, taskId);
+            writeCounts(tenantId, taskId, intOf(counts, "sentCount"), intOf(counts, "failCount"));
+        }
+        String from = task.getStatus();
+        String to = from;
+        // 唤醒三步各判一次，写成 if 而不是布尔表达式：moveTo 是带副作用的，藏在 && 链里读起来像纯判定。
+        if (reset > 0 && ("done".equals(from) || "error".equals(from)) && BatchStatus.canMove(from, "paused")) {
+            if (taskMapper.moveTo(tenantId, taskId, from, "paused") > 0) {
+                to = "paused";
+            }
+        }
+        return Map.of("reset", reset, "status", to);
+    }
+
+    @Transactional
+    public BatchRecallVO recall(long tenantId, long taskId, List<Long> detailIds) {
+        BatchSendTask task = requireOwned(tenantId, taskId);
+        Set<Long> wanted = new LinkedHashSet<>(detailIds);
+        List<BatchSendDetail> found = detailMapper.selectList(new LambdaQueryWrapper<BatchSendDetail>()
+                .eq(BatchSendDetail::getTenantId, tenantId)
+                .eq(BatchSendDetail::getTaskId, taskId)
+                .in(BatchSendDetail::getId, wanted)
+                .orderByAsc(BatchSendDetail::getSeq));
+        Set<Long> seen = new HashSet<>();
+        List<BatchRecallVO.Target> eligible = new ArrayList<>();
+        List<BatchRecallVO.Blocked> blocked = new ArrayList<>();
+        // 读一遍再分区：每一条被挡都要说得出为什么（spec §4 的 recall 那行）。
+        for (BatchSendDetail d : found) {
+            seen.add(d.getId());
+            String reason = BatchStatus.recallBlocker(task.getDryRun(), d.getSendStatus(), d.getMsgKey());
+            if (reason != null) {
+                blocked.add(new BatchRecallVO.Blocked(d.getId(), reason));
+            } else if (!"none".equals(d.getRecallStatus())) {
+                blocked.add(new BatchRecallVO.Blocked(d.getId(),
+                        "已经撤过或正在撤（recall_status=" + d.getRecallStatus() + "）"));
+            } else {
+                eligible.add(new BatchRecallVO.Target(d.getId(), d.getAccountId(), d.getChatKey(), d.getMsgKey()));
+            }
+        }
+        // 库里没有的 id 也要点名：只按 id 传而不核对，打错消息的人是无辜的收件人。
+        for (Long id : wanted) {
+            if (!seen.contains(id)) {
+                blocked.add(new BatchRecallVO.Blocked(id, "这一条不属于本任务或不存在"));
+            }
+        }
+        if (!eligible.isEmpty()) {
+            detailMapper.markRecalling(tenantId, taskId,
+                    eligible.stream().map(BatchRecallVO.Target::detailId).toList());
+        }
+        return new BatchRecallVO(eligible, blocked);
+    }
+
+    /** R4 两拍：先 unknown 后 paused，顺序换了就是重复发送事故。 */
+    @Transactional
+    public Map<String, Object> reconcile(long tenantId) {
+        LocalDateTime staleBefore = LocalDateTime.now(MsgTimes.CHAT_ZONE).minusSeconds(STALE_SECONDS);
+        int unknown = taskMapper.markStaleSendingUnknown(tenantId, staleBefore);
+        int paused = taskMapper.pauseStaleTasks(tenantId, staleBefore);
+        return Map.of("pausedTasks", paused, "markedUnknown", unknown);
+    }
+
+    /**
+     * 逐条结撤回回执，把受影响行数累加返回：只有 recalling 的行结得掉（守卫在 SQL 里），
+     * 差值就是「迟到的那一报」。getRecalled() 是包装 Boolean，缺字段读到 null——必须走
+     * Boolean.TRUE.equals(...)，直接进条件会 NPE 出 50000，引擎只看得到「这一跳挂了」。
+     */
+    @Transactional
+    public int recallReports(long tenantId, long taskId, BatchRecallReportsDTO dto) {
+        int settled = 0;
+        for (BatchRecallReportItemDTO item : dto.getItems()) {
+            settled += detailMapper.applyRecallReport(tenantId, taskId, item.getDetailId(),
+                    Boolean.TRUE.equals(item.getRecalled()) ? "recalled" : "recall_failed", item.getDetail());
+        }
+        return settled;
+    }
+
+    /** 只碰这两列：updateById 会拿整个实体覆盖行，而这里手上的实体是旧的。 */
+    private void writeCounts(long tenantId, long taskId, int sent, int fail) {
+        taskMapper.update(null, new LambdaUpdateWrapper<BatchSendTask>()
+                .eq(BatchSendTask::getTenantId, tenantId)
+                .eq(BatchSendTask::getId, taskId)
+                .set(BatchSendTask::getSentCount, sent)
+                .set(BatchSendTask::getFailCount, fail));
+    }
+
+    /** 状态搬完之后的权威读数：Task 12 的 host 拿它广播，渲染层只认这一份。 */
+    private BatchReportsResultVO resultOf(long tenantId, long taskId) {
+        BatchSendTask t = requireOwned(tenantId, taskId);
+        return new BatchReportsResultVO(nz(t.getSentCount()), nz(t.getFailCount()), nz(t.getTotalCount()),
+                t.getStatus());
+    }
+
+    private static int nz(Integer v) {
+        return v == null ? 0 : v;
+    }
+
+    /** SUM(...) 无行时是 null；JDBC 也可能给 Long / BigDecimal，所以只认 Number。 */
+    private static int intOf(Map<String, Object> row, String key) {
+        Object v = row == null ? null : row.get(key);
+        return v instanceof Number n ? n.intValue() : 0;
     }
 
     /** 两个 JSON 列 + 心跳：实体存串，VO 给结构。时间原样透传 LocalDateTime（Task 4 Step 2 的口径）。 */
