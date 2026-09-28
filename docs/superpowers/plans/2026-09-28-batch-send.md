@@ -1646,14 +1646,14 @@ cancel 顺带 skipAllPending；reconcile 先判 unknown 再转 paused；allHalte
 
 **Interfaces:**
 - Consumes: Task 4/5 的全部端点与错误码。
-- Produces: 一份可重复运行的台账：**27 个编号、一次运行 30 条 `check`**（调用点有 31 个：`#24` 三条、`#26` 两条 `#26a`/`#26b`，而 `#5` 那对 if/else 分支每次只跑一条），终端表格按 `rows.length` 打印 + 退出码。
+- Produces: 一份可重复运行的台账：**27 个编号、一次运行 30 条 `check`、30 个调用点**（`#24` 三条、`#26` 两条 `#26a`/`#26b`；`#5` 以前是 if/else 取其一、每次有一条 `check(..., true, ...)` 的恒真行占着 pass，现在收件人夹具实测可选，写成一调一断）。终端表格按 `rows.length` 打印 + 退出码。
 
 - [ ] **Step 1：写驱动骨架。** 形制照 `tmp/p6b-scope-contract.mjs`（读码：同一个 `check/req/get/post`、同一种退出码约定）。整文件开头：
 
 ```js
 // tmp/p7b-batch-contract.mjs — P7/B7 群发后端契约（全程 dryRun=1，不碰页面）
 // 用法：node tmp/p7b-batch-contract.mjs   （后端需已在 :8180 上跑本计划的构建）
-// 退出码：0=30 条 check 全过（27 个编号，#24 三条 / #26 两条 / #5 两支取其一）；1=有断言失败；2=前置条件不满足（没有可用账号/会话，不算产品失败）
+// 退出码：0=30 条 check 全过（27 个编号，#24 三条 / #26 两条）；1=有断言失败；2=前置条件不满足（没有可用账号/会话，不算产品失败）
 // 收尾：#26b 需要一条 dryRun:false 的任务才有撤回资格，所以本脚本确实会建非演练单——但从不 start 它
 //       （#18~#24 的 start/pause/resume/cancel 链全部打在 dryRun:true 的 T/T2/T3 上）。创建的每个 taskId 进
 //       createdTasks，结尾逐个 POST /cancel（取消会把 pending 置 skipped），并打印取消结果。
@@ -1688,12 +1688,34 @@ if (!tok) { console.log('login failed: ' + JSON.stringify(login)); process.exit(
 
 // —— 前置：一个已绑定视图的账号 + 该账号下至少两条已采会话 ——
 const accts = (await get('/api/platform-accounts')).data ?? [];
-const acct = accts.find((a) => a.viewId && a.status === 1);
-if (!acct) { console.log('前置失败：没有 status=1 且 viewId 非空的账号'); process.exit(2); }
-const convs = (await get(`/api/conversations?accountId=${acct.id}&size=50`)).data?.records ?? [];
-const keys = [...new Set(convs.map((c) => c.chatKey))].filter(Boolean);
-if (keys.length < 2) { console.log('前置失败：该账号下不足 2 条会话，keys=' + JSON.stringify(keys)); process.exit(2); }
-const cust = convs.find((c) => c.customerId)?.customerId ?? null;
+const bound = accts.filter((a) => a.viewId && a.status === 1);
+let acct = null, keys = [], convs = [];
+for (const a of bound) {
+  const cs = (await get(`/api/conversations?accountId=${a.id}&size=50`)).data?.records ?? [];
+  // keys：无客户且标题为空的会话。#6 要比的是「两条兜底链在同一格重合」，挂了客户或带标题的会话
+  // 会让创建侧走昵称/标题那一支，与 preview 的样例链必然不等（读码 BatchSendService#preview）。
+  const plain = [...new Set(cs
+    .filter((c) => !c.customerId && (c.title == null || c.title === ''))
+    .map((c) => c.chatKey))].filter(Boolean);
+  if (plain.length >= 2) { acct = a; keys = plain; convs = cs; break; }
+}
+if (!acct) { console.log('前置失败：没有 status=1/viewId 非空、且有 ≥2 条无客户空标题会话的账号'); process.exit(2); }
+
+// chat_key 本地段尾 4：与 BatchRender#openIdTail 同口径（先剥 @ 之后，再取尾 4，不足 4 位用整串）
+const tail4 = (chatKey) => { const l = chatKey.split('@')[0]; return l.length <= 4 ? l : l.slice(-4); };
+
+// liveCust：同一账号下「挂着存活客户」的会话，三条门槛都过——昵称非空、手机号非空、
+// 昵称≠会话标题、昵称≠chat_key 本地段尾 4。为什么门槛要这么多（读码 BatchSendService#resolveFields
+// 的兜底链：客户昵称 → 会话标题 → chat_key 本地段尾 4）：昵称撞上标题或尾 4 时，
+// 「创建侧根本没查客户档」这一支错也能写出同一个 body，断言就废了。
+// 实测本地库账号 7 有 9 条这种会话（探针 tmp/p7b-fixture-probe.mjs，只读、退出码 0=有夹具）。
+const custRows = (await get('/api/customers?pageSize=200')).data?.records ?? [];
+const custById = new Map(custRows.map((c) => [c.id, c]));
+const liveCust = convs
+  .map((c) => ({ chatKey: c.chatKey, title: c.title ?? '', cu: custById.get(c.customerId) }))
+  .find((x) => x.cu && (x.cu.nickname ?? '') !== '' && (x.cu.phone ?? '') !== ''
+    && x.cu.nickname !== x.title && x.cu.nickname !== tail4(x.chatKey));
+if (!liveCust) { console.log('前置失败：账号下没有「挂存活客户且昵称≠标题≠尾 4」的会话'); process.exit(2); }
 
 // —— 任务工厂：默认 2 收件人 × 2 内容、零间隔、演练 ——
 const base = (over = {}) => ({
@@ -1751,16 +1773,19 @@ check('#4 body 含 {订单号}，两个已知 token 已被替换',
     && !b.includes('{客户名}') && !b.includes('{号码}')),
   '含 {订单号}，不含两个 token', JSON.stringify(outs));
 
-// #5 有客户时 {客户名} = 客户昵称；无客户时 = chat_key 本地段尾 4（R9）
-const firstBody = recs[0]?.body ?? '';
-if (cust) {
-  const nick = ((await get('/api/customers?pageSize=200')).data?.records ?? [])
-    .find((x) => x.id === cust)?.nickname ?? '';
-  check('#5 有客户 → body 里出现该客户昵称', nick !== '' && firstBody.includes(nick),
-    '含 ' + nick, firstBody);
-} else {
-  check('#5 无客户可证 → 本条记为待验证（不参与 failures）', true, 'skipped', 'skipped');
-}
+// #5 创建侧真的查了客户档（R9 的 nickname/phone 接线，spec §3 第 6 条）。
+//    这一腿**自己建一个 dryRun 任务**，收件人是 liveCust 那条挂了存活客户的会话——它和 #6 的收件人
+//    不能是同一条：#6 要的是「无客户 + 空标题」那一格两条链重合，#5 要证的是「有客户时真去读了客户档」。
+//    {号码} 没有兜底链（客户缺 phone 就是空串），所以它出现在 body 里本身就证明那一格来自客户档。
+const c5 = await makeTask({
+  conversations: [{ accountId: acct.id, chatKey: liveCust.chatKey }],
+  contents: ['{客户名}|{号码}'],
+});
+const d5 = c5.code === 0
+  ? (await get(`/api/batch-send/tasks/${c5.data.taskId}/details?page=1&size=5`)).data?.records ?? [] : [];
+check('#5 收件人挂存活客户 → body 逐字 = 客户昵称|客户手机号',
+  c5.code === 0 && d5.length === 1 && d5[0].body === liveCust.cu.nickname + '|' + liveCust.cu.phone,
+  liveCust.cu.nickname + '|' + liveCust.cu.phone, JSON.stringify(d5.map((r) => r.body)));
 
 // #6 契约是「预览复用同一个渲染函数」（spec §4「渲染规则只有后端一份」），不是「同一份字段值」。
 //    preview 手上没有客户档，喂的是样例兜底链：nickname=null、openId=chat_key 本地段、phone=null
@@ -1768,10 +1793,6 @@ if (cust) {
 //    本腿收件人无客户且标题为空，两条链在 {客户名} 那一格重合，于是 body 逐字相等；
 //    再把期望值写成手拼的整串，把样例链本身钉住（{号码} 落空、未识别 token 原样）——
 //    Task 14 的向导要靠这条口径把预览标成「示例」，不能当成真实正文。
-
-// chat_key 本地段尾 4：与 BatchRender#openIdTail 同口径（先剥 @ 之后，再取尾 4，不足 4 位用整串）
-const tail4 = (chatKey) => { const l = chatKey.split('@')[0]; return l.length <= 4 ? l : l.slice(-4); };
-
 const p6 = await post('/api/batch-send/preview', {
   conversations: [{ accountId: acct.id, chatKey: keys[0] }],
   contents: ['第一条 {客户名} {号码} {订单号}', '第二条'],
@@ -2010,7 +2031,7 @@ check('#27 八跳对不存在的任务都回 40404，心跳回 code=0/updated=0'
   '8 段全 =40404 + heartbeat updated=0', `${ghostCodes.join(' ')} heartbeat=${rGhostHb.code}/${rGhostHb.data?.updated}`);
 ```
 
-> 编号到 `#27`，其中 `#24` 有三条 `check`（收尾跳 / 单条重发唤醒 / cancelled 不唤醒）、`#26` 有两条（`#26a`/`#26b`），`#5` 写成 if/else 两个调用点（有客户证昵称、无客户只记待验证，每次只跑一支）：台账是 **27 个编号、一次运行 30 条 `check`**，收尾表格按 `rows.length` 打印。
+> 编号到 `#27`，其中 `#24` 有三条 `check`（收尾跳 / 单条重发唤醒 / cancelled 不唤醒）、`#26` 有两条（`#26a`/`#26b`）：台账是 **27 个编号、一次运行 30 条 `check`、30 个调用点**，收尾表格按 `rows.length` 打印。`#5` 曾经写成 if/else 两个调用点、无客户那一支是 `check(..., true, ...)`——它占着一个 pass 却永远为真，等于台账虚报一格；现在收件人夹具（挂存活客户的那条会话）实测可选，就写成一调一断，一条都不许恒真。
 
 - [ ] **Step 5：收尾与打印（每条退出路径都还原）。**
 
@@ -2040,7 +2061,7 @@ process.exit(failures ? 1 : 0);
 cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 ```
 
-期望：末行 `30/30 passed`，退出码 0。若前置不足（会话 < 2 条）退出码 2 —— 那是环境不是产品，回来写「待验证」而不是改断言。
+期望：末行 `30/30 passed`，退出码 0。若前置不足退出码 2 —— 两条候选都是环境而不是产品，回来写「待验证」而不是改断言：账号下无客户空标题会话 < 2 条（#6/#1~#4 的收件人），或账号下找不到「挂存活客户且昵称≠标题≠尾 4」的会话（#5 的 `liveCust`）。
 
 - [ ] **Step 7：不提交驱动。** `tmp/` 已 gitignore；本任务没有需要提交的源码改动，验证结果写进 Task 16 的验收文档草稿（`docs/notes/` 下一份 P7 群发验证文档，**只在本计划最后一个任务提交它**）。
 
