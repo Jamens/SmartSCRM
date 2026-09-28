@@ -28,7 +28,15 @@ export interface BatchApiOptions { fetcher: Fetcher; onError?: (where: string, e
 // 行级豁免补齐 `--quiet` 闸门，不改 brief 的任何行为。
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function createBatchApi(opts: BatchApiOptions) {
-  const note = (where: string, e: unknown): void => opts.onError?.(where, e)
+  // 诊断通道自己不能把这一跳弄挂：宿主传进来的 `onError` 一旦抛，本来只是"这一跳没成"的调用
+  // 会变成抛到采集/发送链上，而全文件"返回成功与否、不抛"的那条口径就是靠这里兜住。
+  const note = (where: string, e: unknown): void => {
+    try {
+      opts.onError?.(where, e)
+    } catch {
+      /* 宿主的日志实现挂了：吞掉，让这一跳照常塌成 null/0 */
+    }
+  }
 
   /**
    * 三种「这一跳没成」的形状都要落到 `onError`，因为塌成 null 之后调用方只剩一个值可读：
@@ -47,7 +55,8 @@ export function createBatchApi(opts: BatchApiOptions) {
       }
       const env = (await res.json()) as Envelope<T>
       if (env.code !== 0 || env.data === undefined) {
-        note(path, new Error(`信封非 0：code=${env.code}`))
+        // 两种塌法分开点名：`code=0 但缺 data` 说的是后端形状变了，和"业务拒了"是两回事。
+        note(path, new Error(env.code !== 0 ? `信封 code=${env.code}` : '信封 code=0 但 data 缺失'))
         return null
       }
       return env.data

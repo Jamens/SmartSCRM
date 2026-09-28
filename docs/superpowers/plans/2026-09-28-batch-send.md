@@ -2360,7 +2360,7 @@ cd /d/SmartSCRM/apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run ty
 
 **Interfaces:**
 - Consumes: Task 7 的 `BatchTask`/`BatchDetail`/`BatchProgress`；后端 Task 4/5 端点与响应形状。
-- Produces（Task 11/12 按这些名字用；本任务自带 **8 条** `node --test` 用例）:
+- Produces（Task 11/12 按这些名字用；本任务自带 **9 条** `node --test` 用例）:
   - `type Fetcher = (path: string, init: RequestInit) => Promise<Response>`（真身是 Task 12 传进来的 `authedFetch`）
   - `interface ReportItem { detailId: number; localId?: string; sendStatus: string; errorCode?: string; errorDetail?: string; msgKey?: string; sentAtEpochSec?: number }`
   - `RecallTarget { detailId: number; accountId: number; chatKey: string; msgKey: string }`、`RecallBlocked { detailId: number; reason: string }`、`RecallPlan { eligible: RecallTarget[]; rejected: RecallBlocked[] }`、`RecallReportItem { detailId: number; recalled: boolean; detail?: string }`、`Page<T> { records: T[]; total: number; page: number; pageSize: number }`
@@ -2470,15 +2470,29 @@ test('三种塌法都报到 onError，where 就是那一跳的 path', async () =
   await mk(async () => { throw new Error('ECONNREFUSED') }).start(1)
   await mk(async () => json({ code: 40902, message: '状态非法' }, 409)).pause(2)
   await mk(async () => json({ code: 50000, message: 'boom' }, 200)).resume(3)
+  await mk(async () => json({ code: 0, message: 'ok' }, 200)).cancel(4)
 
   assert.deepEqual(seen.map((s) => s.where), [
     '/api/batch-send/tasks/1/start',
     '/api/batch-send/tasks/2/pause',
-    '/api/batch-send/tasks/3/resume'
+    '/api/batch-send/tasks/3/resume',
+    '/api/batch-send/tasks/4/cancel'
   ])
   assert.match(seen[0].msg, /ECONNREFUSED/)
   assert.match(seen[1].msg, /HTTP 409/, '非 2xx 要把状态码带出来，否则日志里只有 null')
   assert.match(seen[2].msg, /code=50000/, '200 + 非 0 信封要把信封码带出来')
+  assert.match(seen[3].msg, /data 缺失/, 'code=0 但没 data 是后端形状变了，不能报成"非 0"')
+})
+
+// 宿主的 onError 挂了也不能把"这一跳没成"升级成抛到采集/发送链上——那是全文件的返回值契约。
+// 少了 note 里那层 try，这一条会直接 reject 而不是拿到 null/0。
+test('onError 自己抛，调用方仍然只拿到 null/0', async () => {
+  const api = createBatchApi({
+    fetcher: async () => json({ code: 40902, message: '状态非法' }, 409),
+    onError: () => { throw new Error('宿主的日志实现挂了') }
+  })
+  assert.equal(await api.start(1), null)
+  assert.equal(await api.heartbeat(1), 0)
 })
 ```
 
@@ -2516,7 +2530,15 @@ export interface BatchApiOptions { fetcher: Fetcher; onError?: (where: string, e
 // 行级豁免补齐 `--quiet` 闸门，不改 brief 的任何行为。
 // eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function createBatchApi(opts: BatchApiOptions) {
-  const note = (where: string, e: unknown): void => opts.onError?.(where, e)
+  // 诊断通道自己不能把这一跳弄挂：宿主传进来的 `onError` 一旦抛，本来只是"这一跳没成"的调用
+  // 会变成抛到采集/发送链上，而全文件"返回成功与否、不抛"的那条口径就是靠这里兜住。
+  const note = (where: string, e: unknown): void => {
+    try {
+      opts.onError?.(where, e)
+    } catch {
+      /* 宿主的日志实现挂了：吞掉，让这一跳照常塌成 null/0 */
+    }
+  }
 
   /**
    * 三种「这一跳没成」的形状都要落到 `onError`，因为塌成 null 之后调用方只剩一个值可读：
@@ -2535,7 +2557,8 @@ export function createBatchApi(opts: BatchApiOptions) {
       }
       const env = (await res.json()) as Envelope<T>
       if (env.code !== 0 || env.data === undefined) {
-        note(path, new Error(`信封非 0：code=${env.code}`))
+        // 两种塌法分开点名：`code=0 但缺 data` 说的是后端形状变了，和"业务拒了"是两回事。
+        note(path, new Error(env.code !== 0 ? `信封 code=${env.code}` : '信封 code=0 但 data 缺失'))
         return null
       }
       return env.data
@@ -2598,7 +2621,7 @@ export function createBatchApi(opts: BatchApiOptions) {
 export type BatchApi = ReturnType<typeof createBatchApi>
 ```
 
-- [ ] **Step 4：`tsconfig.unit.json` 的 `include` 追加那两支**（`src/main/services/batchSend/batchApi.ts`、`.../batchApi.test.ts`；`host.ts` 这类 import electron 的绝不能加）。`package.json:15` 的 `test:unit` 追加 `"src/main/services/batchSend/**/*.test.ts"`。跑 unit + typecheck 全绿：期望 `pass` 从 **222 → 230**（212 基线 + Task 7 的 10 + 本任务 8），`fail 0`。
+- [ ] **Step 4：`tsconfig.unit.json` 的 `include` 追加那两支**（`src/main/services/batchSend/batchApi.ts`、`.../batchApi.test.ts`；`host.ts` 这类 import electron 的绝不能加）。`package.json:15` 的 `test:unit` 追加 `"src/main/services/batchSend/**/*.test.ts"`。跑 unit + typecheck 全绿：期望 `pass` 从 **222 → 231**（212 基线 + Task 7 的 10 + 本任务 9），`fail 0`。
 - [ ] **Step 5：提交。** `feat(P7/群发): 主进程群发十二跳，注入 fetcher 且全部塌成 null`
 
 ## Task 9: per-view 发送锁 + `sendText` / `recallText` 挂锁
@@ -3837,7 +3860,7 @@ cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.
 cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 ```
 
-期望：unit `pass` = 212 + 10(Task 7) + 8(Task 8) + 4(Task 9) + 4(Task 10) + 8(Task 11) = **246**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
+期望：unit `pass` = 212 + 10(Task 7) + 9(Task 8) + 4(Task 9) + 4(Task 10) + 8(Task 11) = **247**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
 
 - [ ] **Step 2：CDP 演练腿（全程 dryRun，不碰页面）。** 前提：主进程改过，dev 必须已被用户重启过一次（dev watcher 不重载 `src/main`）。先 `powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p5c-top.ps1` 断言 `visibilityState==='visible'`，然后跑 `tmp/p7b-dry-run.mjs`，八条：
 
