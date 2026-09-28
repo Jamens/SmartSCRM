@@ -31,15 +31,16 @@ test('buildQueues: 终态行不进队列（重跑一个已 done 的任务不该�
   assert.deepEqual(buildQueues([done], [1]).flat(), [])
 })
 
-// Task 13 的状态徽标与 buildQueues 共用这一份判据，所以三个成员各自都得真的「收口」；
-// 'unknown' 在里面是 R2 的落点（超时可能已送达，算失败会诱导出再发一遍），
-// 'failed' 必须**不在**里面——单条重发靠它，漏了就让重试按钮点不动。
-test('SETTLED_DETAIL_STATUS: 只有 success/unknown/skipped 算收口，failed 仍可重发', () => {
+// 这里有两个不同的问题，之前被一份判据一起答了，所以答错了一个：
+// SETTLED_DETAIL_STATUS 答的是「人还能不能处置这一行」——'failed' 必须**不在**里面，单条重发靠它，
+// 漏了 Task 15 的重试按钮就点不动；'unknown' 必须在里面，它是 R2 的落点（超时可能已送达）。
+// buildQueues 答的是「泵该不该再发这一行」——只有 pending 算数。
+test('SETTLED 管"人可处置"、buildQueues 管"泵可发"：泵只捡 pending', () => {
   assert.deepEqual([...SETTLED_DETAIL_STATUS].sort(), ['skipped', 'success', 'unknown'])
-  for (const s of SETTLED_DETAIL_STATUS) {
+  for (const s of ['success', 'unknown', 'skipped', 'failed', 'sending'] as const) {
     assert.deepEqual(buildQueues([{ ...d(1, 1, 1, 'a'), sendStatus: s }], [1]).flat(), [], s + ' 不该进队列')
   }
-  assert.equal(buildQueues([{ ...d(1, 1, 1, 'a'), sendStatus: 'failed' as const }], [1]).flat().length, 1)
+  assert.equal(buildQueues([d(1, 1, 1, 'a')], [1]).flat().length, 1, 'pending 要进队列')
 })
 
 test('pickIntervalSec: 落在 [min,max] 且取整，边界两种随机数都夹得住', () => {
