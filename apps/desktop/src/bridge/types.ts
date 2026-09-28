@@ -67,11 +67,27 @@ export interface SendChatResult {
   sendMsgResult?: unknown
 }
 
+/**
+ * `deleteMessage` 的返回体（wa-js 4.6.0 `dist/chat/functions/deleteMessage.d.ts` 的
+ * `DeleteMessageReturn`）：三个布尔里只有 `isRevoked` 表示"对所有人撤回"成了，`isDeleted`
+ * 只说明本机那条没了——判定语义在 `whatsapp/recall.ts`，这里只声明形状。
+ * 类型在本文件唯一声明，叶子模块 `recall.ts` 取别名，不另抄一份字段。
+ */
+export interface WaDeleteResult {
+  id?: string
+  sendMsgResult?: unknown
+  isRevoked?: boolean
+  isDeleted?: boolean
+  isSentByMe?: boolean
+}
+
 export interface WppChatApi {
   list(options: Record<string, unknown>): Promise<WaChatModel[]>
   getMessages(chatId: string, options: Record<string, unknown>): Promise<WaMsgModel[]>
   getActiveChat(): { id?: { _serialized?: string } } | null
   sendTextMessage(to: string, content: string, options?: Record<string, unknown>): Promise<SendChatResult>
+  /** `ids` 按 wa-js 文档收 string 或 string[]，桥这一侧只传一条裸 key（去 `_out` 尾在 recall.ts）。 */
+  deleteMessage(chatId: string, ids: string, deleteMediaInDevice?: boolean, revoke?: boolean): Promise<WaDeleteResult>
 }
 
 export interface WppLike {
