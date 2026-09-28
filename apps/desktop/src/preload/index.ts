@@ -9,6 +9,7 @@ import type {
 } from '@shared/chatTypes'
 import type { AppSettings, ThemeSnapshot } from '../main/state/settings'
 import type { BadgeEcho } from '@shared/badge'
+import type { BatchProgress, BatchStateEvent } from '@shared/batchSend'
 import type { MachineProfile, StorageUsage } from '@shared/machine'
 
 export interface StoredSession {
@@ -145,6 +146,27 @@ const scrm = {
       const listener = (_event: IpcRendererEvent, states: BridgeState[]): void => callback(states)
       ipcRenderer.on('msg:state', listener)
       return () => ipcRenderer.removeListener('msg:state', listener)
+    }
+  },
+  /**
+   * 批量群发（P7/B7）：七条 invoke + 一条 `batch:state` 推送。
+   * `start`/`resume` 在主进程迁移成功后顺手把待跑明细交给引擎，渲染层不许自己拼"先 start 再 run"
+   * 两次调用；`onState` 只是"进度变了"的通知，数字仍以渲染层 GET 回来的那一份为准。
+   */
+  batch: {
+    start: (taskId: number): Promise<BatchProgress | null> => ipcRenderer.invoke('batch:start', taskId),
+    pause: (taskId: number): Promise<BatchProgress | null> => ipcRenderer.invoke('batch:pause', taskId),
+    resume: (taskId: number): Promise<BatchProgress | null> => ipcRenderer.invoke('batch:resume', taskId),
+    cancel: (taskId: number): Promise<BatchProgress | null> => ipcRenderer.invoke('batch:cancel', taskId),
+    run: (taskId: number): Promise<{ started: boolean }> => ipcRenderer.invoke('batch:run', taskId),
+    retryFailed: (taskId: number, detailIds?: number[]): Promise<number> =>
+      ipcRenderer.invoke('batch:retry-failed', taskId, detailIds),
+    recall: (taskId: number, detailIds: number[]): Promise<{ eligible: number; blocked: number }> =>
+      ipcRenderer.invoke('batch:recall', taskId, detailIds),
+    onState: (cb: (e: BatchStateEvent) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, e: BatchStateEvent): void => cb(e)
+      ipcRenderer.on('batch:state', listener)
+      return () => ipcRenderer.removeListener('batch:state', listener)
     }
   }
 }
