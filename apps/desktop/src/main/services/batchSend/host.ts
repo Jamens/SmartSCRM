@@ -8,7 +8,7 @@ import { BatchEngine } from './engine'
 import { createBatchApi } from './batchApi'
 import type { RecallTarget } from './batchApi'
 import type { Dispatch, RecallDispatch, SendOutcome } from './engine'
-import type { BatchDetail, BatchStateEvent, BatchTask } from '../../../shared/batchSend'
+import type { BatchDetail, BatchRecallResult, BatchStateEvent, BatchTask } from '../../../shared/batchSend'
 
 /** 心跳周期：15 s（spec §5）。四拍打空才停泵，那条线就是下面 `HEARTBEAT_MISS_LIMIT` 的注释。 */
 const HEARTBEAT_MS = 15_000
@@ -197,9 +197,9 @@ export function registerBatchIpc(): void {
   ipcMain.handle('batch:retry-failed', (_e, taskId: number, detailIds?: number[]) =>
     api.retryFailed(taskId, detailIds))
   // 撤回：清单在后端判（Task 5），这里只把 eligible 逐条交给页内出料口，结清走 recallReports。
-  ipcMain.handle('batch:recall', async (_e, taskId: number, detailIds: number[]) => {
+  ipcMain.handle('batch:recall', async (_e, taskId: number, detailIds: number[]): Promise<BatchRecallResult> => {
     const plan = await api.recall(taskId, detailIds)
-    if (!plan) return { eligible: 0, blocked: 0 }
+    if (!plan) return { eligible: 0, blocked: [] }
     for (const t of plan.eligible) {
       // 账号没有可用视图（掉线 / 未挂桥）也要结清：后端已经把这条推成 recalling，
       // 静默 continue 会让它永远卡在 recalling，界面上看不出"为什么没撤"。
@@ -211,6 +211,7 @@ export function registerBatchIpc(): void {
       const r = await recallDispatch(t)
       await api.recallReports(taskId, [{ detailId: t.detailId, recalled: r.ok && r.isRevoked === true, detail: r.detail }])
     }
-    return { eligible: plan.eligible.length, blocked: plan.rejected.length }
+    // 挡下的那些后端不写库，`recallDetail` 里永远不会有它们——这一份 reason 列表是唯一的出处。
+    return { eligible: plan.eligible.length, blocked: plan.rejected }
   })
 }

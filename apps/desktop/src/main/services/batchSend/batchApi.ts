@@ -1,5 +1,5 @@
 // src/main/services/batchSend/batchApi.ts
-import type { BatchDetail, BatchProgress, BatchTask } from '../../../shared/batchSend.ts'
+import type { BatchDetail, BatchProgress, BatchRecallBlocked, BatchTask } from '../../../shared/batchSend.ts'
 
 export type Fetcher = (path: string, init: RequestInit) => Promise<Response>
 
@@ -16,8 +16,8 @@ export interface ReportItem {
 }
 
 export interface RecallTarget { detailId: number; accountId: number; chatKey: string; msgKey: string }
-export interface RecallBlocked { detailId: number; reason: string }
-export interface RecallPlan { eligible: RecallTarget[]; rejected: RecallBlocked[] }
+/** 被挡下的那一条就是 shared 的那一份形状（Task 15 的折叠区从 IPC 一直读到它）。 */
+export interface RecallPlan { eligible: RecallTarget[]; rejected: BatchRecallBlocked[] }
 export interface RecallReportItem { detailId: number; recalled: boolean; detail?: string }
 export interface Page<T> { records: T[]; total: number; page: number; pageSize: number }
 
