@@ -2635,7 +2635,7 @@ export type BatchApi = ReturnType<typeof createBatchApi>
 - Modify: `apps/desktop/src/main/services/msgBridge/index.ts`（`sendText` 包锁；新增 `recallText`；`recall_result` 结清；掉线与销毁两条出口）
 - Modify: `apps/desktop/tsconfig.unit.json`（只追加一行 `src/main/services/msgBridge/sendLock.ts`。`sendLock.test.ts` 已被现有的 `src/main/services/msgBridge/*.test.ts` 那一行收进，**不要再登记一次**；`index.ts` 与 `bridgeMount.ts` import electron，永远不进这份 include）
 
-**本任务自带 6 条测试**（sendLock 4 + RecallRegistry 2），unit 期望 `pass` 从 **231 → 237**。
+**本任务自带 8 条测试**（sendLock 6 + RecallRegistry 2），unit 期望 `pass` 从 **231 → 239**。
 
 **Interfaces:**
 - Consumes: 无（纯 promise 链工具）。`sendLock.ts` 与 `RecallRegistry` 都不许 import electron——它们进 `tsconfig.unit.json`，那里跑的是 `node --test`。
@@ -2698,6 +2698,28 @@ test('pending 计数含在途那条，dropView 之后新 job 仍能排队', asyn
   lock.dropView('v1')
   assert.equal(await lock.run('v1', async () => 'third'), 'third')
 })
+
+test('作业同步就抛：这一环照样释放，后来的不被一条死尾链卡住', async () => {
+  const lock = new SendLock()
+  // 非 async 的闭包：抛出发生在 await 之前。起飞那一行若排在 try 之外，finally 就不跑，
+  // done 永远没人 resolve——下一条会排在一个死 promise 上，而日志里什么都没有。
+  await assert.rejects(() => lock.run('v1', () => { throw new Error('起飞前就炸') }), /起飞前就炸/)
+  assert.equal(lock.pending('v1'), 0, '抛错那一环的计数要归还')
+  assert.equal(await lock.run('v1', async () => 'ok'), 'ok')
+})
+
+test('排队中被 dropView：两条陆续收尾也不把 pending 减成负数', async () => {
+  const lock = new SendLock()
+  let release = (): void => {}
+  const held = lock.run('v1', () => new Promise<string>((r) => { release = () => r('done') }))
+  const queued = lock.run('v1', async () => 'second')
+  assert.equal(lock.pending('v1'), 2)
+  lock.dropView('v1') // 视图销毁：队列还在飞，两条的 finally 之后才各自收尾
+  release()
+  await Promise.all([held, queued])
+  assert.equal(lock.pending('v1'), 0, '摘掉的 view 不许留下负计数')
+  assert.equal(lock.pending(), 0, '全局求和也不许被负数拖下去')
+})
 ```
 
 - [ ] **Step 2：跑 → 找不到模块。**
@@ -2733,11 +2755,17 @@ export class SendLock {
     this.tails.set(viewId, done)
     // 队首（prev 为 undefined）直接同步启动 job，保证外部在同一个同步段就能拿到 promise resolve；
     // 排队时等 prev 兑现再启动——这才是串行的真正来源。
-    const result = prev ? prev.catch(() => undefined).then(job) : job()
+    // 起飞那一行必须留在 try 里：一个同步就抛的作业（非 async 的闭包）要是逃在 try 之外，
+    // finally 就不会跑，这一环的 done 永远没人 resolve，该 view 之后每一条都排在一个死 promise 上。
     try {
+      const result = prev ? prev.catch(() => undefined).then(job) : job()
       return await result
     } finally {
-      this.count.set(viewId, (this.count.get(viewId) ?? 1) - 1)
+      // 归零就删键，不写 0：dropView 已经把这个 view 摘掉时，`?? 1` 那一格会把计数写回表里，
+      // 后面排队的那一环再减一次就成了负数，而 pending() 是全局求和的。
+      const next = (this.count.get(viewId) ?? 1) - 1
+      if (next > 0) this.count.set(viewId, next)
+      else this.count.delete(viewId)
       release()
       if (this.tails.get(viewId) === done) this.tails.delete(viewId)
     }
@@ -2926,7 +2954,9 @@ export class RecallRegistry {
 // ① broadcastState 的那条掉线分支，紧跟在 attribution.dropView(s.viewId) 之后：
       // 撤回与发送共用这一条掉线出口：桥没了，在途那条 invoke 必须当场拿到 ok:false，
       // 不能干等自己的 20s 超时（这里的 detail 会原样进后端的 recall_failed）。
-      recallRegistry.failView(s.viewId, s.detail ?? '桥未在线')
+      const m = recallRegistry.failView(s.viewId, s.detail ?? '桥未在线')
+      // 页内那条 deleteMessage 可能其实成功了，只是回执赶不上这张表——这条日志是唯一能看到那一格的痕迹。
+      if (m > 0) console.log(`[msgBridge] 结清未决撤回 ${m} 条 view=${s.viewId}`)
 
 // ② unmountView 里，放在 activeChat.delete(viewId) 之后、`if (!mount) return` 之前：
   // 锁只在真销毁时摘，且不放进 ① 的那条分支——retry/offline 是掉线不是销毁：排队中的 job
@@ -2944,12 +2974,16 @@ export class RecallRegistry {
 ```ts
   if (report.kind === 'recall_result') {
     // 这一帧的字段与 RecallReceipt 逐字一致（Step 5 就是这么定义的），不需要转手。
-    recallRegistry.settle(report)
+    // false 意味着表里已经没有这一格：要么 20s 超时先判了，要么掉线那一刻被 failView 结掉了。
+    // 撤回这一侧没有 attribution 那样的第二证人，"答晚了"与"没答"只差这一行日志，不能不放。
+    if (!recallRegistry.settle(report)) {
+      console.log(`[msgBridge] 撤回回执无人认领（迟到或已结）localId=${report.localId}`)
+    }
     return
   }
 ```
 
-- [ ] **Step 8：跑 unit + typecheck + lint，并用读码复核一次单发链路。** unit 期望 `pass` **237**（231 + 本任务 6）、`fail 0`；`pnpm run typecheck` 四路 0 error；`pnpm exec eslint <改动文件> --quiet` 0 error。**这一步不许真发、也不许真撤回**：`sendText`/`recallText` 一旦通过 CDP 或回复框敲下去就是一条不可回收的外部动作（全站口径，Task 16 才有用户在场放行那一格）。这里的判据改成读码三条，逐条写进报告：① `sendText` 的返回值形状与错误次序未变（`SEND_FAILED` 仍在 `BRIDGE_OFFLINE` 之前）；② 同一 viewId 的两条 job 在锁上严格串行（Step 1 的第一条测试就是它的证人）；③ `recall_result` 只结 `recallRegistry`、`send_result` 只结 `registry`，两张表互不串门。真发那一格在验收文档里标 **待验证**，交给 Task 16。
+- [ ] **Step 8：跑 unit + typecheck + lint，并用读码复核一次单发链路。** unit 期望 `pass` **239**（231 + 本任务 8）、`fail 0`；`pnpm run typecheck` 四路 0 error；`pnpm exec eslint <改动文件> --quiet` 0 error。**这一步不许真发、也不许真撤回**：`sendText`/`recallText` 一旦通过 CDP 或回复框敲下去就是一条不可回收的外部动作（全站口径，Task 16 才有用户在场放行那一格）。这里的判据改成读码三条，逐条写进报告：① `sendText` 的返回值形状与错误次序未变（`SEND_FAILED` 仍在 `BRIDGE_OFFLINE` 之前）；② 同一 viewId 的两条 job 在锁上严格串行（Step 1 的第一条测试就是它的证人）；③ `recall_result` 只结 `recallRegistry`、`send_result` 只结 `registry`，两张表互不串门。真发那一格在验收文档里标 **待验证**，交给 Task 16。
 - [ ] **Step 9：提交。** `feat(P7/群发): per-view 发送锁挂进 sendText，撤回走同一把锁`
 
 ---
@@ -2968,7 +3002,7 @@ export class RecallRegistry {
 - Produces:
   - `interface RecallChat { deleteMessage(chatId: string, ids: string, deleteMediaInDevice?: boolean, revoke?: boolean): Promise<DeleteResult> }`
   - `recallViaWa(cmd: RecallCmd, chat: RecallChat | undefined): Promise<RecallReceipt>`
-  - `type DeleteResult = WaDeleteResult`（**本任务自带 5 条** `node --test` 用例：`recall.test.ts` 4 条 + `index.test.ts` 1 条；unit 期望 `pass` 从 **237 → 242**）
+  - `type DeleteResult = WaDeleteResult`（**本任务自带 5 条** `node --test` 用例：`recall.test.ts` 4 条 + `index.test.ts` 1 条；unit 期望 `pass` 从 **239 → 244**）
 
 - [ ] **Step 1：失败的测试**（`src/bridge/**` 已在 unit glob 与 include 里）：
 
@@ -3143,7 +3177,7 @@ test('recall 命令交给 recallViaWa：回执异步单独一帧，命令回路�
 
 `fakeHost` / `idle` / `CONFIG` / `destroy` 都是该文件已有的助手，不新加工具函数。
 
-- [ ] **Step 6：跑 `pnpm run test:unit` + `pnpm run typecheck`，并重建 bridge bundle**：`pnpm run build:bridge`（若该脚本名不同，读 `package.json` 的 `build:bridge`），确认编译过、产物里含 `deleteMessage` 调用。unit 期望 `pass` **242**、`fail 0`。
+- [ ] **Step 6：跑 `pnpm run test:unit` + `pnpm run typecheck`，并重建 bridge bundle**：`pnpm run build:bridge`（若该脚本名不同，读 `package.json` 的 `build:bridge`），确认编译过、产物里含 `deleteMessage` 调用。unit 期望 `pass` **244**、`fail 0`。
 - [ ] **Step 7：提交。** `feat(P7/群发): 页内撤回命令——revoke=true 与入参剥尾`
 
 ---
@@ -4030,7 +4064,7 @@ cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.
 cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 ```
 
-期望：unit `pass` = 212 + 10(Task 7) + 9(Task 8) + 6(Task 9) + 5(Task 10) + 8(Task 11) = **250**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
+期望：unit `pass` = 212 + 10(Task 7) + 9(Task 8) + 8(Task 9) + 5(Task 10) + 8(Task 11) = **252**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
 
 - [ ] **Step 2：CDP 演练腿（全程 dryRun，不碰页面）。** 前提：主进程改过，dev 必须已被用户重启过一次（dev watcher 不重载 `src/main`）。先 `powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p5c-top.ps1` 断言 `visibilityState==='visible'`，然后跑 `tmp/p7b-dry-run.mjs`，八条：
 
