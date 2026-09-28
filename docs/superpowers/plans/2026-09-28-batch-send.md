@@ -2724,16 +2724,18 @@ export class SendLock {
   }
 
   async run<T>(viewId: string, job: () => Promise<T>): Promise<T> {
-    const gate = this.tails.get(viewId) ?? Promise.resolve()
+    const prev = this.tails.get(viewId)
     // 计数在第一个 await 之前加：测试要在调用后同步读到 pending。
     this.count.set(viewId, (this.count.get(viewId) ?? 0) + 1)
     // done 只给队尾当"这一环结束了"的信号（成功失败都一样）；调用方拿的是 job 自己的结果。
     let release!: () => void
     const done = new Promise<void>((r) => { release = r })
     this.tails.set(viewId, done)
-    await gate.catch(() => undefined)
+    // 队首（prev 为 undefined）直接同步启动 job，保证外部在同一个同步段就能拿到 promise resolve；
+    // 排队时等 prev 兑现再启动——这才是串行的真正来源。
+    const result = prev ? prev.catch(() => undefined).then(job) : job()
     try {
-      return await job()
+      return await result
     } finally {
       this.count.set(viewId, (this.count.get(viewId) ?? 1) - 1)
       release()
@@ -2750,6 +2752,8 @@ export class SendLock {
 ```
 
 - [ ] **Step 4：跑 `sendLock.test.ts` 四条全绿**（`sendRegistry.test.ts` 的那两条要到 Step 5b 才写，这一步先不碰），`pnpm run typecheck` 四路干净。
+
+> **队首那一条必须同步起飞**（R45，实施后回写到这里）：`job()` 不能排在 `await` 之后。第四条用例的 `release` 是作业体自己被调用时才捕获到的那个 resolve——先 `await` 就等于让作业晚一个微任务起步，同一个同步段里拿到的还是初始那个空函数，`release()` 按下去谁也不醒，那条用例直接死等。串行性只由 `prev` 那一支负责，排队者照样等在前一环的 `done` 上，第一条用例的 `in:a / out:a / in:b / out:b` 就是它的证人。
 - [ ] **Step 5：`shared/chatTypes.ts` 扩三种形状。**
 
 ```ts
@@ -2955,15 +2959,16 @@ export class RecallRegistry {
 **Files:**
 - Create: `apps/desktop/src/bridge/whatsapp/recall.ts`
 - Create: `apps/desktop/src/bridge/whatsapp/recall.test.ts`
-- Modify: `apps/desktop/src/bridge/types.ts`（`WppChatApi` 加 `deleteMessage`）
+- Modify: `apps/desktop/src/bridge/types.ts`（`WppChatApi` 加 `deleteMessage`，并在**这一处唯一声明**返回类型 `WaDeleteResult`）
 - Modify: `apps/desktop/src/bridge/index.ts`（switch 加 `case 'recall'`）
+- Modify: `apps/desktop/src/bridge/index.test.ts`（加 1 条 recall 派发证人，见 Step 5b）
 
 **Interfaces:**
-- Consumes: Task 9 的 `BridgeCommand.recall` / `BridgeReport.recall_result`。
+- Consumes: Task 9 的 `BridgeCommand.recall` / `BridgeReport.recall_result`（两个形状都在 `shared/chatTypes.ts`，本任务**不再改**那个文件）。
 - Produces:
   - `interface RecallChat { deleteMessage(chatId: string, ids: string, deleteMediaInDevice?: boolean, revoke?: boolean): Promise<DeleteResult> }`
   - `recallViaWa(cmd: RecallCmd, chat: RecallChat | undefined): Promise<RecallReceipt>`
-  - `DeleteResult = { id?: string; sendMsgResult?: unknown; isRevoked?: boolean; isDeleted?: boolean; isSentByMe?: boolean }`
+  - `type DeleteResult = WaDeleteResult`（**本任务自带 5 条** `node --test` 用例：`recall.test.ts` 4 条 + `index.test.ts` 1 条；unit 期望 `pass` 从 **237 → 242**）
 
 - [ ] **Step 1：失败的测试**（`src/bridge/**` 已在 unit glob 与 include 里）：
 
@@ -3012,16 +3017,12 @@ test('页内抛错折成 detail 原文，不抛出到主进程', async () => {
 ```ts
 // src/bridge/whatsapp/recall.ts
 import type { BridgeCommand, RecallReceipt } from '../../shared/chatTypes.ts'
+import type { WaDeleteResult } from '../types.ts'
 
 export type RecallCmd = Extract<BridgeCommand, { kind: 'recall' }>
 
-export interface DeleteResult {
-  id?: string
-  sendMsgResult?: unknown
-  isRevoked?: boolean
-  isDeleted?: boolean
-  isSentByMe?: boolean
-}
+/** 返回类型只在 `bridge/types.ts` 声明一次（R32）；这里换个名字给本文件用，不再抄一遍字段。 */
+export type DeleteResult = WaDeleteResult
 
 export interface RecallChat {
   deleteMessage(chatId: string, ids: string, deleteMediaInDevice?: boolean, revoke?: boolean): Promise<DeleteResult>
@@ -3030,6 +3031,8 @@ export interface RecallChat {
 /**
  * 剥 `_out` 只发生在**入参**这一步：`msgKey` 列存的仍是回执原样（与 whatsapp/send.ts 的
  * "key 原样用"配套——原样那串要和事件流那条逐字相等，而去尾这串才是 deleteMessage 认的）。
+ * 同一个尾在 `shared/msgIds.ts` 里也有一份常量，但那边的操作是"取末段裸 id"，与这里的
+ * "整串去尾"不是同一件事，所以不复用那个函数（R33）。
  */
 export const bareMsgKey = (msgKey: string): string => msgKey.replace(/_out$/, '')
 
@@ -3053,7 +3056,7 @@ export async function recallViaWa(cmd: RecallCmd, chat: RecallChat | undefined):
 }
 ```
 
-- [ ] **Step 4：`bridge/types.ts` 的 `WppChatApi` 加一行，并就地声明返回类型**（`ids` 按 wa-js 文档收 string 或 string[]，这里只传一条裸 key）：
+- [ ] **Step 4：`bridge/types.ts` 的 `WppChatApi` 加一行，并把返回类型声明在**这个文件**（`ids` 按 wa-js 文档收 string 或 string[]，这里只传一条裸 key）：
 
 ```ts
 export interface WaDeleteResult {
@@ -3067,7 +3070,7 @@ export interface WaDeleteResult {
   deleteMessage(chatId: string, ids: string, deleteMediaInDevice?: boolean, revoke?: boolean): Promise<WaDeleteResult>
 ```
 
-（从 `whatsapp/recall.ts` import `DeleteResult` 会让类型文件依赖实现目录，所以在 `types.ts` 里就地声明同形 `WaDeleteResult`；`recall.ts` 的 `RecallChat` 用它自己那份 `DeleteResult`，两个接口字段全可选、结构一致，`wppChat()` 的返回值可直接喂进去。）
+（依赖方向照 `whatsapp/send.ts` 走：叶子模块从 `../types.ts` 取共享形状，`types.ts` 不 import 实现目录。所以 `WaDeleteResult` 只在这里声明一次，`recall.ts` 用 `export type DeleteResult = WaDeleteResult` 起别名——两个名字一套字段，`wppChat()` 的返回值可直接喂进 `RecallChat`。若在 `recall.ts` 里另抄一份同形接口，评审会按重复代码记账，R32。）
 
 - [ ] **Step 5：`bridge/index.ts` 的 switch 加一支**：
 
@@ -3082,7 +3085,65 @@ export interface WaDeleteResult {
 
 并在文件顶部 `import { recallViaWa } from './whatsapp/recall.ts'`。`wppChat()` 返回的是 `WppChatApi`，`deleteMessage` 已在 Step 4 进接口，所以类型直接对得上。
 
-- [ ] **Step 6：跑 `pnpm run test:unit` + `pnpm run typecheck`，并重建 bridge bundle**：`pnpm run build:bridge`（若该脚本名不同，读 `package.json` 的 `build:bridge`），确认编译过、产物里含 `deleteMessage` 调用。
+- [ ] **Step 5b：`bridge/index.test.ts` 加一条派发证人**（R34：Step 5 那一支如果不接住命令，`recall.test.ts` 四条全绿也照样发现不了——撤回会永远走 default 之外的"没人管"，主进程那 20 s 超时是它唯一的响）。照 `gatedSend()`/那条 send 证人的形状加，放在 send 证人之后：
+
+```ts
+/** 带 `deleteMessage` 的假 WPP，回执卡在 await 里：证明 recall 支与 send 支同样不排命令回路。 */
+function gatedRecall(): { wpp: unknown; calls: unknown[][]; release: () => void } {
+  let release: () => void = () => undefined
+  const gate = new Promise<void>((r) => {
+    release = r
+  })
+  const calls: unknown[][] = []
+  return {
+    release,
+    calls,
+    wpp: {
+      chat: {
+        list: async () => [],
+        getMessages: async () => [],
+        getActiveChat: () => null,
+        deleteMessage: async (...args: unknown[]) => {
+          calls.push(args)
+          await gate
+          return { isRevoked: true }
+        }
+      },
+      on: () => ({ off: () => undefined })
+    }
+  }
+}
+
+test('recall 命令交给 recallViaWa：回执异步单独一帧，命令回路不被它排住', async (t) => {
+  const { wpp, calls, release } = gatedRecall()
+  const host = fakeHost(wpp)
+  t.after(() => {
+    destroy()
+    delete (globalThis as unknown as { window?: unknown }).window
+  })
+  install(CONFIG)
+  host.out.length = 0 // 只留命令阶段的帧
+  host.deliver({ kind: 'recall', localId: 'R1', chatKey: '861380001001@c.us', msgKey: 'true_861380001001@c.us_K-1_out' })
+  host.deliver({ kind: 'ping' })
+  // 区分性证据：case 'recall' 若漏加，下面两条一条也过不了（ping 会是唯一一帧，calls 为空）；
+  // 若改成 await 再 return，pong 就排不到 recall_result 前面。
+  assert.equal(host.out[0]?.kind, 'pong')
+  assert.equal(host.out.some((f) => f.kind === 'recall_result'), false)
+  release()
+  await idle(0)
+  assert.deepEqual(calls[0], ['861380001001@c.us', 'true_861380001001@c.us_K-1', false, true])
+  assert.deepEqual(host.out.find((f) => f.kind === 'recall_result'), {
+    kind: 'recall_result',
+    localId: 'R1',
+    ok: true,
+    isRevoked: true
+  })
+})
+```
+
+`fakeHost` / `idle` / `CONFIG` / `destroy` 都是该文件已有的助手，不新加工具函数。
+
+- [ ] **Step 6：跑 `pnpm run test:unit` + `pnpm run typecheck`，并重建 bridge bundle**：`pnpm run build:bridge`（若该脚本名不同，读 `package.json` 的 `build:bridge`），确认编译过、产物里含 `deleteMessage` 调用。unit 期望 `pass` **242**、`fail 0`。
 - [ ] **Step 7：提交。** `feat(P7/群发): 页内撤回命令——revoke=true 与入参剥尾`
 
 ---
@@ -3969,7 +4030,7 @@ cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.
 cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 ```
 
-期望：unit `pass` = 212 + 10(Task 7) + 9(Task 8) + 6(Task 9) + 4(Task 10) + 8(Task 11) = **249**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
+期望：unit `pass` = 212 + 10(Task 7) + 9(Task 8) + 6(Task 9) + 5(Task 10) + 8(Task 11) = **250**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
 
 - [ ] **Step 2：CDP 演练腿（全程 dryRun，不碰页面）。** 前提：主进程改过，dev 必须已被用户重启过一次（dev watcher 不重载 `src/main`）。先 `powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p5c-top.ps1` 断言 `visibilityState==='visible'`，然后跑 `tmp/p7b-dry-run.mjs`，八条：
 
