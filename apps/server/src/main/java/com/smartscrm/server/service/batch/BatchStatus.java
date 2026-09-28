@@ -20,6 +20,15 @@ public final class BatchStatus {
             "error", Set.of("paused")
     );
 
+    /**
+     * 引擎经 {@code POST /tasks/{id}/reports} 可以写进明细的状态（R37，spec §2 那条链）。
+     * 少 {@code pending}：它是建单与重发写下的初始态，不是回执——让它进来会把一行已经结掉的条目
+     * 倒回待跑，而 {@code openCount} 只认 pending+sending，那一行从此归不了零、任务到不了 done。
+     * 词表只在这里写一次，服务层的闸门读它。
+     */
+    public static final Set<String> REPORTABLE_SEND_STATUS =
+            Set.of("sending", "success", "failed", "unknown", "skipped");
+
     private BatchStatus() {
     }
 

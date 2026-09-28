@@ -124,6 +124,13 @@ public class BatchSendService {
         List<BatchExpansion.ExpandedRow> rows = BatchExpansion.expand(ok, dto.getContents(),
                 r -> fieldsByKey.getOrDefault(convKey(r.accountId(), r.chatKey()), BatchRender.EMPTY_FIELDS));
 
+        // R35：上面那一遍量的是向导里的模板，这一遍量的是真要发出去的那串字——变量填进来才决定
+        // 这一行有多长、还剩不剩下东西。放在落库之前，所以这一趟一行都不会留下。
+        List<String> rendered = BatchRules.renderedViolations(rows);
+        if (!rendered.isEmpty()) {
+            throw new BizException(40013, String.join("；", rendered));
+        }
+
         // 先落任务头拿自增 id，再分块落明细，最后用 countByTask 自检（spec §3.5）。
         BatchSendTask task = newTask(tenantId, dto, rows.size());
         taskMapper.insert(task);
@@ -177,6 +184,9 @@ public class BatchSendService {
 
     public PageResult<BatchDetailVO> pageDetails(long tenantId, long taskId, String sendStatus,
                                                  String recallStatus, int page, int size) {
+        // R40：先过租户闸。少了这一闸，外来/不存在的 taskId 会回「一页空行」——
+        // 那与「这一档筛选下确实没有行」在响应体上分不出来，而八跳运行端点对同一种输入说的是 40404。
+        requireOwned(tenantId, taskId);
         LambdaQueryWrapper<BatchSendDetail> wrapper = new LambdaQueryWrapper<BatchSendDetail>()
                 .eq(BatchSendDetail::getTenantId, tenantId)
                 .eq(BatchSendDetail::getTaskId, taskId)
@@ -212,6 +222,12 @@ public class BatchSendService {
         if (taskMapper.moveTo(tenantId, taskId, task.getStatus(), to) == 0) {
             throw new BizException(40902, "任务状态已被并发改变，请刷新后重试", HttpStatus.CONFLICT);
         }
+        // R39：搬进 running 的当下就续一次心跳。引擎第一跳心跳最快也要 15 s 后，
+        // 而 reconcile 的判据是「heartbeat_at 为空或早于 60 s」——不补这一拍，
+        // 刚点下「开始」的任务在一次重启里就会被判成陈旧：明细转 unknown、任务转 paused。
+        if ("running".equals(to)) {
+            taskMapper.heartbeat(tenantId, taskId);
+        }
         if ("cancel".equals(action)) {
             detailMapper.skipAllPending(tenantId, taskId);
         }
@@ -226,9 +242,20 @@ public class BatchSendService {
     public BatchReportsResultVO reports(long tenantId, long taskId, BatchReportsDTO dto) {
         requireOwned(tenantId, taskId);
         if (dto.getItems() != null) {
+            // R37：先扫一遍词表再动手，越界就整页拒收。半收半拒会让这一页的计数与明细对不上，
+            // 而引擎那一侧只看得到 code=0。词表在 BatchStatus 里只写一次，这里只读。
+            List<String> outOfVocabulary = new ArrayList<>();
+            for (BatchReportItemDTO item : dto.getItems()) {
+                if (!BatchStatus.REPORTABLE_SEND_STATUS.contains(item.getSendStatus())) {
+                    outOfVocabulary.add(item.getDetailId() + "=" + item.getSendStatus());
+                }
+            }
+            if (!outOfVocabulary.isEmpty()) {
+                throw new BizException(40013, "send_status 越界: " + String.join("、", outOfVocabulary));
+            }
             LocalDateTime now = LocalDateTime.now(MsgTimes.CHAT_ZONE);
             for (BatchReportItemDTO item : dto.getItems()) {
-                // 引擎是唯一写入者（单实例锁），所以这里不做状态守卫，只结这一行。
+                // 除词表外不做逐行状态守卫：引擎是唯一写入者（单实例锁），这一行结掉就是结掉。
                 detailMapper.applyReport(tenantId, taskId, item.getDetailId(), item.getSendStatus(),
                         item.getLocalId(), item.getErrorCode(), item.getErrorDetail(),
                         item.getMsgKey(), item.getSentAtEpochSec() == null
@@ -373,8 +400,11 @@ public class BatchSendService {
 
     /** 两个 JSON 列 + 心跳：实体存串，VO 给结构。时间原样透传 LocalDateTime（Task 4 Step 2 的口径）。 */
     private BatchTaskVO toVO(BatchSendTask t) {
+        // R36：只把「哪个任务的哪一列」交给解码异常，正文本身不许进异常文案。
+        String where = "任务 " + t.getId() + " 的 ";
         return new BatchTaskVO(t.getId(), t.getName(), t.getPlatform(), Boolean.TRUE.equals(t.getDryRun()),
-                t.getStatus(), BatchJson.readLongs(t.getAccountIds()), BatchJson.readStrings(t.getContents()),
+                t.getStatus(), BatchJson.readLongs(t.getAccountIds(), where + "account_ids"),
+                BatchJson.readStrings(t.getContents(), where + "contents"),
                 t.getMsgIntervalMin(), t.getMsgIntervalMax(), t.getChatIntervalMin(), t.getChatIntervalMax(),
                 t.getTotalCount(), t.getSentCount(), t.getFailCount(), t.getHeartbeatAt(), t.getCreatedAt());
     }

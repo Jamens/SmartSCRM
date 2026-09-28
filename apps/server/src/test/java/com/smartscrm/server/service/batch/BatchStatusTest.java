@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import java.util.Set;
 import org.junit.jupiter.api.Test;
 
 class BatchStatusTest {
@@ -49,5 +50,16 @@ class BatchStatusTest {
         assertEquals("这一条没有 msg_key，无法定位要撤哪条消息",
                 BatchStatus.recallBlocker(false, "success", null));
         assertNull(BatchStatus.recallBlocker(false, "success", "true_x@c.us_Y_out"));
+    }
+
+    /**
+     * 词表在这里只写一次，`/reports` 的闸门读它（R37）。`pending` 不在里面：那是建单与重发写下的
+     * 初始态，不是回执。让它进来会把一行已经结掉的条目倒回待跑，而 `openCount` 只认
+     * pending+sending —— 那一行从此再也归不了零，任务也就到不了 done。
+     */
+    @Test
+    void onlyTheFiveStatesTheEngineCanReachAreReportable() {
+        assertEquals(Set.of("sending", "success", "failed", "unknown", "skipped"),
+                BatchStatus.REPORTABLE_SEND_STATUS);
     }
 }

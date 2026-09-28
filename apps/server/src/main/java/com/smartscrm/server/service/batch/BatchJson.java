@@ -36,29 +36,34 @@ public final class BatchJson {
         }
     }
 
-    public static List<Long> readLongs(String json) {
-        return read(json, new TypeReference<List<Long>>() { });
+    public static List<Long> readLongs(String json, String where) {
+        return read(json, new TypeReference<List<Long>>() { }, where);
     }
 
-    public static List<String> readStrings(String json) {
+    public static List<String> readStrings(String json, String where) {
         if (json == null || json.isBlank()) {
             return List.of();
         }
-        return read(json, new TypeReference<List<String>>() { });
+        return read(json, new TypeReference<List<String>>() { }, where);
     }
 
-    private static <T> T read(String json, TypeReference<T> type) {
+    /**
+     * {@code where} 是「哪个任务的哪一列」这种调用方才知道的标签，异常文案只带它。
+     * 这两列里存的是别人的正文，而 {@code GlobalExceptionHandler} 会把 {@code getMessage()} 原样
+     * 回进响应体（R36）——把 payload 拼进文案就等于把一行正文交给一个只需要知道「哪一列坏了」的人。
+     */
+    private static <T> T read(String json, TypeReference<T> type, String where) {
         if (json == null || json.isBlank()) {
             try {
                 return MAPPER.readValue("[]", type);
             } catch (Exception e) {
-                throw new IllegalStateException("JSON 列空白成形失败", e);
+                throw new IllegalStateException(where + " 空白成形失败", e);
             }
         }
         try {
             return MAPPER.readValue(json, type);
         } catch (Exception e) {
-            throw new IllegalStateException("JSON 列解不出来: " + json, e);
+            throw new IllegalStateException(where + " 解不出来", e);
         }
     }
 }
