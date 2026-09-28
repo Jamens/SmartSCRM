@@ -191,7 +191,7 @@ public class BatchSendTask {
     "<script>",
     "INSERT INTO batch_send_detail (tenant_id, task_id, seq, account_id, chat_key, customer_id,",
     " content_index, body, send_status, recall_status) VALUES",
-    "<foreach collection='rows' item='r' separator='>,",
+    "<foreach collection='rows' item='r' separator=','>",
     "(#{r.tenantId}, #{r.taskId}, #{r.seq}, #{r.accountId}, #{r.chatKey}, #{r.customerId},",
     " #{r.contentIndex}, #{r.body}, 'pending', 'none')",
     "</foreach>",
