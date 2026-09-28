@@ -2165,6 +2165,10 @@ cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
   - `interface BatchProgress`：四个运行端点与 reports 的出参 = 后端 `BatchReportsResultVO` 的四列
     （`sentCount/failCount/totalCount/status`），**不是**整张任务——整张任务只有 `GET /tasks/{id}` 一条路。
     preload 与渲染层都要认它，而 preload 不许 import `main/services/**`，所以它住在 shared。
+  - `interface BatchRecallBlocked { detailId: number; reason: string }`（后端 `BatchRecallVO.Blocked` 的镜像）
+    与 `interface BatchRecallResult { eligible: number; blocked: BatchRecallBlocked[] }`：`batch:recall` 的出参。
+    `blocked` 必须是**带理由的列表**而不是一个数——被挡下的行后端不写库，明细里永远查不到它们，
+    这一份就是 Task 15 折叠区的唯一出处（Task 8 的 `RecallPlan.rejected` 直接复用前者，不重声明）。
   - `SETTLED_DETAIL_STATUS: readonly BatchDetailStatus[]`（`success`/`unknown`/`skipped`）：
     它答的是「人还能不能处置这一行」——Task 13/15 的状态徽标与「重发这一条」按钮读它。
     **它不决定泵该发谁**（那一条只有 `pending` 算数，见上面的 `buildQueues`）：
@@ -2367,6 +2371,16 @@ export interface BatchProgress {
   status: BatchTaskStatus
 }
 
+/** 撤回清单里被后端挡下的那一条（后端 `BatchRecallVO.Blocked`）。 */
+export interface BatchRecallBlocked { detailId: number; reason: string }
+
+/**
+ * `batch:recall` 的出参：`eligible` 是条数（真撤的那几行没有回执可等，逐条结论走明细的
+ * `recallDetail`），`blocked` 带着**逐条理由**。理由不能压成一个数：Task 15 的折叠区要点名
+ * "这几条为什么没撤"，而挡下的行后端不写库，界面上除了这一份就再无出处。
+ */
+export interface BatchRecallResult { eligible: number; blocked: BatchRecallBlocked[] }
+
 /**
  * 账号之间并行、账号内串行，所以队列形状 = 按 accountIds 顺序分组、组内 seq 升序。
  * 泵只捡 `pending` 行：进 `sending` 的唯一 arrow 是 `pending → sending`（spec:96），
@@ -2453,7 +2467,7 @@ cd /d/SmartSCRM/apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run ty
 - Produces（Task 11/12 按这些名字用；本任务自带 **9 条** `node --test` 用例）:
   - `type Fetcher = (path: string, init: RequestInit) => Promise<Response>`（真身是 Task 12 传进来的 `authedFetch`）
   - `interface ReportItem { detailId: number; localId?: string; sendStatus: string; errorCode?: string; errorDetail?: string; msgKey?: string; sentAtEpochSec?: number }`
-  - `RecallTarget { detailId: number; accountId: number; chatKey: string; msgKey: string }`、`RecallBlocked { detailId: number; reason: string }`、`RecallPlan { eligible: RecallTarget[]; rejected: RecallBlocked[] }`、`RecallReportItem { detailId: number; recalled: boolean; detail?: string }`、`Page<T> { records: T[]; total: number; page: number; pageSize: number }`
+  - `RecallTarget { detailId: number; accountId: number; chatKey: string; msgKey: string }`、`RecallPlan { eligible: RecallTarget[]; rejected: BatchRecallBlocked[] }`（`rejected` 的元素直接复用 Task 7 的 `BatchRecallBlocked`，不在这里重声明一份同名局部类型）、`RecallReportItem { detailId: number; recalled: boolean; detail?: string }`、`Page<T> { records: T[]; total: number; page: number; pageSize: number }`
   - `createBatchApi(opts: BatchApiOptions)` → `BatchApi = ReturnType<typeof createBatchApi>`，十二个方法就是 Step 3 实现里那十二个（十跳运行面 + `task`/`details` 两跳只读）：`start/pause/resume/cancel(taskId) → Promise<BatchProgress | null>`、`reports(taskId, items, allHalted) → Promise<BatchProgress | null>`、`task(id) → Promise<BatchTask | null>`、`details(taskId, page, size) → Promise<Page<BatchDetail> | null>`（URL 里拼 `size=`，见 Task 4 Step 4 的「入参 size / 出参 pageSize」）、`heartbeat(taskId) → Promise<number>`、`retryFailed(taskId, detailIds?) → Promise<number>`（省略＝整批，带＝只复位那几条，R11）、`recall(taskId, detailIds) → Promise<RecallPlan | null>`、`recallReports(taskId, items) → Promise<number>`、`reconcile() → Promise<{ pausedTasks: number; markedUnknown: number } | null>`
   - `BatchApiOptions { fetcher: Fetcher; onError?: (where: string, e: unknown) => void }`（两个参数：host 要知道是哪一跳挂了，只给 error 就得上 log 里猜）
 
@@ -2591,7 +2605,7 @@ test('onError 自己抛，调用方仍然只拿到 null/0', async () => {
 
 ```ts
 // src/main/services/batchSend/batchApi.ts
-import type { BatchDetail, BatchProgress, BatchTask } from '../../../shared/batchSend.ts'
+import type { BatchDetail, BatchProgress, BatchRecallBlocked, BatchTask } from '../../../shared/batchSend.ts'
 
 export type Fetcher = (path: string, init: RequestInit) => Promise<Response>
 
@@ -2608,8 +2622,8 @@ export interface ReportItem {
 }
 
 export interface RecallTarget { detailId: number; accountId: number; chatKey: string; msgKey: string }
-export interface RecallBlocked { detailId: number; reason: string }
-export interface RecallPlan { eligible: RecallTarget[]; rejected: RecallBlocked[] }
+/** 被挡下的那一条就是 shared 的那一份形状（Task 15 的折叠区从 IPC 一直读到它）。 */
+export interface RecallPlan { eligible: RecallTarget[]; rejected: BatchRecallBlocked[] }
 export interface RecallReportItem { detailId: number; recalled: boolean; detail?: string }
 export interface Page<T> { records: T[]; total: number; page: number; pageSize: number }
 
@@ -3721,7 +3735,7 @@ import { BatchEngine } from './engine'
 import { createBatchApi } from './batchApi'
 import type { RecallTarget } from './batchApi'
 import type { Dispatch, RecallDispatch, SendOutcome } from './engine'
-import type { BatchDetail, BatchStateEvent, BatchTask } from '../../../shared/batchSend'
+import type { BatchDetail, BatchRecallResult, BatchStateEvent, BatchTask } from '../../../shared/batchSend'
 
 /** 心跳周期：15 s（spec §5）。四拍打空才停泵，那条线就是下面 `HEARTBEAT_MISS_LIMIT` 的注释。 */
 const HEARTBEAT_MS = 15_000
@@ -3938,9 +3952,9 @@ export function registerBatchIpc(): void {
   ipcMain.handle('batch:retry-failed', (_e, taskId: number, detailIds?: number[]) =>
     api.retryFailed(taskId, detailIds))
   // 撤回：清单在后端判（Task 5），这里只把 eligible 逐条交给页内出料口，结清走 recallReports。
-  ipcMain.handle('batch:recall', async (_e, taskId: number, detailIds: number[]) => {
+  ipcMain.handle('batch:recall', async (_e, taskId: number, detailIds: number[]): Promise<BatchRecallResult> => {
     const plan = await api.recall(taskId, detailIds)
-    if (!plan) return { eligible: 0, blocked: 0 }
+    if (!plan) return { eligible: 0, blocked: [] }
     for (const t of plan.eligible) {
       // 账号没有可用视图（掉线 / 未挂桥）也要结清：后端已经把这条推成 recalling，
       // 静默 continue 会让它永远卡在 recalling，界面上看不出"为什么没撤"。
@@ -3952,7 +3966,8 @@ export function registerBatchIpc(): void {
       const r = await recallDispatch(t)
       await api.recallReports(taskId, [{ detailId: t.detailId, recalled: r.ok && r.isRevoked === true, detail: r.detail }])
     }
-    return { eligible: plan.eligible.length, blocked: plan.rejected.length }
+    // 挡下的那些后端不写库，`recallDetail` 里永远不会有它们——这一份 reason 列表是唯一的出处。
+    return { eligible: plan.eligible.length, blocked: plan.rejected }
   })
 }
 ```
@@ -3981,7 +3996,7 @@ export function registerBatchIpc(): void {
     run: (taskId: number): Promise<{ started: boolean }> => ipcRenderer.invoke('batch:run', taskId),
     retryFailed: (taskId: number, detailIds?: number[]): Promise<number> =>
       ipcRenderer.invoke('batch:retry-failed', taskId, detailIds),
-    recall: (taskId: number, detailIds: number[]): Promise<{ eligible: number; blocked: number }> =>
+    recall: (taskId: number, detailIds: number[]): Promise<BatchRecallResult> =>
       ipcRenderer.invoke('batch:recall', taskId, detailIds),
     onState: (cb: (e: BatchStateEvent) => void): (() => void) => {
       const listener = (_event: IpcRendererEvent, e: BatchStateEvent): void => cb(e)
@@ -4018,10 +4033,16 @@ export function registerBatchIpc(): void {
 
 ```ts
 import { useEffect } from 'react'
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import {
+  useMutation,
+  useQuery,
+  useQueryClient,
+  type UseMutationResult,
+  type UseQueryResult
+} from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import type { PageResult } from './customers'
-import type { BatchDetail, BatchTask } from '@shared/batchSend'   // 渲染层已有的 `@shared/*` 别名（读码：api/messages.ts:15-18 同形）
+import type { BatchDetail, BatchProgress, BatchRecallResult, BatchTask } from '@shared/batchSend'
 
 const BATCH_KEY = ['batch'] as const
 
@@ -4047,7 +4068,30 @@ export interface BatchCreateVO {
   totalCount: number
 }
 
-export function useBatchTasks(status?: string, page = 1, size = 20) {
+/** 一条收件人的寻址：账号 + 会话键（与后端 `BatchRecipientDTO` 同形）。 */
+type RecipientRef = { accountId: number; chatKey: string }
+type PreviewInput = { conversations: RecipientRef[]; contents: string[] }
+type PreviewRow = { chatKey: string; contentIndex: number; body: string }
+type PreviewResult = { rows: PreviewRow[]; truncated: boolean }
+/** 重发/撤回的入参：`taskId` 定位任务，`detailIds` 定哪几行（重发省略＝整批）。 */
+type RetryInput = { taskId: number; detailIds?: number[] }
+type RecallInput = { taskId: number; detailIds: number[] }
+
+/**
+ * `window.scrm` 在类型上是可选的（preload 没挂上的浏览器调试档），而群发的运行面只有宿主能给。
+ * 这里不给静默 no-op 的 fallback：`services/msgService.ts` 那份 fallback 有明确的离线语义
+ * （发送一律回 `BRIDGE_OFFLINE`），而"点了开始什么都没发生"会被 UI 当成成功——
+ * 对一条会往客户脸上发消息的链，那是最坏的一种假成功。
+ */
+type BatchHost = NonNullable<Window['scrm']>['batch']
+
+function batchHost(): BatchHost {
+  const scrm = window.scrm
+  if (!scrm) throw new Error('批量群发需要 Electron 宿主（preload 未挂载）')
+  return scrm.batch
+}
+
+export function useBatchTasks(status?: string, page = 1, size = 20): UseQueryResult<PageResult<BatchTaskVO>, Error> {
   return useQuery({
     queryKey: [...BATCH_KEY, 'list', status ?? '', page, size],
     queryFn: () =>
@@ -4057,7 +4101,7 @@ export function useBatchTasks(status?: string, page = 1, size = 20) {
   })
 }
 
-export function useBatchTask(taskId: number | null) {
+export function useBatchTask(taskId: number | null): UseQueryResult<BatchTaskVO, Error> {
   return useQuery({
     queryKey: [...BATCH_KEY, 'task', taskId],
     queryFn: () => http.get<BatchTaskVO>(`/api/batch-send/tasks/${taskId}`),
@@ -4067,8 +4111,12 @@ export function useBatchTask(taskId: number | null) {
 
 /** 明细的 seq 升序由后端保证（Task 4），这里不再排第二遍。 */
 export function useBatchDetails(
-  taskId: number | null, sendStatus?: string, recallStatus?: string, page = 1, size = 50
-) {
+  taskId: number | null,
+  sendStatus?: string,
+  recallStatus?: string,
+  page = 1,
+  size = 50
+): UseQueryResult<PageResult<BatchDetailVO>, Error> {
   return useQuery({
     queryKey: [...BATCH_KEY, 'details', taskId, sendStatus ?? '', recallStatus ?? '', page, size],
     queryFn: () =>
@@ -4080,7 +4128,7 @@ export function useBatchDetails(
   })
 }
 
-export function useCreateBatchTask() {
+export function useCreateBatchTask(): UseMutationResult<BatchCreateVO, Error, BatchCreateInput, unknown> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: BatchCreateInput) => http.post<BatchCreateVO>('/api/batch-send/tasks', input),
@@ -4088,60 +4136,82 @@ export function useCreateBatchTask() {
   })
 }
 
-export function useBatchPreview() {
+export function useBatchPreview(): UseMutationResult<PreviewResult, Error, PreviewInput, unknown> {
   return useMutation({
-    mutationFn: (input: { conversations: { accountId: number; chatKey: string }[]; contents: string[] }) =>
-      http.post<{ rows: { chatKey: string; contentIndex: number; body: string }[]; truncated: boolean }>(
-        '/api/batch-send/preview',
-        input
-      )
+    mutationFn: (input: PreviewInput) => http.post<PreviewResult>('/api/batch-send/preview', input)
   })
 }
 
 /**
  * 状态迁移不直连 REST：群发的"开始"必须由主进程起泵，所以这一跳走 window.scrm.batch。
- * 四个动作返回同一种 BatchTaskVO，因此一个 hook 够用；retry-failed 返回的是 { reset }，
- * 形状不同，另立一个 useBatchRetry —— 一个 hook 两种返回会让调用方无从判定拿到的是哪个。
+ * 四个动作都只回 `BatchProgress | null`（后端 `BatchReportsResultVO` 那四列；宿主塌成 null 表示这一跳没成），
+ * 不是整张任务——所以成功后一律重新 GET `['batch','task',id]` 取权威的那一份，顺带刷列表那一行的状态徽标。
+ * `retry-failed` 返回的是复位条数，形状不同，另立一个 `useBatchRetry`：
+ * 一个 hook 两种返回会让调用方无从判定拿到的是哪个。
+ * 这里没有 `run`：起泵是 `batch:start`/`batch:resume` 的处理器自己干的活（`main/services/batchSend/host.ts:175-189`），
+ * 渲染层再补一跳就会起出两条泵。
  */
-export function useBatchAction(action: 'start' | 'pause' | 'resume' | 'cancel') {
+export function useBatchAction(
+  action: 'start' | 'pause' | 'resume' | 'cancel'
+): UseMutationResult<BatchProgress | null, Error, number, unknown> {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: (taskId: number) => window.scrm.batch[action](taskId),
-    onSuccess: (_out, taskId) => void qc.invalidateQueries({ queryKey: [...BATCH_KEY, 'task', taskId] })
+    mutationFn: (taskId: number) => batchHost()[action](taskId),
+    onSuccess: (_out, taskId) => {
+      void qc.invalidateQueries({ queryKey: [...BATCH_KEY, 'task', taskId] })
+      void qc.invalidateQueries({ queryKey: [...BATCH_KEY, 'list'] })
+    }
   })
 }
 
 /** 重发：detailIds 省略＝整批（表头那颗），带＝只这一行（行末那颗）。返回复位条数，新状态靠下面的 invalidate 重新 GET。 */
-export function useBatchRetry() {
+export function useBatchRetry(): UseMutationResult<number, Error, RetryInput, unknown> {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ taskId, detailIds }: { taskId: number; detailIds?: number[] }) =>
-      window.scrm.batch.retryFailed(taskId, detailIds),
-    onSuccess: (reset, { taskId }) => {
+    mutationFn: ({ taskId, detailIds }: RetryInput) => batchHost().retryFailed(taskId, detailIds),
+    onSuccess: (_reset, { taskId }) => {
       void qc.invalidateQueries({ queryKey: [...BATCH_KEY, 'task', taskId] })
       void qc.invalidateQueries({ queryKey: [...BATCH_KEY, 'details', taskId] })
     }
   })
 }
 
-export function useBatchRecall() {
+/**
+ * 撤回的逐条成败不在这条 promise 上：真撤的那几行只看 `isRevoked`，结论文案躺在明细的
+ * `recallDetail` 里（撤回结论没有 error 码，R52），所以这里回收明细那一页。
+ * `blocked` 却在 promise 上：被挡下的行后端不写库，`recallDetail` 永远不会有它们，
+ * 这一份 reason 列表是「这几条为什么没撤」的唯一出处（Task 15 的折叠区读它）。
+ */
+export function useBatchRecall(): UseMutationResult<BatchRecallResult, Error, RecallInput, unknown> {
   const qc = useQueryClient()
   return useMutation({
-    mutationFn: ({ taskId, detailIds }: { taskId: number; detailIds: number[] }) =>
-      window.scrm.batch.recall(taskId, detailIds),
+    mutationFn: ({ taskId, detailIds }: RecallInput) => batchHost().recall(taskId, detailIds),
     onSuccess: (_out, v) => void qc.invalidateQueries({ queryKey: [...BATCH_KEY, 'details', v.taskId] })
   })
 }
 
-/** 事件只是加速器：进页面一律 GET 兜底（spec §7），所以这里只顺手并一帧进缓存，不建第二个真值。 */
-export function useBatchLive() {
+/**
+ * 事件只是加速器：进页面一律 GET 兜底（spec §7），所以这里只顺手并一帧进缓存，不建第二个真值。
+ * 并完这一帧就 invalidate 让 GET 覆盖它——`batch:state` 的数字是主进程顺手广播的那一份，
+ * 权威读数永远在 `GET /tasks/{id}`（`shared/batchSend.ts` 的 `BatchStateEvent` 注释同一条口径）。
+ */
+export function useBatchLive(): void {
   const qc = useQueryClient()
   useEffect(() => {
-    return window.scrm.batch.onState((e) => {
+    return window.scrm?.batch.onState((e) => {
       qc.setQueryData<BatchTaskVO>([...BATCH_KEY, 'task', e.taskId], (prev) =>
-        prev ? { ...prev, status: e.status, sentCount: e.sentCount, failCount: e.failCount, totalCount: e.totalCount } : prev
+        prev
+          ? {
+              ...prev,
+              status: e.status,
+              sentCount: e.sentCount,
+              failCount: e.failCount,
+              totalCount: e.totalCount
+            }
+          : prev
       )
       void qc.invalidateQueries({ queryKey: [...BATCH_KEY, 'list'] })
+      void qc.invalidateQueries({ queryKey: [...BATCH_KEY, 'task', e.taskId] })
     })
   }, [qc])
 }
@@ -4235,7 +4305,7 @@ export function recallEligible(task: BatchTask, row: BatchDetailVO): boolean {
 }
 ```
 
-勾选只在 `recallEligible` 的行上可用；「撤回已发」→ `useBatchRecall({taskId, detailIds})`，返回 `{eligible, blocked}` 后 toast「待撤 N 条，M 条不能撤」并把 `blocked` 的 `reason` 逐条列在一个折叠区里。`dryRun` 任务的整排 checkbox 禁用 + 表头一句「演练任务没有真发过」。
+勾选只在 `recallEligible` 的行上可用；「撤回已发」→ `useBatchRecall({taskId, detailIds})`，返回 `{ eligible: number, blocked: BatchRecallBlocked[] }`（Task 7 的 shared 形状：`blocked` 是**带 `reason` 的列表**，不是计数）后 toast「待撤 N 条，M 条不能撤」并把 `blocked[].reason` 逐条列在一个折叠区里。`dryRun` 任务的整排 checkbox 禁用 + 表头一句「演练任务没有真发过」。
 - [ ] **Step 4：typecheck + eslint --quiet + 手工看一眼**（打开一个已跑完的演练任务，确认演练任务的撤回 checkbox 全是禁用且有那句说明）。
 - [ ] **Step 5：提交。** `feat(P7/群发): 任务详情——明细翻页、失败复位与撤回勾选`
 
