@@ -303,11 +303,13 @@ DEAD 档、带那颗 `msgId` 问一次后端（DEAD 档既不回写也不入内�
 **收尾复核**（实测，不采信驱动自己那行 `[还原]`）：驱动打的是 `[还原] 全局档 channel=5｜会话档=原会话档`，
 另用 `tmp/p7f-restorecheck.mjs` 把两档从后端读回来、与它记账的
 `tmp/p7f-domscan-state.json`（`globalDraft` / `convDraft`）逐字段比：`全局档 MATCH`、`会话档 MATCH`，
-现值 `全局 channel=5 sendEnabled=false receiveEnabled=true`、`会话 channel=5 sendEnabled=false
-sendToLang=en receiveEnabled=true receiveToLang=af`，驱动自身退出码 0（`tmp/p7f-run-restore2.log`）。
-唯一留在现场没还原的是**页内**那把 `sendEnabled=true`——它是广播进来的内存态，落库的全局档已经是 `false`，
+**那一跑读回的现值**（只对这次测量负责，不是文档的当前状态）：`全局 channel=5 sendEnabled=false receiveEnabled=true`、
+`会话 channel=5 sendEnabled=false sendToLang=en receiveEnabled=true receiveToLang=af`，驱动自身退出码 0（`tmp/p7f-run-restore2.log`）。
+唯一留在现场没还原的是**页内**那把 `sendEnabled=true`——它是广播进来的内存态，那一跑落库的全局档已是 `false`，
 下一次渲染层重挂载就会回到 `false`（读码：`translationSync.ts:63` 只在挂载时按全局档广播一次）。
 最后把窗口取消置顶（`tmp/p5c-top.ps1 -Untop`），工作树除 `apps/desktop/tsconfig.node.tsbuildinfo` 外干净。
+**时效**：本档同日下午的诊断跑（`tmp/p7f-run-convscan2.log`）从后端读到全局档 `sendEnabled=true`，
+那是上面这次复核**之后**才被改动的，不能反过来当作本节还原没做到的证据。
 
 ---
 
