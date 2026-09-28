@@ -23,6 +23,7 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { LangSelect } from '@/components/translation/LangSelect'
+import { LangWarning } from '@/components/translation/DirectionLangRows'
 import {
   usePutCredential,
   useTestCredential,
@@ -44,7 +45,7 @@ import { GLOBAL_REF } from '@/lib/scopeLabel'
 import {
   TRANSLATION_CHANNELS,
   channelProvider,
-  isSupportedByChannel,
+  langWarnings,
   sourceLanguagesFor,
   targetLanguagesFor
 } from '@/lib/langData'
@@ -469,7 +470,11 @@ function DirectionCard({
 }): React.JSX.Element {
   const sources = sourceLanguagesFor(channel)
   const targets = targetLanguagesFor(channel)
-  const vendor = channelProvider(channel)
+  const warnings = langWarnings(from, to, channel)
+  const warnFor = (side: 'from' | 'to'): string | undefined =>
+    warnings.find((w) => w.side === side)?.text
+  const fromWarn = warnFor('from')
+  const toWarn = warnFor('to')
   return (
     <Card>
       <CardHeader>
@@ -482,19 +487,14 @@ function DirectionCard({
           <div className="flex flex-col gap-1">
             <Label className="text-[11px] text-muted-foreground">源语言</Label>
             <LangSelect value={from} allowAuto options={sources} onChange={onFrom} />
+            {fromWarn && <LangWarning side="from" text={fromWarn} />}
           </div>
           <div className="flex flex-col gap-1">
             <Label className="text-[11px] text-muted-foreground">目标语言</Label>
             <LangSelect value={to} options={targets} onChange={onTo} />
+            {toWarn && <LangWarning side="to" text={toWarn} />}
           </div>
         </div>
-        {!isSupportedByChannel(to, channel) && (
-          <p className="text-[11px] text-amber-600">
-            {vendor
-              ? `该语向超出${vendor === 'baidu' ? '百度' : '腾讯'}支持的语种：译文不会产出，气泡会显示「翻译失败」，且重试无效。`
-              : '该语向超出模拟词典范围，译文会按原文返回并标 partial。'}
-          </p>
-        )}
         {extra}
       </CardContent>
     </Card>

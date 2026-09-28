@@ -115,3 +115,30 @@ export function languageName(code: string): string {
   const lang = byCode.get(code)
   return lang ? `${lang.zh}（${lang.code}）` : code
 }
+
+export type LangWarning = { side: 'from' | 'to'; code: string; text: string }
+
+const VENDOR_ZH: Record<'baidu' | 'tencent', string> = { baidu: '百度', tencent: '腾讯' }
+
+/**
+ * 线路上产不出译文的语种 ⇒ 该警告哪一侧、说什么话。三处宿主（翻译中心两张卡 + 会话档/客户档弹层）
+ * 共用这一份判据与文案，界面才不会出现"同一件事三种说法"（或一处有警示、两处静默）。
+ *
+ * 源侧只有线上线路判：模拟引擎压根不看 `fromLang`（只按目标语查词典），而适配器的 `supports()` 是
+ * `fromOk && LANGS.containsKey(toLang)` —— 百度档下把源语言存成 `af` 会静默永久降级、一句提示都没有。
+ * 源侧的 `''` 与 `'auto'` 都合法（那是厂商自己的检测值）；目标侧的 `''` 不合法（没有线路能产译文）。
+ */
+export function langWarnings(from: string, to: string, channel: string): LangWarning[] {
+  const vendor = channelProvider(channel)
+  const warn = (side: 'from' | 'to', slot: string, code: string): LangWarning => {
+    if (!code) return { side, code, text: `${slot}未选：该线路不会产出译文。` }
+    const subject = `${slot}「${languageName(code)}」`
+    return vendor
+      ? { side, code, text: `${subject}：${VENDOR_ZH[vendor]}不支持，译文不会产出，气泡会显示「翻译失败」，且重试无效。` }
+      : { side, code, text: `${subject}：超出模拟词典范围，译文会按原文返回并标 partial。` }
+  }
+  const out: LangWarning[] = []
+  if (vendor && from && from !== 'auto' && !isSupportedByChannel(from, channel)) out.push(warn('from', '源语言', from))
+  if (!isSupportedByChannel(to, channel)) out.push(warn('to', '目标语', to))
+  return out
+}

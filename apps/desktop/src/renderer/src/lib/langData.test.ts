@@ -10,6 +10,7 @@ import {
   allLanguages,
   ENGINE_LANGUAGES,
   isSupportedByChannel,
+  langWarnings,
   languageName,
   sourceLanguagesFor,
   targetLanguagesFor,
@@ -84,4 +85,40 @@ test('R4 isSupportedByChannel 与下拉同源：提示与兜底项不能各自�
     assert.ok(!isSupportedByChannel('', code), `channel ${code} 把空目标语当成了支持`)
     assert.ok(!isSupportedByChannel('lt', code), `channel ${code} 把 lt 当成了支持`)
   }
+})
+
+/** 抽出到 `langWarnings` 之前的形状：`{side, code, text}`，组件按 side 挂进各自那一列。 */
+test('R4 警示点名是哪一侧：文案与槽位分开，组件不用猜', () => {
+  // 真机复现过的那一格：模拟线下 收 id→lt，坏的是目标语，旧文案横跨两列、读起来像在指源语言。
+  const sim = langWarnings('id', 'lt', '3')
+  assert.equal(sim.length, 1, JSON.stringify(sim))
+  assert.equal(sim[0].side, 'to')
+  assert.match(sim[0].text, /^目标语「立陶宛语（lt）」/)
+  assert.match(sim[0].text, /超出模拟词典范围，译文会按原文返回并标 partial/)
+
+  const none = langWarnings('id', 'zh-CN', '3')
+  assert.deepEqual(none, [], JSON.stringify(none))
+})
+
+test('R4 源语言侧只有线上线路判：模拟引擎压根不看 fromLang（读码 SimulatedTranslationEngine:51/65）', () => {
+  assert.deepEqual(langWarnings('af', 'en', '1'), [], '模拟线不该判源语言')
+  const baidu = langWarnings('af', 'zh-CN', '5')
+  assert.equal(baidu.length, 1, JSON.stringify(baidu))
+  assert.equal(baidu[0].side, 'from')
+  assert.match(baidu[0].text, /^源语言「南非荷兰语（af）」：百度不支持/)
+  // 厂商在发起请求前就拒 ⇒ 降级分支既不回写也不缓存，这句必须说清"重试无效"，不然又是一颗点不亮的按钮。
+  assert.match(baidu[0].text, /译文不会产出/)
+  assert.match(baidu[0].text, /重试无效/)
+})
+
+test('R4 两侧都坏就两条；空与 auto 是合法的源值（厂商自己的检测值）', () => {
+  const both = langWarnings('af', 'lt', '5')
+  assert.deepEqual(both.map((w) => w.side), ['from', 'to'], JSON.stringify(both))
+  for (const src of ['', 'auto']) {
+    assert.deepEqual(langWarnings(src, 'zh-CN', '5'), [], `源语言 ${JSON.stringify(src)} 不该报错`)
+  }
+  // 目标语未选也要判（`supports()` 里 LANGS.containsKey("") 为假），文案要说"未选"而不是一个空书名号。
+  const unchosen = langWarnings('', '', '5')
+  assert.equal(unchosen.length, 1, JSON.stringify(unchosen))
+  assert.match(unchosen[0].text, /^目标语未选/)
 })
