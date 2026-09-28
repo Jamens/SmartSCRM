@@ -2779,7 +2779,7 @@ export class SendLock {
 }
 ```
 
-- [ ] **Step 4：跑 `sendLock.test.ts` 四条全绿**（`sendRegistry.test.ts` 的那两条要到 Step 5b 才写，这一步先不碰），`pnpm run typecheck` 四路干净。
+- [ ] **Step 4：跑 `sendLock.test.ts` 六条全绿**（`sendRegistry.test.ts` 的那两条要到 Step 5b 才写，这一步先不碰），`pnpm run typecheck` 四路干净。
 
 > **队首那一条必须同步起飞**（R45，实施后回写到这里）：`job()` 不能排在 `await` 之后。第四条用例的 `release` 是作业体自己被调用时才捕获到的那个 resolve——先 `await` 就等于让作业晚一个微任务起步，同一个同步段里拿到的还是初始那个空函数，`release()` 按下去谁也不醒，那条用例直接死等。串行性只由 `prev` 那一支负责，排队者照样等在前一环的 `done` 上，第一条用例的 `in:a / out:a / in:b / out:b` 就是它的证人。
 - [ ] **Step 5：`shared/chatTypes.ts` 扩三种形状。**
