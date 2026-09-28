@@ -22,9 +22,13 @@ export function LangSelect({
   allowAuto?: boolean
   onChange: (v: string) => void
 }): React.JSX.Element {
+  const shown = allowAuto && value === '' ? AUTO_SOURCE : value
+  // 下拉收窄后，库里存的历史值（换线路前挑的、或在别的线路上存的）会落在清单外。
+  // 不补这一项，Radix 找不到匹配的 item，触发器就退成占位符——界面在说"没选"，实际选了个不支持的。
+  const unsupported = shown !== '' && shown !== AUTO_SOURCE && !options.some((o) => o.code === shown)
   return (
     <Select
-      value={allowAuto && value === '' ? AUTO_SOURCE : value}
+      value={shown}
       onValueChange={(v) => onChange(v === AUTO_SOURCE ? '' : v)}
     >
       <SelectTrigger className="h-8 w-full text-xs">
@@ -37,6 +41,11 @@ export function LangSelect({
             {languageName(lang.code)}
           </SelectItem>
         ))}
+        {unsupported && (
+          <SelectItem value={shown} data-p7-unsupported="">
+            {languageName(shown)} · 该线路不支持
+          </SelectItem>
+        )}
       </SelectContent>
     </Select>
   )

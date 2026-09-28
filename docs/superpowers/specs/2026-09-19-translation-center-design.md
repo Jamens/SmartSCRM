@@ -24,7 +24,7 @@
 | R1 | **气泡译文按归属选语向**：本端发出的气泡走 `send` 语向，对方发来的气泡走 `receive` 语向；输入框发送前预览同样走 `send` |
 | R2 | 语向、渠道、生效节点一律由**后端按 JWT 定位设置行**解析；页面与注入层都不下发语言参数 |
 | R3 | 缓存单层、按租户隔离，key **不含会话维度** |
-| R4 | 渠道 2（DeepL）的源语言与目标语言是两张不同的候选清单 |
+| R4 | **语种候选按线路收窄**：源/目标下拉只给该线路真能产出译文的语种（见 §5.2）；「自动检测」由控件提供，不占清单。库里存量值落在清单外时，下拉补一项标注「该线路不支持」，只念出它、不改写它 |
 | R5 | 节点 `hk` 仅在"已启用的 receive / send 渠道都为 1"时可选（只支持 Google 线路） |
 | R6 | 自动选优：候选 = 延迟有限 且 兼容；取最小；**当前节点已是最小时保持不变**（滞回，避免来回跳） |
 | R7 | `from == to` 时直接返回原文，且不写缓存 |
@@ -379,7 +379,7 @@ DOM 里只有截断文本。P5 的处理：**行内出现展开控件就跳过�
 ### 5.1 新增 / 改动
 
 ```
-renderer/src/lib/langData.ts             四组语言清单 + 渠道映射 + 名称解析（静态数据）
+renderer/src/lib/langData.ts             线路 → 语种映射 + 码→名字典（静态数据）
 renderer/src/api/translation.ts          类型 + Query hooks
 renderer/src/lib/translationSync.ts      设置开关 → 推送全部视图
 renderer/src/components/ui/switch.tsx    新增（现有 ui/ 无开关；radix-ui 已在依赖里）
@@ -390,21 +390,23 @@ renderer/src/lib/nav.ts + App.tsx        /translation 路由 + 「翻译中心�
 
 ### 5.2 渠道 ↔ 语言清单（R4）
 
-| 渠道 | 源语言候选 | 目标语言候选 |
+| 渠道 | 产出译文的引擎 | 源语言候选 = 目标语言候选 |
 |---|---|---|
-| 1 Google | `allLanguages` | `allLanguages` |
-| 2 DeepL | `deeplSourceLanguages` | `deeplTargetLanguages`（**两张不同清单**） |
-| 3 ChatGPT | `chatGptLanguages` | `chatGptLanguages` |
-| 4 Gemini | `allLanguages` | `allLanguages` |
-| 5 百度 | `allLanguages` | `allLanguages` |
-| 6 有道 | `allLanguages` | `allLanguages` |
-| 7 腾讯 | `allLanguages` | `allLanguages` |
+| 1 Google / 2 DeepL / 3 ChatGPT / 4 Gemini / 6 有道 | 模拟引擎 | `ENGINE_LANGUAGES`（§3.4 的 8 语种） |
+| 5 百度 | 线上适配器 | `BAIDU_LANGUAGES` = `BaiduProvider.LANGS` 的键集 |
+| 7 腾讯 | 线上适配器 | `TENCENT_LANGUAGES` = `TencentProvider.LANGS` 的键集 |
 
-`5` / `6` / `7` 三条是后加的，候选清单一律回落 `allLanguages`（引擎能真正出译文的仍是 §3.4 的 8 语种）；
-渠道与节点的兼容规则不因它们改变：`hk` 仍然只服务 `1 Google`。
+三条线上线路的候选与各自适配器的 `supports()` 逐码相等——**下拉不许宽于引擎的真值**。
+`lib/langData.test.ts` 直接读那两个 Java 源文件取键集作漂移闸：后端加了第 9 个码而前端没跟，测试就红。
 
-四组清单都是 `lib/langData.ts` 的导出常量，纯静态内容（约 100 语言 × 多个语种名列），不入库。
-显示名当前取中文列，缺失回退英文列；其余语种名列一并带上，P14 接 i18n 时按 locale 取列，无需二次整理。
+渠道与节点的兼容规则不因收窄改变：`hk` 仍然只服务 `1 Google`。
+`allLanguages` 从"候选清单"退成**码 → 名字典**：兜底项要念出线路外的存值，列表与徽标也按码取名。
+它的多语种名列（约 100 语言 × 中英文名）是纯静态内容，不入库；显示名取中文列，缺失回退英文列，
+其余语种名列 P14 接 i18n 时按 locale 取列，无需二次整理。
+
+目标语落在线路候选外时，接收/发送两张卡片各显示一句警示，**措辞按线路分叉**：模拟引擎那条说"按原文返回并标
+partial"（R8），线上适配器那条说"译文不会产出、气泡显示翻译失败且重试无效"——适配器在 `supports()` 里就拒，
+降级分支既不回写也不缓存，重试不可能变好。判据与下拉同源（`isSupportedByChannel`），两句不会各说一套。
 
 ### 5.3 布局（宝蓝 + 金色，两栏）
 

@@ -6,7 +6,7 @@ export interface Language {
 
 const L = (code: string, zh: string, en: string): Language => ({ code, zh, en })
 
-/** Full candidate list; shared by the Google and Gemini channels. */
+/** 码 → 名字的字典（线路外的历史存值也要能被念出来），下拉不再从这里取清单。 */
 export const allLanguages: Language[] = [
   L('af', '南非荷兰语', 'Afrikaans'), L('sq', '阿尔巴尼亚语', 'Albanian'), L('am', '阿姆哈拉语', 'Amharic'),
   L('ar', '阿拉伯语', 'Arabic'), L('hy', '亚美尼亚语', 'Armenian'), L('az', '阿塞拜疆语', 'Azerbaijani'),
@@ -52,25 +52,31 @@ function pick(codes: string[]): Language[] {
   return codes.map((code) => byCode.get(code)).filter((lang): lang is Language => !!lang)
 }
 
-/** R4: DeepL offers different source and target sets — `pt`/`nb` in, `pt-BR`/`ar`/`he`/`ms` out. */
-export const deeplSourceLanguages: Language[] = pick([
-  'bg', 'cs', 'da', 'de', 'el', 'en', 'es', 'et', 'fi', 'fr', 'hu', 'id', 'it', 'ja', 'ko',
-  'lt', 'lv', 'nb', 'nl', 'pl', 'pt', 'ro', 'ru', 'sk', 'sl', 'sv', 'tr', 'uk', 'zh-CN'
-])
-
-export const deeplTargetLanguages: Language[] = pick([
-  'ar', 'bg', 'cs', 'da', 'de', 'el', 'en', 'es', 'et', 'fi', 'fr', 'he', 'hu', 'id', 'it',
-  'ja', 'ko', 'lt', 'lv', 'ms', 'nb', 'nl', 'pl', 'pt', 'ro', 'ru', 'sk', 'sl', 'sv', 'tr',
-  'uk', 'zh-CN'
-])
-
-export const chatGptLanguages: Language[] = pick([
-  'ar', 'de', 'en', 'es', 'fr', 'hi', 'id', 'it', 'ja', 'ko', 'ms', 'nl', 'pl', 'pt', 'ru',
-  'th', 'tr', 'uk', 'ur', 'vi', 'zh-CN', 'zh-TW'
-])
-
 /** The eight languages the simulated engine can actually produce (spec §3.4 step 2). */
 export const ENGINE_LANGUAGES = ['zh-CN', 'en', 'vi', 'id', 'lo', 'hi', 'my', 'ms']
+
+/**
+ * 线上两条线路各自适配器认的码，必须与后端 `supports()` 的真值同批改动：
+ * `BaiduProvider.LANGS` / `TencentProvider.LANGS` 的键集。漂移由 `langData.test.ts` 那条
+ * 读 Java 源文件的断言拦下，不靠人对齐两份常量。
+ */
+const BAIDU_LANGUAGES = ['zh-CN', 'en', 'vi', 'id', 'lo', 'hi', 'my', 'ms']
+const TENCENT_LANGUAGES = ['zh-CN', 'en', 'vi', 'id', 'lo', 'hi', 'my', 'ms']
+
+/**
+ * 线路 → 该线路真能产出的目标语码。1/2/3/4/6 都走本地模拟引擎（DeepL、ChatGPT 这些名字只决定
+ * 输出风格，不决定能力），所以它们的清单就是引擎词典的那 8 个；未知线路落到这一档，宁可给窄。
+ * 源语侧不再另立清单：`supports()` 对 from 用的是同一批码，"自动检测"由 `LangSelect` 的 `allowAuto` 提供。
+ */
+const CHANNEL_LANGUAGES: Record<string, string[]> = {
+  '1': ENGINE_LANGUAGES,
+  '2': ENGINE_LANGUAGES,
+  '3': ENGINE_LANGUAGES,
+  '4': ENGINE_LANGUAGES,
+  '5': BAIDU_LANGUAGES,
+  '6': ENGINE_LANGUAGES,
+  '7': TENCENT_LANGUAGES
+}
 
 /** 线路清单。1-4/6 走本地模拟引擎；5=百度、7=腾讯为线上适配器，需配置密钥，
  *  未配置或调用失败时回退模拟引擎并标 degraded（spec §3.4）。 */
@@ -91,16 +97,17 @@ export function channelProvider(channel: string): 'baidu' | 'tencent' | null {
   return null
 }
 
+/** 库里存的值可能落在本线路清单外（历史值或别的线路上存的），兜底项要用它的名字，故仍查全量字典。 */
+export function isSupportedByChannel(code: string, channel: string): boolean {
+  return (CHANNEL_LANGUAGES[channel] ?? ENGINE_LANGUAGES).includes(code)
+}
+
 export function sourceLanguagesFor(channel: string): Language[] {
-  if (channel === '2') return deeplSourceLanguages
-  if (channel === '3') return chatGptLanguages
-  return allLanguages
+  return pick(CHANNEL_LANGUAGES[channel] ?? ENGINE_LANGUAGES)
 }
 
 export function targetLanguagesFor(channel: string): Language[] {
-  if (channel === '2') return deeplTargetLanguages
-  if (channel === '3') return chatGptLanguages
-  return allLanguages
+  return pick(CHANNEL_LANGUAGES[channel] ?? ENGINE_LANGUAGES)
 }
 
 export function languageName(code: string): string {
