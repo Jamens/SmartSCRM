@@ -158,6 +158,58 @@ test('send 命令交给 sendViaWa：回执异步单独一帧，命令回路不�
   })
 })
 
+/** 带 `deleteMessage` 的假 WPP，回执卡在 await 里：证明 recall 支与 send 支同样不排命令回路。 */
+function gatedRecall(): { wpp: unknown; calls: unknown[][]; release: () => void } {
+  let release: () => void = () => undefined
+  const gate = new Promise<void>((r) => {
+    release = r
+  })
+  const calls: unknown[][] = []
+  return {
+    release,
+    calls,
+    wpp: {
+      chat: {
+        list: async () => [],
+        getMessages: async () => [],
+        getActiveChat: () => null,
+        deleteMessage: async (...args: unknown[]) => {
+          calls.push(args)
+          await gate
+          return { isRevoked: true }
+        }
+      },
+      on: () => ({ off: () => undefined })
+    }
+  }
+}
+
+test('recall 命令交给 recallViaWa：回执异步单独一帧，命令回路不被它排住', async (t) => {
+  const { wpp, calls, release } = gatedRecall()
+  const host = fakeHost(wpp)
+  t.after(() => {
+    destroy()
+    delete (globalThis as unknown as { window?: unknown }).window
+  })
+  install(CONFIG)
+  host.out.length = 0 // 只留命令阶段的帧
+  host.deliver({ kind: 'recall', localId: 'R1', chatKey: '861380001001@c.us', msgKey: 'true_861380001001@c.us_K-1_out' })
+  host.deliver({ kind: 'ping' })
+  // 区分性证据：case 'recall' 若漏加，下面两条一条也过不了（ping 会是唯一一帧，calls 为空）；
+  // 若改成 await 再 return，pong 就排不到 recall_result 前面。
+  assert.equal(host.out[0]?.kind, 'pong')
+  assert.equal(host.out.some((f) => f.kind === 'recall_result'), false)
+  release()
+  await idle(0)
+  assert.deepEqual(calls[0], ['861380001001@c.us', 'true_861380001001@c.us_K-1', false, true])
+  assert.deepEqual(host.out.find((f) => f.kind === 'recall_result'), {
+    kind: 'recall_result',
+    localId: 'R1',
+    ok: true,
+    isRevoked: true
+  })
+})
+
 test('WPP.chat 不在时 send 也要有一帧回执：主进程的 invoke 不能白等超时', async (t) => {
   const host = fakeHost({ on: () => ({ off: () => undefined }) }) // 没有 chat 的 WPP
   t.after(() => {

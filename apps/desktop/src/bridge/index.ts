@@ -2,6 +2,7 @@
 import { makeThrottledReporter, onCommand, report } from './host.ts'
 import * as whatsappCollect from './whatsapp/collect.ts'
 import { sendViaWa } from './whatsapp/send.ts'
+import { recallViaWa } from './whatsapp/recall.ts'
 import type { BridgeCommand, BridgeInstallConfig } from '../shared/chatTypes.ts'
 import type { ChatPlatform } from '../shared/chatPlatform.ts'
 import type { CollectCtx, CollectImpl, WppChatApi } from './types.ts'
@@ -72,6 +73,12 @@ export function install(config: BridgeInstallConfig): boolean {
         // 不 await：命令回路是同步的，await 会让后面的 ping 排在这条消息后面。
         void sendViaWa(cmd, wppChat()).then((receipt) => {
           push({ kind: 'send_result', ...receipt })
+        })
+        return
+      case 'recall':
+        // 与 send 同样不 await：命令回路是同步的。
+        void recallViaWa(cmd, wppChat()).then((receipt) => {
+          push({ kind: 'recall_result', ...receipt })
         })
         return
     }
