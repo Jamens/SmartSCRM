@@ -84,6 +84,16 @@ export interface BatchProgress {
   status: BatchTaskStatus
 }
 
+/** 撤回清单里被后端挡下的那一条（后端 `BatchRecallVO.Blocked`）。 */
+export interface BatchRecallBlocked { detailId: number; reason: string }
+
+/**
+ * `batch:recall` 的出参：`eligible` 是条数（真撤的那几行没有回执可等，逐条结论走明细的
+ * `recallDetail`），`blocked` 带着**逐条理由**。理由不能压成一个数：Task 15 的折叠区要点名
+ * "这几条为什么没撤"，而挡下的行后端不写库，界面上除了这一份就再无出处。
+ */
+export interface BatchRecallResult { eligible: number; blocked: BatchRecallBlocked[] }
+
 /**
  * 账号之间并行、账号内串行，所以队列形状 = 按 accountIds 顺序分组、组内 seq 升序。
  * 泵只捡 `pending` 行：进 `sending` 的唯一 arrow 是 `pending → sending`（spec:96），

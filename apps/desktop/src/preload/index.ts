@@ -9,7 +9,7 @@ import type {
 } from '@shared/chatTypes'
 import type { AppSettings, ThemeSnapshot } from '../main/state/settings'
 import type { BadgeEcho } from '@shared/badge'
-import type { BatchProgress, BatchStateEvent } from '@shared/batchSend'
+import type { BatchProgress, BatchRecallResult, BatchStateEvent } from '@shared/batchSend'
 import type { MachineProfile, StorageUsage } from '@shared/machine'
 
 export interface StoredSession {
@@ -161,7 +161,7 @@ const scrm = {
     run: (taskId: number): Promise<{ started: boolean }> => ipcRenderer.invoke('batch:run', taskId),
     retryFailed: (taskId: number, detailIds?: number[]): Promise<number> =>
       ipcRenderer.invoke('batch:retry-failed', taskId, detailIds),
-    recall: (taskId: number, detailIds: number[]): Promise<{ eligible: number; blocked: number }> =>
+    recall: (taskId: number, detailIds: number[]): Promise<BatchRecallResult> =>
       ipcRenderer.invoke('batch:recall', taskId, detailIds),
     onState: (cb: (e: BatchStateEvent) => void): (() => void) => {
       const listener = (_event: IpcRendererEvent, e: BatchStateEvent): void => cb(e)

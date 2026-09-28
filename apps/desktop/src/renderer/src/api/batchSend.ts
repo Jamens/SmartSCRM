@@ -8,7 +8,7 @@ import {
 } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 import type { PageResult } from './customers'
-import type { BatchDetail, BatchProgress, BatchTask } from '@shared/batchSend'
+import type { BatchDetail, BatchProgress, BatchRecallResult, BatchTask } from '@shared/batchSend'
 
 const BATCH_KEY = ['batch'] as const
 
@@ -42,7 +42,6 @@ type PreviewResult = { rows: PreviewRow[]; truncated: boolean }
 /** 重发/撤回的入参：`taskId` 定位任务，`detailIds` 定哪几行（重发省略＝整批）。 */
 type RetryInput = { taskId: number; detailIds?: number[] }
 type RecallInput = { taskId: number; detailIds: number[] }
-type RecallCount = { eligible: number; blocked: number }
 
 /**
  * `window.scrm` 在类型上是可选的（preload 没挂上的浏览器调试档），而群发的运行面只有宿主能给。
@@ -144,10 +143,12 @@ export function useBatchRetry(): UseMutationResult<number, Error, RetryInput, un
 }
 
 /**
- * 撤回的结论不在这条 promise 上：它只有 `eligible/blocked` 两个计数，逐条成败看 `isRevoked`，
- * 失败原因只躺在明细的 `recallDetail` 自由文案里（撤回结论文案没有 error 码），所以这里只回收明细那一页。
+ * 撤回的逐条成败不在这条 promise 上：真撤的那几行只看 `isRevoked`，结论文案躺在明细的
+ * `recallDetail` 里（撤回结论没有 error 码，R52），所以这里回收明细那一页。
+ * `blocked` 却在 promise 上：被挡下的行后端不写库，`recallDetail` 永远不会有它们，
+ * 这一份 reason 列表是「这几条为什么没撤」的唯一出处（Task 15 的折叠区读它）。
  */
-export function useBatchRecall(): UseMutationResult<RecallCount, Error, RecallInput, unknown> {
+export function useBatchRecall(): UseMutationResult<BatchRecallResult, Error, RecallInput, unknown> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ taskId, detailIds }: RecallInput) => batchHost().recall(taskId, detailIds),
