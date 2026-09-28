@@ -3843,7 +3843,18 @@ export function registerBatchIpc(): void {
 ```
 
 - [ ] **Step 2：`main/ipc.ts` 不碰 batch。** 七条 handle 已经在 Step 1b 的 `registerBatchIpc()` 里（由 `startBatchHost()` 调用）——**不要在 `ipc.ts` 再注册一遍**：`ipcMain.handle` 第二次同名会抛 `Attempted to register a second handler`，而那是在应用启动路径上抛的，表现为整个应用起不来。
-- [ ] **Step 3：`main/index.ts` 接线。** `startBatchHost()` 放在 `startMsgBridge()` 之后；`stopBatchHost()` 放进现有退出清理链（与 `stopMsgBridge()` 同一段，`await` 它）。
+- [ ] **Step 3：`main/index.ts` 接线。** `startBatchHost()` 放在 `startMsgBridge()` 之后（`:35` 那一行下面）；`stopBatchHost()` 放进 `before-quit` 那段清理链，写法与 `stopMsgBridge()` 一致用 `void`，**不要 `await`**：
+
+```ts
+  app.on('before-quit', () => {
+    setQuitting(true)
+    void stopMsgBridge()
+    void stopBatchHost()   // 这里不 await：before-quit 不等监听器的返回值，而 stopBatchHost 体内没有异步等待点
+    viewManager.destroyAll()
+  })
+```
+
+  理由写下来免得下次又被"顺手改成 async"：`before-quit` 的回调返回的 Promise Electron 不会等，把监听器改成 `async` 再 `await` 只会让应用先退出、清理后落地，比 `void` 更差；而 `stopBatchHost()` 的函数体本来就是同步的（遍历 `running` 调 `stopEngine`，`stopEngine` 三段全同步：`clearInterval` → `engine.stop()` → `running.delete`），`Promise<void>` 只是给调用方的签名，不是"里面有东西要等"。**`stopEngine` 的 `clearInterval` 因此就是那条泵的终结**——退出时不需要等在途的 `send`，那一条的明细留在 `sending`，由后端 reconcile 判成 `unknown`（spec §5）。
 - [ ] **Step 4：`preload/index.ts` 加 `scrm.batch`。** 形制照现有 `msg: {}` 那一块；shared 类型走 `@shared/*` 别名（读码：`preload/index.ts:11` 的 `import type { ... } from '@shared/badge'` 就是同一别名，renderer 与 preload 两条 tsconfig 都配了 paths，而 unit 那条没有——所以只有 `main/services/**` 的测试要用相对路径）。这里加 `import type { BatchProgress, BatchStateEvent } from '@shared/batchSend'`。`preload/index.d.ts` 不用改：它写的是 `scrm?: ScrmApi`，而 `ScrmApi = typeof scrm`，加进去的 `batch` 自己就流到 `window.scrm.batch` 的类型上。
 
 ```ts
