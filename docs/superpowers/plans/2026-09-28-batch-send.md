@@ -21,7 +21,7 @@
 - **前端命令**：只用 `pnpm`（`pnpm run test:unit` / `pnpm run typecheck` / `pnpm exec eslint`）。
 - **lint 口径**：全仓 lint 不是绿的（格式化器自身崩 + src 既有 error），只按**改动文件**跑 `pnpm exec eslint --quiet <files>` 判定。
 - **typecheck 四路**：`pnpm run typecheck` 必须 node / web / inject / unit 四路全过。
-- **`tsconfig.unit.json` 是逐文件枚举**：新的**纯**主进程模块要显式加进 `include`；任何 `import 'electron'` 的文件**绝不能**加进去（unit 程序不含 electron 依赖）。
+- **`tsconfig.unit.json` 的 `include` 是半枚举**：`src/shared/**` 与 `src/bridge/**` 已经是整目录通配（读码：`include` 头两条），落在这两个目录里的纯模块**不需要**再加 `include`，逐条枚举它们只是空转；`src/main/services/**` 与 `src/renderer/src/lib/**` 才是逐文件枚举，新的**纯**主进程/渲染模块要显式加进去。任何 `import 'electron'` 的文件**绝不能**加进去（unit 程序不含 electron 依赖）。
 - **`erasableSyntaxOnly: true`**：禁用参数属性（TS1294）、禁用 `enum`。字段 + 构造赋值，或用 `as const` 联合类型。
 - **`node --test` 不解析 `@shared/*` 别名**：进入 unit 程序的模块一律用相对路径 + `.ts` 后缀导入。
 - **提交**：一个功能一次提交，前缀 `feat:` / `fix:` / `refa:` / `update:`，主题行后空一行再写正文。**助手不得 push、不得 amend、不得跳 hook**。一个任务一个提交，由验证它的坐席提。
@@ -2073,7 +2073,8 @@ cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 - Create: `apps/desktop/src/shared/batchSend.ts`
 - Create: `apps/desktop/src/shared/batchSend.test.ts`
 - Modify: `apps/desktop/package.json:15`（`test:unit` glob 不变即可覆盖 `src/shared/**`，无需改；只在 Task 9 加 `batchSend` 目录那条 glob）
-- Modify: `apps/desktop/tsconfig.unit.json`（`include` 加这两支）
+- （不改）`apps/desktop/tsconfig.unit.json`：`include` 第一条就是 `src/shared/**/*.ts`（读码），
+  这两支已被覆盖；再逐条枚举一遍是空转。Task 8/9/10/11 才需要动这个文件（`src/main/services/**` 是逐文件枚举）。
 
 **Interfaces:**
 - Consumes: `NormalizedMessage`/`SendReceipt` 之外的东西一律不 import（本文件零依赖，才进得去 unit 程序）。
@@ -2087,6 +2088,12 @@ cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
   - `outcomeStatus(receipt: { ok: boolean; error?: string }): BatchDetailStatus`
   - `FAIL_STREAK_LIMIT = 3`、`REPORT_BACKLOG_CAP = 500`
   - `class ReportBacklog`（`push/drain/size/dropped`）
+  - `interface IntervalConfig` / `type IntervalKind = 'msg'|'chat'`（`pickIntervalSec` 与 Task 11 的节律共用）
+  - `interface BatchProgress`：四个运行端点与 reports 的出参 = 后端 `BatchReportsResultVO` 的四列
+    （`sentCount/failCount/totalCount/status`），**不是**整张任务——整张任务只有 `GET /tasks/{id}` 一条路。
+    preload 与渲染层都要认它，而 preload 不许 import `main/services/**`，所以它住在 shared。
+  - `SETTLED_DETAIL_STATUS: readonly BatchDetailStatus[]`（`success`/`unknown`/`skipped`）：
+    「不再参与执行」的那三个状态只有这一份判据，`buildQueues` 与 Task 13 的状态徽标共用它。
 
 - [ ] **Step 1：写失败的测试** `apps/desktop/src/shared/batchSend.test.ts`：
 
@@ -2096,7 +2103,7 @@ import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
   FAIL_STREAK_LIMIT, REPORT_BACKLOG_CAP, ReportBacklog, buildQueues,
-  outcomeStatus, pickIntervalSec
+  gapKindFor, outcomeStatus, pickIntervalSec
 } from './batchSend.ts'
 import type { BatchDetail, IntervalConfig } from './batchSend.ts'
 
@@ -2113,7 +2120,9 @@ test('buildQueues: 每个账号一条队列，队列内按 seq 升序', () => {
 })
 
 test('buildQueues: 没在 accountIds 里的行不进队列（账号被剔出任务不该照跑）', () => {
-  assert.deepEqual(buildQueues([d(1, 1, 9, 'a')], [1]), [])
+  // .flat()：实现保证「每个账号一条队列」（长度 = accountIds.length），账号下没有可发行时
+  // 拿到的是 [[]] 而不是 []。这里要比的是「没有行进队列」，不是队列条数——条数由上一条钉住。
+  assert.deepEqual(buildQueues([d(1, 1, 9, 'a')], [1]).flat(), [])
 })
 
 test('buildQueues: 终态行不进队列（重跑一个已 done 的任务不该重发成功条目）', () => {
@@ -2151,6 +2160,13 @@ test('ReportBacklog: 溢出丢最旧并计数，drain 保序且清空', () => {
   assert.equal(out[0], 3)
   assert.equal(b.size, 0)
   assert.deepEqual(b.drain(), [])
+})
+
+test('gapKindFor: 同人接续算 msg，换人算 chat；跨账号同 chatKey 必须算换人', () => {
+  const first = d(1, 1, 1, '8613800001001@c.us')
+  assert.equal(gapKindFor(null, first), 'chat')
+  assert.equal(gapKindFor(first, d(2, 2, 1, '8613800001001@c.us')), 'msg')
+  assert.equal(gapKindFor(first, d(3, 3, 2, '8613800001001@c.us')), 'chat')
 })
 
 test('FAIL_STREAK_LIMIT 就是 3（spec §5 的熔断阈值只有一个出处）', () =>
@@ -2298,14 +2314,14 @@ export class ReportBacklog<T> {
 }
 ```
 
-- [ ] **Step 4：把两支加进 `tsconfig.unit.json` 的 `include`**（在 `src/shared/chatKeys.test.ts` 那两行之后加 `"src/shared/batchSend.ts"`、`"src/shared/batchSend.test.ts"`）。
+- [ ] **Step 4：确认 `tsconfig.unit.json` 已覆盖这两支，不要改它。** 读码：`include[0] === "src/shared/**/*.ts"`，`src/shared/batchSend.ts` 与 `batchSend.test.ts` 天然在内。改这个文件是空转，而空转会在后续任务的 diff 里被当成「Task 7 动过 tsconfig」误读。
 - [ ] **Step 5：跑 unit + typecheck。**
 
 ```bash
 cd /d/SmartSCRM/apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run typecheck 2>&1 | tail -8
 ```
 
-期望：`pass 212+8`、`fail 0`；typecheck 四路 0 error。
+期望：`pass 212+9`（9 条 = buildQueues 3 + pickIntervalSec 2 + outcomeStatus 1 + ReportBacklog 1 + gapKindFor 1 + FAIL_STREAK_LIMIT 1）、`fail 0`；typecheck 四路 0 error。
 
 - [ ] **Step 6：提交。** `feat(P7/群发): shared 群发纯模型（队列/节律/熔断阈值/上报积压）`
 
@@ -3722,7 +3738,7 @@ cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.
 cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 ```
 
-期望：unit `pass` = 212 + 8(Task 7) + 5(Task 8) + 4(Task 9) + 4(Task 10) + 8(Task 11) = **241**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
+期望：unit `pass` = 212 + 9(Task 7) + 5(Task 8) + 4(Task 9) + 4(Task 10) + 8(Task 11) = **242**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
 
 - [ ] **Step 2：CDP 演练腿（全程 dryRun，不碰页面）。** 前提：主进程改过，dev 必须已被用户重启过一次（dev watcher 不重载 `src/main`）。先 `powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p5c-top.ps1` 断言 `visibilityState==='visible'`，然后跑 `tmp/p7b-dry-run.mjs`，八条：
 
