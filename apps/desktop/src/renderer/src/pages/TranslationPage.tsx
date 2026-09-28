@@ -42,9 +42,9 @@ import {
 } from '@/api/translation'
 import { GLOBAL_REF } from '@/lib/scopeLabel'
 import {
-  ENGINE_LANGUAGES,
   TRANSLATION_CHANNELS,
   channelProvider,
+  isSupportedByChannel,
   sourceLanguagesFor,
   targetLanguagesFor
 } from '@/lib/langData'
@@ -469,6 +469,7 @@ function DirectionCard({
 }): React.JSX.Element {
   const sources = sourceLanguagesFor(channel)
   const targets = targetLanguagesFor(channel)
+  const vendor = channelProvider(channel)
   return (
     <Card>
       <CardHeader>
@@ -487,9 +488,11 @@ function DirectionCard({
             <LangSelect value={to} options={targets} onChange={onTo} />
           </div>
         </div>
-        {!ENGINE_LANGUAGES.includes(to) && (
+        {!isSupportedByChannel(to, channel) && (
           <p className="text-[11px] text-amber-600">
-            该语向超出模拟词典范围，译文会按原文返回并标 partial。
+            {vendor
+              ? `该语向超出${vendor === 'baidu' ? '百度' : '腾讯'}支持的语种：译文不会产出，气泡会显示「翻译失败」，且重试无效。`
+              : '该语向超出模拟词典范围，译文会按原文返回并标 partial。'}
           </p>
         )}
         {extra}
