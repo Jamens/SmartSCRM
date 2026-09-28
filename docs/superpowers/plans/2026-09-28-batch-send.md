@@ -2104,7 +2104,8 @@ check('#29b 心跳停过阈值后：那一行 sending→unknown(ENGINE_LOST)、�
 ```js
 // 收尾：所有创建的任务逐个 cancel（幂等，已是终态的返回 40902 也无害），只打印返回码。
 // 这里刻意不 assert「cancel 后没有行留在 sending」——本驱动从未报过 sending 行，那条断言恒真；
-// sending 行的结清由 Task 11 的引擎单测（stop → 剩余报 skipped+TASK_HALT）来证。
+// sending 行的结清由 Task 11 的引擎单测来证：每一行投料后必跟一跳终态（`TIMEOUT 落 unknown`
+// 那一格证的正是这个——非 success 的投递不能把行留在 sending 上等天收）。
 const cancelResults = [];
 for (const id of createdTasks) {
   cancelResults.push([id, (await post(`/api/batch-send/tasks/${id}/cancel`)).code]);
@@ -3291,6 +3292,10 @@ const row = (id: number, seq: number, accountId: number, chatKey: string, conten
  * "后端没收下，整批进积压"。回 `null` 的用例照样能看 `calls` 变长，于是"报出去了"这件事
  * 一次都没发生过而没人报警（本计划第一版草稿就写成 `return null`，三处已改）。
  */
+// 返回类型不写在这里：`api` 只以 `as unknown as BatchApi` 进 EngineDeps，显式标一遍会把
+// 12 跳的桩形状钉死、用例里 `api.reports = ...` 那处覆盖反而套不进去。与本目录 batchApi.ts
+// 同一规则（@typescript-eslint/explicit-function-return-type）的仓库惯例处理。
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 function fakeApi() {
   const calls: { items: ReportItem[]; allHalted: boolean }[] = []
   const api = {
@@ -3344,6 +3349,17 @@ test('账号并行、账号内串行：每条明细都被投料一次', async ()
   const items = calls.flatMap((c) => c.items)
   assert.equal(items.length, 6, '每条先 sending 后终态，两跳')
   assert.ok(items.every((i) => typeof i.detailId === 'number'))
+  // 上面那三句只看 `calls` 变没变长，而 `calls` 在 `reports` 返回什么之前就先 push 了。
+  // 少了下面这两句，把 `fakeApi` 的 `reports` 改回 `return null` 时八条用例照样全绿——
+  // 引擎会以为"后端没收下"，把每一跳都塞进积压，于是"报出去了"这个事实一次都没被证过。
+  // 判据落在积压侧：正常路径一条都不该积压，所以 flushBacklog 之后重报数必须是 0。
+  const replayed: ReportItem[] = []
+  api.reports = async (_t: number, batch: ReportItem[]) => {
+    replayed.push(...batch)
+    return { sentCount: batch.length, failCount: 0, totalCount: 20, status: 'running' }
+  }
+  await engine.flushBacklog()
+  assert.equal(replayed.length, 0, '正常路径不该有任何上报落到积压里等重报')
 })
 
 test('同账号串行：一条在飞时不会有第二条从同一账号出去', async () => {
@@ -3397,7 +3413,11 @@ test('连续 3 条失败熔断该账号：只停它，别的账号继续跑完',
   const skipped = calls.flatMap((c) => c.items).filter((i) => i.sendStatus === 'skipped')
   assert.deepEqual(skipped.map((i) => i.detailId), [5])
   assert.equal(skipped[0].errorCode, 'ACCOUNT_HALT')
-  assert.ok(last?.items.some((i) => i.detailId === 4 && i.sendStatus === 'success'))
+  // success 那一跳来自账号 2 的泵；`calls.at(-1)` 是 settle 那批——它按设计 items 恒为 []
+  // （见 engine.ts 里"收尾那一跳只带结论"那条注释），所以"报没报成 success"只能在全部 items 里找，
+  // 而 allHalted 只在 settle 那一批才有真值，两句各看各的，不能都挂在 last 上。
+  assert.ok(calls.flatMap((c) => c.items).some((i) => i.detailId === 4 && i.sendStatus === 'success'),
+    '账号 2 那一条要带着 success 报出去')
   assert.ok(last?.allHalted === false, '还有一个账号跑完了，不是全停')
 })
 
@@ -3407,6 +3427,9 @@ test('全部账号熔断 → 收尾那一跳 allHalted=true（后端据此把 ru
   // 三条都失败才够熔断线：单条失败只算一次失败，不该判成全停。
   await engine.start(task({ accountIds: [1] }), [row(1, 1, 1, 'a'), row(2, 2, 1, 'a', 1), row(3, 3, 1, 'b')])
   assert.equal(calls.at(-1)?.allHalted, true)
+  // 熔断正好落在最后一行，剩余条目是零：那一跳不该发。空 items 是 `settle` 的专用形状
+  // （只带结论、不带明细），多一条就让人分不清"这是收尾结论"还是"给零条报 skipped"。
+  assert.equal(calls.filter((c) => c.items.length === 0).length, 1, '空 items 的跳只允许收尾那一条')
 })
 
 test('TIMEOUT 落 unknown 而不是 failed（重发不可回收，这一行只能人判）', async () => {
@@ -3437,7 +3460,7 @@ test('后端不可达时进积压，恢复后按序重报，不丢结论也不�
 })
 
 test('stop() 之后队列不再投料，剩余 pending 一条都不发', async () => {
-  const { api } = fakeApi()
+  const { calls, api } = fakeApi()
   let n = 0
   const engine = new BatchEngine(fakeDeps(api, {
     dispatch: async () => { n += 1; await new Promise((r) => setTimeout(r, 5)); return { ok: true, msgKey: 'k' } }
@@ -3447,6 +3470,11 @@ test('stop() 之后队列不再投料，剩余 pending 一条都不发', async (
   engine.stop()
   await running
   assert.ok(n <= 1, `stop 之后还在投料：n=${n}`)
+  // 标题里"一条都不发"靠这句才成立：引擎不许替没跑的条目写 skipped。
+  // 这不是抠字眼——`skipped` 是没有回程的终态（retryFailed 只复位 failed、buildQueues 不再捡它），
+  // 暂停要是把剩余条目报成 skipped，resume 就只剩空队列，任务会被判成"发完了"。
+  const skipped = calls.flatMap((c) => c.items).filter((i) => i.sendStatus === 'skipped')
+  assert.deepEqual(skipped.map((i) => i.detailId), [], '暂停要留 pending 给 resume')
 })
 ```
 
@@ -3533,6 +3561,7 @@ export class BatchEngine {
     }
   }
 
+  /** 只停投料：剩余条目由下一轮的 host/后端决定去处，引擎不在这里替它们写结论。 */
   stop(): void {
     this.stopped = true
   }
@@ -3558,14 +3587,19 @@ export class BatchEngine {
     for (let i = 0; i < queue.length; i++) {
       const d = queue[i]
       if (this.stopped) {
-        await this.report(task, [{ detailId: d.id, sendStatus: 'skipped', errorCode: 'TASK_HALT' }], false)
-        continue
+        // 只退出投料，不替没跑的那些写结论。暂停走的就是这一格：剩余条目必须还是 `pending`，
+        // resume 才拾得起来——`skipped` 是没有回程的终态（`retryFailed` 只复位 `failed`，
+        // `buildQueues` 也不再捡它）。取消那一侧的 skipped 由后端 `skipAllPending` 一条 SQL 落，
+        // 写的同样是 `TASK_HALT`，所以"谁停的"这条事实不会因为这里不报而丢掉。
+        break
       }
       const localId = `b${task.id}-${d.id}-${(this.seq += 1)}`
       await this.report(task, [{ detailId: d.id, sendStatus: 'sending', localId }], false)
-      const outcome = await this.deps.dispatch(d, viewId, localId).catch((e: unknown) => {
+      // catch 的返回值要显式标成 SendOutcome：只写 `satisfies` 的话 TS 留的是那个窄字面量类型
+      // （没有 msgKey 那一格），下面 `outcome.msgKey` 就在 union 上取不到属性、typecheck 直接红。
+      const outcome = await this.deps.dispatch(d, viewId, localId).catch((e: unknown): SendOutcome => {
         this.deps.log('dispatch', e)
-        return { ok: false, error: 'SEND_FAILED', detail: e instanceof Error ? e.message : String(e) } satisfies SendOutcome
+        return { ok: false, error: 'SEND_FAILED', detail: e instanceof Error ? e.message : String(e) }
       })
       const sendStatus = outcomeStatus(outcome)
       const item: ReportItem = { detailId: d.id, sendStatus, localId }
@@ -3582,9 +3616,14 @@ export class BatchEngine {
       streak = sendStatus === 'failed' ? streak + 1 : 0
       prev = d
       if (streak >= FAIL_STREAK_LIMIT) {
-        await this.report(task, queue.slice(i + 1).map((r) => ({
-          detailId: r.id, sendStatus: 'skipped', errorCode: 'ACCOUNT_HALT'
-        })), false)
+        const rest = queue.slice(i + 1)
+        // 熔断正好落在最后一行时 rest 是空的：空 items 那一跳是 `settle` 的专用形状（只带结论），
+        // 在这里也发一条会让人分不清"这是收尾结论"还是"给零条明细报 skipped"。
+        if (rest.length) {
+          await this.report(task, rest.map((r) => ({
+            detailId: r.id, sendStatus: 'skipped', errorCode: 'ACCOUNT_HALT'
+          })), false)
+        }
         this.halted.add(accountId)
         return
       }
@@ -3622,7 +3661,7 @@ export class BatchEngine {
 ```
 
 > 三处刻意的选择，实现时不要"顺手改回去"：
-> ① **`skipped` 一律走 `reports` 上报，不调 `skipAllPending`**——判定权在后端，引擎只报事实：逐条报 `sendStatus:'skipped'` 与 `errorCode:'ACCOUNT_HALT'/'TASK_HALT'/'BRIDGE_OFFLINE'`，谁停的、停了几条都留在明细行上。`skipAllPending` 只服务 `cancel`（Task 5 Step 2：一键取消把还剩的 pending 一次扫成 skipped，那时已经没有泵在报事实了），本任务不碰；Task 16 的验收文档要写明这一点。
+> ① **引擎只在"自己判出来的停"那一格报 `skipped`**——熔断报 `ACCOUNT_HALT`、桥离线（`pump` 里 `viewIdOf` 取不到 viewId）整队报 `BRIDGE_OFFLINE`，两条都是逐条 `sendStatus:'skipped'` + `errorCode`，谁停的、停了几条留在明细行上。**暂停不报**：`stop()` 只退出投料，剩余条目必须是 `pending`，`resume` 才拾得起来（`skipped` 是没有回程的终态——`retryFailed` 只复位 `failed`，`buildQueues` 也不再捡它）。**取消也不由引擎报**：那一份 `skipped` 是后端 `skipAllPending` 一条 SQL 落的（Task 5 Step 2，只在 `action=cancel` 分支里跑，写的同样是 `TASK_HALT`），本任务不碰。三个去处各有各自的作者，Task 16 的验收文档要按这个分工写。
 > ② **`report` 失败进积压的是整批**（含 `allHalted`），不是逐条：拆开重报会把"这一批的结论"丢掉。
 > ③ **`allHalted` 那一批天然是最后进积压的**（`settle` 在所有泵之后才跑），所以 `flushBacklog` 不需要为它单独排序。
 
