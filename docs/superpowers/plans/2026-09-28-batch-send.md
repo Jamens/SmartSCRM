@@ -1654,8 +1654,9 @@ cancel 顺带 skipAllPending；reconcile 先判 unknown 再转 paused；allHalte
 // tmp/p7b-batch-contract.mjs — P7/B7 群发后端契约（全程 dryRun=1，不碰页面）
 // 用法：node tmp/p7b-batch-contract.mjs   （后端需已在 :8180 上跑本计划的构建）
 // 退出码：0=30 条 check 全过（27 个编号，#24 三条 / #26 两条 / #5 两支取其一）；1=有断言失败；2=前置条件不满足（没有可用账号/会话，不算产品失败）
-// 收尾：本脚本只创建 dryRun 任务，绝不 start 真发腿；创建的每个 taskId 进 createdTasks，
-//       结尾逐个 POST /cancel（取消会把 pending 置 skipped），并打印取消结果。
+// 收尾：#26b 需要一条 dryRun:false 的任务才有撤回资格，所以本脚本确实会建非演练单——但从不 start 它
+//       （#18~#24 的 start/pause/resume/cancel 链全部打在 dryRun:true 的 T/T2/T3 上）。创建的每个 taskId 进
+//       createdTasks，结尾逐个 POST /cancel（取消会把 pending 置 skipped），并打印取消结果。
 const BASE = 'http://127.0.0.1:8180';
 const rows = [];
 const responses = {};
