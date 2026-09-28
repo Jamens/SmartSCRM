@@ -93,10 +93,11 @@
 
 | 文件 | 改动 |
 |---|---|
-| `apps/desktop/src/shared/chatTypes.ts` | `BridgeCommand` 加 `recall`；`BridgeReport` 加 `recall_result`；`SendReceipt` 加可选 `isRevoked` |
+| `apps/desktop/src/shared/chatTypes.ts` | `BridgeCommand` 加 `recall`；`BridgeReport` 加 `recall_result`；新增 `RecallRequest` / `RecallReceipt`（**`SendReceipt` 不加 `isRevoked`**，R31：撤回的结论另有自己的类型，发送回执里塞一个永远 undefined 的字段只会多一个分支） |
 | `apps/desktop/src/bridge/types.ts` | `WppChatApi` 加 `deleteMessage` |
 | `apps/desktop/src/bridge/index.ts` | 命令 switch 加 `case 'recall'` |
-| `apps/desktop/src/main/services/msgBridge/index.ts` | `sendText`/`recallText` 走锁；`send_result`/`recall_result` 结清 |
+| `apps/desktop/src/main/services/msgBridge/index.ts` | `sendText`/`recallText` 走锁；`send_result`/`recall_result` 结清；掉线与销毁两条出口 |
+| `apps/desktop/src/main/services/msgBridge/sendRegistry.ts` | 新增 `RecallRegistry`（同文件的第二个类；`SendRegistry` 与 `SendReceipt` 一字不动） |
 | `apps/desktop/src/main/ipc.ts` | **不动它**：`batch:*` 七条 handle 全在 `services/batchSend/host.ts` 的 `registerBatchIpc()` 里（Task 12 Step 2 说清为什么不能在这里再注册一遍） |
 | `apps/desktop/src/main/index.ts` | 启动 `startBatchHost()`、退出 `stopBatchHost()` |
 | `apps/desktop/src/preload/index.ts` | `scrm.batch` 面 |
@@ -2629,13 +2630,18 @@ export type BatchApi = ReturnType<typeof createBatchApi>
 **Files:**
 - Create: `apps/desktop/src/main/services/msgBridge/sendLock.ts`
 - Create: `apps/desktop/src/main/services/msgBridge/sendLock.test.ts`
-- Modify: `apps/desktop/src/main/services/msgBridge/index.ts`（`sendText` 包锁；新增 `recallText`）
-- Modify: `apps/desktop/tsconfig.unit.json`
+- Modify: `apps/desktop/src/main/services/msgBridge/sendRegistry.ts`（同文件加第二个类 `RecallRegistry`）
+- Modify: `apps/desktop/src/main/services/msgBridge/sendRegistry.test.ts`（`RecallRegistry` 两条）
+- Modify: `apps/desktop/src/main/services/msgBridge/index.ts`（`sendText` 包锁；新增 `recallText`；`recall_result` 结清；掉线与销毁两条出口）
+- Modify: `apps/desktop/tsconfig.unit.json`（只追加一行 `src/main/services/msgBridge/sendLock.ts`。`sendLock.test.ts` 已被现有的 `src/main/services/msgBridge/*.test.ts` 那一行收进，**不要再登记一次**；`index.ts` 与 `bridgeMount.ts` import electron，永远不进这份 include）
+
+**本任务自带 6 条测试**（sendLock 4 + RecallRegistry 2），unit 期望 `pass` 从 **231 → 237**。
 
 **Interfaces:**
-- Consumes: 无（纯 promise 链工具）。
+- Consumes: 无（纯 promise 链工具）。`sendLock.ts` 与 `RecallRegistry` 都不许 import electron——它们进 `tsconfig.unit.json`，那里跑的是 `node --test`。
 - Produces:
   - `class SendLock { run<T>(viewId: string, job: () => Promise<T>): Promise<T>; pending(viewId?): number; dropView(viewId): void }`
+  - `class RecallRegistry { get size: number; add(localId: string, viewId: string): Promise<RecallReceipt>; settle(receipt: RecallReceipt): boolean; failView(viewId: string, detail?: string): number; dispose(): void }`（`sendRegistry.ts`，默认超时 20 s 与 `SendRegistry` 同形）
   - `msgBridge.recallText(req: RecallRequest): Promise<RecallReceipt>`（新增导出）
   - `RecallRequest = { accountId: number; chatKey: string; msgKey: string; localId: string }`、`RecallReceipt = { localId: string; ok: boolean; isRevoked?: boolean; detail?: string }`（`shared/chatTypes.ts`）
 
@@ -2743,7 +2749,7 @@ export class SendLock {
 }
 ```
 
-- [ ] **Step 4：跑 `sendLock.test.ts` 四条全绿**，`pnpm run typecheck` 四路干净。
+- [ ] **Step 4：跑 `sendLock.test.ts` 四条全绿**（`sendRegistry.test.ts` 的那两条要到 Step 5b 才写，这一步先不碰），`pnpm run typecheck` 四路干净。
 - [ ] **Step 5：`shared/chatTypes.ts` 扩三种形状。**
 
 ```ts
@@ -2772,11 +2778,46 @@ export interface RecallReceipt {
 
 `SendReceipt` 之后另加 `RecallReceipt` 即可，**不改 `SendReceipt` 本身**（撤回结论与发送结论是两件事，混在一个类型里会让 `send_result` 的处理分支多一个永远为 undefined 的字段）。
 
-- [ ] **Step 6：`msgBridge/index.ts` 挂锁并加 `recallText`。** 在模块里建 `const sendLock = new SendLock()`，`sendText` 全体包进锁，`recallText` 同锁同 view：
+- [ ] **Step 5b：`RecallRegistry` 先红**（`sendRegistry.test.ts` 末尾追加两条；这一步之后类还不存在，跑该文件应报 `does not provide an export named 'RecallRegistry'`）：
+
+```ts
+// 追加在 src/main/services/msgBridge/sendRegistry.test.ts 末尾，import 那行加上 RecallRegistry：
+// import { RecallRegistry, SendAttribution, SendRegistry } from './sendRegistry.ts'
+test('RecallRegistry：超时与重复登记都会结掉 invoke，迟到的 ok 不再改口', async () => {
+  const reg = new RecallRegistry(5)
+  const p = reg.add('R1', 'acc-x')
+  assert.deepEqual(await p, { localId: 'R1', ok: false, detail: '>5ms' })
+  assert.equal(reg.settle({ localId: 'R1', ok: true, isRevoked: true }), false)
+  const first = reg.add('R2', 'acc-x')
+  const second = reg.add('R2', 'acc-x')
+  assert.deepEqual(await first, { localId: 'R2', ok: false, detail: 'duplicated localId' })
+  reg.settle({ localId: 'R2', ok: true, isRevoked: true })
+  assert.deepEqual(await second, { localId: 'R2', ok: true, isRevoked: true })
+})
+
+test('RecallRegistry：failView 只结该视图并带 detail，dispose 清空表与定时器', async () => {
+  const reg = new RecallRegistry(1_000)
+  const a = reg.add('R1', 'acc-x')
+  const b = reg.add('R2', 'acc-y')
+  assert.equal(reg.failView('acc-x', '视图已销毁'), 1)
+  assert.deepEqual(await a, { localId: 'R1', ok: false, detail: '视图已销毁' })
+  reg.settle({ localId: 'R2', ok: false, isRevoked: false, detail: 'isRevoked=false' })
+  assert.equal((await b).isRevoked, false)
+  const reg2 = new RecallRegistry(1_000)
+  reg2.add('R3', 'acc-z')
+  reg2.dispose()
+  assert.equal(reg2.size, 0)
+})
+```
+
+- [ ] **Step 6：`msgBridge/index.ts` 挂锁并加 `recallText`。** 在模块里建 `const sendLock = new SendLock()` 与 `const recallRegistry = new RecallRegistry()`，`sendText` 包进锁，`recallText` 同锁同 view：
 
 ```ts
 export async function sendText(req: SendRequest): Promise<SendReceipt> {
   const localId = req.localId
+  // 正文判定留在最前，那是既有 `sendText` 的报错次序：挪到 viewId 之后会让
+  // 「账号没绑视图 + 正文又不合格」这一格从 SEND_FAILED 翻成 BRIDGE_OFFLINE，白改一次语义。
+  if (!isSendable(req)) return { localId, ok: false, error: 'SEND_FAILED', detail: '正文为空或超长' }
   const entry = accountOfId(req.accountId)
   const viewId = entry?.viewId
   // 锁挂在 viewId 上：没有 viewId 就没有"哪条链"，直接按离线返回，不进锁也不排队。
@@ -2786,7 +2827,6 @@ export async function sendText(req: SendRequest): Promise<SendReceipt> {
 
 async function sendTextUnlocked(req: SendRequest, viewId: string): Promise<SendReceipt> {
   const localId = req.localId
-  if (!isSendable(req)) return { localId, ok: false, error: 'SEND_FAILED', detail: '正文为空或超长' }
   const mount = bridgeOf(viewId)
   if (!mount || !mount.ready) return { localId, ok: false, error: 'BRIDGE_OFFLINE', detail: '会话未在线' }
   const wait = registry.add(localId, viewId)
@@ -2798,7 +2838,7 @@ async function sendTextUnlocked(req: SendRequest, viewId: string): Promise<SendR
   })
 }
 
-/** 撤回：localId 由引擎生成，回执走同一条 registry（同一张 Promise 表，两种 kind）。 */
+/** 撤回：localId 由引擎生成，回执走 `recallRegistry` 那张同形但另立的 Promise 表。 */
 export async function recallText(req: RecallRequest): Promise<RecallReceipt> {
   const entry = accountOfId(req.accountId)
   const viewId = entry?.viewId
@@ -2813,18 +2853,87 @@ export async function recallText(req: RecallRequest): Promise<RecallReceipt> {
 }
 ```
 
-`recallRegistry` **不复用 `SendRegistry` 的实例，而是同文件另起一个 30 行的 `RecallRegistry` 类**（字段与 `add/settle/failView/dispose` 同形， receipt 类型换成 `RecallReceipt`）。裁定理由：`SendRegistry` 的超时分支要自己造一条失败回执（`{ localId, ok: false, error: 'TIMEOUT', detail }`），把它泛型化就得允许 `T` 携带 `error: SendError`——那等于把 `SendReceipt` 的类型面放宽给一个永远用不到它的调用方，还会牵动 `sendRegistry.test.ts` 现有 6 条。两个 registry 是为了不动 `SendReceipt`。
+`recallRegistry` **不复用 `SendRegistry` 的实例，而是在 `sendRegistry.ts` 里另起一个 `RecallRegistry` 类**（类放在那个文件而不是 `index.ts`：`index.ts` import electron、进不了 `tsconfig.unit.json`，写在它里面的表就永远没有单测）。裁定理由：`SendRegistry` 的超时分支要自己造一条失败回执（`{ localId, ok: false, error: 'TIMEOUT', detail }`），把它泛型化就得允许 `T` 携带 `error: SendError`——那等于把 `SendReceipt` 的类型面放宽给一个永远用不到它的调用方，还会牵动 `sendRegistry.test.ts` 现有 6 条。两个 registry 是为了不动 `SendReceipt`；这两份表形状相近是有意的，别去抽第三个基类。
 
-同一节里把视图销毁接上（`unmountView(viewId)` 现有实现末尾加两行）：
+`sendRegistry.ts` 里紧接 `SendRegistry` 之后加（`RecallReceipt` 由文件顶部的 `chatTypes.ts` import 带进来）：
 
 ```ts
-  // 锁与两张未决表都要跟着视图走：不摘的话，同一个 viewId 下次重挂会排在一条死链上，
-  // 而撤回那侧会留一个永远等不到回执的 invoke（Task 16 的退出路径检查就看这两行）。
-  sendLock.dropView(viewId)
-  recallRegistry.failView(viewId, '视图已销毁')
+interface PendingRecall {
+  viewId: string
+  resolve: (receipt: RecallReceipt) => void
+  timer: NodeJS.Timeout
+}
+
+/**
+ * localId → 未决撤回。与 `SendRegistry` 分开写的唯一理由是回执类型：`RecallReceipt` 没有
+ * `error: SendError` 那一格（撤回的结论是 `isRevoked`，失败原因只进 `detail`）。
+ * 超时这一支照抄发送侧：页内不回话时 invoke 不能永远挂着。
+ */
+export class RecallRegistry {
+  private readonly table = new Map<string, PendingRecall>()
+  // 同 SendRegistry：`erasableSyntaxOnly` 不许参数属性，写成字段 + 赋值。
+  private readonly timeoutMs: number
+
+  constructor(timeoutMs = 20_000) {
+    this.timeoutMs = timeoutMs
+  }
+
+  get size(): number {
+    return this.table.size
+  }
+
+  add(localId: string, viewId: string): Promise<RecallReceipt> {
+    this.settle({ localId, ok: false, detail: 'duplicated localId' })
+    return new Promise<RecallReceipt>((resolve) => {
+      const timer = setTimeout(() => {
+        this.settle({ localId, ok: false, detail: `>${this.timeoutMs}ms` })
+      }, this.timeoutMs)
+      this.table.set(localId, { viewId, resolve, timer })
+    })
+  }
+
+  /** @returns 命中未决表才 true；迟到或不属于本表的回执由调用方自己处置。 */
+  settle(receipt: RecallReceipt): boolean {
+    const entry = this.table.get(receipt.localId)
+    if (!entry) return false
+    this.table.delete(receipt.localId)
+    clearTimeout(entry.timer)
+    entry.resolve(receipt)
+    return true
+  }
+
+  /** 桥掉线 / 视图销毁：只结这个视图的未决撤回。 */
+  failView(viewId: string, detail?: string): number {
+    const ids = [...this.table.entries()].filter(([, p]) => p.viewId === viewId).map(([id]) => id)
+    for (const id of ids) this.settle({ localId: id, ok: false, detail })
+    return ids.length
+  }
+
+  dispose(): void {
+    for (const entry of this.table.values()) clearTimeout(entry.timer)
+    this.table.clear()
+  }
+}
 ```
 
-（`registry.failView` 那一段现有代码已经在 `unmountView` 里，位置在 `attribution.dropView` 之后；新增这两行紧贴它，不要另找地方。`RecallRegistry.failView(viewId, detail)` 的签名里没有 `SendError` 那格，第二条参数直接是 `detail`。）
+三条出口都要接上，位置各不同（`registry.failView` / `attribution.dropView` 那段既有代码在 `broadcastState()` 的 `retry|offline|destroyed` 分支里，不在 `unmountView` 里——`unmountView` 是先 `mount.dispose()`、由它翻到 `destroyed` 再经 `broadcastState` 结清的）：
+
+```ts
+// ① broadcastState 的那条掉线分支，紧跟在 attribution.dropView(s.viewId) 之后：
+      // 撤回与发送共用这一条掉线出口：桥没了，在途那条 invoke 必须当场拿到 ok:false，
+      // 不能干等自己的 20s 超时（这里的 detail 会原样进后端的 recall_failed）。
+      recallRegistry.failView(s.viewId, s.detail ?? '桥未在线')
+
+// ② unmountView 里，放在 activeChat.delete(viewId) 之后、`if (!mount) return` 之前：
+  // 锁只在真销毁时摘，且不放进 ① 的那条分支——retry/offline 是掉线不是销毁：排队中的 job
+  // 已经抓住了自己的 gate，摘掉 tails 会让下一条与它并发上飞，把归属认领的"同视图同会话同文本
+  // FIFO"判据摊开。放在早退之前：一条从没挂上桥的 viewId 也不该留下尾链。
+  sendLock.dropView(viewId)
+
+// ③ stopMsgBridge 里，紧跟 registry.dispose() 之后：
+  // 撤回表的超时定时器同样没 unref：不 dispose 就是退出路上最多 20s 的挂起。
+  recallRegistry.dispose()
+```
 
 - [ ] **Step 7：`handleBridgeReport` 接 `recall_result`。** 在 `send_result` 那一段之后加：
 
@@ -2836,7 +2945,7 @@ export async function recallText(req: RecallRequest): Promise<RecallReceipt> {
   }
 ```
 
-- [ ] **Step 8：跑 unit + typecheck + 手工回归一次单发**（记录页回复框发一条**演练性质**的检查：只验 `sendText` 仍在锁后返回同形状回执，不真发到外部号码——用现有已采会话里自己的自聊 `@lid`/self 会话即可，且不按回车；若无法在不真发的情况下验证，本步改为「读码 + unit 覆盖」并在验收文档写明这一格未实测）。
+- [ ] **Step 8：跑 unit + typecheck + lint，并用读码复核一次单发链路。** unit 期望 `pass` **237**（231 + 本任务 6）、`fail 0`；`pnpm run typecheck` 四路 0 error；`pnpm exec eslint <改动文件> --quiet` 0 error。**这一步不许真发、也不许真撤回**：`sendText`/`recallText` 一旦通过 CDP 或回复框敲下去就是一条不可回收的外部动作（全站口径，Task 16 才有用户在场放行那一格）。这里的判据改成读码三条，逐条写进报告：① `sendText` 的返回值形状与错误次序未变（`SEND_FAILED` 仍在 `BRIDGE_OFFLINE` 之前）；② 同一 viewId 的两条 job 在锁上严格串行（Step 1 的第一条测试就是它的证人）；③ `recall_result` 只结 `recallRegistry`、`send_result` 只结 `registry`，两张表互不串门。真发那一格在验收文档里标 **待验证**，交给 Task 16。
 - [ ] **Step 9：提交。** `feat(P7/群发): per-view 发送锁挂进 sendText，撤回走同一把锁`
 
 ---
@@ -3860,7 +3969,7 @@ cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.
 cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 ```
 
-期望：unit `pass` = 212 + 10(Task 7) + 9(Task 8) + 4(Task 9) + 4(Task 10) + 8(Task 11) = **247**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
+期望：unit `pass` = 212 + 10(Task 7) + 9(Task 8) + 6(Task 9) + 4(Task 10) + 8(Task 11) = **249**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
 
 - [ ] **Step 2：CDP 演练腿（全程 dryRun，不碰页面）。** 前提：主进程改过，dev 必须已被用户重启过一次（dev watcher 不重载 `src/main`）。先 `powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p5c-top.ps1` 断言 `visibilityState==='visible'`，然后跑 `tmp/p7b-dry-run.mjs`，八条：
 
