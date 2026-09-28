@@ -48,3 +48,25 @@ test('pending 计数含在途那条，dropView 之后新 job 仍能排队', asyn
   lock.dropView('v1')
   assert.equal(await lock.run('v1', async () => 'third'), 'third')
 })
+
+test('作业同步就抛：这一环照样释放，后来的不被一条死尾链卡住', async () => {
+  const lock = new SendLock()
+  // 非 async 的闭包：抛出发生在 await 之前。起飞那一行若排在 try 之外，finally 就不跑，
+  // done 永远没人 resolve——下一条会排在一个死 promise 上，而日志里什么都没有。
+  await assert.rejects(() => lock.run('v1', () => { throw new Error('起飞前就炸') }), /起飞前就炸/)
+  assert.equal(lock.pending('v1'), 0, '抛错那一环的计数要归还')
+  assert.equal(await lock.run('v1', async () => 'ok'), 'ok')
+})
+
+test('排队中被 dropView：两条陆续收尾也不把 pending 减成负数', async () => {
+  const lock = new SendLock()
+  let release = (): void => {}
+  const held = lock.run('v1', () => new Promise<string>((r) => { release = () => r('done') }))
+  const queued = lock.run('v1', async () => 'second')
+  assert.equal(lock.pending('v1'), 2)
+  lock.dropView('v1') // 视图销毁：队列还在飞，两条的 finally 之后才各自收尾
+  release()
+  await Promise.all([held, queued])
+  assert.equal(lock.pending('v1'), 0, '摘掉的 view 不许留下负计数')
+  assert.equal(lock.pending(), 0, '全局求和也不许被负数拖下去')
+})
