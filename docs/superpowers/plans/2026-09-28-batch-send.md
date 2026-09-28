@@ -2072,7 +2072,7 @@ cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 **Files:**
 - Create: `apps/desktop/src/shared/batchSend.ts`
 - Create: `apps/desktop/src/shared/batchSend.test.ts`
-- Modify: `apps/desktop/package.json:15`（`test:unit` glob 不变即可覆盖 `src/shared/**`，无需改；只在 Task 9 加 `batchSend` 目录那条 glob）
+（**不改** `apps/desktop/package.json`：`test:unit` 已有 `"src/shared/**/*.test.ts"`，Task 7 的两支天然覆盖。`batchSend` 目录那条 glob 由 **Task 8** 加——它是该目录第一个测试文件；原先写"Task 9 加"，与 Task 11 的 Files 段互相矛盾，两处都已改口）
 - （不改）`apps/desktop/tsconfig.unit.json`：`include` 第一条就是 `src/shared/**/*.ts`（读码），
   这两支已被覆盖；再逐条枚举一遍是空转。Task 8/9/10/11 才需要动这个文件（`src/main/services/**` 是逐文件枚举）。
 
@@ -2355,6 +2355,7 @@ cd /d/SmartSCRM/apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run ty
 **Files:**
 - Create: `apps/desktop/src/main/services/batchSend/batchApi.ts`
 - Create: `apps/desktop/src/main/services/batchSend/batchApi.test.ts`
+- Modify: `apps/desktop/package.json:15`（`test:unit` 追加 `"src/main/services/batchSend/**/*.test.ts"`——**本任务就是这个目录第一个测试文件**，glob 不在这里加，后面 Task 9/10 每次报的"unit 全绿"都不含刚写的那几条，而漏掉的窗口正好横跨三个任务）
 - Modify: `apps/desktop/tsconfig.unit.json`（include 加这两支：`src/main/services/batchSend/batchApi.ts`、`src/main/services/batchSend/batchApi.test.ts`。**只加这两支**——`src/main/services/**` 是逐文件枚举，而 Task 7 那两支不用再加，`include[0]` 的 `src/shared/**/*.ts` 已经覆盖）
 
 **Interfaces:**
@@ -2556,7 +2557,7 @@ export function createBatchApi(opts: BatchApiOptions) {
 export type BatchApi = ReturnType<typeof createBatchApi>
 ```
 
-- [ ] **Step 4：`tsconfig.unit.json` 的 `include` 追加那两支**（`src/main/services/batchSend/batchApi.ts`、`.../batchApi.test.ts`；`host.ts` 这类 import electron 的绝不能加）。跑 unit + typecheck 全绿。
+- [ ] **Step 4：`tsconfig.unit.json` 的 `include` 追加那两支**（`src/main/services/batchSend/batchApi.ts`、`.../batchApi.test.ts`；`host.ts` 这类 import electron 的绝不能加）。`package.json:15` 的 `test:unit` 追加 `"src/main/services/batchSend/**/*.test.ts"`。跑 unit + typecheck 全绿：期望 `pass` 从 **222 → 229**（212 基线 + Task 7 的 10 + 本任务 7），`fail 0`。
 - [ ] **Step 5：提交。** `feat(P7/群发): 主进程群发十二跳，注入 fetcher 且全部塌成 null`
 
 ## Task 9: per-view 发送锁 + `sendText` / `recallText` 挂锁
@@ -2918,7 +2919,7 @@ export interface WaDeleteResult {
 **Files:**
 - Create: `apps/desktop/src/main/services/batchSend/engine.ts`
 - Create: `apps/desktop/src/main/services/batchSend/engine.test.ts`
-- Modify: `apps/desktop/package.json:15`（`test:unit` glob 追加 `"src/main/services/batchSend/**/*.test.ts"`）
+- Modify: `apps/desktop/package.json:15`（**不改**：那条 `src/main/services/batchSend/**/*.test.ts` glob 已由 Task 8 加过，这里确认在位即可）
 - Modify: `apps/desktop/tsconfig.unit.json`（include 加 `src/main/services/batchSend/engine.ts`、`batchApi.ts`、`*.test.ts`）
 
 **Interfaces:**
@@ -3285,7 +3286,7 @@ export class BatchEngine {
 > ③ **`allHalted` 那一批天然是最后进积压的**（`settle` 在所有泵之后才跑），所以 `flushBacklog` 不需要为它单独排序。
 
 - [ ] **Step 4：跑 8 条全绿。** `pnpm run test:unit 2>&1 | tail -8`。
-- [ ] **Step 5：`package.json` 的 `test:unit` glob 追加** `"src/main/services/batchSend/**/*.test.ts"`；`tsconfig.unit.json` 的 `include` 追加 `src/main/services/batchSend/*.ts`（**只加纯的那些**：`engine.ts`、`batchApi.ts` 与两份 `.test.ts`；`host.ts` 因为 import electron 不加）。
+- [ ] **Step 5：`package.json` 的 `test:unit` 里那条 `"src/main/services/batchSend/**/*.test.ts"` 由 Task 8 加过，这里只确认在位**；`tsconfig.unit.json` 的 `include` 追加 `src/main/services/batchSend/*.ts`（**只加纯的那些**：`engine.ts`、`batchApi.ts` 与两份 `.test.ts`；`host.ts` 因为 import electron 不加）。
 - [ ] **Step 6：`pnpm run typecheck` 四路干净。**
 - [ ] **Step 7：提交。** `feat(P7/群发): 执行环——账号并行、同人串行、3 连失败只熔断一个账号`
 
