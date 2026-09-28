@@ -360,6 +360,7 @@ git commit -m "feat(P7/群发): V11 两张表 + 实体与 Mapper 状态迁移原
 - Produces:
   - `BatchRender.CUSTOMER_TOKEN = "{客户名}"`、`BatchRender.PHONE_TOKEN = "{号码}"`
   - `record BatchRender.Fields(String nickname, String openId, String phone)`
+  - `BatchRender.EMPTY_FIELDS = new Fields(null, null, null)`（Task 4 的 `getOrDefault` 用它兜底）
   - `static String BatchRender.render(String template, Fields fields)`
   - `record BatchExpansion.Recipient(long accountId, String chatKey, Long customerId)`
   - `record BatchExpansion.ExpandedRow(int seq, long accountId, String chatKey, Long customerId, int contentIndex, String body)`
@@ -401,7 +402,7 @@ class BatchRenderTest {
     @Test
     void missingPhoneRendersEmptyAndMissingEverythingIsSafe() {
         assertEquals("[]", BatchRender.render("[{号码}]", new BatchRender.Fields(null, null, null)));
-        assertEquals("[", BatchRender.render("[{客户名}]", new BatchRender.Fields(null, "", null)));
+        assertEquals("[]", BatchRender.render("[{客户名}]", new BatchRender.Fields(null, "", null)));
     }
 
     @Test
