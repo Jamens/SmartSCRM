@@ -7,6 +7,8 @@
     "src/main/services/msgBridge/sendRegistry.ts",
     "src/main/services/msgBridge/msgApi.ts",
     "src/main/services/msgBridge/*.test.ts",
+    "src/main/services/batchSend/batchApi.ts",
+    "src/main/services/batchSend/batchApi.test.ts",
     "src/renderer/src/lib/chatDays.ts",
     "src/renderer/src/lib/chatDays.test.ts",
     "src/renderer/src/lib/sendDraft.ts",
