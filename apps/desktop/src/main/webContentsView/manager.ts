@@ -154,7 +154,9 @@ export class WebContentsViewManager {
     const managed = this.views.get(viewId)
     if (!managed) return
     const win = this.hostWindow()
-    win?.contentView.removeChildView(managed.view)
+    // 宿主窗口可能已经先没了（退出时序里窗口比视图早拆）——那时读 `win.contentView` 直接抛
+    // 「Object has been destroyed」，而拆账与关页面这两步跟窗口死活无关，必须照旧跑完。
+    if (win && !win.isDestroyed()) win.contentView.removeChildView(managed.view)
     this.wcToView.delete(managed.view.webContents.id)
     this.injects.delete(viewId)
     unmountView(viewId)
