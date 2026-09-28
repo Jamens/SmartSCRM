@@ -21,6 +21,8 @@ export interface BatchDetail {
   errorDetail?: string | null
   msgKey?: string | null
   recallStatus: RecallStatus
+  /** 页内撤回四态的逐条结论文案（后端 `recall_detail`）；没撤过就为空。 */
+  recallDetail?: string | null
   /** 后端 VO 的墙钟串（不带偏移），显示走 `chatMs` + `chatClock`；引擎只写不回读，所以可选。 */
   sentAt?: string | null
 }
@@ -46,6 +48,8 @@ export interface BatchTask {
    * 直接 `dayjs(串)` 会在非东八区机器上按浏览器时区偏一次。
    */
   heartbeatAt?: string | null
+  /** 与 `heartbeatAt` 同一口径的墙钟串（后端 `created_at` 原样透传）；列表按它排序展示，解析同样只准走 `chatMs`。 */
+  createdAt?: string | null
 }
 
 export interface IntervalConfig { msgMin: number; msgMax: number; chatMin: number; chatMax: number }
