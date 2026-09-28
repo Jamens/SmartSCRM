@@ -134,7 +134,7 @@ CREATE TABLE `batch_send_detail` (
 | `POST /tasks/{id}/recall-reports` | 撤回结果回报：`[{detailId, recalled, detail}]`；服务端逐条只结 `recall_status='recalling'` 的行，返回结掉的行数（差值即「迟到的那一报」） |
 | `POST /reconcile` | 启动时一次、不带 body：租户从 token 来，故换号驱动即可验到隔离。把陈旧 `running` 任务转 `paused`、其 `sending` 残留明细转 `unknown`（§5 R4 两拍），返回 `{pausedTasks, markedUnknown}`。陈旧判定的 **60 s 阈值由后端定义**（`STALE_SECONDS`），引擎只负责在这条上什么都不传 |
 
-租户闸、参数校验、错误码风格全部沿用既有控制器；越权与跨租户读一律走现有那条 401/403 出口（`401` 无 data 字段这条已知口径不变）。
+租户闸、参数校验、错误码风格全部沿用既有控制器；越权与跨租户读一律走现有那条 401/403 出口（`401` 无 data 字段这条已知口径不变）。八跳 `/tasks/{id}/*`（start/pause/resume/cancel/reports/retry-failed/recall/recall-reports）对不存在或越权的任务 id 全部同一张嘴：业务码 `40404`。`recall-reports` 也在这一条里——它若只靠 SQL 里的租户守卫，错误的 taskId 会回 `settled:0`，与「每一条报都迟到了」在响应体上无法区分，而后者正是 reconcile 要处理的状态。`heartbeat` 是有意的那一支例外，不先查任务：它的 `updated` 本来就是停泵信号，「这一行没在 running」与「这一行不存在」对引擎是同一个决定。
 
 ## 5. 执行环：主进程 `services/batchSend/engine.ts`
 
