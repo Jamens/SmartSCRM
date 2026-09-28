@@ -331,9 +331,12 @@ public class BatchSendService {
      * 逐条结撤回回执，把受影响行数累加返回：只有 recalling 的行结得掉（守卫在 SQL 里），
      * 差值就是「迟到的那一报」。getRecalled() 是包装 Boolean，缺字段读到 null——必须走
      * Boolean.TRUE.equals(...)，直接进条件会 NPE 出 50000，引擎只看得到「这一跳挂了」。
+     * 先 requireOwned：任务不存在时要和其余九跳说同一句话。少了这一闸，错的 taskId 会回
+     * settled:0——那与「每一条报都迟到了」在响应体上一模一样，而后者正是 reconcile 要处理的状态。
      */
     @Transactional
     public int recallReports(long tenantId, long taskId, BatchRecallReportsDTO dto) {
+        requireOwned(tenantId, taskId);
         int settled = 0;
         for (BatchRecallReportItemDTO item : dto.getItems()) {
             settled += detailMapper.applyRecallReport(tenantId, taskId, item.getDetailId(),

@@ -1349,7 +1349,7 @@ git commit -m "feat(P7/群发): 创建即展开与预览复用同一个渲染器
   - `BatchReportsResultVO reports(long tenantId, long taskId, BatchReportsDTO dto)`
   - `Map<String,Object> retryFailed(long tenantId, long taskId, List<Long> detailIds)` → `{reset, status}`（`detailIds` 空＝整批；`status` 是复位后任务态，可能是被唤醒的 `paused`，R11）
   - `BatchRecallVO recall(long tenantId, long taskId, List<Long> detailIds)`
-  - `int recallReports(long tenantId, long taskId, BatchRecallReportsDTO dto)`（返回结掉的行数：只有 `recalling` 的行结得掉，差值就是"迟到的那一报"）
+  - `int recallReports(long tenantId, long taskId, BatchRecallReportsDTO dto)`（先 `requireOwned`，任务不存在回 `40404`；返回结掉的行数：只有 `recalling` 的行结得掉，差值就是"迟到的那一报"）
   - `Map<String,Object> reconcile(long tenantId)` → `{pausedTasks, markedUnknown}`
   - DTO/VO 字段：`BatchReportItemDTO{ @NotNull Long detailId, @Size(max=64) String localId, @NotBlank String sendStatus, @Size(max=32) String errorCode, @Size(max=255) String errorDetail, @Size(max=160) String msgKey, Long sentAtEpochSec }`；`BatchReportsDTO{ @Valid List<BatchReportItemDTO> items, boolean allHalted }`（**items 不加 `@NotEmpty`**：收尾那一跳只带结论不带条目）；`BatchRecallRequestDTO{ @NotEmpty List<Long> detailIds }`；`BatchRecallReportsDTO{ @Valid @NotNull List<BatchRecallReportItemDTO> items }`、`BatchRecallReportItemDTO{ @NotNull Long detailId, @NotNull Boolean recalled, @Size(max=255) String detail }`（这三个字段名就是 Task 8 线上拼的 `{detailId, recalled, detail}`，一个都不能改叫别的：叫 `ok` 的话每一条报都读成 `recalled=undefined → false`，撤**成功**的行会被记成 `recall_failed`，而这是写进库的结论）；`BatchRecallVO{ List<Target> eligible, List<Blocked> rejected }`，`Target(long detailId, long accountId, String chatKey, String msgKey)`、`Blocked(long detailId, String reason)`；`BatchReportsResultVO(int sentCount, int failCount, int totalCount, String status)`。
 
@@ -1531,15 +1531,17 @@ git commit -m "feat(P7/群发): 创建即展开与预览复用同一个渲染器
     @Transactional
     public Map<String, Object> reconcile(long tenantId) {
         LocalDateTime staleBefore = LocalDateTime.now(MsgTimes.CHAT_ZONE).minusSeconds(STALE_SECONDS);
-        int unknown = detailMapper.markStaleSendingUnknown(tenantId, staleBefore);
+        int unknown = taskMapper.markStaleSendingUnknown(tenantId, staleBefore);
         int paused = taskMapper.pauseStaleTasks(tenantId, staleBefore);
         return Map.of("pausedTasks", paused, "markedUnknown", unknown);
     }
 ```
 
-`STALE_SECONDS = 60`（spec §5，定义在后端——就是服务类里一行 `private static final int STALE_SECONDS = 60;`，和 `INSERT_CHUNK` 同一处；引擎只负责在 `POST /tasks/{id}/reconcile` 上什么都不传）。`recall` 里那一趟 `selectList` + `seen` 差集就是"每一条都被交代"的实现：库里没有的 id 进 `blocked`，而不是静默少一条。
+`STALE_SECONDS = 60`（spec §5，定义在后端——就是服务类里一行 `private static final int STALE_SECONDS = 60;`，和 `INSERT_CHUNK` 同一处；引擎只负责在 `POST /tasks/{id}/reconcile` 上什么都不传）。`recall` 里那一趟 `selectList` + `seen` 差集就是「每一条都被交代」的实现：库里没有的 id 进 `blocked`，而不是静默少一条。
 
-`recallReports`：逐条 `applyRecallReport(tenantId, taskId, item.getDetailId(), Boolean.TRUE.equals(item.getRecalled()) ? "recalled" : "recall_failed", item.getDetail())`，把受影响行数累加成返回值即可（守卫在 SQL 里：不是 `recalling` 的行结不掉）。`getRecalled()` 是包装 `Boolean`，必须走 `Boolean.TRUE.equals(...)` 而不是直接进条件——缺字段的那一条报会 NPE，而 NPE 出的是 50000，引擎那边只会看到"这一跳挂了"，看不到是体形状不对。
+`reconcile` 的两跳都打在 `taskMapper` 上——读码：`BatchSendTaskMapper.java:42` 的 `markStaleSendingUnknown` 与 `:48` 的 `pauseStaleTasks`（Task 1 就把这两条放在任务 mapper）。第一跳写的虽是明细行（`UPDATE batch_send_detail d JOIN batch_send_task t ...`），但它的成立条件是「这一行属于一个 running 且心跳陈旧的任务」，谓词横跨两表；`BatchSendDetailMapper` 里没有 `markStaleSendingUnknown`，照字面写 `detailMapper.` 编译不过。
+
+`recallReports`：先 `requireOwned(tenantId, taskId)`（与其余九跳同一张嘴：任务不存在就回 `40404`，而不是回一个看不出所以然的 `settled:0`——错的 taskId 与「每一条报都迟到了」在响应体上本来会一模一样，而后者正是 R4 的 reconcile 要处理的状态）。然后逐条 `applyRecallReport(tenantId, taskId, item.getDetailId(), Boolean.TRUE.equals(item.getRecalled()) ? "recalled" : "recall_failed", item.getDetail())`，把受影响行数累加成返回值（额外守卫在 SQL 里：不是 `recalling` 的行结不掉）。`getRecalled()` 是包装 `Boolean`，必须走 `Boolean.TRUE.equals(...)` 而不是直接进条件——缺字段的那一条报会 NPE，而 NPE 出的是 50000，引擎那边只会看到"这一跳挂了"，看不到是体形状不对。
 
 `BatchRetryDTO` 与 `BatchRecallRequestDTO` 只差一个校验注解，形状照现有 DTO 的形制（`@Data` + 一个字段），**这里不加 `@NotEmpty`**：整批重发的语义就是"什么都不传"，加上它 spec §5 那条 `retry-failed` 原语义（无 body）会被 400 挡掉，而 `recall` 那一条必须有目标、`@NotEmpty` 保留：
 
@@ -1636,7 +1638,7 @@ git commit -m "feat(P7/群发): 运行面端点齐了，状态迁移只有一个
 cancel 顺带 skipAllPending；reconcile 先判 unknown 再转 paused；allHalted 把 running 打成 error。"
 ```
 
-## Task 6: 后端契约驱动 `tmp/p7b-batch-contract.mjs`（26 个编号 / 29 条断言，全程 dryRun）
+## Task 6: 后端契约驱动 `tmp/p7b-batch-contract.mjs`（27 个编号 / 30 条断言，全程 dryRun）
 
 **Files:**
 - Create: `tmp/p7b-batch-contract.mjs`（gitignored，永不进提交）
@@ -1644,14 +1646,14 @@ cancel 顺带 skipAllPending；reconcile 先判 unknown 再转 paused；allHalte
 
 **Interfaces:**
 - Consumes: Task 4/5 的全部端点与错误码。
-- Produces: 一份可重复运行的台账：**26 个编号、一次运行 29 条 `check`**（调用点有 30 个：`#24` 三条、`#26` 两条 `#26a`/`#26b`，而 `#5` 那对 if/else 分支每次只跑一条），终端表格按 `rows.length` 打印 + 退出码。
+- Produces: 一份可重复运行的台账：**27 个编号、一次运行 30 条 `check`**（调用点有 31 个：`#24` 三条、`#26` 两条 `#26a`/`#26b`，而 `#5` 那对 if/else 分支每次只跑一条），终端表格按 `rows.length` 打印 + 退出码。
 
 - [ ] **Step 1：写驱动骨架。** 形制照 `tmp/p6b-scope-contract.mjs`（读码：同一个 `check/req/get/post`、同一种退出码约定）。整文件开头：
 
 ```js
 // tmp/p7b-batch-contract.mjs — P7/B7 群发后端契约（全程 dryRun=1，不碰页面）
 // 用法：node tmp/p7b-batch-contract.mjs   （后端需已在 :8180 上跑本计划的构建）
-// 退出码：0=29 条 check 全过（26 个编号，#24 三条 / #26 两条 / #5 两支取其一）；1=有断言失败；2=前置条件不满足（没有可用账号/会话，不算产品失败）
+// 退出码：0=30 条 check 全过（27 个编号，#24 三条 / #26 两条 / #5 两支取其一）；1=有断言失败；2=前置条件不满足（没有可用账号/会话，不算产品失败）
 // 收尾：本脚本只创建 dryRun 任务，绝不 start 真发腿；创建的每个 taskId 进 createdTasks，
 //       结尾逐个 POST /cancel（取消会把 pending 置 skipped），并打印取消结果。
 const BASE = 'http://127.0.0.1:8180';
@@ -1966,9 +1968,36 @@ check('#26b 非演练 + success → eligible 1 条带 msgKey、recall_status 变
     && rc2.data?.rejected?.length === 3 && dT4b[0]?.recallStatus === 'recalling'
     && dT4b[1]?.recallStatus === 'none',
   'eligible=1/recalling=1', JSON.stringify({ e: rc2.data?.eligible, r: dT4b.map((x) => x.recallStatus) }));
+
+// #27 运行端点对不存在的任务：八跳同一张嘴（业务码 40404），心跳是有意的那一支例外。
+//     recall-reports 是这一条的意义所在——少了 requireOwned 那一闸，它只靠 SQL 里的租户守卫，
+//     错误的 taskId 会回 settled:0，与「每一条报都迟到了」（reconcile 要处理的状态）在响应体上不可区分。
+//     heartbeat 反过来不闸：它的 `updated` 本来就是停泵信号（spec §5），「这一行没在 running」与
+//     「这一行不存在」对引擎是同一个决定，把它改成 40404 只是给每 15 s 一跳加一次读。
+const GHOST = 9000001;
+const ghostCalls = [
+  ['start', {}],
+  ['pause', {}],
+  ['resume', {}],
+  ['cancel', {}],
+  ['reports', { items: [], allHalted: false }],
+  ['retry-failed', {}],
+  ['recall', { detailIds: [1] }],
+  ['recall-reports', { items: [{ detailId: 1, recalled: true }] }],
+];
+const ghostCodes = [];
+for (const [seg, body] of ghostCalls) {
+  const r = await post(`/api/batch-send/tasks/${GHOST}/${seg}`, body);
+  ghostCodes.push(`${seg}=${r.code}`);
+}
+const rGhostHb = await post(`/api/batch-send/tasks/${GHOST}/heartbeat`);
+check('#27 八跳对不存在的任务都回 40404，心跳回 code=0/updated=0',
+  ghostCodes.length === 8 && ghostCodes.every((x) => x.endsWith('=40404'))
+    && rGhostHb.code === 0 && rGhostHb.data?.updated === 0,
+  '8 段全 =40404 + heartbeat updated=0', `${ghostCodes.join(' ')} heartbeat=${rGhostHb.code}/${rGhostHb.data?.updated}`);
 ```
 
-> 编号到 `#26`，其中 `#24` 有三条 `check`（收尾跳 / 单条重发唤醒 / cancelled 不唤醒）、`#26` 有两条（`#26a`/`#26b`），`#5` 写成 if/else 两个调用点（有客户证昵称、无客户只记待验证，每次只跑一支）：台账是 **26 个编号、一次运行 29 条 `check`**，收尾表格按 `rows.length` 打印。
+> 编号到 `#27`，其中 `#24` 有三条 `check`（收尾跳 / 单条重发唤醒 / cancelled 不唤醒）、`#26` 有两条（`#26a`/`#26b`），`#5` 写成 if/else 两个调用点（有客户证昵称、无客户只记待验证，每次只跑一支）：台账是 **27 个编号、一次运行 30 条 `check`**，收尾表格按 `rows.length` 打印。
 
 - [ ] **Step 5：收尾与打印（每条退出路径都还原）。**
 
@@ -1998,7 +2027,7 @@ process.exit(failures ? 1 : 0);
 cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 ```
 
-期望：末行 `29/29 passed`，退出码 0。若前置不足（会话 < 2 条）退出码 2 —— 那是环境不是产品，回来写「待验证」而不是改断言。
+期望：末行 `30/30 passed`，退出码 0。若前置不足（会话 < 2 条）退出码 2 —— 那是环境不是产品，回来写「待验证」而不是改断言。
 
 - [ ] **Step 7：不提交驱动。** `tmp/` 已 gitignore；本任务没有需要提交的源码改动，验证结果写进 Task 16 的验收文档草稿（`docs/notes/` 下一份 P7 群发验证文档，**只在本计划最后一个任务提交它**）。
 
@@ -3659,7 +3688,7 @@ cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.
 cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 ```
 
-期望：unit `pass` = 212 + 8(Task 7) + 5(Task 8) + 4(Task 9) + 4(Task 10) + 8(Task 11) = **241**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `29/29 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
+期望：unit `pass` = 212 + 8(Task 7) + 5(Task 8) + 4(Task 9) + 4(Task 10) + 8(Task 11) = **241**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
 
 - [ ] **Step 2：CDP 演练腿（全程 dryRun，不碰页面）。** 前提：主进程改过，dev 必须已被用户重启过一次（dev watcher 不重载 `src/main`）。先 `powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p5c-top.ps1` 断言 `visibilityState==='visible'`，然后跑 `tmp/p7b-dry-run.mjs`，八条：
 
@@ -3684,7 +3713,7 @@ cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
   1. **真发 1 条**：`dryRun=false`、1 收件人 × 1 内容、`msgMin=3/msgMax=3/chatMin=5/chatMax=5`，收件人**必须是用户当场给出的那一个会话**（不许自己挑），用户点头后点「开始」；跑完读 `msgKey`（不带 `dryrun:` 前缀）与 `sentAt`。
   2. **真撤回 1 次**：对刚那条勾「撤回已发」并提交，读 `recall_status` 与 `recall_detail`；顺手把超出时间窗那一格的失败原文抄回来（spec §11.2 就等这个串）。
   3. 这两格之外**不许真发**：群发的形状决定了"多发一条"不可回收。
-- [ ] **Step 5：验收文档**，四张表：机械验证（Step 1 五个数）、后端契约（29 行逐条 `ok/FAIL` + 期望/实际）、CDP 演练腿（Step 2 八行 + Step 3 那一格重发腿 + 截图名）、真实档（Step 4 两格 + 失败形状原文）。用户那两格没跑就写「待验证（需用户在场）」，**不写"已验证"**。
+- [ ] **Step 5：验收文档**，四张表：机械验证（Step 1 五个数）、后端契约（30 行逐条 `ok/FAIL` + 期望/实际）、CDP 演练腿（Step 2 八行 + Step 3 那一格重发腿 + 截图名）、真实档（Step 4 两格 + 失败形状原文）。用户那两格没跑就写「待验证（需用户在场）」，**不写"已验证"**。
 - [ ] **Step 6：spec 回填。** §11 四条逐条给状态（1 是否真走到对所有人 / 2 抄回的失败形状 / 3 回复框最坏等待 = 读码结论「一条 chat_interval + 在途回执耗时」加实测状态 / 4 演练 200 ms 是否够慢）；§10 补一条「unknown 的人工裁决入口 V1 缺，只有显示」；**§2 状态机补 R11 那两条边**（`done/error → paused` 只由重发走，`cancelled` 没有出边）。
 - [ ] **Step 7：只提交文档三件。**
 
