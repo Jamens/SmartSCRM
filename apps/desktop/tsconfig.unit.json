@@ -4,6 +4,7 @@
     "src/shared/**/*.ts",
     "src/bridge/**/*.ts",
     "src/main/services/msgBridge/collectorHub.ts",
+    "src/main/services/msgBridge/sendLock.ts",
     "src/main/services/msgBridge/sendRegistry.ts",
     "src/main/services/msgBridge/msgApi.ts",
     "src/main/services/msgBridge/*.test.ts",

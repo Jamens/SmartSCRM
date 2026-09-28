@@ -10,6 +10,8 @@ import type {
   BridgeReport,
   BridgeState,
   LiveFrame,
+  RecallReceipt,
+  RecallRequest,
   SendReceipt,
   SendRequest,
   StatusFrame
@@ -19,6 +21,8 @@ import { BridgeMount } from './bridgeMount'
 import { CollectorHub } from './collectorHub'
 import { createMsgApi, isSendable } from './msgApi'
 import { SendAttribution, SendRegistry } from './sendRegistry'
+import { RecallRegistry } from './sendRegistry'
+import { SendLock } from './sendLock'
 
 /** spec §4 的 msgHistoryLimit：每会话补底条数。 */
 export const HISTORY_LIMIT_DEFAULT = 200
@@ -55,6 +59,8 @@ let refreshTimer: NodeJS.Timeout | null = null
 /** invoke 的 Promise 表（localId → 未决），与 `SendAttribution`（数据行归属）各管一件事。 */
 const registry = new SendRegistry()
 const attribution = new SendAttribution()
+const sendLock = new SendLock()
+const recallRegistry = new RecallRegistry()
 
 function broadcastState(): void {
   const states = bridgeStates()
@@ -64,6 +70,9 @@ function broadcastState(): void {
     if (s.phase === 'retry' || s.phase === 'offline' || s.phase === 'destroyed') {
       const n = registry.failView(s.viewId, 'BRIDGE_OFFLINE', s.detail ?? '桥未在线')
       attribution.dropView(s.viewId)
+      // 撤回与发送共用这一条掉线出口：桥没了，在途那条 invoke 必须当场拿到 ok:false，
+      // 不能干等自己的 20s 超时（这里的 detail 会原样进后端的 recall_failed）。
+      recallRegistry.failView(s.viewId, s.detail ?? '桥未在线')
       if (n > 0) console.log(`[msgBridge] 结清未决发送 ${n} 条 view=${s.viewId}`)
     }
   }
@@ -229,6 +238,11 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
     }
     return
   }
+  if (report.kind === 'recall_result') {
+    // 这一帧的字段与 RecallReceipt 逐字一致（Step 5 就是这么定义的），不需要转手。
+    recallRegistry.settle(report)
+    return
+  }
   if (report.kind === 'ack') {
     // ack 走自己那份形状（`StatusFrame`）与自己那条通道（`msg:status`），不拼成 `NormalizedMessage`
     // 广播 `msg:live`：这帧没有真的 body / direction / source，而渲染层按 msgKey 合并时是逐字段
@@ -328,20 +342,40 @@ export function bridgeOf(viewId: string): BridgeMount | null {
 /** 渲染层的唯一发送入口：localId 由渲染层生成，主进程只登记不发明。 */
 export async function sendText(req: SendRequest): Promise<SendReceipt> {
   const localId = req.localId
+  // 正文判定留在最前，那是既有 `sendText` 的报错次序：挪到 viewId 之后会让
+  // 「账号没绑视图 + 正文又不合格」这一格从 SEND_FAILED 翻成 BRIDGE_OFFLINE，白改一次语义。
   if (!isSendable(req)) return { localId, ok: false, error: 'SEND_FAILED', detail: '正文为空或超长' }
   const entry = accountOfId(req.accountId)
   const viewId = entry?.viewId
+  // 锁挂在 viewId 上：没有 viewId 就没有"哪条链"，直接按离线返回，不进锁也不排队。
   if (!viewId) return { localId, ok: false, error: 'BRIDGE_OFFLINE', detail: '账号没有绑定视图' }
+  return sendLock.run(viewId, () => sendTextUnlocked(req, viewId))
+}
+
+async function sendTextUnlocked(req: SendRequest, viewId: string): Promise<SendReceipt> {
+  const localId = req.localId
   const mount = bridgeOf(viewId)
   if (!mount || !mount.ready) return { localId, ok: false, error: 'BRIDGE_OFFLINE', detail: '会话未在线' }
   const wait = registry.add(localId, viewId)
   attribution.claim(viewId, localId, req.chatKey, req.text)
   mount.push({ kind: 'send', localId, chatKey: req.chatKey, text: req.text })
-  // 超时（TIMEOUT）只在这条 Promise 上暴露，不会变成页内回执：必须在这里 abandon，
-  // 否则同会话随后一条同文本的原生消息会被这条已经放弃的 intent 认领成 app_send。
   return wait.then((receipt) => {
     if (!receipt.ok) attribution.abandon(localId)
     return receipt
+  })
+}
+
+/** 撤回：localId 由引擎生成，回执走 `recallRegistry` 那张同形但另立的 Promise 表。 */
+export async function recallText(req: RecallRequest): Promise<RecallReceipt> {
+  const entry = accountOfId(req.accountId)
+  const viewId = entry?.viewId
+  if (!viewId) return { localId: req.localId, ok: false, detail: '账号没有绑定视图' }
+  return sendLock.run(viewId, async () => {
+    const mount = bridgeOf(viewId)
+    if (!mount || !mount.ready) return { localId: req.localId, ok: false, detail: '会话未在线' }
+    const wait = recallRegistry.add(req.localId, viewId)
+    mount.push({ kind: 'recall', localId: req.localId, chatKey: req.chatKey, msgKey: req.msgKey })
+    return wait
   })
 }
 
@@ -363,6 +397,10 @@ export function unmountView(viewId: string): void {
   // 清 map 不依赖"这条视图曾经挂上过桥"：mount 不在也要把活动会话抹掉，
   // 否则同一 viewId 重挂时，上一次的会话会先被广播当成当前值。
   activeChat.delete(viewId)
+  // 锁只在真销毁时摘，且不放进 ① 的那条分支——retry/offline 是掉线不是销毁：排队中的 job
+  // 已经抓住了自己的 gate，摘掉 tails 会让下一条与它并发上飞，把归属认领的"同视图同会话同文本
+  // FIFO"判据摊开。放在早退之前：一条从没挂上桥的 viewId 也不该留下尾链。
+  sendLock.dropView(viewId)
   if (!mount) return
   mount.dispose()
   mounts.delete(viewId)
@@ -381,6 +419,8 @@ export async function stopMsgBridge(): Promise<void> {
   refreshTimer = null
   // 未决发送的超时定时器没有 unref：不 dispose 就是退出路上最多 20s 的挂起。
   registry.dispose()
+  // 撤回表的超时定时器同样没 unref：不 dispose 就是退出路上最多 20s 的挂起。
+  recallRegistry.dispose()
   for (const mount of mounts.values()) mount.dispose()
   mounts.clear()
   activeChat.clear()
