@@ -58,6 +58,41 @@ public final class BatchRules {
         return out;
     }
 
+    /**
+     * 渲染后再量一遍（R35）：上限 5000 量的是**要发出去的那串字**，不是向导里的模板。
+     * 模板 4900 字加上填进来的昵称就过 5000，而 {@code isSendable} 会在执行环里把这一行判成失败——
+     * 那一格最晚要在创建时点名，否则用户看到的形状是「任务建好了，跑出一条 unknown」。
+     * 只点名前三行的 seq、同时给出总数：2 万行全点名会把 message 撑成一坨。
+     */
+    public static List<String> renderedViolations(List<BatchExpansion.ExpandedRow> rows) {
+        List<String> out = new ArrayList<>();
+        if (rows == null) {
+            return out;
+        }
+        List<String> blank = new ArrayList<>();
+        List<String> tooLong = new ArrayList<>();
+        for (BatchExpansion.ExpandedRow r : rows) {
+            String body = r.body();
+            if (body == null || body.isBlank()) {
+                blank.add(String.valueOf(r.seq()));
+            } else if (body.length() > MAX_BODY) {
+                tooLong.add(String.valueOf(r.seq()));
+            }
+        }
+        if (!blank.isEmpty()) {
+            out.add("渲染后有 " + blank.size() + " 行正文是空的（seq " + firstThreeSeq(blank) + "）");
+        }
+        if (!tooLong.isEmpty()) {
+            out.add("渲染后有 " + tooLong.size() + " 行正文超过 " + MAX_BODY + " 字（seq "
+                    + firstThreeSeq(tooLong) + "）");
+        }
+        return out;
+    }
+
+    private static String firstThreeSeq(List<String> seqs) {
+        return String.join("、", seqs.subList(0, Math.min(3, seqs.size())));
+    }
+
     public static List<String> intervalViolations(int msgMin, int msgMax, int chatMin, int chatMax,
                                                  boolean dryRun) {
         List<String> out = new ArrayList<>();
