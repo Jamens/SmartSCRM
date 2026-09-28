@@ -71,8 +71,10 @@ function broadcastState(): void {
       attribution.dropView(s.viewId)
       // 撤回与发送共用这一条掉线出口：桥没了，在途那条 invoke 必须当场拿到 ok:false，
       // 不能干等自己的 20s 超时（这里的 detail 会原样进后端的 recall_failed）。
-      recallRegistry.failView(s.viewId, s.detail ?? '桥未在线')
+      const m = recallRegistry.failView(s.viewId, s.detail ?? '桥未在线')
       if (n > 0) console.log(`[msgBridge] 结清未决发送 ${n} 条 view=${s.viewId}`)
+      // 页内那条 deleteMessage 可能其实成功了，只是回执赶不上这张表——这条日志是唯一能看到那一格的痕迹。
+      if (m > 0) console.log(`[msgBridge] 结清未决撤回 ${m} 条 view=${s.viewId}`)
     }
   }
   // 与 `broadcastTheme`/`broadcastSettings` 同一条口径：`getMainWindow()` 可能给回一枚已销毁的窗口，
@@ -239,7 +241,11 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
   }
   if (report.kind === 'recall_result') {
     // 这一帧的字段与 RecallReceipt 逐字一致（Step 5 就是这么定义的），不需要转手。
-    recallRegistry.settle(report)
+    // false 意味着表里已经没有这一格：要么 20s 超时先判了，要么掉线那一刻被 failView 结掉了。
+    // 撤回这一侧没有 attribution 那样的第二证人，"答晚了"与"没答"只差这一行日志，不能不放。
+    if (!recallRegistry.settle(report)) {
+      console.log(`[msgBridge] 撤回回执无人认领（迟到或已结）localId=${report.localId}`)
+    }
     return
   }
   if (report.kind === 'ack') {

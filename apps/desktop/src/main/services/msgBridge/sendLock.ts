@@ -27,11 +27,17 @@ export class SendLock {
     this.tails.set(viewId, done)
     // 队首（prev 为 undefined）直接同步启动 job，保证外部在同一个同步段就能拿到 promise resolve；
     // 排队时等 prev 兑现再启动——这才是串行的真正来源。
-    const result = prev ? prev.catch(() => undefined).then(job) : job()
+    // 起飞那一行必须留在 try 里：一个同步就抛的作业（非 async 的闭包）要是逃在 try 之外，
+    // finally 就不会跑，这一环的 done 永远没人 resolve，该 view 之后每一条都排在一个死 promise 上。
     try {
+      const result = prev ? prev.catch(() => undefined).then(job) : job()
       return await result
     } finally {
-      this.count.set(viewId, (this.count.get(viewId) ?? 1) - 1)
+      // 归零就删键，不写 0：dropView 已经把这个 view 摘掉时，`?? 1` 那一格会把计数写回表里，
+      // 后面排队的那一环再减一次就成了负数，而 pending() 是全局求和的。
+      const next = (this.count.get(viewId) ?? 1) - 1
+      if (next > 0) this.count.set(viewId, next)
+      else this.count.delete(viewId)
       release()
       if (this.tails.get(viewId) === done) this.tails.delete(viewId)
     }
