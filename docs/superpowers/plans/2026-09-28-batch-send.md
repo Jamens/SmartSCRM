@@ -1156,9 +1156,9 @@ public class BatchSendService {
     /**
      * 两个变量的取值来源（R9）：有客户用客户档案；没客户落到会话标题与 chat_key 本地段。
      * 一次性批量查客户，绝不在循环里 selectById —— 1000 个收件人会打出 1000 条 SQL。
-     * 这批 id 来自会话行，带 `tenant_id` 闸是照仓库既有形制（读码：`CustomerService.java:78`、
-     * `MessageQueryService.java:81` 的每一条 by-id 客户读都先 eq 租户）：错链的那一行会把
-     * 别人的昵称/号码渲染进 `body`，而 `body` 是要发出去的。
+     * 这批 id 来自会话行，带 `tenant_id` 闸是照仓库既有形制（读码：每一条 by-id 的客户读都先 eq 租户
+     * ——`MessageQueryService.java:376` 的 selectCount、`TranslationService.java:153` 的 selectOne）：
+     * 错链的那一行会把别人的昵称/号码渲染进 `body`，而 `body` 是要发出去的。
      */
     private Map<String, BatchRender.Fields> resolveFields(long tenantId,
                                                           Map<String, ChatConversation> convIndex,
@@ -1246,7 +1246,7 @@ public class BatchSendService {
 
 `pageTasks` / `task` / `pageDetails`：`LambdaQueryWrapper` 加 `eq(tenantId)` + 可选 `eq(status)` / `eq(sendStatus)` / `eq(recallStatus)`，`orderByAsc(BatchSendDetail::getSeq)`（明细）/ `orderByDesc(BatchSendTask::getId)`（任务列表），分页用现有 `PageResult.of(records, total, page, pageSize)`。`requireOwned` 用 `LambdaQueryWrapper` 按 `tenantId + id` 取，取不到 → `BizException(40404, "任务不存在")`。
 
-**每页条数：入参叫 `size`，出参叫 `pageSize`，两个方向两套名。** 入参照 spec §4 的端点表（`?page=&size=`）与既有 `ConversationController.java:36`、`MessageController.java:54`、`CustomerController.java:65` 的同形写法（`AudienceController.java:47` 的 `pageSize` 是仓库里唯一的例外，别照它）；出参照 `common/PageResult.java` 的 record 组件名 `pageSize`，那是响应体字段，不是查询参数。Task 6 的契约腿、Task 8 的 query 串、Task 13 的两个 hook 一律拼 `size=`。拼成 `pageSize=` 不会报错——Spring 只是不绑定，然后静默回到默认页大小，断言看起来"过了"其实测的是默认值。
+**每页条数：入参叫 `size`，出参叫 `pageSize`，两个方向两套名。** 入参的名以 spec §4 的端点表为准（`?page=&size=`）。仓库里"每页条数"这个入参本来就有两派写法：`ConversationController.java:36`、`MessageController.java:54`、`CustomerController.java:65` 收 `size`（那三处是游标 + `size`，没有 `page`），`AudienceController.java:47` 与 `CustomerController.java:45`（列表分页那一跳）收 `pageSize`。群发这一片统一用 `size`，跟的是 §4 那张表，不是跟某一处旧代码；出参照 `common/PageResult.java` 的 record 组件名 `pageSize`，那是响应体字段、不是查询参数。Task 6 的契约腿、Task 8 的 query 串、Task 13 的两个 hook 一律拼 `size=`。拼成 `pageSize=` 不会报错——Spring 只是不绑定，然后静默回到默认页大小，断言看起来"过了"其实测的是默认值（实测：`tasks?page=1&size=1` 回显 `pageSize:1`，`tasks?page=1&pageSize=1` 回显 `pageSize:20`）。
 
 实体 → VO 只有这一份映射，Task 5 的 `resultOf` 与三个读端点都调它（JSON 列在这里拆，别的地方拿到的一直是 `List`）：
 
@@ -1351,7 +1351,7 @@ git commit -m "feat(P7/群发): 创建即展开与预览复用同一个渲染器
   - `BatchRecallVO recall(long tenantId, long taskId, List<Long> detailIds)`
   - `int recallReports(long tenantId, long taskId, BatchRecallReportsDTO dto)`（返回结掉的行数：只有 `recalling` 的行结得掉，差值就是"迟到的那一报"）
   - `Map<String,Object> reconcile(long tenantId)` → `{pausedTasks, markedUnknown}`
-  - DTO/VO 字段：`BatchReportItemDTO{ @NotNull Long detailId, @Size(max=64) String localId, @NotBlank String sendStatus, @Size(max=32) String errorCode, @Size(max=255) String errorDetail, @Size(max=160) String msgKey, Long sentAtEpochSec }`；`BatchReportsDTO{ @Valid List<BatchReportItemDTO> items, boolean allHalted }`（**items 不加 `@NotEmpty`**：收尾那一跳只带结论不带条目）；`BatchRecallRequestDTO{ @NotEmpty List<Long> detailIds }`；`BatchRecallVO{ List<Target> eligible, List<Blocked> rejected }`，`Target(long detailId, long accountId, String chatKey, String msgKey)`、`Blocked(long detailId, String reason)`；`BatchReportsResultVO(int sentCount, int failCount, int totalCount, String status)`。
+  - DTO/VO 字段：`BatchReportItemDTO{ @NotNull Long detailId, @Size(max=64) String localId, @NotBlank String sendStatus, @Size(max=32) String errorCode, @Size(max=255) String errorDetail, @Size(max=160) String msgKey, Long sentAtEpochSec }`；`BatchReportsDTO{ @Valid List<BatchReportItemDTO> items, boolean allHalted }`（**items 不加 `@NotEmpty`**：收尾那一跳只带结论不带条目）；`BatchRecallRequestDTO{ @NotEmpty List<Long> detailIds }`；`BatchRecallReportsDTO{ @Valid @NotNull List<BatchRecallReportItemDTO> items }`、`BatchRecallReportItemDTO{ @NotNull Long detailId, @NotNull Boolean recalled, @Size(max=255) String detail }`（这三个字段名就是 Task 8 线上拼的 `{detailId, recalled, detail}`，一个都不能改叫别的：叫 `ok` 的话每一条报都读成 `recalled=undefined → false`，撤**成功**的行会被记成 `recall_failed`，而这是写进库的结论）；`BatchRecallVO{ List<Target> eligible, List<Blocked> rejected }`，`Target(long detailId, long accountId, String chatKey, String msgKey)`、`Blocked(long detailId, String reason)`；`BatchReportsResultVO(int sentCount, int failCount, int totalCount, String status)`。
 
 - [ ] **Step 1：状态迁移一个口。**
 
@@ -1372,11 +1372,11 @@ git commit -m "feat(P7/群发): 创建即展开与预览复用同一个渲染器
         List<String> sources = SOURCES_OF.getOrDefault(action, List.of());
         if (to == null || !sources.contains(task.getStatus()) || !BatchStatus.canMove(task.getStatus(), to)) {
             throw new BizException(40902,
-                    "当前状态 " + task.getStatus() + " 不能 " + action, 409);
+                    "当前状态 " + task.getStatus() + " 不能 " + action, HttpStatus.CONFLICT);
         }
         // 0 行 = 有人先我一步搬走了它（两个窗口同时点「继续」）。
         if (taskMapper.moveTo(tenantId, taskId, task.getStatus(), to) == 0) {
-            throw new BizException(40902, "任务状态已被并发改变，请刷新后重试", 409);
+            throw new BizException(40902, "任务状态已被并发改变，请刷新后重试", HttpStatus.CONFLICT);
         }
         if ("cancel".equals(action)) {
             detailMapper.skipAllPending(tenantId, taskId);
@@ -1386,6 +1386,8 @@ git commit -m "feat(P7/群发): 创建即展开与预览复用同一个渲染器
 ```
 
 > `SOURCES_OF.get("cancel")` 里没有终态：终态不可再 `cancel`（spec §2「done/error/cancelled 不可再 start」，取消同理），且 `BatchStatus.canMove` 会再挡一次。两张表都判，是因为两张表管的是不同的事——「这个动作允许从哪来」与「这条边在状态机上合不合法」。
+
+> `BizException` 的第三个参数是 `org.springframework.http.HttpStatus` 枚举，不是 int（读码：`common/BizException.java:14`；`GlobalExceptionHandler.java:12-14` 把它同时摊成 HTTP 状态与信封里的业务码）。写 `409` 编译不过，要 `HttpStatus.CONFLICT` 并加 import。既有 `40901` 那类走的是两参构造（默认 400），群发的迁移冲突单独特意给 409：渲染层的按钮态与后端裁决要能对上。
 
 - [ ] **Step 2：心跳与上报。**
 
@@ -1535,9 +1537,9 @@ git commit -m "feat(P7/群发): 创建即展开与预览复用同一个渲染器
     }
 ```
 
-`STALE_SECONDS = 60`（spec §5，定义在后端，引擎只负责在 `POST /tasks/{id}/reconcile` 上什么都不传）。`recall` 里那一趟 `selectList` + `seen` 差集就是"每一条都被交代"的实现：库里没有的 id 进 `blocked`，而不是静默少一条。
+`STALE_SECONDS = 60`（spec §5，定义在后端——就是服务类里一行 `private static final int STALE_SECONDS = 60;`，和 `INSERT_CHUNK` 同一处；引擎只负责在 `POST /tasks/{id}/reconcile` 上什么都不传）。`recall` 里那一趟 `selectList` + `seen` 差集就是"每一条都被交代"的实现：库里没有的 id 进 `blocked`，而不是静默少一条。
 
-`recallReports`：逐条 `applyRecallReport(tenantId, taskId, detailId, recalled ? "recalled" : "recall_failed", detail)`，返回受影响行数总和即可（守卫在 SQL 里：不是 `recalling` 的行结不掉）。
+`recallReports`：逐条 `applyRecallReport(tenantId, taskId, item.getDetailId(), Boolean.TRUE.equals(item.getRecalled()) ? "recalled" : "recall_failed", item.getDetail())`，把受影响行数累加成返回值即可（守卫在 SQL 里：不是 `recalling` 的行结不掉）。`getRecalled()` 是包装 `Boolean`，必须走 `Boolean.TRUE.equals(...)` 而不是直接进条件——缺字段的那一条报会 NPE，而 NPE 出的是 50000，引擎那边只会看到"这一跳挂了"，看不到是体形状不对。
 
 `BatchRetryDTO` 与 `BatchRecallRequestDTO` 只差一个校验注解，形状照现有 DTO 的形制（`@Data` + 一个字段），**这里不加 `@NotEmpty`**：整批重发的语义就是"什么都不传"，加上它 spec §5 那条 `retry-failed` 原语义（无 body）会被 400 挡掉，而 `recall` 那一条必须有目标、`@NotEmpty` 保留：
 
