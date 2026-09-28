@@ -244,7 +244,8 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
     // false 意味着表里已经没有这一格：要么 20s 超时先判了，要么掉线那一刻被 failView 结掉了。
     // 撤回这一侧没有 attribution 那样的第二证人，"答晚了"与"没答"只差这一行日志，不能不放。
     if (!recallRegistry.settle(report)) {
-      console.log(`[msgBridge] 撤回回执无人认领（迟到或已结）localId=${report.localId}`)
+      // localId 是页内回带的，进日志前照 `oneLine` 的口径收：留着控制字符就等于允许伪造日志行。
+      console.log(`[msgBridge] 撤回回执无人认领（迟到或已结）localId=${oneLine(report.localId)}`)
     }
     return
   }
