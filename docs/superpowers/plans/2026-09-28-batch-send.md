@@ -3253,7 +3253,7 @@ test('recall 命令交给 recallViaWa：回执异步单独一帧，命令回路�
 - Create: `apps/desktop/src/main/services/batchSend/engine.ts`
 - Create: `apps/desktop/src/main/services/batchSend/engine.test.ts`
 - Modify: `apps/desktop/package.json:15`（**不改**：那条 `src/main/services/batchSend/**/*.test.ts` glob 已由 Task 8 加过，这里确认在位即可）
-- Modify: `apps/desktop/tsconfig.unit.json`（include 加 `src/main/services/batchSend/engine.ts`、`batchApi.ts`、`*.test.ts`）
+- Modify: `apps/desktop/tsconfig.unit.json`（**只追加这两行**：`src/main/services/batchSend/engine.ts`、`src/main/services/batchSend/engine.test.ts`。`batchApi.ts` 与 `batchApi.test.ts` 已由 Task 8 登记在该文件 line 11–12，重复登记是空转；`host.ts` 因为 import electron 永远不进这份 include）
 
 **Interfaces:**
 - Consumes: Task 7 全部纯函数；Task 8 的 `BatchApi`/`ReportItem`/`RecallTarget` 形状。Task 9 的 `sendText` 只以注入的 `Dispatch` 出现，引擎不 import 它。
@@ -3285,7 +3285,12 @@ const row = (id: number, seq: number, accountId: number, chatKey: string, conten
   id, taskId: 1, seq, accountId, chatKey, contentIndex, body: 'x', sendStatus: 'pending', recallStatus: 'none'
 })
 
-/** 记账用的假 api：记录每一跳上报，返回一个不改状态机的空壳。 */
+/**
+ * 记账用的假 api：记录每一跳上报。`reports` **必须回一份非空 `BatchProgress`**——
+ * 引擎那一侧的判据是 `send()` 里的 `(await api.reports(...)) !== null`，`null` 在它眼里就是
+ * "后端没收下，整批进积压"。回 `null` 的用例照样能看 `calls` 变长，于是"报出去了"这件事
+ * 一次都没发生过而没人报警（本计划第一版草稿就写成 `return null`，三处已改）。
+ */
 function fakeApi() {
   const calls: { items: ReportItem[]; allHalted: boolean }[] = []
   const api = {
@@ -3302,7 +3307,8 @@ function fakeApi() {
     reconcile: async () => null,
     reports: async (_taskId: number, items: ReportItem[], allHalted: boolean) => {
       calls.push({ items, allHalted })
-      return null
+      // 非空 = 这一跳被后端收下了：积压只在收不下时才涨（见上面那段注释）。
+      return { sentCount: items.length, failCount: 0, totalCount: 20, status: 'running' }
     }
   }
   return { calls, api }
@@ -3418,7 +3424,9 @@ test('后端不可达时进积压，恢复后按序重报，不丢结论也不�
   api.reports = async (_t: number, items: ReportItem[]) => {
     if (down) throw new Error('ECONNREFUSED')
     sent.push(...items)
-    return null
+    // 这里也必须回非空：`flushBacklog()` 是按 `send()` 的返回值决定"倒得动倒不动"的，
+    // 回 null 的话它倒完第一条就把整段原序塞回去，下面那句 `sent.length >= 2` 永远不成立。
+    return { sentCount: items.length, failCount: 0, totalCount: 20, status: 'running' }
   }
   const engine = new BatchEngine(fakeDeps(api))
   await engine.start(task({ accountIds: [1] }), [row(1, 1, 1, 'a')])
@@ -3619,7 +3627,7 @@ export class BatchEngine {
 > ③ **`allHalted` 那一批天然是最后进积压的**（`settle` 在所有泵之后才跑），所以 `flushBacklog` 不需要为它单独排序。
 
 - [ ] **Step 4：跑 8 条全绿。** `pnpm run test:unit 2>&1 | tail -8`。
-- [ ] **Step 5：`package.json` 的 `test:unit` 里那条 `"src/main/services/batchSend/**/*.test.ts"` 由 Task 8 加过，这里只确认在位**；`tsconfig.unit.json` 的 `include` 追加 `src/main/services/batchSend/*.ts`（**只加纯的那些**：`engine.ts`、`batchApi.ts` 与两份 `.test.ts`；`host.ts` 因为 import electron 不加）。
+- [ ] **Step 5：`package.json` 的 `test:unit` 里那条 `"src/main/services/batchSend/**/*.test.ts"` 由 Task 8 加过，这里只确认在位**；`tsconfig.unit.json` 的 `include` **只追加这两行**：`src/main/services/batchSend/engine.ts` 与 `src/main/services/batchSend/engine.test.ts`（`batchApi.ts` / `batchApi.test.ts` 是 Task 8 登记的，line 11–12 已在，别再列一次；`host.ts` 因为 import electron 永不加）。
 - [ ] **Step 6：`pnpm run typecheck` 四路干净。**
 - [ ] **Step 7：提交。** `feat(P7/群发): 执行环——账号并行、同人串行、3 连失败只熔断一个账号`
 
