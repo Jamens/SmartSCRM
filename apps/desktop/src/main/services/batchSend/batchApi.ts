@@ -30,12 +30,27 @@ export interface BatchApiOptions { fetcher: Fetcher; onError?: (where: string, e
 export function createBatchApi(opts: BatchApiOptions) {
   const note = (where: string, e: unknown): void => opts.onError?.(where, e)
 
+  /**
+   * 三种「这一跳没成」的形状都要落到 `onError`，因为塌成 null 之后调用方只剩一个值可读：
+   * - 非 2xx（409 状态迁移非法 / 40404 任务不属本租户 / 网关 5xx）
+   * - 200 但信封 `code !== 0` 或缺 `data`
+   * - `fetcher` 直接抛（后端没起 / 断网）
+   * 少报任何一种，Task 11 的心跳泵就只能把"后端拒了"和"后端根本没起来"当成同一件事处理——
+   * 而它对该不该停泵的判断正好取决于这两者的区别。
+   */
   async function call<T>(path: string, init: RequestInit): Promise<T | null> {
     try {
       const res = await opts.fetcher(path, init)
-      if (!res.ok) return null
+      if (!res.ok) {
+        note(path, new Error(`HTTP ${res.status}`))
+        return null
+      }
       const env = (await res.json()) as Envelope<T>
-      return env.code === 0 && env.data !== undefined ? env.data : null
+      if (env.code !== 0 || env.data === undefined) {
+        note(path, new Error(`信封非 0：code=${env.code}`))
+        return null
+      }
+      return env.data
     } catch (e) {
       note(path, e)
       return null
