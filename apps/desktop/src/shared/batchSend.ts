@@ -96,7 +96,10 @@ export function pickIntervalSec(kind: IntervalKind, t: IntervalConfig, rand: () 
   const min = kind === 'msg' ? t.msgMin : t.chatMin
   const max = kind === 'msg' ? t.msgMax : t.chatMax
   if (max <= min) return min
-  const r = Math.min(Math.max(rand(), 0), 0.999999)
+  // 非有限值（NaN / ±Infinity）一律走区间下界：NaN 会一路穿到 Task 11 的 setTimeout，
+  // 而 `setTimeout(fn, NaN)` 等于立刻触发——节律保护正是它该护住账号的那一格就这样没了。
+  const raw = rand()
+  const r = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), 0.999999) : 0
   return Math.floor(min + r * (max - min + 1))
 }
 
