@@ -2,7 +2,7 @@
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import {
-  FAIL_STREAK_LIMIT, REPORT_BACKLOG_CAP, ReportBacklog, buildQueues,
+  FAIL_STREAK_LIMIT, REPORT_BACKLOG_CAP, ReportBacklog, SETTLED_DETAIL_STATUS, buildQueues,
   gapKindFor, outcomeStatus, pickIntervalSec
 } from './batchSend.ts'
 import type { BatchDetail, IntervalConfig } from './batchSend.ts'
@@ -20,9 +20,10 @@ test('buildQueues: 每个账号一条队列，队列内按 seq 升序', () => {
 })
 
 test('buildQueues: 没在 accountIds 里的行不进队列（账号被剔出任务不该照跑）', () => {
-  // .flat()：实现保证「每个账号一条队列」（长度 = accountIds.length），账号下没有可发行时
-  // 拿到的是 [[]] 而不是 []。这里要比的是「没有行进队列」，不是队列条数——条数由上一条钉住。
+  // 实现保证「每个账号一条队列」（长度 = accountIds.length），账号下没有可发行时
+  // 拿到的是 [[]] 而不是 []。Task 11 靠这条形状给每个账号挂一条泵，空队列也要占位。
   assert.deepEqual(buildQueues([d(1, 1, 9, 'a')], [1]).flat(), [])
+  assert.equal(buildQueues([d(1, 1, 9, 'a')], [1, 2]).length, 2)
 })
 
 test('buildQueues: 终态行不进队列（重跑一个已 done 的任务不该重发成功条目）', () => {
@@ -30,9 +31,24 @@ test('buildQueues: 终态行不进队列（重跑一个已 done 的任务不该�
   assert.deepEqual(buildQueues([done], [1]).flat(), [])
 })
 
+// Task 13 的状态徽标与 buildQueues 共用这一份判据，所以三个成员各自都得真的「收口」；
+// 'unknown' 在里面是 R2 的落点（超时可能已送达，算失败会诱导出再发一遍），
+// 'failed' 必须**不在**里面——单条重发靠它，漏了就让重试按钮点不动。
+test('SETTLED_DETAIL_STATUS: 只有 success/unknown/skipped 算收口，failed 仍可重发', () => {
+  assert.deepEqual([...SETTLED_DETAIL_STATUS].sort(), ['skipped', 'success', 'unknown'])
+  for (const s of SETTLED_DETAIL_STATUS) {
+    assert.deepEqual(buildQueues([{ ...d(1, 1, 1, 'a'), sendStatus: s }], [1]).flat(), [], s + ' 不该进队列')
+  }
+  assert.equal(buildQueues([{ ...d(1, 1, 1, 'a'), sendStatus: 'failed' as const }], [1]).flat().length, 1)
+})
+
 test('pickIntervalSec: 落在 [min,max] 且取整，边界两种随机数都夹得住', () => {
   assert.equal(pickIntervalSec('msg', t, () => 0), 3)
   assert.equal(pickIntervalSec('msg', t, () => 0.999999), 8)
+  // rand() 交出区间外的数（桩函数给 1、负数）时，钳制必须把它夹回区间内，
+  // 否则 max+1 秒会直接进 Task 11 的等待时长里。
+  assert.equal(pickIntervalSec('msg', t, () => 1), 8)
+  assert.equal(pickIntervalSec('msg', t, () => -0.5), 3)
   assert.equal(pickIntervalSec('chat', t, () => 0.5), 10)
   for (let i = 0; i < 200; i++) {
     const v = pickIntervalSec('msg', t, Math.random)
