@@ -77,6 +77,7 @@ export class BatchEngine {
     }
   }
 
+  /** 只停投料：剩余条目由下一轮的 host/后端决定去处，引擎不在这里替它们写结论。 */
   stop(): void {
     this.stopped = true
   }
@@ -102,8 +103,11 @@ export class BatchEngine {
     for (let i = 0; i < queue.length; i++) {
       const d = queue[i]
       if (this.stopped) {
-        await this.report(task, [{ detailId: d.id, sendStatus: 'skipped', errorCode: 'TASK_HALT' }], false)
-        continue
+        // 只退出投料，不替没跑的那些写结论。暂停走的就是这一格：剩余条目必须还是 `pending`，
+        // resume 才拾得起来——`skipped` 是没有回程的终态（`retryFailed` 只复位 `failed`，
+        // `buildQueues` 也不再捡它）。取消那一侧的 skipped 由后端 `skipAllPending` 一条 SQL 落，
+        // 写的同样是 `TASK_HALT`，所以"谁停的"这条事实不会因为这里不报而丢掉。
+        break
       }
       const localId = `b${task.id}-${d.id}-${(this.seq += 1)}`
       await this.report(task, [{ detailId: d.id, sendStatus: 'sending', localId }], false)
@@ -111,7 +115,7 @@ export class BatchEngine {
       // （没有 msgKey 那一格），下面 `outcome.msgKey` 就在 union 上取不到属性、typecheck 直接红。
       const outcome = await this.deps.dispatch(d, viewId, localId).catch((e: unknown): SendOutcome => {
         this.deps.log('dispatch', e)
-        return { ok: false, error: 'SEND_FAILED', detail: e instanceof Error ? e.message : String(e) } satisfies SendOutcome
+        return { ok: false, error: 'SEND_FAILED', detail: e instanceof Error ? e.message : String(e) }
       })
       const sendStatus = outcomeStatus(outcome)
       const item: ReportItem = { detailId: d.id, sendStatus, localId }
@@ -128,9 +132,14 @@ export class BatchEngine {
       streak = sendStatus === 'failed' ? streak + 1 : 0
       prev = d
       if (streak >= FAIL_STREAK_LIMIT) {
-        await this.report(task, queue.slice(i + 1).map((r) => ({
-          detailId: r.id, sendStatus: 'skipped', errorCode: 'ACCOUNT_HALT'
-        })), false)
+        const rest = queue.slice(i + 1)
+        // 熔断正好落在最后一行时 rest 是空的：空 items 那一跳是 `settle` 的专用形状（只带结论），
+        // 在这里也发一条会让人分不清"这是收尾结论"还是"给零条明细报 skipped"。
+        if (rest.length) {
+          await this.report(task, rest.map((r) => ({
+            detailId: r.id, sendStatus: 'skipped', errorCode: 'ACCOUNT_HALT'
+          })), false)
+        }
         this.halted.add(accountId)
         return
       }

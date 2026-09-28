@@ -75,6 +75,17 @@ test('账号并行、账号内串行：每条明细都被投料一次', async ()
   const items = calls.flatMap((c) => c.items)
   assert.equal(items.length, 6, '每条先 sending 后终态，两跳')
   assert.ok(items.every((i) => typeof i.detailId === 'number'))
+  // 上面那三句只看 `calls` 变没变长，而 `calls` 在 `reports` 返回什么之前就先 push 了。
+  // 少了下面这两句，把 `fakeApi` 的 `reports` 改回 `return null` 时八条用例照样全绿——
+  // 引擎会以为"后端没收下"，把每一跳都塞进积压，于是"报出去了"这个事实一次都没被证过。
+  // 判据落在积压侧：正常路径一条都不该积压，所以 flushBacklog 之后重报数必须是 0。
+  const replayed: ReportItem[] = []
+  api.reports = async (_t: number, batch: ReportItem[]) => {
+    replayed.push(...batch)
+    return { sentCount: batch.length, failCount: 0, totalCount: 20, status: 'running' }
+  }
+  await engine.flushBacklog()
+  assert.equal(replayed.length, 0, '正常路径不该有任何上报落到积压里等重报')
 })
 
 test('同账号串行：一条在飞时不会有第二条从同一账号出去', async () => {
@@ -142,6 +153,9 @@ test('全部账号熔断 → 收尾那一跳 allHalted=true（后端据此把 ru
   // 三条都失败才够熔断线：单条失败只算一次失败，不该判成全停。
   await engine.start(task({ accountIds: [1] }), [row(1, 1, 1, 'a'), row(2, 2, 1, 'a', 1), row(3, 3, 1, 'b')])
   assert.equal(calls.at(-1)?.allHalted, true)
+  // 熔断正好落在最后一行，剩余条目是零：那一跳不该发。空 items 是 `settle` 的专用形状
+  // （只带结论、不带明细），多一条就让人分不清"这是收尾结论"还是"给零条报 skipped"。
+  assert.equal(calls.filter((c) => c.items.length === 0).length, 1, '空 items 的跳只允许收尾那一条')
 })
 
 test('TIMEOUT 落 unknown 而不是 failed（重发不可回收，这一行只能人判）', async () => {
@@ -172,7 +186,7 @@ test('后端不可达时进积压，恢复后按序重报，不丢结论也不�
 })
 
 test('stop() 之后队列不再投料，剩余 pending 一条都不发', async () => {
-  const { api } = fakeApi()
+  const { calls, api } = fakeApi()
   let n = 0
   const engine = new BatchEngine(fakeDeps(api, {
     dispatch: async () => { n += 1; await new Promise((r) => setTimeout(r, 5)); return { ok: true, msgKey: 'k' } }
@@ -182,4 +196,9 @@ test('stop() 之后队列不再投料，剩余 pending 一条都不发', async (
   engine.stop()
   await running
   assert.ok(n <= 1, `stop 之后还在投料：n=${n}`)
+  // 标题里"一条都不发"靠这句才成立：引擎不许替没跑的条目写 skipped。
+  // 这不是抠字眼——`skipped` 是没有回程的终态（retryFailed 只复位 failed、buildQueues 不再捡它），
+  // 暂停要是把剩余条目报成 skipped，resume 就只剩空队列，任务会被判成"发完了"。
+  const skipped = calls.flatMap((c) => c.items).filter((i) => i.sendStatus === 'skipped')
+  assert.deepEqual(skipped.map((i) => i.detailId), [], '暂停要留 pending 给 resume')
 })
