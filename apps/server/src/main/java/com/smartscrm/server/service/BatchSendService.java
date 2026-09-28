@@ -78,18 +78,24 @@ public class BatchSendService {
         requireAccountsBound(tenantId, dto.getAccountIds());
 
         Map<String, ChatConversation> convIndex = loadConversations(tenantId, recipients);
+        Set<Long> chosen = new HashSet<>(dto.getAccountIds());
         List<BatchExpansion.Recipient> ok = new ArrayList<>();
         List<BatchRejectedVO> rejected = new ArrayList<>();
         for (BatchRecipientDTO r : recipients) {
             ChatConversation c = convIndex.get(convKey(r.getAccountId(), r.getChatKey()));
-            if (c == null) {
+            if (!chosen.contains(r.getAccountId())) {
+                // spec §3.2 的后半句「account_id ∈ accountIds」。不拦在这里的代价是静默半跑：
+                // Task 11 的 buildQueues 按 accountIds 分组，不属于任何一组的明细行永远留在 pending，
+                // openCount 也就永远不归零、任务永远到不了 done。
+                rejected.add(new BatchRejectedVO(r.getChatKey(), r.getAccountId(), "这条会话所属的账号不在本次勾选的账号里"));
+            } else if (c == null) {
                 rejected.add(new BatchRejectedVO(r.getChatKey(), r.getAccountId(), "当前账号下没有这条会话的采集记录"));
             } else {
                 ok.add(new BatchExpansion.Recipient(r.getAccountId(), r.getChatKey(), c.getCustomerId()));
             }
         }
         if (ok.isEmpty()) {
-            throw new BizException(40012, "所有收件人都找不到对应会话");
+            throw new BizException(40012, "所有收件人都不可寻址");
         }
         Map<String, BatchRender.Fields> fieldsByKey = resolveFields(convIndex, ok);
         List<BatchExpansion.ExpandedRow> rows = BatchExpansion.expand(ok, dto.getContents(),
