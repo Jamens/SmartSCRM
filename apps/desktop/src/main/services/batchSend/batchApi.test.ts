@@ -98,13 +98,27 @@ test('三种塌法都报到 onError，where 就是那一跳的 path', async () =
   await mk(async () => { throw new Error('ECONNREFUSED') }).start(1)
   await mk(async () => json({ code: 40902, message: '状态非法' }, 409)).pause(2)
   await mk(async () => json({ code: 50000, message: 'boom' }, 200)).resume(3)
+  await mk(async () => json({ code: 0, message: 'ok' }, 200)).cancel(4)
 
   assert.deepEqual(seen.map((s) => s.where), [
     '/api/batch-send/tasks/1/start',
     '/api/batch-send/tasks/2/pause',
-    '/api/batch-send/tasks/3/resume'
+    '/api/batch-send/tasks/3/resume',
+    '/api/batch-send/tasks/4/cancel'
   ])
   assert.match(seen[0].msg, /ECONNREFUSED/)
   assert.match(seen[1].msg, /HTTP 409/, '非 2xx 要把状态码带出来，否则日志里只有 null')
   assert.match(seen[2].msg, /code=50000/, '200 + 非 0 信封要把信封码带出来')
+  assert.match(seen[3].msg, /data 缺失/, 'code=0 但没 data 是后端形状变了，不能报成"非 0"')
+})
+
+// 宿主的 onError 挂了也不能把"这一跳没成"升级成抛到采集/发送链上——那是全文件的返回值契约。
+// 少了 note 里那层 try，这一条会直接 reject 而不是拿到 null/0。
+test('onError 自己抛，调用方仍然只拿到 null/0', async () => {
+  const api = createBatchApi({
+    fetcher: async () => json({ code: 40902, message: '状态非法' }, 409),
+    onError: () => { throw new Error('宿主的日志实现挂了') }
+  })
+  assert.equal(await api.start(1), null)
+  assert.equal(await api.heartbeat(1), 0)
 })
