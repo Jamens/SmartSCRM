@@ -2153,7 +2153,10 @@ cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
     两个 VO 接口逐列对齐后端出参（读码 `BatchTaskVO.java:10-16`、`BatchDetailVO.java:6-12`）：
     `BatchDetail.recallDetail`（页内撤回的逐条结论，Task 10/15 要展示）、`BatchTask.createdAt`
     （列表排序与展示，Task 14 要用）都是 `string | null` 的墙钟串，与 `sentAt`/`heartbeatAt` 同一口径。
-  - `buildQueues(details: BatchDetail[], accountIds: number[]): BatchDetail[][]`
+  - `buildQueues(details: BatchDetail[], accountIds: number[]): BatchDetail[][]`：
+    **只捡 `pending` 行**。进 `sending` 的唯一 arrow 是 `pending → sending`（spec:96），`failed` 要回队
+    必须由人走 `retry-failed`（spec:136）——这条判据和下面那份 `SETTLED_DETAIL_STATUS` 是**两个问题**，
+    各答各的，共用一份就会把「重发这一条」变成「重发这一批」。
   - `gapKindFor(prev: BatchDetail | null, cur: BatchDetail): IntervalKind` + `pickIntervalSec(kind, t, rand): number`
   - `outcomeStatus(receipt: { ok: boolean; error?: string }): BatchDetailStatus`
   - `FAIL_STREAK_LIMIT = 3`、`REPORT_BACKLOG_CAP = 500`
@@ -2163,7 +2166,9 @@ cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
     （`sentCount/failCount/totalCount/status`），**不是**整张任务——整张任务只有 `GET /tasks/{id}` 一条路。
     preload 与渲染层都要认它，而 preload 不许 import `main/services/**`，所以它住在 shared。
   - `SETTLED_DETAIL_STATUS: readonly BatchDetailStatus[]`（`success`/`unknown`/`skipped`）：
-    「不再参与执行」的那三个状态只有这一份判据，`buildQueues` 与 Task 13 的状态徽标共用它。
+    它答的是「人还能不能处置这一行」——Task 13/15 的状态徽标与「重发这一条」按钮读它。
+    **它不决定泵该发谁**（那一条只有 `pending` 算数，见上面的 `buildQueues`）：
+    `failed` 在这里必须算「没收口」，否则重试按钮点不动；它对泵又必须是「别再发一遍」。
 
 - [ ] **Step 1：写失败的测试** `apps/desktop/src/shared/batchSend.test.ts`：
 
@@ -2201,15 +2206,16 @@ test('buildQueues: 终态行不进队列（重跑一个已 done 的任务不该�
   assert.deepEqual(buildQueues([done], [1]).flat(), [])
 })
 
-// Task 13 的状态徽标与 buildQueues 共用这一份判据，所以三个成员各自都得真的「收口」；
-// 'unknown' 在里面是 R2 的落点（超时可能已送达，算失败会诱导出再发一遍），
-// 'failed' 必须**不在**里面——单条重发靠它，漏了就让重试按钮点不动。
-test('SETTLED_DETAIL_STATUS: 只有 success/unknown/skipped 算收口，failed 仍可重发', () => {
+// 这里有两个不同的问题，之前被一份判据一起答了，所以答错了一个：
+// SETTLED_DETAIL_STATUS 答的是「人还能不能处置这一行」——'failed' 必须**不在**里面，单条重发靠它，
+// 漏了 Task 15 的重试按钮就点不动；'unknown' 必须在里面，它是 R2 的落点（超时可能已送达）。
+// buildQueues 答的是「泵该不该再发这一行」——只有 pending 算数。
+test('SETTLED 管"人可处置"、buildQueues 管"泵可发"：泵只捡 pending', () => {
   assert.deepEqual([...SETTLED_DETAIL_STATUS].sort(), ['skipped', 'success', 'unknown'])
-  for (const s of SETTLED_DETAIL_STATUS) {
+  for (const s of ['success', 'unknown', 'skipped', 'failed', 'sending'] as const) {
     assert.deepEqual(buildQueues([{ ...d(1, 1, 1, 'a'), sendStatus: s }], [1]).flat(), [], s + ' 不该进队列')
   }
-  assert.equal(buildQueues([{ ...d(1, 1, 1, 'a'), sendStatus: 'failed' as const }], [1]).flat().length, 1)
+  assert.equal(buildQueues([d(1, 1, 1, 'a')], [1]).flat().length, 1, 'pending 要进队列')
 })
 
 test('pickIntervalSec: 落在 [min,max] 且取整，边界两种随机数都夹得住', () => {
@@ -2219,6 +2225,11 @@ test('pickIntervalSec: 落在 [min,max] 且取整，边界两种随机数都夹�
   // 否则 max+1 秒会直接进 Task 11 的等待时长里。
   assert.equal(pickIntervalSec('msg', t, () => 1), 8)
   assert.equal(pickIntervalSec('msg', t, () => -0.5), 3)
+  // 非有限值走区间下界：NaN 穿到 setTimeout 就是"立刻触发"，节律等于没设；
+  // Infinity 也按同一张嘴处理，不然两条分支要各记一条规则。
+  assert.equal(pickIntervalSec('msg', t, () => Number.NaN), 3)
+  assert.equal(pickIntervalSec('msg', t, () => Number.POSITIVE_INFINITY), 3)
+  assert.equal(pickIntervalSec('msg', t, () => Number.NEGATIVE_INFINITY), 3)
   assert.equal(pickIntervalSec('chat', t, () => 0.5), 10)
   for (let i = 0; i < 200; i++) {
     const v = pickIntervalSec('msg', t, Math.random)
@@ -2275,7 +2286,11 @@ export type BatchTaskStatus = 'pending' | 'running' | 'paused' | 'done' | 'error
 export type BatchDetailStatus = 'pending' | 'sending' | 'success' | 'failed' | 'unknown' | 'skipped'
 export type RecallStatus = 'none' | 'recalling' | 'recalled' | 'recall_failed'
 
-/** 只有这三个是"不再参与执行"的状态，buildQueues 与 Task 13 的徽标共用这一份判据。 */
+/**
+ * 「人还能不能处置这一行」= 已经收口。Task 13/15 的徽标与「重发这一条」按钮读它。
+ * 这条判据**不**用来决定泵该发谁（那一条只有 `pending` 算数，见 `buildQueues`）：
+ * `failed` 在这里必须算"没收口"，否则重试按钮点不动；它对泵又必须是"别再发一遍"。
+ */
 export const SETTLED_DETAIL_STATUS: readonly BatchDetailStatus[] = ['success', 'unknown', 'skipped']
 
 export interface BatchDetail {
@@ -2352,11 +2367,16 @@ export interface BatchProgress {
   status: BatchTaskStatus
 }
 
-/** 账号之间并行、账号内串行，所以队列形状 = 按 accountIds 顺序分组、组内 seq 升序。 */
+/**
+ * 账号之间并行、账号内串行，所以队列形状 = 按 accountIds 顺序分组、组内 seq 升序。
+ * 泵只捡 `pending` 行：进 `sending` 的唯一 arrow 是 `pending → sending`（spec:96），
+ * `failed` 要回队必须由人走 `retry-failed`（spec:136）——别把这里改成读 `SETTLED_DETAIL_STATUS`，
+ * 那一份判据答的是「人还能不能处置这一行」，拿它决定投料会把单条重发变成全部重发。
+ */
 export function buildQueues(details: BatchDetail[], accountIds: number[]): BatchDetail[][] {
   return accountIds
     .map((a) => details
-      .filter((d) => d.accountId === a && !SETTLED_DETAIL_STATUS.includes(d.sendStatus))
+      .filter((d) => d.accountId === a && d.sendStatus === 'pending')
       .sort((x, y) => x.seq - y.seq))
 }
 
@@ -2368,7 +2388,10 @@ export function pickIntervalSec(kind: IntervalKind, t: IntervalConfig, rand: () 
   const min = kind === 'msg' ? t.msgMin : t.chatMin
   const max = kind === 'msg' ? t.msgMax : t.chatMax
   if (max <= min) return min
-  const r = Math.min(Math.max(rand(), 0), 0.999999)
+  // 非有限值（NaN / ±Infinity）一律走区间下界：NaN 会一路穿到 Task 11 的 setTimeout，
+  // 而 `setTimeout(fn, NaN)` 等于立刻触发——节律保护正是它该护住账号的那一格就这样没了。
+  const raw = rand()
+  const r = Number.isFinite(raw) ? Math.min(Math.max(raw, 0), 0.999999) : 0
   return Math.floor(min + r * (max - min + 1))
 }
 
@@ -2411,7 +2434,7 @@ export class ReportBacklog<T> {
 cd /d/SmartSCRM/apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run typecheck 2>&1 | tail -8
 ```
 
-期望：`pass 212+10`（10 条 = buildQueues 3 + SETTLED_DETAIL_STATUS 1 + pickIntervalSec 2 + outcomeStatus 1 + ReportBacklog 1 + gapKindFor 1 + FAIL_STREAK_LIMIT 1）、`fail 0`；typecheck 四路 0 error。
+期望：`pass 212+10`（10 条 = buildQueues 3 + 「SETTLED 管人可处置 / buildQueues 管泵可发」1 + pickIntervalSec 2 + outcomeStatus 1 + ReportBacklog 1 + gapKindFor 1 + FAIL_STREAK_LIMIT 1）、`fail 0`；typecheck 四路 0 error。
 
 - [ ] **Step 6：提交。** `feat(P7/群发): shared 群发纯模型（队列/节律/熔断阈值/上报积压）`
 
@@ -3698,10 +3721,19 @@ import { BatchEngine } from './engine'
 import { createBatchApi } from './batchApi'
 import type { RecallTarget } from './batchApi'
 import type { Dispatch, RecallDispatch, SendOutcome } from './engine'
-import type { BatchDetail, BatchStateEvent } from '../../../shared/batchSend'
+import type { BatchDetail, BatchStateEvent, BatchTask } from '../../../shared/batchSend'
 
-/** 心跳周期：15 s（spec §5），比后端 60 s 陈旧线短，一次丢两拍才被判死。 */
+/** 心跳周期：15 s（spec §5）。四拍打空才停泵，那条线就是下面 `HEARTBEAT_MISS_LIMIT` 的注释。 */
 const HEARTBEAT_MS = 15_000
+/**
+ * 连着四拍（= 60 s）打不到后端才停泵。这个数就是后端自己的 `STALE_SECONDS`
+ * （`BatchSendService.java:58`）——它认定这条泵已经死了的那一刻，泵才自己收。
+ * 单拍为 0 就停是不行的：`heartbeat` 把「后端明确说这一行不在 running」和「这一跳根本没打到
+ * 后端」（`batchApi` 折成同一个 0，spec:141 有意如此）混在一起，一次 15 s 的网络抖动就会
+ * 把泵连同它的上报积压一起扔掉，而积压正是为后端不可达准备的。
+ * 界面点暂停/取消那一侧不受这条影响：`batch:pause`/`batch:cancel` 的处理器直接 `stopEngine`。
+ */
+const HEARTBEAT_MISS_LIMIT = 4
 /** 演练出料口的模拟耗时（spec §11.4：先取 200 ms，只影响观感）。 */
 const DRY_RUN_MS = 200
 
@@ -3711,12 +3743,25 @@ const api = createBatchApi({
   fetcher: (path, init) => authedFetch(path, init),
   onError: (where, e) => console.warn(`[batch] ${where}`, e)
 })
-const running = new Map<number, { engine: BatchEngine; timer: NodeJS.Timeout }>()
+
+/**
+ * 一张「taskId → 泵」的表。`engine`/`timer` 可以为 null：那是 `runTask` 在开场之前先占下的格子
+ * （见那里的注释），占位格没有任何在飞的东西，只回答"这个 taskId 已经有人在起了"。
+ */
+interface Pump {
+  engine: BatchEngine | null
+  timer: NodeJS.Timeout | null
+  misses: number
+  /** 上一拍心跳还在飞（见 `tick` 开头那句跳过）。 */
+  beating: boolean
+}
+const running = new Map<number, Pump>()
 ```
 
 `viewIdOf` 的落点已定：账号→视图的映射只有 `msgBridge/accountDirectory.ts` 一份（`accountOfId(accountId)?.viewId`，读码确认它在 `:60` 就是 `export`，`index.ts:350` 同源取用），**host 里不建第二份 map**：
 
 ```ts
+/** 账号→视图的映射只有 accountDirectory 那一份，host 不建第二张表。 */
 const viewIdOf = (accountId: number): string | null => accountOfId(accountId)?.viewId ?? null
 ```
 
@@ -3747,10 +3792,18 @@ const recallDispatch: RecallDispatch = async (t: RecallTarget): Promise<{ ok: bo
 
 ```ts
 async function runTask(taskId: number): Promise<{ started: boolean }> {
-  if (running.has(taskId)) return { started: true }        // 同一个任务只允许一条泵在飞
+  // 占位要在第一个 await 之前同步落表：`running.has` 与真正建泵之间隔着 `api.task` 和整段翻页
+  // 拉取（20 000 条明细 = 100 跳 HTTP），那个窗口里第二次 runTask 会读到"没人在飞"，
+  // 于是同一个 detailId 有两个投料者——群发最贵的一种事故就是同一条消息发出去两遍。
+  // 占位格还有个附带用处：开场期间来的 pause/cancel 能在表里找到它并摘掉，下面两处复查据此止步。
+  if (running.has(taskId)) return { started: true }
+  running.set(taskId, { engine: null, timer: null, misses: 0, beating: false })
   const task = await api.task(taskId)
   // 引擎不裁决、也不发起迁移：谁把任务变成 running 是渲染层点「开始」那一次 batch:start 的事。
-  if (!task || task.status !== 'running') return { started: false }
+  if (!task || task.status !== 'running') {
+    running.delete(taskId)
+    return { started: false }
+  }
   const details: BatchDetail[] = []
   for (let page = 1; ; page++) {
     const res = await api.details(taskId, page, 200)
@@ -3758,15 +3811,17 @@ async function runTask(taskId: number): Promise<{ started: boolean }> {
     details.push(...res.records)
     if (details.length >= res.total || res.records.length === 0) break
   }
+  if (!running.has(taskId)) return { started: false }
   const engine = new BatchEngine({
     api, dispatch: task.dryRun ? dryDispatch : realDispatch, viewIdOf,
     sleep, rand: Math.random, now: () => Date.now(),
     log: (where, e) => console.warn(`[batch] task=${taskId} ${where}`, e)
   })
-  // timer 先占位再建：setInterval 的回调可能在 engine 进 map 之前就跑到（心跳与泵同时起步）。
   const timer = setInterval(() => void tick(taskId), HEARTBEAT_MS)
   timer.unref()
-  running.set(taskId, { engine, timer })
+  // 从上面那句复查到这里落表是同一个同步段：中间不许插 await，否则"被 pause 摘掉的格子
+  // 又被这里复活"就成了第三条能起两条泵的路；timer 也在这段里建，止步就不必撤它。
+  running.set(taskId, { engine, timer, misses: 0, beating: false })
   void engine.start(task, details).then(() => finish(taskId), (e: unknown) => {
     console.error(`[batch] task=${taskId} 泵逃出来的异常`, e)
     finish(taskId)
@@ -3777,30 +3832,51 @@ async function runTask(taskId: number): Promise<{ started: boolean }> {
 /** 心跳 + 顺带广播：15 s 一跳，比每跳都发一次吵得要轻，也比"只在收尾发"有用得多。 */
 async function tick(taskId: number): Promise<void> {
   const entry = running.get(taskId)
-  if (!entry) return
-  await entry.engine.flushBacklog()
-  const updated = await api.heartbeat(taskId)
-  // updated === 0：任务已不在 running（被暂停/取消/结清），再投料就是对着不该跑的东西投料。
-  if (updated === 0) {
-    stopEngine(taskId)
-    return
+  if (!entry?.engine) return
+  // 一拍是可以跑过 15 s 的：flushBacklog 是逐条一跳，每跳的上限是 authedFetch 的 5 s 超时，
+  // 积压几十条就足够让 setInterval 把第二条 tick 排进来。两条并发倒同一份积压会把同一批上报
+  // 报两遍，倒不动的那段还各塞回一次——同一条结论在积压里就存了两份。上一拍没完就跳过这一拍：
+  // 心跳少打一拍不会停泵（要看的是 MISS_LIMIT 那个连续数），也不会让积压变多。
+  if (entry.beating) return
+  entry.beating = true
+  try {
+    await entry.engine.flushBacklog()
+    const updated = await api.heartbeat(taskId)
+    if (updated === 0) {
+      // 这一拍没打到/没命中：先记一笔，到 HEARTBEAT_MISS_LIMIT 才认死（两种 0 的分别见那条注释）。
+      entry.misses += 1
+      if (entry.misses >= HEARTBEAT_MISS_LIMIT) stopEngine(taskId)
+      return
+    }
+    entry.misses = 0
+    const task = await api.task(taskId)
+    if (task) broadcastTask(task)
+  } finally {
+    entry.beating = false
   }
-  const task = await api.task(taskId)
-  if (task) broadcastState({ taskId, status: task.status, totalCount: task.totalCount, sentCount: task.sentCount, failCount: task.failCount })
 }
 
 async function finish(taskId: number): Promise<void> {
   stopEngine(taskId)
   const task = await api.task(taskId)
-  if (task) broadcastState({ taskId, status: task.status, totalCount: task.totalCount, sentCount: task.sentCount, failCount: task.failCount })
+  if (task) broadcastTask(task)
+}
+
+/** 进度只有这一处构造：`tick` 与 `finish` 两个发点读同一份 GET 回来的任务，不各拼一份字面量。 */
+function broadcastTask(task: BatchTask): void {
+  broadcastState({
+    taskId: task.id, status: task.status,
+    totalCount: task.totalCount, sentCount: task.sentCount, failCount: task.failCount
+  })
 }
 
 function stopEngine(taskId: number): void {
   const entry = running.get(taskId)
   if (!entry) return
   // 顺序不能反：先撤 timer 再 stop 再从 map 摘，反了会有一个在途心跳在摘掉之后重新排一个 timer。
-  clearInterval(entry.timer)
-  entry.engine.stop()
+  // 两个 null 是给占位格留的：那一段泵还没起步，没什么可停，摘掉就是"这一趟开场作废"。
+  if (entry.timer) clearInterval(entry.timer)
+  entry.engine?.stop()
   running.delete(taskId)
 }
 ```
