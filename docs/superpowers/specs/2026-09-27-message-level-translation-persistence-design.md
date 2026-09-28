@@ -61,19 +61,36 @@ ALTER TABLE `chat_message`
 
 ## 5. 注入层：降级不再静默删（直接治"过一会儿没译文"）
 
-`domScan.translateOne`（`domScan.ts:59-125`）改三处：
+`domScan.translateOne`（`domScan.ts:61-167`）改三处：
 
 - 发请求时带上 `msgId`（`adapter.getMessageId(row)` 已是它）。
-- 拿到结果：**`result.degraded` 为真**时，不再进 `isNoopTranslation` 那支删气泡，而是 `renderManualButton` 挂"翻译失败 · 点此重试"，重试回调以 `noCache:true` 强制再走厂商（复用现成 `manualButton.ts` 通道）。
-- `isNoopTranslation` 仅在**非降级**时用来剥"同语言原样返回"（R7/R10 语义不变）。这样"厂商在线→有真译文 / 厂商掉线→可见失败 + 可重试"，不再有"整行悄悄消失"。
+- 拿到结果：**`result.degraded` 为真**时，不再进 `isNoopTranslation` 那支删气泡，而是按"这一格重试得了吗"落两种形状之一（§5b）。
+- `isNoopTranslation` 仅在**非降级**时用来剥"同语言原样返回"（R7/R10 语义不变）。这样"厂商在线→有真译文 / 厂商掉线→可见失败"，不再有"整行悄悄消失"。
 
-作用：即使某条消息首刷时百度就挂着，也不会被伪造成"不用译"删掉——留一个能点的重试，点通了才入库、下次直接回显。
+作用：即使某条消息首刷时百度就挂着，也不会被伪造成"不用译"删掉——留下一格会说话的形状，点通了才入库、下次直接回显。
+
+### 5b. 两种降级形状：`degradeRetryable` 是分岔的唯一证人
+
+降级不是一种状态，是两类，而它们的"下一步"根本不同，所以页面上也不该长同一个样子：
+
+| 形状 | 什么时候 | 页面那一格 | 为什么是这个形状 |
+| --- | --- | --- | --- |
+| `retry` | 瞬时故障：厂商 HTTP 非 2xx、厂商回错的 `error_code`、断网、请求被中断 | 「翻译失败 · 点此重试」——`renderManualButton` 那颗点得动的按钮（`.scrm-inject-mask`，`cursor:pointer` + 虚线下划线），点击发一次 `noCache:true` 的强制重译 | 多点一次有可能就好起来 |
+| `dead` | 配置性死路：这条线路没配密钥，或这对语种不在这条线路的表上 | 「翻译失败（重试无效）· `<degradeReason>`」——`renderManualNote` 的一句话（`.scrm-inject-degrade-note`）：没有 `role="button"`、没有点击监听、没有 `tabIndex`、不 pointer、不画下划线 | 重试走的还是同一条线路、同一份缺着的凭据；那颗点不亮的按钮等于对用户说"再试一次就有救" |
+
+- **判据只有一个字段**：后端 `TranslateVO.degradeRetryable`。分岔发生在抛出点——`ProviderException.retryable()` 由 `BaiduProvider` / `TencentProvider` 的两个死路校验（未配密钥、语种不支持）显式传 `false`，其余构造一律 `true`；`TranslationService` 里"压根没查到凭据"那一格不经 provider 抛出（它连厂商都没问），出口直接写 `false`。
+- **页内绝不按 `degradeReason` 的文案猜形状**：那是给人看的一句话，不是判据。判据缺失（旧后端、字段没透传）一律回退成 `retry`——宁可多给一颗其实没用的按钮，也不把一次真能救回来的重译入口悄悄关掉。
+- **死路那一格点名是哪一侧死的**：`degradeReason` 由后端产出（`<provider> 未配置密钥，此结果来自本地模拟引擎` / `<provider> 语种不支持: x->y` / 厂商原始错误消息），页面原样念出来，不在前端另造一句、也不把原因藏进 tooltip。
+- **形状随消息态一起存**（`MsgState.degradeReason` / `degradeRetryable`）：只存 `degraded` 的话，那条消息滚出可视区再滚回来时会按"未知是否可重试"退化成 `retry`，等于把死路重新伪装成有救。
+- **恢复路径不经过死路那一格**：改档位或配密钥时 `translationRevision` 自增，整轮重扫会重新发一次请求；所以那一格不需要自己长出任何入口。
+- 两种形状都挂在同一枚锚点、同一个节点 id（`translation-<页内 data-id>`）上，并带证人属性 `data-p7-degrade="retry" | "dead"`，验收驱动按这个属性分形状，不按文案猜。
 
 ## 6. 安全与边界
 
 - `msgId` 进 `ipc.ts` 的**重建字面量白名单**：像 `text/type/input/noCache` 一样显式挑进去，长度/字符集上限按平台 msgId 实形设（≤128、可见 ASCII），页多报的别的字段仍被挡。作用域两字段（`accountId`/`chatKey`）保持"只由主进程盖"。
 - 后端定位行永远带主进程盖的 `account_id`+`chat_key`+`tenant_id`，`msgId` 只是在这把作用域内再缩小；跨会话/跨租户的 `msgId` 复用因作用域与 body 校验而落空。
 - 不新增页可命名的语种/渠道/token（沿用 §4.2 既有口径）。
+- `degradeRetryable` 只走**响应方向**（后端 JSON → `translationBridge.requestTranslation` 原样 `return body.data` → 页内 `TranslateResponse`），主进程不改写响应字段，所以它不进 `ipc.ts` 那份请求白名单；页面依然无法左右这个布尔——形状是后端按抛出点判出来的。
 
 ## 7. 已知限制与取舍
 
@@ -89,13 +106,21 @@ ALTER TABLE `chat_message`
   仍无限期回显旧通道那一份，只有换目标语种才失效。这是"一列只存一个方向的译文"的口径本身，不是实现偏差。
 - **按消息定位是两次查询而不是一条 OR**：`msg_id` 等值那一趟走 `idx_msg_msgid`（常态路径），
   `msg_key` 尾锚那一趟用不上索引、按会话规模扫描，只在第一趟没命中时才发。老行被懒填之后就再也不用它。
+- **厂商侧错误码一律算"可重试"，因为这里不维护那张码表**：`BaiduProvider` / `TencentProvider` 只对"未配密钥"和"语种不在表上"两个自己写得出的判断传 `retryable=false`；
+  厂商 HTTP 非 2xx 与响应体里的 `error_code` 一律留 `true`。
+  后果是明说的：一个被停用/配额耗尽的厂商账号在页面上仍然显示那颗点得动的「点此重试」，用户要多点几次、再看 `degradeReason` 里那句原始错误才反应过来要换线路。
+  反过来把码表建进来（按 code 白名单判死路）需要跟着厂商改，本 spec 不收这一格。
+- **`degradeReason` 是后端串出来的原文**，厂商给的是英文句子或数字码时页面上就照那样念，不做二次翻译也不裁剪；一句过长的原因可能把气泡那一行撑高，属可接受。
 - Telegram 侧：`msg_id` 规范形与写回在 TG 采集器接入时同构复用，本 spec 不落地 TG。
 
 ## 8. 验证计划（分档，缺档不写"已验证"）
 
 1. **后端契约**（`tmp/` 驱动）：命中 `msg_id`+语种一致 → `cached=true` 且不发厂商；语种不符 → 重译；伪造/错位 `msgId`（body 对不上）→ 不命中、不写脏；降级 → 不写 `translated_*`；成功 → 回写 + 懒填 `msg_id`。断言分成败两向、退出码区分（exit 1 vs 2）。
-2. **`node:test` 纯函数**：`normalizeWa` 产出 `msgId=raw.id.id`；`translateKey` 把 `msgId` 计入去重键。
-3. **注入层 CDP**：造 `degraded` 响应 → 气泡显"翻译失败"按钮（非静默消失）；点重试 → `noCache` 请求发出；命中回显路径不发厂商。真实会话先 `document.visibilityState==='visible'` 再操作（C9）。
+   新增两格：死路档（channel 指向未配密钥的厂商，零出网）→ `degraded=true` 且 `degradeRetryable=false` 且 `degradeReason` 念得出"未配置密钥"；同一档只把 channel 换回 `'1'`（模拟引擎）作对照 → `degraded=false` 且 `degradeReason` 为 `null`。
+2. **`node:test` 纯函数**：`normalizeWa` 产出 `msgId=raw.id.id`；`translateKey` 把 `msgId` 计入去重键；`degradeCopy` 三种形状（非降级 → `none`；`degradeRetryable` 缺省或 `true` → `retry` + 原句；显式 `false` → `dead` + 点名原因，原因空 → 兜底句）。
+3. **注入层 CDP**：造 `degraded` 响应 → 气泡显出失败那一格（非静默消失）；点重试 → `noCache` 请求发出；命中回显路径不发厂商。真实会话先 `document.visibilityState==='visible'` 再操作（C9）。
+   死路那一格另跑一条腿：channel 指向未配密钥的厂商（这一档零出网就能造）→ 断言 `data-p7-degrade="dead"`、文案是「翻译失败（重试无效）· …未配置密钥…」且点名哪个厂商、那一格没有 `role="button"`/`tabIndex`/点击监听、`cursor` 不是 pointer，**真实坐标点它不发出任何请求**，滚出可视区再滚回来还是同一句同一形状。
+   可重试那一格要真出网才能造出瞬时故障（厂商 HTTP/断网），本轮只由 `degradeCopy` 单测覆盖形状判据，不冒充实机已验。
 4. **真实登录档**（需用户在场）：一条已译消息滚出再滚回 → 从库里回显、不再问厂商；把厂商打挂（关代理）后新消息 → 显失败+可点重试；恢复后点一下入库。跑完才在验收文档把对应格标"实测"。
 
 ## 9. 落点一览（供 writing-plans 拆任务）
@@ -104,5 +129,7 @@ ALTER TABLE `chat_message`
 - `shared/chatTypes.ts` 的 `NormalizedMessage` + `normalizeWa` + 采集写库路径带 `msgId`。
 - `shared/translateKey.ts`（去重键纳入 `msgId`）、`inject/.../translationQueue.ts` 与 `TranslateRequest`（带 `msgId`）。
 - `ipc.ts`（`msgId` 进白名单重建体）+ `translationBridge.ts`（`TranslateRequest`/透传）+ 后端 `TranslateDTO`/`translate()`（消息级读回显 + 成功回写 + 懒填）。
-- `domScan.ts`（带 `msgId` 发请求 + `degraded` 显式失败/重试；`isNoopTranslation` 收口到非降级）+ `manualButton.ts`（重试走 `noCache`）。
+- `domScan.ts`（带 `msgId` 发请求 + `degraded` 显式失败/重试；`isNoopTranslation` 收口到非降级）+ `manualButton.ts`（重试走 `noCache`；死路那一格 `renderManualNote`）。
+- `shared/degradeCopy.ts`（形状判据：`degraded` × `degradeRetryable` × `degradeReason` → `none`/`retry`/`dead` + 文案）+ `messageState.ts`（降级两字段随消息态存）+ `renderTranslation.ts`（`.scrm-inject-degrade-note` 样式）+ `constants/config.ts`（`DEGRADE_NOTE` 类名）。
+- 后端 `TranslateVO.degradeRetryable` + `ProviderException.retryable()` + 两厂商的死路抛出点 + `TranslationService` 各出口的取值；契约驱动与两侧单测。
 - 后端契约驱动 + `node:test` + CDP 注入层探针；验收文档。

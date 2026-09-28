@@ -1,6 +1,6 @@
 # 消息级译文回显 + 降级可见重试 · 验收记录
 
-**日期**：2026-09-27（首跑与纠偏）／2026-09-28 上午（E1 复跑，§4d）／2026-09-28（两个弹层宿主的警示位置，§4e）
+**日期**：2026-09-27（首跑与纠偏）／2026-09-28 上午（E1 复跑，§4d）／2026-09-28（两个弹层宿主的警示位置，§4e）／2026-09-28（降级分两种形状，§10）
 **规格**：`docs/superpowers/specs/2026-09-27-message-level-translation-persistence-design.md`
 **计划**：`docs/superpowers/plans/2026-09-27-message-level-translation-persistence.md`
 **提交区间**：起点 `ebf89fa`（spec/计划落档），到本提交为止；逐提交枚举 `git log --oneline ebf89fa..HEAD`
@@ -103,7 +103,7 @@
 
 | 组 | 断言 |
 | --- | --- |
-| D1–D8 | 降级档下气泡显出 `.scrm-inject-translate-error`（不是静默消失）、文案逐字 = 「翻译失败 · 点此重试」、节点 id 就是 `translation-<页内 data-id>`、挂在同 `data-id` 的锚点里、自动扫描那趟带 `msgId` 且**不带** `noCache`、应答 `degraded=true && cached=false`、没有停在「翻译中…」占位上 |
+| D1–D8 | 降级档下气泡显出 `.scrm-inject-translate-error`（不是静默消失）、文案逐字 = 「翻译失败 · 点此重试」（**这条前提今天已经不成立**：同一片布景在 §10 的形状分岔之后判成死路那一格，逐字口径改写在 §10b；本行只描述 §4 那一跑的现场）、节点 id 就是 `translation-<页内 data-id>`、挂在同 `data-id` 的锚点里、自动扫描那趟带 `msgId` 且**不带** `noCache`、应答 `degraded=true && cached=false`、没有停在「翻译中…」占位上 |
 | K1–K7 | 一次真实 `Input.dispatchMouseEvent` 点击恰好发出一条 `noCache:true` 且带的就是被点那条的 `msgId`；降级未恢复时不自己长成重试环；按钮原样挂回、可重复点 |
 | R1–R6 | 恢复档（channel `'1'`）下**手点那一下**拿到非降级结果（只有 `noCache` 那一支谈得上回写，见下面 §4b 修正 4）、失败按钮不再在场；随后切回 DEAD 档做跨边界判别：带该 `msgId` 命中回显、不带不命中、换 `chatKey` 不回显（作用域仍是主进程盖的那把，且那一趟因全局档被钉死而零出网） |
 | E1–E4 | 页面内存清光后重扫，死档也从库里直接回显真译文（`cached=true`、逐字一致、画的是译文不是失败按钮） |
@@ -511,3 +511,97 @@ ALTER TABLE `chat_message`
 - [ ] 可选：`tmp/p7f-domscan-cdp.mjs fresh`（整页重载那一格；跑完要真人再点一次会话）
 - [ ] 可选：`tmp/p7f-sendflag.mjs` 那条页面侧判据为什么在重挂载后读不到（本轮由另两个读法确认为"翻了"，
   驱动自身仍报"读不到"，原因未定，§4d 事实 4）——下一跑若要再靠它翻开关，先补这一格取证
+
+---
+
+## 10. 降级分两种形状：`retry` 那颗点得动，`dead` 只说话（2026-09-28，#147）
+
+**改了什么**：降级不再只有一格「点此重试」。后端把"重试会不会好起来"这个判断（`TranslateVO.degradeRetryable`）
+在**抛出点**做完带上（`ProviderException.retryable()`），注入层按它分两种形状落地（规格 §5b）：
+瞬时故障 → 那颗点得动的按钮（原样保留 `翻译失败 · 点此重试`）；配置性死路（未配密钥 / 语种不在这条线路的表上）→
+一句 `翻译失败（重试无效）· <后端给的原因>`，**没有按钮、点不动**。
+动因是 #145/#146 那一串：真人看到"翻译失败 · 点此重试"点了没反应，其实那一档指的是没配密钥的厂商线路——那颗按钮本身就是假出口。
+
+| 腿 | 证什么 | 结论 | 证据词 |
+| --- | --- | --- | --- |
+| 后端契约 | 死路档的应答真的带 `degraded=true + degradeRetryable=false + degradeReason` 念出未配密钥 | `tmp/p7g-deadhttp.mjs` **6/6 PASS、exit 0**（`tmp/p7g-deadhttp.log`） | 实测 |
+| 单测 | 形状判据三岔 + 抛出点分类 + 成功出口不带原因 | Java **81/81**（+6）+ BUILD SUCCESS；node:test **212/212**（新增 `degradeCopy` 5 条）；`typecheck` 四路无报错 | 实测 |
+| 注入层实机 | 真气泡上那一格画对（形状、点不动、滚出滚回同一句） | **没跑成**：内嵌视图此刻在 `chrome-error`、本机零出网。驱动 `tmp/p7g-deadend.mjs` 已就位（14 条），等真人两下（§10c） | 待验证 |
+| bundle 上线 | dev 下换新注入 bundle **不需要**重启 Electron 主进程 | 实测：视图样式表里读得到 `.scrm-inject-degrade-note{…color:#faa724}`，`window.__SCRM_INJECTOR__` 在场 | 实测 |
+
+### 10a. 后端契约腿（实测 6/6，`tmp/p7g-deadhttp.log`）
+
+布景：会话档（账号 7 / `261963795943523@lid`）只把 `channel` 钉成库里**没配凭据**的那条厂商通道（现读凭据表得出 `DEAD=7=tencent`，百度有 secret），
+其余 14 个可写字段原样带过去、`receiveEnabled=true`，然后打一次 `/api/translation/translate`。全程零出网：`creds==null` 那一支压根不问厂商（读码 `TranslationService.java:582-613`）。
+
+| 条 | 判据 | 读数 |
+| --- | --- | --- |
+| S1 | 钉完读回来的生效档就是这一档 | `{"scope":"conversation","channel":"7"}` |
+| D1 | 降级为真且没冒充缓存命中 | `{"degraded":true,"cached":false}` |
+| D2 | 后端说"重试无效" | `degradeRetryable=false` |
+| D3 | 原因念得出死在哪一侧 | `"tencent 未配置密钥，此结果来自本地模拟引擎"` |
+| D4 | 应答里的通道 = 钉上去的那条 | `{"channel":"7","scope":"conversation"}` |
+| C1 | **对照**：同一档、同一句话，只把 `channel` 换回 `'1'`（模拟线）→ 走成功出口 | `{"put":0,"degraded":false,"degradeReason":null,"channel":"1"}` |
+
+C1 这一格是必须的：死路那一句只属于降级出口，不许跟着成功出口一起躺着（否则页面会把一次正常翻译念成"重试无效"）。
+`[收尾现值]` 见 §10d。
+
+**驱动自己的一处修正（不是功能缺陷）**：第一版把寻址用的 `chatKey` 绑在渲染层那枚 ready 桥帧的 `activeChatKey` 上，
+于是内嵌视图一挂整条腿 `PREMISE-FAIL(exit 4)`——而这一腿证的是**后端应答的形状**，跟页面此刻开着哪条会话无关。
+改成 `GET /api/conversations?accountId=7&size=200` 取一条投影里的会话键（同一把键，只是作者不同）。改完同一条腿 6/6 全绿。
+
+### 10b. 单测腿（实测）与 §4 那条 D 组老断言的口径改写
+
+新增/改动的判据，各钉一件事：
+- `apps/desktop/src/shared/degradeCopy.test.ts`（5）：① 非降级 → `none`（不给按钮也不给说明）；② 可重试的降级 → 保持原句 `翻译失败 · 点此重试`、文案里不预告厂商错误；
+  ③ **后端没给 `degradeRetryable` 字段 → 退成可重试**（缺字段不等于死路，否则旧后端的降级会集体丢掉那颗按钮）；
+  ④ 显式 `false` → `dead`，把 `degradeReason` 念出来且不再挂重试；⑤ `dead` 但后端没给原因 → 兜底句 `翻译失败（重试无效）· 这条线路出不了译文`，不许漏出 `undefined`。
+- `DegradeClassificationTest.java`（4）：厂商瞬时故障仍标可重试 / 抛出点判死的故障到了 VO 上仍是不可重试 / 压根没配凭据那条出口就是死路 / 成功出口不带降级原因。
+- 两厂商各加一条 `blankCredentialsAreADeadEndToo`（`retryable()==false` 且**没发过任何厂商请求**），并给既有的"语种不在表上"补 `assertFalse(e.retryable())`、
+  给"厂商 HTTP 54001"与"线路抖动"两条补 `assertTrue(e.retryable())`——**厂商侧错误码一律留成可重试**，这条取舍写在规格 §7。
+- 全量：`./mvnw test` → `Tests run: 81, Failures: 0, Errors: 0` + `BUILD SUCCESS`（75 → 81）；`test:unit` → `212/212`；`typecheck` 四路（node/web/inject/unit）通过。
+- `lint`（实测，分两层）：改动的桌面端文件里只有 `renderer/src/api/translation.ts` 报 10 条 `explicit-function-return-type`；
+  把 `HEAD` 那一份原样落盘再 lint **同样 10 条**（行号 147…303 → 149…305，只是被这次新增的两行字段注释推下去了）——**既有，本轮没新增**。其余 9 个改动文件 `--quiet` 无输出。
+
+**§4 表里 D1–D8 那行的「文案逐字＝翻译失败 · 点此重试」要这样读**：它的前提（会话档 channel 指无凭据厂商）在今天的代码上判的是死路形状，
+页面文案变成 `翻译失败（重试无效）· tencent 未配置密钥，此结果来自本地模拟引擎`。那一跑（27/27）做的是这次改动**之前**的现场，记录保留不改写；
+今天拿同一片布景重跑 `tmp/p7f-domscan-cdp.mjs`，D2 那一格会红——**那是形状换了，不是回归失败**。改后同一片布景的期望写在 §10c 那条腿里。
+
+### 10c. 注入层实机腿：待验证（驱动已就位，被布景卡住）
+
+驱动 `tmp/p7g-deadend.mjs`（14 条，不入库）：S1 生效档就是死路通道 → D1 `data-p7-degrade="dead"` 在场 →
+D2 前缀逐字 `翻译失败（重试无效）·` 且念出「未配置密钥」→ D3 点名厂商（`tencent`）→ D4 无 `role=button`/`tabIndex`/`onclick` →
+D5 `cursor` 不是 pointer、无下划线 → D6 同一趟里 0 颗 `retry` 形状 → **D7 真实坐标点它，页内请求计数器不增** →
+D8 点完那一格原样还在（没被点没、也没翻成按钮）→ D9 滚出可视区再滚回还是同一句同一形状 → D10 滚回那趟不再问后端 →
+D11 页内那一趟拿回的确实是 `degraded=true + retryable=false + cached=false` → R1 还原并重扫后这一句不再挂在页上 → R2 生效档不再是死路通道。
+判据看**形状属性**不看文案关键字：按钮与说明共用同一枚 holder（错误态类名两边都有），只看 className 分不开。
+
+为什么这轮没跑（全部实测，读数见下）：内嵌 WhatsApp 视图停在 `chrome-error://chromewebdata/`，桥帧是
+`{"phase":"retry","ready":false,"detail":"注入失败：Script failed to execute…","activeChatKey":null}`；
+本机此刻零出网——`netsh winhttp show proxy` = 直接访问、`ProxyEnable=0`（`ProxyServer` 留着 `127.0.0.1:7892` 但没人监听），
+`curl` 直连与走 7892/8899 三发各自 `000`。视图不在会话里，D 组没有气泡可画。
+
+**这一格有本轮自伤的成分，如实记**：上一段排查里我对这枚视图发过 `Page.reload` / `Page.navigate`（为了取新档位与新 bundle），
+它因此从已登录的 `web.whatsapp.com` 掉到 `chrome-error`，当时开着的那条会话被弹走。**恢复要真人两下**：
+① 把系统代理开起来（让页面能出网），② 在内嵌页里点回一条会话。这两件都不在助手的手上（C9/红线：开关联线与切会话是用户的手）。
+所以本轮**不给"实机已验"**：`dead` 形状目前证据链两头齐（§10a 后端字段 + §10b 判据单测），
+中间那一格（注入层真在 WhatsApp DOM 上画对）只有读码（`manualButton.ts:54-63`、`domScan.ts:177-190`）与推断。
+可重试那一格本轮**连实机都没测**：要造瞬时故障得真出网打到厂商，规格 §8.3 明写那条只由单测覆盖形状判据。
+
+### 10d. bundle 上线不需要重启主进程 + 档位恢复
+
+- 读码：`main/webContentsView/manager.ts:291-301 readInjectBundle()` 在 `!app.isPackaged` 分支每次注入都从磁盘重读 `resources/inject.bundle.js`；
+  `cachedBundle` 那份缓存只在打包后走。所以 `build:inject` 出新 bundle（21.8kb）之后，一次视图重注入就用上新代码，不必动 Electron 主进程。
+- 实测（`tmp/p7g-cssread.mjs`）：视图样式表里读得到 `-degrade-note` 那条规则、`noteColor="#faa724"`、`hasInjector=true`；
+  同时 `url="chrome-error…"`、`rows=0`、`holders=0`——新 bundle 上身与页面停在错误页这两件事互不矛盾，正说明这一读数是今天的。
+- 恢复（实测，独立 HTTP 逐字段读回）：这条会话进入前**没有自己的会话档**，所以临时行按 `DELETE` 撤；
+  驱动打印 `[还原] 删掉本驱动建的会话档，生效档回到 global（进入前也没有这一档）`，
+  收尾现值 `{"scope":"global","channel":"2","收":"→lo","发":"ms→zh-CN","收开关":true}` 与进入前逐字一致。
+  两次跑各自还原过（第一次跑因桥帧前提失败退出，`dirty` 尚未置位、没写过档位）。
+
+### 10e. 这一格还欠着什么（本轮不收，逐条有归属）
+
+- **厂商错误码表**（规格 §7 记档）：被停用 / 配额耗尽的厂商账号在页面上仍显示那颗点得动的「点此重试」，用户要多点几次、读 `degradeReason` 里的原始错误才反应过来要换线路。
+- **死路那一格不给"去哪儿改"的入口**：现在只说"重试无效"并点名厂商，不链到翻译中心那张卡（恢复路径是改档位时 `translationRevision` 自增、整轮重扫）。属文案/导航设计，未批准就不做。
+- **`dead` 形状的实机腿**（§10c）：等出网 + 真人点开一条会话，跑 `node tmp/p7g-deadend.mjs` 结掉。
+

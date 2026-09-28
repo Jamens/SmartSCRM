@@ -75,10 +75,10 @@ public class BaiduProvider implements TranslationProvider {
     @Override
     public ProviderResult translate(Credentials creds, String text, String fromLang, String toLang) {
         if (creds == null || creds.appId().isBlank() || creds.secret().isBlank()) {
-            throw new ProviderException("百度 未配置密钥");
+            throw new ProviderException("百度 未配置密钥", false);
         }
         if (!supports(fromLang, toLang)) {
-            throw new ProviderException("百度 语种不支持: " + fromLang + "->" + toLang);
+            throw new ProviderException("百度 语种不支持: " + fromLang + "->" + toLang, false);
         }
         String to = LANGS.get(toLang);
         String from = (fromLang == null || fromLang.isBlank() || "auto".equals(fromLang))

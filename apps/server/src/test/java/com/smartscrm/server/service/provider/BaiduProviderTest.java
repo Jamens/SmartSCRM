@@ -93,6 +93,17 @@ class BaiduProviderTest {
         ProviderException e = assertThrows(ProviderException.class,
             () -> provider().translate(CREDS, "habari", "sw", "en"));
         assertTrue(e.getMessage().contains("sw"));
+        // 语种不在这条线路的表上：重试必然撞同一面墙，页面上那颗「点此重试」是假出口
+        assertFalse(e.retryable(), "语种不支持要判成死路: " + e.getMessage());
+        assertEquals(0, receivedQueries.size());
+    }
+
+    @Test
+    void blankCredentialsAreADeadEndToo() {
+        ProviderException e = assertThrows(ProviderException.class,
+            () -> provider().translate(new Credentials("", "", null), "你好", "zh-CN", "en"));
+        assertTrue(e.getMessage().contains("未配置密钥"), e.getMessage());
+        assertFalse(e.retryable(), "没有密钥时重试一万次也不会好: " + e.getMessage());
         assertEquals(0, receivedQueries.size());
     }
 
@@ -132,6 +143,9 @@ class BaiduProviderTest {
         ProviderException e = assertThrows(ProviderException.class,
             () -> provider().translate(CREDS, "你好", "zh-CN", "en"));
         assertTrue(e.getMessage().contains("54001"), e.getMessage());
+        // 厂商错误码一律留成"可重试"：那张码表（限流 / 并发 / 配额 / 鉴权）不在这里维护，
+        // 而我们能自证的两格（未配密钥、语种不支持）都在自己的构造点上。代价见验收文档。
+        assertTrue(e.retryable(), "厂商侧故障不判死: " + e.getMessage());
     }
 
     @Test
@@ -140,6 +154,7 @@ class BaiduProviderTest {
         ProviderException e = assertThrows(ProviderException.class,
             () -> provider().translate(CREDS, "你好", "zh-CN", "en"));
         assertTrue(e.getMessage().contains("百度"));
+        assertTrue(e.retryable(), "线路抖动/断网是瞬时故障，重试有意义: " + e.getMessage());
     }
 
     // ---------- helpers ----------
