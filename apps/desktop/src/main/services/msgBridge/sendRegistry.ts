@@ -1,5 +1,5 @@
 // src/main/services/msgBridge/sendRegistry.ts
-import type { MsgSource, NormalizedMessage, SendError, SendReceipt } from '../../../shared/chatTypes.ts'
+import type { MsgSource, NormalizedMessage, RecallReceipt, SendError, SendReceipt } from '../../../shared/chatTypes.ts'
 
 interface Pending {
   viewId: string
@@ -56,6 +56,63 @@ export class SendRegistry {
   failView(viewId: string, error: SendError, detail?: string): number {
     const ids = [...this.table.entries()].filter(([, p]) => p.viewId === viewId).map(([id]) => id)
     for (const id of ids) this.settle({ localId: id, ok: false, error, detail })
+    return ids.length
+  }
+
+  dispose(): void {
+    for (const entry of this.table.values()) clearTimeout(entry.timer)
+    this.table.clear()
+  }
+}
+
+interface PendingRecall {
+  viewId: string
+  resolve: (receipt: RecallReceipt) => void
+  timer: NodeJS.Timeout
+}
+
+/**
+ * localId → 未决撤回。与 `SendRegistry` 分开写的唯一理由是回执类型：`RecallReceipt` 没有
+ * `error: SendError` 那一格（撤回的结论是 `isRevoked`，失败原因只进 `detail`）。
+ * 超时这一支照抄发送侧：页内不回话时 invoke 不能永远挂着。
+ */
+export class RecallRegistry {
+  private readonly table = new Map<string, PendingRecall>()
+  // 同 SendRegistry：`erasableSyntaxOnly` 不许参数属性，写成字段 + 赋值。
+  private readonly timeoutMs: number
+
+  constructor(timeoutMs = 20_000) {
+    this.timeoutMs = timeoutMs
+  }
+
+  get size(): number {
+    return this.table.size
+  }
+
+  add(localId: string, viewId: string): Promise<RecallReceipt> {
+    this.settle({ localId, ok: false, detail: 'duplicated localId' })
+    return new Promise<RecallReceipt>((resolve) => {
+      const timer = setTimeout(() => {
+        this.settle({ localId, ok: false, detail: `>${this.timeoutMs}ms` })
+      }, this.timeoutMs)
+      this.table.set(localId, { viewId, resolve, timer })
+    })
+  }
+
+  /** @returns 命中未决表才 true；迟到或不属于本表的回执由调用方自己处置。 */
+  settle(receipt: RecallReceipt): boolean {
+    const entry = this.table.get(receipt.localId)
+    if (!entry) return false
+    this.table.delete(receipt.localId)
+    clearTimeout(entry.timer)
+    entry.resolve(receipt)
+    return true
+  }
+
+  /** 桥掉线 / 视图销毁：只结这个视图的未决撤回。 */
+  failView(viewId: string, detail?: string): number {
+    const ids = [...this.table.entries()].filter(([, p]) => p.viewId === viewId).map(([id]) => id)
+    for (const id of ids) this.settle({ localId: id, ok: false, detail })
     return ids.length
   }
 

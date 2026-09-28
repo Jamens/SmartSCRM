@@ -107,6 +107,21 @@ export interface SendReceipt {
   detail?: string
 }
 
+export interface RecallRequest {
+  accountId: number
+  chatKey: string
+  msgKey: string
+  localId: string
+}
+
+export interface RecallReceipt {
+  localId: string
+  ok: boolean
+  /** 只有页内返回体 isRevoked===true 才是 true（spec §6 的判定）。 */
+  isRevoked?: boolean
+  detail?: string
+}
+
 /** 页 → 主。全部经 `window.ele.sendToHost('msg-report', report)`，不带任何凭据（C2）。 */
 export type BridgeReport =
   | { kind: 'ready'; bridgeVersion: string }
@@ -115,6 +130,7 @@ export type BridgeReport =
   | { kind: 'backfill_progress'; chatsDone: number; chatsTotal: number; messages: number }
   | { kind: 'backfill_gap'; chatKey: string; reason: string }
   | { kind: 'send_result'; localId: string; ok: boolean; msgKey?: string; error?: SendError; detail?: string }
+  | { kind: 'recall_result'; localId: string; ok: boolean; isRevoked?: boolean; detail?: string }
   /**
    * 一次页内 ack 事件一帧：wa-js 的回执事件本来就带着 `ids[]`（整群读回执一次给几十条），
    * 拆成一 id 一帧会把一次更新变成几十个并发请求，而落库那侧每个请求是一个带行锁的事务。
@@ -127,6 +143,7 @@ export type BridgeReport =
 export type BridgeCommand =
   | { kind: 'ping' }
   | { kind: 'send'; localId: string; chatKey: string; text: string }
+  | { kind: 'recall'; localId: string; chatKey: string; msgKey: string }
   | { kind: 'backfill'; limit: number }
   | { kind: 'open_chat'; chatKey: string }
 

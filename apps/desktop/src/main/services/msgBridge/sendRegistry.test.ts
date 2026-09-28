@@ -1,7 +1,7 @@
 // src/main/services/msgBridge/sendRegistry.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { SendAttribution, SendRegistry } from './sendRegistry.ts'
+import { RecallRegistry, SendAttribution, SendRegistry } from './sendRegistry.ts'
 import type { NormalizedMessage } from '../../../shared/chatTypes.ts'
 
 test('settle 命中未决表；未知 localId 返回 false', async () => {
@@ -133,4 +133,30 @@ test('认领必须同视图同会话：换个 chatKey 或换个 viewId 的同文
   assert.equal(claimed.source, 'app_send')
   assert.equal(claimed.sendLocalId, 'L1')
   assert.deepEqual(at.pendingIntents(), [])
+})
+
+test('RecallRegistry：超时与重复登记都会结掉 invoke，迟到的 ok 不再改口', async () => {
+  const reg = new RecallRegistry(5)
+  const p = reg.add('R1', 'acc-x')
+  assert.deepEqual(await p, { localId: 'R1', ok: false, detail: '>5ms' })
+  assert.equal(reg.settle({ localId: 'R1', ok: true, isRevoked: true }), false)
+  const first = reg.add('R2', 'acc-x')
+  const second = reg.add('R2', 'acc-x')
+  assert.deepEqual(await first, { localId: 'R2', ok: false, detail: 'duplicated localId' })
+  reg.settle({ localId: 'R2', ok: true, isRevoked: true })
+  assert.deepEqual(await second, { localId: 'R2', ok: true, isRevoked: true })
+})
+
+test('RecallRegistry：failView 只结该视图并带 detail，dispose 清空表与定时器', async () => {
+  const reg = new RecallRegistry(1_000)
+  const a = reg.add('R1', 'acc-x')
+  const b = reg.add('R2', 'acc-y')
+  assert.equal(reg.failView('acc-x', '视图已销毁'), 1)
+  assert.deepEqual(await a, { localId: 'R1', ok: false, detail: '视图已销毁' })
+  reg.settle({ localId: 'R2', ok: false, isRevoked: false, detail: 'isRevoked=false' })
+  assert.equal((await b).isRevoked, false)
+  const reg2 = new RecallRegistry(1_000)
+  reg2.add('R3', 'acc-z')
+  reg2.dispose()
+  assert.equal(reg2.size, 0)
 })
