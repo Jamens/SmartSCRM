@@ -2360,7 +2360,7 @@ cd /d/SmartSCRM/apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run ty
 
 **Interfaces:**
 - Consumes: Task 7 的 `BatchTask`/`BatchDetail`/`BatchProgress`；后端 Task 4/5 端点与响应形状。
-- Produces（Task 11/12 按这些名字用；本任务自带 **7 条** `node --test` 用例）:
+- Produces（Task 11/12 按这些名字用；本任务自带 **8 条** `node --test` 用例）:
   - `type Fetcher = (path: string, init: RequestInit) => Promise<Response>`（真身是 Task 12 传进来的 `authedFetch`）
   - `interface ReportItem { detailId: number; localId?: string; sendStatus: string; errorCode?: string; errorDetail?: string; msgKey?: string; sentAtEpochSec?: number }`
   - `RecallTarget { detailId: number; accountId: number; chatKey: string; msgKey: string }`、`RecallBlocked { detailId: number; reason: string }`、`RecallPlan { eligible: RecallTarget[]; rejected: RecallBlocked[] }`、`RecallReportItem { detailId: number; recalled: boolean; detail?: string }`、`Page<T> { records: T[]; total: number; page: number; pageSize: number }`
@@ -2423,20 +2423,20 @@ test('recall 出参保留 eligible 与 rejected 两侧', async () => {
 // 这一支是全文件最容易静默坏掉的地方：把空数组拼成 body 发出去，后端按整批复位还是按零条复位，
 // 调用方在渲染层看不出来——单条重发按钮会「成功」但复位了整批。
 test('retryFailed：省略/空数组都不带 body，非空数组只带那几条', async () => {
-  const seen: { path: string; body?: string }[] = [];
+  const seen: { path: string; body?: string }[] = []
   const api = createBatchApi({
     fetcher: async (path, init) => {
-      seen.push({ path, body: init.body === undefined ? undefined : String(init.body) });
-      return json({ code: 0, data: { reset: 1, status: 'paused' } });
+      seen.push({ path, body: init.body === undefined ? undefined : String(init.body) })
+      return json({ code: 0, data: { reset: 1, status: 'paused' } })
     }
-  });
-  assert.equal(await api.retryFailed(1), 1);
-  assert.equal(await api.retryFailed(1, []), 1);
-  assert.equal(seen[0].body, undefined);
-  assert.equal(seen[1].body, undefined);
-  await api.retryFailed(1, [7, 8]);
-  assert.equal(seen[2].body, JSON.stringify({ detailIds: [7, 8] }));
-});
+  })
+  assert.equal(await api.retryFailed(1), 1)
+  assert.equal(await api.retryFailed(1, []), 1)
+  assert.equal(seen[0].body, undefined)
+  assert.equal(seen[1].body, undefined)
+  await api.retryFailed(1, [7, 8])
+  assert.equal(seen[2].body, JSON.stringify({ detailIds: [7, 8] }))
+})
 
 // 两个「只回一个数」的跳：抽取的键名各有其主（heartbeat=updated / recallReports=settled），
 // 写错键名的症状是永远回 0，而 0 在这里是合法值——泵会据此停摆，看起来像后端坏了。
@@ -2444,19 +2444,41 @@ test('heartbeat 取 updated、recallReports 取 settled，缺字段塌成 0', as
   const api = createBatchApi({
     fetcher: async (path) =>
       json({ code: 0, data: path.includes('heartbeat') ? { updated: 1 } : { settled: 2 } })
-  });
-  assert.equal(await api.heartbeat(1), 1);
-  assert.equal(await api.recallReports(1, [{ detailId: 1, recalled: true }]), 2);
-  const empty = createBatchApi({ fetcher: async () => json({ code: 0, data: {} }) });
-  assert.equal(await empty.heartbeat(1), 0);
-  assert.equal(await empty.recallReports(1, []), 0);
-});
+  })
+  assert.equal(await api.heartbeat(1), 1)
+  assert.equal(await api.recallReports(1, [{ detailId: 1, recalled: true }]), 2)
+  const empty = createBatchApi({ fetcher: async () => json({ code: 0, data: {} }) })
+  assert.equal(await empty.heartbeat(1), 0)
+  assert.equal(await empty.recallReports(1, []), 0)
+})
 
 test('details 分页参数进 query 串，页码从 1 起', async () => {
   let seenPath = ''
   const api = createBatchApi({ fetcher: async (p) => { seenPath = p; return json({ code: 0, data: { records: [], total: 0, page: 2, pageSize: 50 } }) } })
   await api.details(1, 2, 50)
   assert.equal(seenPath, '/api/batch-send/tasks/1/details?page=2&size=50')
+})
+
+// 塌成 null 的三种形状必须各自落到 onError(where, e)，且 where = 那一跳的 path：
+// 调用方拿到的返回值全是 null/0，唯一的区别就在这一路回调里。少报任何一种，
+// Task 11 的心跳泵就无法把「后端拒了这个迁移」和「后端没起来」分开处理。
+test('三种塌法都报到 onError，where 就是那一跳的 path', async () => {
+  const seen: { where: string; msg: string }[] = []
+  const mk = (fetcher: (p: string) => Promise<Response>): ReturnType<typeof createBatchApi> =>
+    createBatchApi({ fetcher, onError: (where, e) => seen.push({ where, msg: String(e) }) })
+
+  await mk(async () => { throw new Error('ECONNREFUSED') }).start(1)
+  await mk(async () => json({ code: 40902, message: '状态非法' }, 409)).pause(2)
+  await mk(async () => json({ code: 50000, message: 'boom' }, 200)).resume(3)
+
+  assert.deepEqual(seen.map((s) => s.where), [
+    '/api/batch-send/tasks/1/start',
+    '/api/batch-send/tasks/2/pause',
+    '/api/batch-send/tasks/3/resume'
+  ])
+  assert.match(seen[0].msg, /ECONNREFUSED/)
+  assert.match(seen[1].msg, /HTTP 409/, '非 2xx 要把状态码带出来，否则日志里只有 null')
+  assert.match(seen[2].msg, /code=50000/, '200 + 非 0 信封要把信封码带出来')
 })
 ```
 
@@ -2489,15 +2511,34 @@ export interface Page<T> { records: T[]; total: number; page: number; pageSize: 
 
 export interface BatchApiOptions { fetcher: Fetcher; onError?: (where: string, e: unknown) => void }
 
+// 返回类型不写在这里：`BatchApi = ReturnType<typeof createBatchApi>` 是 Task 11/12 的口径，
+// 而 `: BatchApi` 会自引用循环。同形的 `createMsgApi` 挂着同一条既有 error，这里用仓库惯例的
+// 行级豁免补齐 `--quiet` 闸门，不改 brief 的任何行为。
+// eslint-disable-next-line @typescript-eslint/explicit-function-return-type
 export function createBatchApi(opts: BatchApiOptions) {
   const note = (where: string, e: unknown): void => opts.onError?.(where, e)
 
+  /**
+   * 三种「这一跳没成」的形状都要落到 `onError`，因为塌成 null 之后调用方只剩一个值可读：
+   * - 非 2xx（409 状态迁移非法 / 40404 任务不属本租户 / 网关 5xx）
+   * - 200 但信封 `code !== 0` 或缺 `data`
+   * - `fetcher` 直接抛（后端没起 / 断网）
+   * 少报任何一种，Task 11 的心跳泵就只能把"后端拒了"和"后端根本没起来"当成同一件事处理——
+   * 而它对该不该停泵的判断正好取决于这两者的区别。
+   */
   async function call<T>(path: string, init: RequestInit): Promise<T | null> {
     try {
       const res = await opts.fetcher(path, init)
-      if (!res.ok) return null
+      if (!res.ok) {
+        note(path, new Error(`HTTP ${res.status}`))
+        return null
+      }
       const env = (await res.json()) as Envelope<T>
-      return env.code === 0 && env.data !== undefined ? env.data : null
+      if (env.code !== 0 || env.data === undefined) {
+        note(path, new Error(`信封非 0：code=${env.code}`))
+        return null
+      }
+      return env.data
     } catch (e) {
       note(path, e)
       return null
@@ -2557,7 +2598,7 @@ export function createBatchApi(opts: BatchApiOptions) {
 export type BatchApi = ReturnType<typeof createBatchApi>
 ```
 
-- [ ] **Step 4：`tsconfig.unit.json` 的 `include` 追加那两支**（`src/main/services/batchSend/batchApi.ts`、`.../batchApi.test.ts`；`host.ts` 这类 import electron 的绝不能加）。`package.json:15` 的 `test:unit` 追加 `"src/main/services/batchSend/**/*.test.ts"`。跑 unit + typecheck 全绿：期望 `pass` 从 **222 → 229**（212 基线 + Task 7 的 10 + 本任务 7），`fail 0`。
+- [ ] **Step 4：`tsconfig.unit.json` 的 `include` 追加那两支**（`src/main/services/batchSend/batchApi.ts`、`.../batchApi.test.ts`；`host.ts` 这类 import electron 的绝不能加）。`package.json:15` 的 `test:unit` 追加 `"src/main/services/batchSend/**/*.test.ts"`。跑 unit + typecheck 全绿：期望 `pass` 从 **222 → 230**（212 基线 + Task 7 的 10 + 本任务 8），`fail 0`。
 - [ ] **Step 5：提交。** `feat(P7/群发): 主进程群发十二跳，注入 fetcher 且全部塌成 null`
 
 ## Task 9: per-view 发送锁 + `sendText` / `recallText` 挂锁
@@ -3796,7 +3837,7 @@ cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.
 cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 ```
 
-期望：unit `pass` = 212 + 10(Task 7) + 7(Task 8) + 4(Task 9) + 4(Task 10) + 8(Task 11) = **245**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
+期望：unit `pass` = 212 + 10(Task 7) + 8(Task 8) + 4(Task 9) + 4(Task 10) + 8(Task 11) = **246**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = Task 1 基线 + 22、0 failures；契约驱动 `30/30 passed` 且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
 
 - [ ] **Step 2：CDP 演练腿（全程 dryRun，不碰页面）。** 前提：主进程改过，dev 必须已被用户重启过一次（dev watcher 不重载 `src/main`）。先 `powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p5c-top.ps1` 断言 `visibilityState==='visible'`，然后跑 `tmp/p7b-dry-run.mjs`，八条：
 
