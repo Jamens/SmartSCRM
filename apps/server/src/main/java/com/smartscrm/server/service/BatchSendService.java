@@ -97,7 +97,7 @@ public class BatchSendService {
         if (ok.isEmpty()) {
             throw new BizException(40012, "所有收件人都不可寻址");
         }
-        Map<String, BatchRender.Fields> fieldsByKey = resolveFields(convIndex, ok);
+        Map<String, BatchRender.Fields> fieldsByKey = resolveFields(tenantId, convIndex, ok);
         List<BatchExpansion.ExpandedRow> rows = BatchExpansion.expand(ok, dto.getContents(),
                 r -> fieldsByKey.getOrDefault(convKey(r.accountId(), r.chatKey()), BatchRender.EMPTY_FIELDS));
 
@@ -244,7 +244,8 @@ public class BatchSendService {
      * 两个变量的取值来源（R9）：有客户用客户档案；没客户落到会话标题与 chat_key 本地段。
      * 一次性批量查客户，绝不在循环里 selectById —— 1000 个收件人会打出 1000 条 SQL。
      */
-    private Map<String, BatchRender.Fields> resolveFields(Map<String, ChatConversation> convIndex,
+    private Map<String, BatchRender.Fields> resolveFields(long tenantId,
+                                                          Map<String, ChatConversation> convIndex,
                                                           List<BatchExpansion.Recipient> ok) {
         Set<Long> customerIds = new HashSet<>();
         ok.forEach(r -> {
@@ -254,7 +255,10 @@ public class BatchSendService {
         });
         Map<Long, Customer> customers = new HashMap<>();
         if (!customerIds.isEmpty()) {
-            customerMapper.selectList(new LambdaQueryWrapper<Customer>().in(Customer::getId, customerIds))
+            // 租户闸：错链的那一行会把别人的昵称/号码渲染进 body，而 body 是要发出去的。
+            customerMapper.selectList(new LambdaQueryWrapper<Customer>()
+                            .eq(Customer::getTenantId, tenantId)
+                            .in(Customer::getId, customerIds))
                     .forEach(c -> customers.put(c.getId(), c));
         }
         Map<String, BatchRender.Fields> out = new HashMap<>();

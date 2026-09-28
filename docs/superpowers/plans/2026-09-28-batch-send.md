@@ -1084,7 +1084,7 @@ public class BatchSendService {
         if (ok.isEmpty()) {
             throw new BizException(40012, "所有收件人都不可寻址");
         }
-        Map<String, BatchRender.Fields> fieldsByKey = resolveFields(convIndex, ok);
+        Map<String, BatchRender.Fields> fieldsByKey = resolveFields(tenantId, convIndex, ok);
         List<BatchExpansion.ExpandedRow> rows = BatchExpansion.expand(ok, dto.getContents(),
                 r -> fieldsByKey.getOrDefault(convKey(r.accountId(), r.chatKey()), BatchRender.EMPTY_FIELDS));
 
@@ -1156,8 +1156,12 @@ public class BatchSendService {
     /**
      * 两个变量的取值来源（R9）：有客户用客户档案；没客户落到会话标题与 chat_key 本地段。
      * 一次性批量查客户，绝不在循环里 selectById —— 1000 个收件人会打出 1000 条 SQL。
+     * 这批 id 来自会话行，带 `tenant_id` 闸是照仓库既有形制（读码：`CustomerService.java:78`、
+     * `MessageQueryService.java:81` 的每一条 by-id 客户读都先 eq 租户）：错链的那一行会把
+     * 别人的昵称/号码渲染进 `body`，而 `body` 是要发出去的。
      */
-    private Map<String, BatchRender.Fields> resolveFields(Map<String, ChatConversation> convIndex,
+    private Map<String, BatchRender.Fields> resolveFields(long tenantId,
+                                                          Map<String, ChatConversation> convIndex,
                                                           List<BatchExpansion.Recipient> ok) {
         Set<Long> customerIds = new HashSet<>();
         ok.forEach(r -> {
@@ -1167,7 +1171,9 @@ public class BatchSendService {
         });
         Map<Long, Customer> customers = new HashMap<>();
         if (!customerIds.isEmpty()) {
-            customerMapper.selectList(new LambdaQueryWrapper<Customer>().in(Customer::getId, customerIds))
+            customerMapper.selectList(new LambdaQueryWrapper<Customer>()
+                            .eq(Customer::getTenantId, tenantId)
+                            .in(Customer::getId, customerIds))
                     .forEach(c -> customers.put(c.getId(), c));
         }
         Map<String, BatchRender.Fields> out = new HashMap<>();
@@ -1239,6 +1245,8 @@ public class BatchSendService {
 - [ ] **Step 4：预览与读端点。** `preview` 复用 `BatchRender`（同一份规则只有一个实现，spec §4 明写）：取 `conversations` 前 `PREVIEW_MAX_RECIPIENTS` 条，逐条逐内容生成 `{chatKey, contentIndex, body}`，`truncated = conversations.size() > 5`。**预览不查库、不校验会话存在性**——它是渲染器预览，不是收件人校验；这一步查库会让人在向导里边打字边等一次 join。
 
 `pageTasks` / `task` / `pageDetails`：`LambdaQueryWrapper` 加 `eq(tenantId)` + 可选 `eq(status)` / `eq(sendStatus)` / `eq(recallStatus)`，`orderByAsc(BatchSendDetail::getSeq)`（明细）/ `orderByDesc(BatchSendTask::getId)`（任务列表），分页用现有 `PageResult.of(records, total, page, pageSize)`。`requireOwned` 用 `LambdaQueryWrapper` 按 `tenantId + id` 取，取不到 → `BizException(40404, "任务不存在")`。
+
+**每页条数：入参叫 `size`，出参叫 `pageSize`，两个方向两套名。** 入参照 spec §4 的端点表（`?page=&size=`）与既有 `ConversationController.java:36`、`MessageController.java:54`、`CustomerController.java:65` 的同形写法（`AudienceController.java:47` 的 `pageSize` 是仓库里唯一的例外，别照它）；出参照 `common/PageResult.java` 的 record 组件名 `pageSize`，那是响应体字段，不是查询参数。Task 6 的契约腿、Task 8 的 query 串、Task 13 的两个 hook 一律拼 `size=`。拼成 `pageSize=` 不会报错——Spring 只是不绑定，然后静默回到默认页大小，断言看起来"过了"其实测的是默认值。
 
 实体 → VO 只有这一份映射，Task 5 的 `resultOf` 与三个读端点都调它（JSON 列在这里拆，别的地方拿到的一直是 `List`）：
 
@@ -1717,11 +1725,15 @@ check('#2 读任务 → status:pending, sent/fail/total=0/0/4, dryRun:true',
     && t2.data?.failCount === 0 && t2.data?.totalCount === 4 && t2.data?.dryRun === true,
   'pending,0,0,4,dryRun=true', JSON.stringify(t2.data));
 
-// #3 明细 seq 收件人主序，同会话相邻（读码级断言：seq/chatKey/contentIndex 三列一起看）
-const d3 = await get(`/api/batch-send/tasks/${T}/details?pageSize=50`);
-const recs = d3.data?.records ?? [];
-check('#3 明细分页 → seq=[1,2,3,4]，同人两条相邻',
-  recs.length === 4 && JSON.stringify(recs.map((r) => r.seq)) === '[1,2,3,4]'
+// #3 明细 seq 收件人主序，同会话相邻。两页各 2 条：`size=` 与 `page=` 都要"看得出生效了"——
+// 只拉一次默认大小的话，参数名拼错（`pageSize=`）返回体一模一样，这条腿就只是在读默认值。
+const d3a = await get(`/api/batch-send/tasks/${T}/details?page=1&size=2`);
+const d3b = await get(`/api/batch-send/tasks/${T}/details?page=2&size=2`);
+const recs = (d3a.data?.records ?? []).concat(d3b.data?.records ?? []);
+check('#3 明细分页 → size=2 每页两条、page=2 接上后两行，seq=[1,2,3,4] 同人两条相邻',
+  (d3a.data?.records ?? []).length === 2 && (d3b.data?.records ?? []).length === 2
+    && d3a.data?.pageSize === 2 && d3a.data?.page === 1 && d3b.data?.page === 2
+    && recs.length === 4 && JSON.stringify(recs.map((r) => r.seq)) === '[1,2,3,4]'
     && recs[0].chatKey === recs[1].chatKey && recs[2].chatKey === recs[3].chatKey
     && recs[0].chatKey !== recs[2].chatKey
     && JSON.stringify(recs.map((r) => r.contentIndex)) === '[0,1,0,1]',
@@ -1808,7 +1820,7 @@ const c15 = await post('/api/batch-send/tasks', base({
     { accountId: 999999, chatKey: keys[0] },
   ],
 }));
-const d15 = c15.code === 0 ? await get(`/api/batch-send/tasks/${c15.data.taskId}/details?pageSize=10`) : null;
+const d15 = c15.code === 0 ? await get(`/api/batch-send/tasks/${c15.data.taskId}/details?size=10`) : null;
 check('#15 两条不可寻址分别点名、其余照常展开，totalCount=2（1 人 × 2 内容）',
   c15.code === 0 && c15.data?.rejected?.length === 2
     && c15.data.rejected.some(r => r.chatKey === 'nope-9999@c.us' && /采集记录/.test(r.reason ?? ''))
@@ -1864,7 +1876,7 @@ check('#21 heartbeat 只在 running 时命中一行',
 
 // 明细 id 一律现取，不硬编码：任务是自己创建的，行 id 由自增决定，写死 1/2/3/4 必然对不上。
 const detailsOf = async (taskId) =>
-  (await get(`/api/batch-send/tasks/${taskId}/details?pageSize=50`)).data?.records ?? [];
+  (await get(`/api/batch-send/tasks/${taskId}/details?size=50`)).data?.records ?? [];
 
 // #22 reports 刷三计数：2 success + 1 failed + 1 unknown
 const dT2 = await detailsOf(T2);
@@ -2247,7 +2259,7 @@ cd /d/SmartSCRM/apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run ty
   - `type Fetcher = (path: string, init: RequestInit) => Promise<Response>`（真身是 Task 12 传进来的 `authedFetch`）
   - `interface ReportItem { detailId: number; localId?: string; sendStatus: string; errorCode?: string; errorDetail?: string; msgKey?: string; sentAtEpochSec?: number }`
   - `RecallTarget { detailId: number; accountId: number; chatKey: string; msgKey: string }`、`RecallBlocked { detailId: number; reason: string }`、`RecallPlan { eligible: RecallTarget[]; rejected: RecallBlocked[] }`、`RecallReportItem { detailId: number; recalled: boolean; detail?: string }`、`Page<T> { records: T[]; total: number; page: number; pageSize: number }`
-  - `createBatchApi(opts: BatchApiOptions)` → `BatchApi = ReturnType<typeof createBatchApi>`，十二个方法就是 Step 3 实现里那十二个（十跳运行面 + `task`/`details` 两跳只读）：`start/pause/resume/cancel(taskId) → Promise<BatchProgress | null>`、`reports(taskId, items, allHalted) → Promise<BatchProgress | null>`、`task(id) → Promise<BatchTask | null>`、`details(taskId, page, pageSize) → Promise<Page<BatchDetail> | null>`、`heartbeat(taskId) → Promise<number>`、`retryFailed(taskId, detailIds?) → Promise<number>`（省略＝整批，带＝只复位那几条，R11）、`recall(taskId, detailIds) → Promise<RecallPlan | null>`、`recallReports(taskId, items) → Promise<number>`、`reconcile() → Promise<{ pausedTasks: number; markedUnknown: number } | null>`
+  - `createBatchApi(opts: BatchApiOptions)` → `BatchApi = ReturnType<typeof createBatchApi>`，十二个方法就是 Step 3 实现里那十二个（十跳运行面 + `task`/`details` 两跳只读）：`start/pause/resume/cancel(taskId) → Promise<BatchProgress | null>`、`reports(taskId, items, allHalted) → Promise<BatchProgress | null>`、`task(id) → Promise<BatchTask | null>`、`details(taskId, page, size) → Promise<Page<BatchDetail> | null>`（URL 里拼 `size=`，见 Task 4 Step 4 的「入参 size / 出参 pageSize」）、`heartbeat(taskId) → Promise<number>`、`retryFailed(taskId, detailIds?) → Promise<number>`（省略＝整批，带＝只复位那几条，R11）、`recall(taskId, detailIds) → Promise<RecallPlan | null>`、`recallReports(taskId, items) → Promise<number>`、`reconcile() → Promise<{ pausedTasks: number; markedUnknown: number } | null>`
   - `BatchApiOptions { fetcher: Fetcher; onError?: (where: string, e: unknown) => void }`（两个参数：host 要知道是哪一跳挂了，只给 error 就得上 log 里猜）
 
 - [ ] **Step 1：写失败的测试**（`node --test`，`tsconfig.unit.json` 内，相对导入）：
@@ -2306,7 +2318,7 @@ test('details 分页参数进 query 串，页码从 1 起', async () => {
   let seenPath = ''
   const api = createBatchApi({ fetcher: async (p) => { seenPath = p; return json({ code: 0, data: { records: [], total: 0, page: 2, pageSize: 50 } }) } })
   await api.details(1, 2, 50)
-  assert.equal(seenPath, '/api/batch-send/tasks/1/details?page=2&pageSize=50')
+  assert.equal(seenPath, '/api/batch-send/tasks/1/details?page=2&size=50')
 })
 ```
 
@@ -2366,8 +2378,8 @@ export function createBatchApi(opts: BatchApiOptions) {
     resume: (taskId: number) => asProgress(postJson(`/api/batch-send/tasks/${taskId}/resume`)),
     cancel: (taskId: number) => asProgress(postJson(`/api/batch-send/tasks/${taskId}/cancel`)),
     task: (taskId: number) => call<BatchTask>(`/api/batch-send/tasks/${taskId}`, { method: 'GET' }),
-    details: (taskId: number, page: number, pageSize: number) =>
-      call<Page<BatchDetail>>(`/api/batch-send/tasks/${taskId}/details?page=${page}&pageSize=${pageSize}`,
+    details: (taskId: number, page: number, size: number) =>
+      call<Page<BatchDetail>>(`/api/batch-send/tasks/${taskId}/details?page=${page}&size=${size}`,
         { method: 'GET' }),
     /** 心跳只关心"命中没有"：0 = 任务已不在 running，调用方据此停泵。 */
     async heartbeat(taskId: number): Promise<number> {
@@ -3389,9 +3401,9 @@ export function registerBatchIpc(): void {
 - Consumes: `http`（`lib/http.ts` 的 `http.get/post`）、`window.scrm.batch`（Task 12）、后端 VO 形状。
 - Produces（Task 14/15 按这些名字用）:
   - `interface BatchTaskVO` / `interface BatchDetailVO` / `interface BatchCreateInput`（`PageResult<T>` 复用 `api/customers.ts` 里已有的那份，不另造）
-  - `useBatchTasks(status?: string, page?: number, pageSize?: number)`
+  - `useBatchTasks(status?: string, page?: number, size?: number)`
   - `useBatchTask(id: number | null)`
-  - `useBatchDetails(id, sendStatus?, recallStatus?, page?, pageSize?)`
+  - `useBatchDetails(id, sendStatus?, recallStatus?, page?, size?)`
   - `useCreateBatchTask()` / `useBatchPreview()`
   - `useBatchAction(action: 'start'|'pause'|'resume'|'cancel')` / `useBatchRetry()` / `useBatchRecall()`
   - `useBatchLive()`
@@ -3429,12 +3441,12 @@ export interface BatchCreateVO {
   totalCount: number
 }
 
-export function useBatchTasks(status?: string, page = 1, pageSize = 20) {
+export function useBatchTasks(status?: string, page = 1, size = 20) {
   return useQuery({
-    queryKey: [...BATCH_KEY, 'list', status ?? '', page, pageSize],
+    queryKey: [...BATCH_KEY, 'list', status ?? '', page, size],
     queryFn: () =>
       http.get<PageResult<BatchTaskVO>>(
-        `/api/batch-send/tasks?page=${page}&pageSize=${pageSize}${status ? `&status=${status}` : ''}`
+        `/api/batch-send/tasks?page=${page}&size=${size}${status ? `&status=${status}` : ''}`
       )
   })
 }
@@ -3449,13 +3461,13 @@ export function useBatchTask(taskId: number | null) {
 
 /** 明细的 seq 升序由后端保证（Task 4），这里不再排第二遍。 */
 export function useBatchDetails(
-  taskId: number | null, sendStatus?: string, recallStatus?: string, page = 1, pageSize = 50
+  taskId: number | null, sendStatus?: string, recallStatus?: string, page = 1, size = 50
 ) {
   return useQuery({
-    queryKey: [...BATCH_KEY, 'details', taskId, sendStatus ?? '', recallStatus ?? '', page, pageSize],
+    queryKey: [...BATCH_KEY, 'details', taskId, sendStatus ?? '', recallStatus ?? '', page, size],
     queryFn: () =>
       http.get<PageResult<BatchDetailVO>>(
-        `/api/batch-send/tasks/${taskId}/details?page=${page}&pageSize=${pageSize}` +
+        `/api/batch-send/tasks/${taskId}/details?page=${page}&size=${size}` +
           `${sendStatus ? `&sendStatus=${sendStatus}` : ''}${recallStatus ? `&recallStatus=${recallStatus}` : ''}`
       ),
     enabled: taskId != null
