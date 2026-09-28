@@ -3,7 +3,11 @@ export type BatchTaskStatus = 'pending' | 'running' | 'paused' | 'done' | 'error
 export type BatchDetailStatus = 'pending' | 'sending' | 'success' | 'failed' | 'unknown' | 'skipped'
 export type RecallStatus = 'none' | 'recalling' | 'recalled' | 'recall_failed'
 
-/** 只有这三个是"不再参与执行"的状态，buildQueues 与 Task 13 的徽标共用这一份判据。 */
+/**
+ * 「人还能不能处置这一行」= 已经收口。Task 13/15 的徽标与「重发这一条」按钮读它。
+ * 这条判据**不**用来决定泵该发谁（那一条只有 `pending` 算数，见 `buildQueues`）：
+ * `failed` 在这里必须算"没收口"，否则重试按钮点不动；它对泵又必须是"别再发一遍"。
+ */
 export const SETTLED_DETAIL_STATUS: readonly BatchDetailStatus[] = ['success', 'unknown', 'skipped']
 
 export interface BatchDetail {
@@ -84,7 +88,7 @@ export interface BatchProgress {
 export function buildQueues(details: BatchDetail[], accountIds: number[]): BatchDetail[][] {
   return accountIds
     .map((a) => details
-      .filter((d) => d.accountId === a && !SETTLED_DETAIL_STATUS.includes(d.sendStatus))
+      .filter((d) => d.accountId === a && d.sendStatus === 'pending')
       .sort((x, y) => x.seq - y.seq))
 }
 
