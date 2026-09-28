@@ -20,8 +20,7 @@ import { accountOfId, accountOfView, refreshAccounts, type AccountEntry } from '
 import { BridgeMount } from './bridgeMount'
 import { CollectorHub } from './collectorHub'
 import { createMsgApi, isSendable } from './msgApi'
-import { SendAttribution, SendRegistry } from './sendRegistry'
-import { RecallRegistry } from './sendRegistry'
+import { RecallRegistry, SendAttribution, SendRegistry } from './sendRegistry'
 import { SendLock } from './sendLock'
 
 /** spec §4 的 msgHistoryLimit：每会话补底条数。 */
