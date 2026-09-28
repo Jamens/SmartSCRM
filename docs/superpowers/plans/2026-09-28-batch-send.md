@@ -1762,14 +1762,26 @@ if (cust) {
   check('#5 无客户可证 → 本条记为待验证（不参与 failures）', true, 'skipped', 'skipped');
 }
 
-// #6 预览与明细用同一个渲染器：同 chatKey 同 contentIndex 的 body 逐字相等
+// #6 契约是「预览复用同一个渲染函数」（spec §4「渲染规则只有后端一份」），不是「同一份字段值」。
+//    preview 手上没有客户档，喂的是样例兜底链：nickname=null、openId=chat_key 本地段、phone=null
+//    （读码 BatchSendService#preview → BatchRender.Fields(null, localPart, null)）。
+//    本腿收件人无客户且标题为空，两条链在 {客户名} 那一格重合，于是 body 逐字相等；
+//    再把期望值写成手拼的整串，把样例链本身钉住（{号码} 落空、未识别 token 原样）——
+//    Task 14 的向导要靠这条口径把预览标成「示例」，不能当成真实正文。
+
+// chat_key 本地段尾 4：与 BatchRender#openIdTail 同口径（先剥 @ 之后，再取尾 4，不足 4 位用整串）
+const tail4 = (chatKey) => { const l = chatKey.split('@')[0]; return l.length <= 4 ? l : l.slice(-4); };
+
 const p6 = await post('/api/batch-send/preview', {
   conversations: [{ accountId: acct.id, chatKey: keys[0] }],
   contents: ['第一条 {客户名} {号码} {订单号}', '第二条'],
 });
-check('#6 preview.body[0] 与 detail seq=1 的 body 逐字相等',
-  p6.code === 0 && p6.data?.rows?.[0]?.body === recs[0]?.body,
-  recs[0]?.body, p6.data?.rows?.[0]?.body);
+const p6b = p6.data?.rows?.[0]?.body ?? '';
+const expect6 = '第一条 ' + tail4(keys[0]) + '  {订单号}';
+check('#6 preview 与 detail 同一个渲染函数，且 preview 走样例链（{客户名}=本地段尾 4、{号码}=空）',
+  p6.code === 0 && p6b === recs[0]?.body && p6b === expect6,
+  '逐字相等 + ' + expect6,
+  JSON.stringify({ same: p6b === recs[0]?.body, expect: expect6, actual: p6b }));
 
 // #7 预览只渲染前 5 个收件人并给出 truncated 标记
 const many = Array.from({ length: 7 }, (_, i) => ({ accountId: acct.id, chatKey: keys[0] + i }));
