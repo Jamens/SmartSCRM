@@ -49,6 +49,11 @@ test('pickIntervalSec: 落在 [min,max] 且取整，边界两种随机数都夹�
   // 否则 max+1 秒会直接进 Task 11 的等待时长里。
   assert.equal(pickIntervalSec('msg', t, () => 1), 8)
   assert.equal(pickIntervalSec('msg', t, () => -0.5), 3)
+  // 非有限值走区间下界：NaN 穿到 setTimeout 就是"立刻触发"，节律等于没设；
+  // Infinity 也按同一张嘴处理，不然两条分支要各记一条规则。
+  assert.equal(pickIntervalSec('msg', t, () => Number.NaN), 3)
+  assert.equal(pickIntervalSec('msg', t, () => Number.POSITIVE_INFINITY), 3)
+  assert.equal(pickIntervalSec('msg', t, () => Number.NEGATIVE_INFINITY), 3)
   assert.equal(pickIntervalSec('chat', t, () => 0.5), 10)
   for (let i = 0; i < 200; i++) {
     const v = pickIntervalSec('msg', t, Math.random)
