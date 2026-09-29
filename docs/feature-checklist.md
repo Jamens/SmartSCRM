@@ -81,6 +81,17 @@
   指纹配置，都按"设置页里的一行/一节"来放，届时不再重开页面；A10 消息中心与 A11 帮助文档是内容页不是设置项，
   仍各自成页。**A12 角标没有宿主问题**——它写的是任务栏，值来自会话未读投影，全在壳层与主进程侧，不需要任何页面。
 
+### 2026-09-29：B7 批量群发交付（P7 第一段，V11）
+
+- **B7 已交付**：`docs/notes/2026-09-28-b7-batch-send-verification.md` 是它的验收记录（四档总览、机械档五个数字、
+  契约 37 条、演练腿 8 条 + 详情腿 6 条、已知行为四条、V1 缺口八条），spec 与计划分别在
+  `docs/superpowers/specs/2026-09-28-batch-send-design.md`、`docs/superpowers/plans/2026-09-28-batch-send.md`。
+- **第一版边界**（不是"以后再说"，是这一版明确不做的，写进 spec §10）：平台只认 `whatsapp`；内容只到纯文本，媒体与
+  按钮消息属于 B17；收件人锁死在已采会话（不碰 `createChat`，发错人不可回收）；没有定时/周期；任务本机跑、不跨设备续；
+  `unknown` 明细**只有显示没有裁决入口**——那一行只能人工去 WhatsApp 里核对，系统不替操作者结掉它。
+- **两格仍是"待验证"**：真发 1 条、真撤回 1 次，都要用户在场并明确放行才做（spec §9 那一档）。全部自动化腿跑的是
+  `dryRun=1`，全程没按下过任何发送键、没撤过任何真实消息。
+
 ## 技术选型
 - desktop: Electron 39 + React 19 + TS(strict) + electron-vite + Tailwind v4 + shadcn/ui + Zustand + TanStack Query + react-i18next
 - server: Java 17 + Spring Boot 3.5 + MyBatis-Plus + Flyway + MySQL 8（库名 `smartscrm_react`，不动旧 `smartscrm` 库）
