@@ -236,8 +236,8 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
   const pct = task.totalCount > 0 ? Math.min(100, Math.round((task.sentCount / task.totalCount) * 100)) : 0
   const acts = ACTIONS[task.status]
   // 复位把终态唤醒成 paused（R11），正常情况下「继续」就在那排按钮上；不在的时候必须说清点哪一颗，
-  // 否则「点继续重跑」会是一句在卡片上点不动的话。running 不在这条链上：正在跑的泵会自己把复位成
-  // pending 的行捡起来重发，叫用户「先暂停」反而会把在跑的批次掐掉（真实副作用），那一句在渲染处单说。
+  // 否则「点继续重跑」会是一句在卡片上点不动的话。running 不走这条链：那时后端不唤醒、卡片上也没有「继续」，
+  // 而正在跑的泵拿的是起泵时的明细快照，捡不到复位出来的行——那一句在渲染处按 running 单独说。
   const resumeStep = acts.includes('resume')
     ? ''
     : acts.includes('start')
@@ -307,9 +307,11 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
           <p className="mt-3 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs text-foreground">
             {resetResult.count > 0
               ? task.status === 'running'
-                ? // 正在跑的泵持续投 pending 行（host 的 runTask 起泵后 buildQueues 只捡 pending），
-                  // 复位成 pending 的行会被它自己捡走——既没有「继续」可点，也不该叫用户去暂停。
-                  `已复位 ${resetResult.count} 条，正在跑的泵会自己把这些行捡起来重发，不用暂停。`
+                ? // 泵拿的是起泵那一刻拉到的明细快照（host 的 runTask 翻页取全量 → buildQueues 只在这份
+                  // 快照里挑 pending），所以跑途中复位出来的 pending 行不在它的队列里，不会被自动捡走。
+                  // 后端那条唤醒边只在 done/error 上做（retryFailed 不看 running），卡片上也就不会出现「继续」；
+                  // 唯一的重跑入口是先停掉这一趟、再重新起泵。
+                  `已复位 ${resetResult.count} 条，但正在跑的泵不会捡走它们（队列在起泵时就定了）：先「暂停」再点「继续」才会重跑这一批。`
                 : // 非 running：复位本身不投泵，要不要「点继续」看复位之后 GET 回来的状态，不是取数前那一份。
                   `已复位 ${resetResult.count} 条，点继续重跑` + resumeStep
               : // count=0：这一跳确实打到了、只是没有 failed 行（后端拒绝现在走上面的 failure 红通道，不再混进 0）。
