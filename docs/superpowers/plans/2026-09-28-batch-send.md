@@ -4273,8 +4273,9 @@ export const ACTIONS: Record<BatchTaskStatus, BatchAction[]> = {
   - 列：`name` / `status`（Badge）/ 演练徽标 / `sentCount`–`totalCount` 进度条 / `failCount`（0 也写「0」，不许留空）/ `createdAt` / 操作。
   - **演练徽标常驻**：`dryRun ? <Badge>演练</Badge> : <Badge variant="outline">真发</Badge>`，两种状态都有字，跑完的演练任务不许看起来像真发过（spec §7）。
   - 状态筛选 Select：`全部 | pending | running | paused | done | error | cancelled`。钉的是那七个 **value**（逐字）；
-    `label` 用中文（`STATUS_LABEL` 在 Task 14 手里留在 `BatchTaskList.tsx` 组件文件里、没导出），
-    CDP 那条腿要断言这七个取值就按 `value` 查，别按可见文字。
+    `label` 用中文，取自 `batchActions.ts` 的 `STATUS_LABEL`（Task 15 把这张表和 `ACTION_LABEL`/`STATUS_VARIANT` 一起
+    收进了那个非组件模块——`react-refresh/only-export-components` 是 error 级，四张表都不许待在 `BatchTaskList.tsx`
+    这种组件文件里）。CDP 那条腿要断言这七个取值就按 `value` 查，别按可见文字。
   - 行点击 → `onOpen(taskId)` 交回 `BroadcastPage` 切详情视图。
 - [ ] **Step 3：向导五步。** `BatchWizard.tsx`（Dialog + step 状态机 `accounts → recipients → contents → pacing → confirm`）：
   - `accounts`：多选在线账号；一个未选时「下一步」disabled。
@@ -4294,10 +4295,12 @@ export const ACTIONS: Record<BatchTaskStatus, BatchAction[]> = {
 **Files:**
 - Create: `apps/desktop/src/renderer/src/components/broadcast/BatchTaskDetail.tsx`
 - Modify: `apps/desktop/src/renderer/src/pages/BroadcastPage.tsx`
+- Modify: `apps/desktop/src/renderer/src/components/broadcast/batchActions.ts`（`recallEligible` 与三张文案/徽标表落这里）
+- Modify: `apps/desktop/src/renderer/src/components/broadcast/BatchTaskList.tsx`（那三张表原先写在组件文件里，改为从 `batchActions.ts` 导入）
 
 **Interfaces:**
 - Consumes: `useBatchTask` / `useBatchDetails` / `useBatchAction` / `useBatchRetry` / `useBatchRecall` / Task 14 的 `ACTIONS`（从 `@/components/broadcast/batchActions` 导入——它不在 `BatchTaskList.tsx` 里）。
-- Produces: `<BatchTaskDetail taskId={number} />`；`recallEligible(task, row): boolean`。
+- Produces: `<BatchTaskDetail taskId={number} />`；`recallEligible(task, row): boolean`（导出点在 `@/components/broadcast/batchActions`，不在组件文件里——同一个 react-refresh 门禁）。
 
 - [ ] **Step 1：头部卡。** 三计数 + 进度条 + 状态 Badge + 演练徽标 + `heartbeatAt` + 按 `ACTIONS` 出的按钮组。
   - `heartbeatAt` 是墙钟串（Task 7 的 `string | null`），解析与格式化都走既有那一条链，**不要 dayjs 直接吃 VO 串**：`const ms = chatMs(task.heartbeatAt)`（`api/messages.ts:393`，内部补 `@shared/chatTime` 的 `CHAT_ZONE_OFFSET_TAG`），显示 `chatClock(ms)`（`@shared/chatTime:43`，东八区 `HH:mm`）+ 一句「距今 N 秒」（`Math.max(0, Math.round((Date.now() - ms) / 1000))`）。绝对时刻只到分，是因为 `chatClock` 的口径就是"日分组已经交代了哪天，这里只到分"；15 秒一跳的心跳在分钟刻度上看不出前进，**「距今 N 秒」才是"引擎还在跑"的那张证人**，所以两个都显示。
@@ -4305,7 +4308,7 @@ export const ACTIONS: Record<BatchTaskStatus, BatchAction[]> = {
 - [ ] **Step 2：明细表。** 列 `seq / accountId / chatKey / contentIndex / body（截断 60 字 + title 全文）/ sendStatus / errorCode+errorDetail / msgKey / recallStatus / sentAt`（`sentAt` 与 `heartbeatAt` 同一口径：`row.sentAt ? chatClock(chatMs(row.sentAt)) : '—'`）；筛选两个 Select（`sendStatus`、`recallStatus`）；翻页用 `useBatchDetails` 的 `page`。
   - **`unknown` 行**只显示不动作：文案「结果未知（可能已发出），不自动重发」。V1 **不给**它任何复位/裁决入口（R3；`retryFailed` 的 WHERE 不含它），并把这个缺口记进 Task 16 的验收文档为「V1 缺 unknown 的人工裁决入口」。
   - **`failed` 行**：行末一个「重发这一条」→ `useBatchRetry({ taskId, detailIds: [row.id] })`；表头另有一颗「重发失败条目」→ `useBatchRetry({ taskId })`（不带 detailIds＝整批）。两颗粒都走同一跳端点，只是 body 有无 `detailIds`（R11）。成功 toast 用返回的 `reset` 说"复位 N 条"（N 不许写死），**N=0 时要点一句「这几条不是失败状态，没有可重发的」**——否则用户会以为已经重发过了。复位把终态唤醒成 `paused` 时，任务卡上要出现「继续」并配一句「已复位 N 条，点继续重跑」：复位本身不投泵，泵只在 `running` 时捡 `pending` 行（Task 12 的 `runTask`），少了这一句用户会以为点完就在跑。
-- [ ] **Step 3：撤回。**
+- [ ] **Step 3：撤回。** 下面这段落在 `batchActions.ts`（shipped 原文，导出点就在那儿；组件文件只导入使用）：
 
 ```ts
 /** 后端四条判据的镜像：`BatchStatus.recallBlocker` 那三条（非演练 / send_status=success / 有 msg_key）+ 服务层那条「recall_status 不是 none = 已经撤过或正在撤」。只用来禁用 checkbox；筛与点名仍在后端 POST /recall。 */
