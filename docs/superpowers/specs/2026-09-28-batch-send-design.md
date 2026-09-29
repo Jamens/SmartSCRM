@@ -93,7 +93,9 @@ CREATE TABLE `batch_send_detail` (
 **状态机**
 
 - 任务：`pending → running → done`；`running ⇄ paused`；`running → error`（参与账号全部熔断或人工放弃）；任一非终态 `→ cancelled`。`done/error/cancelled` 不可再 `start`。
-- 明细：`pending → sending → success | failed | unknown`；`pending → skipped`（任务被取消或账号熔断时的未跑条目）。`unknown` 只能由人工裁决改写为 `success`（补 `msg_key` 无从谈起，因此不给它撤回资格）或 `failed`。
+  - **`done → paused` 与 `error → paused` 只由「重发失败条目」这一条路径走**（R11）：`retryFailed` 真复位了至少一行时，后端把任务推回 `paused`，等人工点「继续」起泵；`reset=0`（那几条不是失败状态）时任务**原地不动**，不会凭空多出一条边。`pending` 单不会被这条路径碰（它没有失败行）。
+  - **`cancelled` 没有出边**：它是唯一连复位入口都不认的状态（`retryFailed` 的 WHERE 不含它，实测 `reset=0` 且状态仍是 `cancelled`）。理由是取消是人的决定，机器不该替他把决定收回。
+- 明细：`pending → sending → success | failed | unknown`；`pending → skipped`（任务被取消或账号熔断时的未跑条目）。`unknown` 只能由人工裁决改写为 `success`（补 `msg_key` 无从谈起，因此不给它撤回资格）或 `failed`——**第一版没有那个裁决入口，只有显示**（见 §10）。
 - 撤回：`none → recalling → recalled | recall_failed`，`recall_failed → recalling` 是合法边（B7 I-6：一次超时或页内失败不该把消息永久钉在客户脸上，`recall_failed` 可以再点撤回）；`recalled` 是终态。只有 `send_status='success' AND msg_key IS NOT NULL AND dry_run=0` 的条目有撤回资格。
 
 ## 3. 创建：展开与校验（全在后端事务内）
@@ -204,10 +206,13 @@ type Dispatch = (d: DetailRow, viewId: string) => Promise<SendOutcome>
 - 陌生号直发（`createChat: true` 使其技术上可达，但发错人不可回收；收件人锁死在已采会话）。
 - 定时/周期发送（何时开始只有"人工点 start"一种）。
 - 跨设备任务续跑（引擎与账号视图同宿主，本机跑）。
+- **`unknown` 明细的人工裁决入口**（把那一行改成 `success` 或 `failed` 的按钮与端点）。第一版只做"显示 + 不牵连"：详情表看得见 `unknown`（读码：`BatchTaskDetail.tsx:39` 有 `unknown: '结果未知'` 这一档，:592 那句文案是「结果未知（可能已发出），不自动重发」；实测：契约腿 #27 断言 `retry-failed` 复位 1 条之后那一行**仍是** `unknown`），撤回资格判据天然把它挡在外面，`retry-failed` 不复位它，`reset=0` 时任务原地不动。代价是：真实档一旦出 `unknown`，操作者只能自己去 WhatsApp 里看那条到底发没发出去，系统不替他把那一行结掉。
 
 ## 11. 待验证（动手后回来补，不许提前定论）
 
-1. `deleteMessage` 第四位在真机上是否真的走到"对所有人撤回"（docs 说 `revoke`，实测只信一次）。
-2. 撤回超出 WhatsApp 时间窗时的失败形状（用于补分类正则）。
-3. `sendText` 加 per-view 锁后，回复框在高密度群发下的最坏等待是否可接受（不可接受就改成"群发期间回复框提示等待"，而不是拆锁）。
-4. 演练任务的耗时形状（`模拟耗时` 取多少才不让人误以为真发完了）——只影响观感，先取 200 ms。
+逐条给当前的证据词；仍写"待验证"的格子不许在验收文档里升级成"已验证"。
+
+1. `deleteMessage` 第四位在真机上是否真的走到"对所有人撤回"——**待验证**。现在的判据是**读码**得来的：桥的撤回支调 `deleteMessage(chatKey, bareMsgKey(msgKey), false, true)`（`apps/desktop/src/bridge/whatsapp/recall.ts:25`），且只有返回体 `isRevoked === true` 才算成功，`isDeleted` 单独为真也只写 `recall_failed`（同一文件 :26-32 把两个位都塞进 `detail` 落库、详情表看得见），其余一律 `recall_failed + detail`。真机那一次要用户在场放行。
+2. 撤回超出 WhatsApp 时间窗时的失败形状（用于补分类正则）——**待验证**。第一版不猜形状：`recall_failed` 的 `detail` 原样落库、详情表可见，正则等真机那一格回来再补。
+3. `sendText` 加 per-view 锁后，回复框在高密度群发下的最坏等待——**读码**给出上界「一条 `chat_interval` + 一个在途回执的耗时」（锁按 view 串行，排队者要等当前那条走完出料口才拿得到）；**这一上界在演练档没被实测过**，因为演练走的是 `host.ts` 的 `dryDispatch`（`DRY_RUN_MS` 之后直接回一条 `dryrun:<detailId>`，不碰 `msgBridge`、不碰页面，压根不占那把锁；读码 `host.ts:55-58` + 实测：演练 20 行的 `msg_key` 全是 `dryrun:` 前缀，零条走真发）。真发档的最坏等待 = **待验证**。
+4. 演练任务的耗时形状（`模拟耗时` 取多少才不让人误以为真发完了）——**实测，200 ms 够用**。演练腿 20 条跑完时，条件轮询走了 16 拍（300 ms 一轮，约 4.8 s）才看到 `running → done`（`tmp/p7b-leg-dryrun-4.log` #3 `rounds=16 final=done`），表在动、进度在涨，不是一闪而过；观感上没有"瞬间全绿"的错觉。
