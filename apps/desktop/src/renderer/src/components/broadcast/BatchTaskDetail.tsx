@@ -1,4 +1,5 @@
-import { useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
+import { useQueryClient } from '@tanstack/react-query'
 import {
   SETTLED_DETAIL_STATUS,
   type BatchDetailStatus,
@@ -15,7 +16,7 @@ import {
   type BatchAction
 } from './batchActions'
 import type { BatchDetailVO } from '@/api/batchSend'
-import { useBatchAction, useBatchDetails, useBatchRecall, useBatchRetry, useBatchTask } from '@/api/batchSend'
+import { useBatchAction, useBatchDetails, useBatchRecall, useBatchRetry, useBatchTask, invalidateBatchDetails } from '@/api/batchSend'
 import { chatMs } from '@/api/messages'
 import { chatClock } from '@shared/chatTime'
 import { Badge } from '@/components/ui/badge'
@@ -104,6 +105,7 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
   const [sendStatus, setSendStatus] = useState<string>(ALL)
   const [recallStatus, setRecallStatus] = useState<string>(ALL)
   const [page, setPage] = useState(1)
+  const taskStatus = task?.status
   const details = useBatchDetails(
     taskId,
     sendStatus === ALL ? undefined : sendStatus,
@@ -113,8 +115,21 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
     // 而运营最容易在此刻去点暂停/取消这种不可回收动作。非 running 不刷，退回事件 + GET 那条节律。
     // 不用事件 invalidate 明细：演练任务一秒能广播几百个 `batch:state`，那是自 DDoS。
     50,
-    task?.status === 'running' ? 2000 : false
+    taskStatus === 'running' ? 2000 : false
   )
+  const qc = useQueryClient()
+  // 换档那一刷：2 s 节律只管 running *期间*，跑完的那一拍它管不到——重发一条只需几百毫秒的短跑
+  // 会从第一个 tick 之前就跑完，`batch:state` 又只管任务与列表两个 key，于是表头说「已完成 · 已发 2」
+  // 而那一行永远停在「待发送」（Task 16 #6 实测：41 帧读数里 API 全程 done，DOM 全程没动过）。
+  // 判据取换档而不是取事件：`finish()` 先等所有 reports 落地再 GET 广播，所以状态读到 done 时
+  // 行状态一定已经结清，跟着这一档刷一次明细拿到的是同一份真值，不会刷出半张旧表。
+  const seenStatus = useRef<string | undefined>(undefined)
+  useEffect(() => {
+    if (seenStatus.current !== undefined && seenStatus.current !== taskStatus) {
+      invalidateBatchDetails(qc, taskId)
+    }
+    seenStatus.current = taskStatus
+  }, [taskStatus, qc, taskId])
 
   const startAction = useBatchAction('start')
   const pauseAction = useBatchAction('pause')

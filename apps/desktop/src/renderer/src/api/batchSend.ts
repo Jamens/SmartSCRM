@@ -3,6 +3,7 @@ import {
   useMutation,
   useQuery,
   useQueryClient,
+  type QueryClient,
   type UseMutationResult,
   type UseQueryResult
 } from '@tanstack/react-query'
@@ -101,6 +102,16 @@ export function useBatchDetails(
   })
 }
 
+/**
+ * 明细那一页的失效口径只这一处。key 里带筛选与页码，所以按 `[batch, details, taskId]` 前缀整体作废，
+ * 让当前挂载的那一屏自己去重取。
+ * 三个调用点各有各的理由：重发/撤回是用户在这屏上按的（mutate 成功即刷），第三处是 `BatchTaskDetail`
+ * 在任务换档时补的那一刷（见其 `useEffect`）——运行收尾不在任何 mutate 上。
+ */
+export function invalidateBatchDetails(qc: QueryClient, taskId: number): void {
+  void qc.invalidateQueries({ queryKey: [...BATCH_KEY, 'details', taskId] })
+}
+
 export function useCreateBatchTask(): UseMutationResult<BatchCreateVO, Error, BatchCreateInput, unknown> {
   const qc = useQueryClient()
   return useMutation({
@@ -148,7 +159,7 @@ export function useBatchRetry(): UseMutationResult<number | null, Error, RetryIn
     mutationFn: ({ taskId, detailIds }: RetryInput) => batchHost().retryFailed(taskId, detailIds),
     onSuccess: (_reset, { taskId }) => {
       void qc.invalidateQueries({ queryKey: [...BATCH_KEY, 'task', taskId] })
-      void qc.invalidateQueries({ queryKey: [...BATCH_KEY, 'details', taskId] })
+      invalidateBatchDetails(qc, taskId)
     }
   })
 }
@@ -163,7 +174,7 @@ export function useBatchRecall(): UseMutationResult<BatchRecallResult, Error, Re
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ taskId, detailIds }: RecallInput) => batchHost().recall(taskId, detailIds),
-    onSuccess: (_out, v) => void qc.invalidateQueries({ queryKey: [...BATCH_KEY, 'details', v.taskId] })
+    onSuccess: (_out, v) => invalidateBatchDetails(qc, v.taskId)
   })
 }
 
