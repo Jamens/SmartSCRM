@@ -1,6 +1,12 @@
 import { useState } from 'react'
 import type { BatchTaskStatus } from '@shared/batchSend'
-import { ACTIONS, type BatchAction } from './batchActions'
+import {
+  ACTION_LABEL,
+  ACTIONS,
+  STATUS_LABEL,
+  STATUS_VARIANT,
+  type BatchAction
+} from './batchActions'
 import type { BatchTaskVO } from '@/api/batchSend'
 import { useBatchAction, useBatchTasks } from '@/api/batchSend'
 import { chatMs } from '@/api/messages'
@@ -14,34 +20,6 @@ import {
   SelectTrigger,
   SelectValue
 } from '@/components/ui/select'
-
-const ACTION_LABEL: Record<BatchAction, string> = {
-  start: '开始',
-  pause: '暂停',
-  resume: '继续',
-  cancel: '取消'
-}
-
-const STATUS_LABEL: Record<BatchTaskStatus, string> = {
-  pending: '待开始',
-  running: '发送中',
-  paused: '已暂停',
-  done: '已完成',
-  error: '出错',
-  cancelled: '已取消'
-}
-
-const STATUS_VARIANT: Record<
-  BatchTaskStatus,
-  'default' | 'secondary' | 'outline' | 'destructive' | 'ghost'
-> = {
-  pending: 'secondary',
-  running: 'default',
-  paused: 'outline',
-  done: 'ghost',
-  error: 'destructive',
-  cancelled: 'ghost'
-}
 
 const ALL = 'all'
 const STATUSES = Object.keys(STATUS_LABEL) as BatchTaskStatus[]

@@ -1,8 +1,8 @@
 import { useState } from 'react'
 import { ArrowLeft, Megaphone, Plus } from 'lucide-react'
-import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
-import { useBatchLive, useBatchTask } from '@/api/batchSend'
+import { useBatchLive } from '@/api/batchSend'
+import { BatchTaskDetail } from '@/components/broadcast/BatchTaskDetail'
 import { BatchTaskList } from '@/components/broadcast/BatchTaskList'
 import { BatchWizard } from '@/components/broadcast/BatchWizard'
 
@@ -40,39 +40,11 @@ export function BroadcastPage(): React.JSX.Element {
         {openTaskId === null ? (
           <BatchTaskList onOpen={setOpenTaskId} />
         ) : (
-          <TaskDetailPlaceholder taskId={openTaskId} />
+          <BatchTaskDetail taskId={openTaskId} />
         )}
       </div>
 
       {wizardOpen && <BatchWizard onClose={() => setWizardOpen(false)} onOpen={setOpenTaskId} />}
-    </div>
-  )
-}
-
-/** 详情视图（明细表 / 重发 / 撤回）是 Task 15 的落点；这里先把切换的缝与头部卡挂上。 */
-function TaskDetailPlaceholder({ taskId }: { taskId: number }): React.JSX.Element {
-  const { data: task, isPending, isError, error } = useBatchTask(taskId)
-  return (
-    <div className="rounded-xl border border-border/60 bg-card p-4">
-      {isPending ? (
-        <p className="py-8 text-center text-sm text-muted-foreground">加载任务中…</p>
-      ) : isError ? (
-        <p className="py-8 text-center text-sm text-destructive">任务加载失败：{error.message}</p>
-      ) : (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="font-medium">{task.name}</span>
-          <Badge variant="secondary" className="text-[11px]">
-            {task.status}
-          </Badge>
-          <span className="text-xs text-muted-foreground">
-            {task.sentCount}/{task.totalCount} · 失败 {task.failCount}
-          </span>
-          <span>{task.dryRun ? <Badge className="text-[11px]">演练</Badge> : <Badge variant="outline" className="text-[11px]">真发</Badge>}</span>
-        </div>
-      )}
-      <p className="mt-3 text-xs text-muted-foreground">
-        明细表、失败重发与撤回勾选在下一任务接入（Task 15：BatchTaskDetail）。
-      </p>
     </div>
   )
 }
