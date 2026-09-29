@@ -4242,15 +4242,24 @@ export function useBatchLive(): void {
 - Modify: `apps/desktop/src/renderer/src/pages/BroadcastPage.tsx`
 - Create: `apps/desktop/src/renderer/src/components/broadcast/BatchTaskList.tsx`
 - Create: `apps/desktop/src/renderer/src/components/broadcast/BatchWizard.tsx`
+- Create: `apps/desktop/src/renderer/src/components/broadcast/batchActions.ts`（`ACTIONS` 不进组件文件，原因见 Step 1）
 
 **Interfaces:**
 - Consumes: Task 13 的全部 hooks；`stores/accounts.ts` 的账号列表；`/api/conversations?accountId=&size=`；`api/audiences.ts` 的 `useAudiences`/`useAudienceCustomers`。
-- Produces: `<BroadcastPage />`（默认 = 列表 + 「新建任务」）；导出 `ACTIONS`（Task 15 复用）。
+- Produces: `<BroadcastPage />`（默认 = 列表 + 「新建任务」）；`batchActions.ts` 的 `ACTIONS` 与 `BatchAction`（Task 15 复用）。
 
-- [ ] **Step 1：`ACTIONS` 表（列表与详情共用一份）。**
+- [ ] **Step 1：`ACTIONS` 表（列表与详情共用一份），落在独立模块 `components/broadcast/batchActions.ts`。** 它不许待在组件文件里：仓内 eslint 的 `react-refresh/only-export-components` 是 error 级，组件文件混出常量直接把门禁崩掉，规则给的处方就是另开一个文件。以下为 shipped 原文：
 
 ```ts
-export const ACTIONS: Record<BatchTaskStatus, ('start' | 'pause' | 'resume' | 'cancel')[]> = {
+import type { BatchTaskStatus } from '@shared/batchSend'
+
+export type BatchAction = 'start' | 'pause' | 'resume' | 'cancel'
+
+/**
+ * 这张表只决定**按钮出不出现**，合法性仍由后端 40902 裁决；
+ * 它与后端 `SOURCES_OF` 是同一规则的两处写法，改一边要看另一边。
+ */
+export const ACTIONS: Record<BatchTaskStatus, BatchAction[]> = {
   pending: ['start', 'cancel'],
   running: ['pause', 'cancel'],
   paused: ['resume', 'cancel'],
@@ -4259,8 +4268,6 @@ export const ACTIONS: Record<BatchTaskStatus, ('start' | 'pause' | 'resume' | 'c
   cancelled: []
 }
 ```
-
-> 注释里写清：这张表只决定**按钮出不出现**，合法性仍由后端 40902 裁决；它与后端 `SOURCES_OF` 是同一规则的两处写法，改一边要看另一边。
 
 - [ ] **Step 2：列表。** `BatchTaskList.tsx`：
   - 列：`name` / `status`（Badge）/ 演练徽标 / `sentCount`–`totalCount` 进度条 / `failCount`（0 也写「0」，不许留空）/ `createdAt` / 操作。
@@ -4287,7 +4294,7 @@ export const ACTIONS: Record<BatchTaskStatus, ('start' | 'pause' | 'resume' | 'c
 - Modify: `apps/desktop/src/renderer/src/pages/BroadcastPage.tsx`
 
 **Interfaces:**
-- Consumes: `useBatchTask` / `useBatchDetails` / `useBatchAction` / `useBatchRetry` / `useBatchRecall` / Task 14 的 `ACTIONS`。
+- Consumes: `useBatchTask` / `useBatchDetails` / `useBatchAction` / `useBatchRetry` / `useBatchRecall` / Task 14 的 `ACTIONS`（从 `@/components/broadcast/batchActions` 导入——它不在 `BatchTaskList.tsx` 里）。
 - Produces: `<BatchTaskDetail taskId={number} />`；`recallEligible(task, row): boolean`。
 
 - [ ] **Step 1：头部卡。** 三计数 + 进度条 + 状态 Badge + 演练徽标 + `heartbeatAt` + 按 `ACTIONS` 出的按钮组。
