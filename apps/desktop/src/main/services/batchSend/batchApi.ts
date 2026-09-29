@@ -91,17 +91,24 @@ export function createBatchApi(opts: BatchApiOptions) {
     reports: (taskId: number, items: ReportItem[], allHalted: boolean) =>
       postProgress(`/api/batch-send/tasks/${taskId}/reports`, { items, allHalted }),
     /**
+     * 三态返回，与 `postProgress` 的「宿主塌成 null 表示这一跳没成」同一条口径——不许再造第二种信号：
+     * - `null` = 这一跳没成：`call` 的三种塌法（非 2xx 的 40902/40404、信封 `code !== 0`、`fetcher` 抛）全落这里；
+     * - `0`    = 打到了，这个任务确实没有 failed 行；
+     * - `N`    = 复位了 N 条。
+     * `0` 与 `null` 必须分开：渲染层据此决定是走「这一跳没成」那条红色失败通道、还是陈述「没有可重发的」。
+     * 塌成同一个 `0`，详情页就会在后端根本没接住时对用户的数据下一句假话——正是这次要拆掉的歧义。
      * 只回复位条数：R11 那次「done/error → paused」的唤醒结果由渲染层随后 GET 任务拿到，
      * 这里不把 status 穿两层 IPC 再穿一次——同一条链上出现两个"任务现在是什么状态"的读数来源，
      * 而其中一个可能是上一跳的旧值。
      * detailIds 省略或空数组 = 整批复位；带 = 只复位勾选的那几条（spec §7 的单条重发）。
      */
-    async retryFailed(taskId: number, detailIds?: number[]): Promise<number> {
+    async retryFailed(taskId: number, detailIds?: number[]): Promise<number | null> {
       const data = await call<{ reset?: number }>(`/api/batch-send/tasks/${taskId}/retry-failed`,
         detailIds?.length
           ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ detailIds }) }
           : { method: 'POST' })
-      return data?.reset ?? 0
+      // `data === null`（这一跳没成）与 `data.reset` 缺失（信封形状变了）都塌 null；真打到的 0 原样回 0。
+      return data?.reset ?? null
     },
     recall: (taskId: number, detailIds: number[]) =>
       call<RecallPlan>(`/api/batch-send/tasks/${taskId}/recall`,
