@@ -151,6 +151,8 @@ function TaskRow({
       className="grid cursor-pointer grid-cols-[minmax(0,2fr)_72px_56px_minmax(0,1.6fr)_48px_128px_minmax(0,168px)] items-center gap-3 rounded-xl border border-border/60 bg-card px-3 py-2.5 text-sm hover:bg-accent/40"
       onClick={() => onOpen(task.id)}
       onKeyDown={(e) => {
+        // 空格在 div[role=button] 上默认还会滚页面，不拦住就"打开了但也跳了一段"。
+        if (e.key === ' ') e.preventDefault()
         if (e.key === 'Enter' || e.key === ' ') onOpen(task.id)
       }}
     >

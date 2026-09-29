@@ -113,6 +113,19 @@ export function BatchWizard({
   const preview = useBatchPreview()
   const create = useCreateBatchTask()
 
+  /** 预览的输入只有收件人与内容这两列：任一被改，上一份渲染结果（或那一次的失败）就不再代表当前。 */
+  const dropPreview = (): void => {
+    if (preview.data || preview.isError || preview.isPending) preview.reset()
+  }
+  const editRecipients = (next: (prev: Recipient[]) => Recipient[]): void => {
+    dropPreview()
+    setRecipients(next)
+  }
+  const editContents = (next: (prev: string[]) => string[]): void => {
+    dropPreview()
+    setContents(next)
+  }
+
   const selectedKeys = useMemo(() => new Set(recipients.map(recipientKey)), [recipients])
   const contentErrors = contents.map((c, i) => {
     if (c.trim() === '') return `第 ${i + 1} 条为空`
@@ -127,14 +140,14 @@ export function BatchWizard({
   const toggleAccount = (id: number): void => {
     if (accountIds.includes(id)) {
       setAccountIds(accountIds.filter((x) => x !== id))
-      setRecipients(recipients.filter((r) => r.accountId !== id))
+      editRecipients((prev) => prev.filter((r) => r.accountId !== id))
     } else {
       setAccountIds([...accountIds, id])
     }
   }
 
   const toggleRecipient = (r: Recipient): void => {
-    setRecipients((prev) => {
+    editRecipients((prev) => {
       const key = recipientKey(r)
       return prev.some((x) => recipientKey(x) === key) ? prev.filter((x) => recipientKey(x) !== key) : [...prev, r]
     })
@@ -240,9 +253,9 @@ export function BatchWizard({
             <ContentsStep
               contents={contents}
               errors={contentErrors}
-              onChange={(i, v) => setContents((prev) => prev.map((c, idx) => (idx === i ? v : c)))}
-              onAdd={() => setContents((prev) => (prev.length < MAX_CONTENTS ? [...prev, ''] : prev))}
-              onRemove={(i) => setContents((prev) => prev.filter((_, idx) => idx !== i))}
+              onChange={(i, v) => editContents((prev) => prev.map((c, idx) => (idx === i ? v : c)))}
+              onAdd={() => editContents((prev) => (prev.length < MAX_CONTENTS ? [...prev, ''] : prev))}
+              onRemove={(i) => editContents((prev) => prev.filter((_, idx) => idx !== i))}
               canPreview={recipients.length > 0}
               previewedCount={Math.min(PREVIEW_RECIPIENTS, recipients.length)}
               onPreview={() =>
@@ -274,6 +287,7 @@ export function BatchWizard({
               recipientCount={recipients.length}
               contentCount={contents.length}
               total={total}
+              overCap={overCap}
               msgRange={`${msgMin}–${msgMax} 秒`}
               chatRange={`${chatMin}–${chatMax} 秒`}
               dryRun={dryRun}
@@ -653,6 +667,7 @@ function ConfirmStep({
   recipientCount,
   contentCount,
   total,
+  overCap,
   msgRange,
   chatRange,
   dryRun,
@@ -664,6 +679,7 @@ function ConfirmStep({
   recipientCount: number
   contentCount: number
   total: number
+  overCap: boolean
   msgRange: string
   chatRange: string
   dryRun: boolean
@@ -690,6 +706,11 @@ function ConfirmStep({
         {line('换人间隔', chatRange)}
         {line('模式', dryRun ? <Badge className="text-[11px]">演练</Badge> : <Badge variant="outline" className="text-[11px]">真发</Badge>)}
       </div>
+      {overCap && (
+        <p className="text-xs text-destructive">
+          超过 {MAX_TOTAL_DETAILS} 条上限——减几个收件人或删掉几条内容才能创建。
+        </p>
+      )}
       {error && <p className="text-xs text-destructive">创建失败：{error}</p>}
     </div>
   )
