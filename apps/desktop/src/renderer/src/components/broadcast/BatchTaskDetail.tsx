@@ -90,8 +90,9 @@ function clockOf(value: string | null | undefined): string {
 /**
  * 「距今 N 秒」的算法。`nowMs` 用参数默认值取当下，与 `lib/chatDays.ts` 的 `listTime` / `dayLabel`
  * 同一条口径（渲染函数体里直接写 `Date.now()` 会撞 `react-hooks/purity` 那条 error 级规则）。
- * 每次重新渲染取一次当下，不自设定时器：页面收到 `batch:state` 就 invalidate + 重新 GET（Task 13 的
- * `useBatchLive`，挂在 `BroadcastPage` 上），这一句跟着跳；没人看的页面不养常驻定时器。
+ * 每次重新渲染取一次当下，不自设定时器：任务与列表两个 key 由 `useBatchLive` 收到 `batch:state`
+ * 时 invalidate + GET 覆盖（Task 13，挂在 `BroadcastPage` 上），这一句跟着跳；明细那一屏不在事件
+ * 覆盖范围内，走 `useBatchDetails` 的 `refetchIntervalMs` 节律（Task 12 I-4）。没人看的页面不养常驻定时器。
  */
 function secondsSince(ms: number, nowMs: number = Date.now()): number {
   return Math.max(0, Math.round((nowMs - ms) / 1000))
@@ -107,7 +108,12 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
     taskId,
     sendStatus === ALL ? undefined : sendStatus,
     recallStatus === ALL ? undefined : recallStatus,
-    page
+    page,
+    // running 时以 2 s 节律刷明细（Task 12 I-4）：数字在跳而表格不动会被读成「页面卡了」，
+    // 而运营最容易在此刻去点暂停/取消这种不可回收动作。非 running 不刷，退回事件 + GET 那条节律。
+    // 不用事件 invalidate 明细：演练任务一秒能广播几百个 `batch:state`，那是自 DDoS。
+    50,
+    task?.status === 'running' ? 2000 : false
   )
 
   const startAction = useBatchAction('start')
@@ -285,8 +291,10 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
           {heartbeatMs === null ? '还没跑过' : `${clockText(heartbeatMs, '还没跑过')} · 距今 ${heartbeatAgo} 秒`}
         </p>
         {/* 「距今 N 秒」才是"引擎还在跑"的那张证人：15 秒一跳在 HH:mm 刻度上看不出来。
-            它不进定时器，页面每收到一次 `batch:state` 就重新 GET（Task 13 的 useBatchLive，挂在页面层），
-            重新渲染时这个数自然跟着跳；没人看的页面不该养一个常驻定时器。 */}
+            它不进定时器：任务与列表两个 key 由 `useBatchLive` 收到 `batch:state` 就 invalidate + 重新 GET
+            （Task 13 挂在页面层），这一句跟着重渲染；明细那一屏由 `useBatchDetails` 的 `refetchIntervalMs`
+            在 running 时按节律刷（Task 12 I-4），事件不覆盖明细——演练任务一秒几百个事件会自 DDoS 本地后端。
+            没人看的页面不养定时器。 */}
 
         <div className="mt-3 flex flex-wrap items-center gap-2">
           {acts.map((action) => (
@@ -505,7 +513,9 @@ function DetailRow({
     <tr className="align-top">
       <Td className="w-8">
         {/* checkbox 只挂在 recallEligible 的行上；演练任务整列禁用，表头另有那句说明。
-            过了判据的旧勾选（比如刚被推成 recalling）画不出来也点不动。 */}
+            `recall_failed` 可以再点撤回（Task 12 I-6 的裁定：一次超时/一次页内失败不该把消息永久
+            钉在客户脸上）；`recalled` 与 `recalling` 画不出来也点不动——前者是终态，后者可能正在
+            别人的手里。刚被推成 `recalling` 的旧勾选也在这一格止步，同一条判据。 */}
         <input
           type="checkbox"
           className="mt-1 size-3.5 accent-[oklch(0.488_0.243_264.376)] disabled:cursor-not-allowed"

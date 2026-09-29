@@ -107,7 +107,15 @@ export function buildQueues(details: BatchDetail[], accountIds: number[]): Batch
       .sort((x, y) => x.seq - y.seq))
 }
 
-export function gapKindFor(prev: BatchDetail | null, cur: BatchDetail): IntervalKind {
+/**
+ * `gapKindFor` 只读 `accountId` 与 `chatKey` 两个字段：参数类型写成最小结构类型而不是 `BatchDetail`，
+ * 是为了让撤回循环 (`host.ts` 的 `batch:recall`) 也能直接把手上的 `RecallTarget` 递进来复用这一条判据。
+ * 复制一份新函数就会有两张真值表；这里合并成一处，改一边一定看得见另一边（Task 12 I-5 节律）。
+ */
+export function gapKindFor(
+  prev: { accountId: number; chatKey: string } | null,
+  cur: { accountId: number; chatKey: string }
+): IntervalKind {
   return prev && prev.chatKey === cur.chatKey && prev.accountId === cur.accountId ? 'msg' : 'chat'
 }
 
@@ -130,6 +138,14 @@ export function outcomeStatus(receipt: { ok: boolean; error?: string }): BatchDe
 
 export const FAIL_STREAK_LIMIT = 3
 export const REPORT_BACKLOG_CAP = 500
+
+/**
+ * 上报体 `errorDetail` / 撤回 `detail` 的字节上限——后端两列 `@Size(max=255)` 的镜像
+ * （`BatchReportItemDTO.errorDetail`、`BatchRecallReportItemDTO.detail`）。越界那一跳会 400 →
+ * `batchApi` 折成 `null` → 整条进 `ReportBacklog`；`flushBacklog` 倒不动会把整段按原序塞回，
+ * 毒条目永远在队头，后面每一条合法上报都永久陪葬——所以这条截断不是"美化"，是保 backlog 不被卡死。
+ */
+export const REPORT_DETAIL_MAX = 255
 
 /** 后端不可达时的内存积压：溢出丢最旧并计数，恢复后按序重报。 */
 export class ReportBacklog<T> {

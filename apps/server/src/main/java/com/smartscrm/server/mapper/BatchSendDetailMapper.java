@@ -60,7 +60,8 @@ public interface BatchSendDetailMapper extends BaseMapper<BatchSendDetail> {
     @Update({
         "<script>",
         "UPDATE batch_send_detail SET recall_status = 'recalling', recall_detail = NULL "
-            + "WHERE tenant_id = #{tenantId} AND task_id = #{taskId} AND recall_status = 'none' "
+            + "WHERE tenant_id = #{tenantId} AND task_id = #{taskId} "
+            + "AND recall_status IN ('none','recall_failed') "
             + "AND id IN",
         "<foreach collection='ids' item='i' open='(' separator=',' close=')'>#{i}</foreach>",
         "</script>"
@@ -68,13 +69,28 @@ public interface BatchSendDetailMapper extends BaseMapper<BatchSendDetail> {
     int markRecalling(@Param("tenantId") long tenantId, @Param("taskId") long taskId,
                       @Param("ids") List<Long> ids);
 
-    /** 只结 recalling 的行：迟到的撤回回执不得改写已经判过 recall_failed 的结论。 */
+    /**
+     * 只结 recalling 的行：迟到的撤回回执不得改写已经判过 recall_failed 的结论。
+     */
     @Update("UPDATE batch_send_detail SET recall_status = #{recallStatus}, recall_detail = #{detail} "
             + "WHERE tenant_id = #{tenantId} AND task_id = #{taskId} AND id = #{detailId} "
             + "AND recall_status = 'recalling'")
     int applyRecallReport(@Param("tenantId") long tenantId, @Param("taskId") long taskId,
                           @Param("detailId") long detailId, @Param("recallStatus") String recallStatus,
                           @Param("detail") String detail);
+
+    /**
+     * I-2 第三拍：把孤儿 `recalling` 结回 `recall_failed`。
+     * 生产者是主进程 `host.ts` 的 `batch:recall`：一条 `recallText` 从 `sendLock.run` 抛出会中断整批循环，
+     * 而 `applyRecallReport` 只结 `recalling` 的行——中断之后没有生产者再报，那些行就永远显示「撤回中」。
+     * `reconcile` 只在应用启动时跑一次，此刻不可能有合法的在途撤回（宿主已经死了或刚起来），
+     * 所以整张租户下所有 `recalling` 都算孤儿。守卫只读 `recall_status`（不 JOIN 任务表：撤回行不属于
+     * running 任务也要结）。它同时是 I-6 的回程入口：`markRecalling` 现在认 `recall_failed` 再进，
+     * 少了这一拍孤儿就永远停在 `recalling`。
+     */
+    @Update("UPDATE batch_send_detail SET recall_status = 'recall_failed', recall_detail = #{detail} "
+            + "WHERE tenant_id = #{tenantId} AND recall_status = 'recalling'")
+    int markOrphanRecallingFailed(@Param("tenantId") long tenantId, @Param("detail") String detail);
 
     /** 每状态一行，供 Task 5 的 reports 结算与 Task 4 的自检。 */
     @Select("SELECT send_status AS sendStatus, COUNT(1) AS c FROM batch_send_detail "

@@ -75,13 +75,19 @@ export function useBatchTask(taskId: number | null): UseQueryResult<BatchTaskVO,
   })
 }
 
-/** 明细的 seq 升序由后端保证（Task 4），这里不再排第二遍。 */
+/** 明细的 seq 升序由后端保证（Task 4），这里不再排第二遍。
+ *  `refetchIntervalMs`（Task 12 I-4）：任务在 running 时以固定节律刷这一屏；否则传 `false`，让
+ *  非 running 状态退回「事件 + GET」那条节律。为什么是节律而不是事件驱动 invalidate 明细：
+ *  演练任务 0 秒间隔会一秒发几百个 `batch:state`，那是对本地后端的自 DDoS——明细那一屏要的是"表在动"，
+ *  每 N 秒 GET 一次就够；`useBatchLive` 只覆盖任务与列表两个 key，明细不在它的管辖里。
+ */
 export function useBatchDetails(
   taskId: number | null,
   sendStatus?: string,
   recallStatus?: string,
   page = 1,
-  size = 50
+  size = 50,
+  refetchIntervalMs?: number | false
 ): UseQueryResult<PageResult<BatchDetailVO>, Error> {
   return useQuery({
     queryKey: [...BATCH_KEY, 'details', taskId, sendStatus ?? '', recallStatus ?? '', page, size],
@@ -90,7 +96,8 @@ export function useBatchDetails(
         `/api/batch-send/tasks/${taskId}/details?page=${page}&size=${size}` +
           `${sendStatus ? `&sendStatus=${sendStatus}` : ''}${recallStatus ? `&recallStatus=${recallStatus}` : ''}`
       ),
-    enabled: taskId != null
+    enabled: taskId != null,
+    ...(refetchIntervalMs === undefined ? {} : { refetchInterval: refetchIntervalMs })
   })
 }
 
@@ -110,12 +117,16 @@ export function useBatchPreview(): UseMutationResult<PreviewResult, Error, Previ
 
 /**
  * 状态迁移不直连 REST：群发的"开始"必须由主进程起泵，所以这一跳走 window.scrm.batch。
- * 四个动作都只回 `BatchProgress | null`（后端 `BatchReportsResultVO` 那四列；宿主塌成 null 表示这一跳没成），
- * 不是整张任务——所以成功后一律重新 GET `['batch','task',id]` 取权威的那一份，顺带刷列表那一行的状态徽标。
+ * 四个动作都只回 `BatchProgress | null`（后端 `BatchReportsResultVO` 那四列；宿主塌成 null 表示这一跳没成）。
+ * 泵起来后 `runTask` 若翻页/取任务塌陷，宿主会把刚迁移成功的任务回滚到 `paused`，返回一份新的
+ * `BatchTask`（结构上是 `BatchProgress` 的超集）——徽标据此说真话「已暂停」。回滚那一跳自己也塌了时
+ * 宿主仍返回原样那份 `BatchProgress`（不会给你 `null`），因为渲染层那句 `null` 文案说的是「任务保持原状，
+ * 没有复位任何行」，迁移已成功时那是假话。所以 `null` 只出现在 `api.start/pause/resume/cancel` 本身塌的
+ * 那一格（后端拒绝、宿主不可达）。
  * `retry-failed` 回的是三态的复位读数（`null` = 这一跳没成 / `0` = 打到了但没 failed 行 / `N` = 复位数），
  * 形状不同，另立一个 `useBatchRetry`：一个 hook 两种返回会让调用方无从判定拿到的是哪个。
- * 这里没有 `run`：起泵是 `batch:start`/`batch:resume` 的处理器自己干的活（`main/services/batchSend/host.ts:175-189`），
- * 渲染层再补一跳就会起出两条泵。
+ * 这里没有 `run`：起泵是 `batch:start`/`batch:resume` 的处理器自己干的活（`main/services/batchSend/host.ts`
+ * 的 `registerBatchIpc`），渲染层再补一跳就会起出两条泵（M2 已把 `batch:run` 那一跳整段拆掉）。
  */
 export function useBatchAction(
   action: 'start' | 'pause' | 'resume' | 'cancel'
@@ -160,6 +171,9 @@ export function useBatchRecall(): UseMutationResult<BatchRecallResult, Error, Re
  * 事件只是加速器：进页面一律 GET 兜底（spec §7），所以这里只顺手并一帧进缓存，不建第二个真值。
  * 并完这一帧就 invalidate 让 GET 覆盖它——`batch:state` 的数字是主进程顺手广播的那一份，
  * 权威读数永远在 `GET /tasks/{id}`（`shared/batchSend.ts` 的 `BatchStateEvent` 注释同一条口径）。
+ * 覆盖范围只到 `task` 与 `list` 两个 key：明细那一屏不进这条链——演练任务 0 秒间隔一秒能广播几百个
+ * `batch:state`，每一个都 invalidate 明细 = 对本地后端的自 DDoS（Task 12 I-4）。明细的刷新走
+ * `useBatchDetails` 的 `refetchIntervalMs` 节律（由 `BatchTaskDetail.tsx` 在 running 时传 2000）。
  */
 export function useBatchLive(): void {
   const qc = useQueryClient()

@@ -98,7 +98,7 @@
 | `apps/desktop/src/bridge/index.ts` | 命令 switch 加 `case 'recall'` |
 | `apps/desktop/src/main/services/msgBridge/index.ts` | `sendText`/`recallText` 走锁；`send_result`/`recall_result` 结清；掉线与销毁两条出口 |
 | `apps/desktop/src/main/services/msgBridge/sendRegistry.ts` | 新增 `RecallRegistry`（同文件的第二个类；`SendRegistry` 与 `SendReceipt` 一字不动） |
-| `apps/desktop/src/main/ipc.ts` | **不动它**：`batch:*` 七条 handle 全在 `services/batchSend/host.ts` 的 `registerBatchIpc()` 里（Task 12 Step 2 说清为什么不能在这里再注册一遍） |
+| `apps/desktop/src/main/ipc.ts` | **不动它**：`batch:*` 六条 handle 全在 `services/batchSend/host.ts` 的 `registerBatchIpc()` 里（Task 12 Step 2 说清为什么不能在这里再注册一遍；M2 已把 `batch:run` 那一跳整段拆掉——它是「两条泵」的潜在入口而渲染层零调用） |
 | `apps/desktop/src/main/index.ts` | 启动 `startBatchHost()`、退出 `stopBatchHost()` |
 | `apps/desktop/src/preload/index.ts` | `scrm.batch` 面 |
 | `apps/desktop/src/renderer/src/lib/nav.ts` | 人群包后加 `/broadcast`「批量群发」 |
@@ -277,7 +277,8 @@ int retryFailed(@Param("tenantId") long tenantId, @Param("taskId") long taskId, 
 @Update({
     "<script>",
     "UPDATE batch_send_detail SET recall_status = 'recalling', recall_detail = NULL "
-        + "WHERE tenant_id = #{tenantId} AND task_id = #{taskId} AND recall_status = 'none' "
+        + "WHERE tenant_id = #{tenantId} AND task_id = #{taskId} "
+        + "AND recall_status IN ('none','recall_failed') "
         + "AND id IN",
     "<foreach collection='ids' item='i' open='(' separator=',' close=')'>#{i}</foreach>",
     "</script>"
@@ -292,6 +293,16 @@ int markRecalling(@Param("tenantId") long tenantId, @Param("taskId") long taskId
 int applyRecallReport(@Param("tenantId") long tenantId, @Param("taskId") long taskId,
                       @Param("detailId") long detailId, @Param("recallStatus") String recallStatus,
                       @Param("detail") String detail);
+
+/**
+ * I-2 第三拍：把孤儿 `recalling` 结回 `recall_failed`。
+ * 生产者是主进程 `batch:recall`：一条 `recallText` 抛出会中断整批循环；`reconcile` 只在应用
+ * 启动时跑，此刻不可能有合法在途撤回，所以整张租户下所有 `recalling` 都算孤儿。
+ * 不 JOIN 任务表：撤回行不属于 running 任务也要结。
+ */
+@Update("UPDATE batch_send_detail SET recall_status = 'recall_failed', recall_detail = #{detail} "
+        + "WHERE tenant_id = #{tenantId} AND recall_status = 'recalling'")
+int markOrphanRecallingFailed(@Param("tenantId") long tenantId, @Param("detail") String detail);
 
 /** 每状态一行，供 Task 5 的 reports 结算与 Task 4 的自检。 */
 @Select("SELECT send_status AS sendStatus, COUNT(1) AS c FROM batch_send_detail "
@@ -1351,7 +1362,7 @@ git commit -m "feat(P7/群发): 创建即展开与预览复用同一个渲染器
   - `Map<String,Object> retryFailed(long tenantId, long taskId, List<Long> detailIds)` → `{reset, status}`（`detailIds` 空＝整批；`status` 是复位后任务态，可能是被唤醒的 `paused`，R11）
   - `BatchRecallVO recall(long tenantId, long taskId, List<Long> detailIds)`
   - `int recallReports(long tenantId, long taskId, BatchRecallReportsDTO dto)`（先 `requireOwned`，任务不存在回 `40404`；返回结掉的行数：只有 `recalling` 的行结得掉，差值就是"迟到的那一报"）
-  - `Map<String,Object> reconcile(long tenantId)` → `{pausedTasks, markedUnknown}`
+  - `Map<String,Object> reconcile(long tenantId)` → `{pausedTasks, markedUnknown, markedRecallFailed}`（第三拍 I-2：结该租户下所有孤儿 `recalling` 撤回行为 `recall_failed`；与两拍读的是不同列，顺序无关）
   - DTO/VO 字段：`BatchReportItemDTO{ @NotNull Long detailId, @Size(max=64) String localId, @NotBlank String sendStatus, @Size(max=32) String errorCode, @Size(max=255) String errorDetail, @Size(max=160) String msgKey, Long sentAtEpochSec }`；`BatchReportsDTO{ @Valid List<BatchReportItemDTO> items, boolean allHalted }`（**items 不加 `@NotEmpty`**：收尾那一跳只带结论不带条目）；`BatchRecallRequestDTO{ @NotEmpty List<Long> detailIds }`；`BatchRecallReportsDTO{ @Valid @NotNull List<BatchRecallReportItemDTO> items }`、`BatchRecallReportItemDTO{ @NotNull Long detailId, @NotNull Boolean recalled, @Size(max=255) String detail }`（这三个字段名就是 Task 8 线上拼的 `{detailId, recalled, detail}`，一个都不能改叫别的：叫 `ok` 的话每一条报都读成 `recalled=undefined → false`，撤**成功**的行会被记成 `recall_failed`，而这是写进库的结论）；`BatchRecallVO{ List<Target> eligible, List<Blocked> rejected }`，`Target(long detailId, long accountId, String chatKey, String msgKey)`、`Blocked(long detailId, String reason)`；`BatchReportsResultVO(int sentCount, int failCount, int totalCount, String status)`。
 
 - [ ] **Step 1：状态迁移一个口。**
@@ -1508,10 +1519,17 @@ git commit -m "feat(P7/群发): 创建即展开与预览复用同一个渲染器
             String reason = BatchStatus.recallBlocker(task.getDryRun(), d.getSendStatus(), d.getMsgKey());
             if (reason != null) {
                 blocked.add(new BatchRecallVO.Blocked(d.getId(), reason));
-            } else if (!"none".equals(d.getRecallStatus())) {
+            } else if ("recalled".equals(d.getRecallStatus())) {
+                // 撤回已经落定：再点一次什么也不会多。
                 blocked.add(new BatchRecallVO.Blocked(d.getId(),
-                        "已经撤过或正在撤（recall_status=" + d.getRecallStatus() + "）"));
+                        "已经撤回成功（recall_status=recalled），没有可再撤的东西"));
+            } else if ("recalling".equals(d.getRecallStatus())) {
+                // 挡死 `recalling`：可能正在别人的手里；孤儿由 `reconcile` 第三拍结回 `recall_failed`。
+                blocked.add(new BatchRecallVO.Blocked(d.getId(),
+                        "这条正在撤回中（recall_status=recalling），请等这一趟收口"));
             } else {
+                // `none` 与 `recall_failed` 都落到 eligible（I-6 裁定：一次超时/一次页内失败
+                // 不能把消息永久钉在客户脸上；`markRecalling` 现在也认 `recall_failed` 再进）。
                 eligible.add(new BatchRecallVO.Target(d.getId(), d.getAccountId(), d.getChatKey(), d.getMsgKey()));
             }
         }
@@ -1528,13 +1546,20 @@ git commit -m "feat(P7/群发): 创建即展开与预览复用同一个渲染器
         return new BatchRecallVO(eligible, blocked);
     }
 
-    /** R4 两拍：先 unknown 后 paused，顺序换了就是重复发送事故。 */
+    /**
+     * R4 两拍 + I-2 第三拍。前二拍顺序换了就是重复发送事故（先 unknown 后 paused）；
+     * 第三拍读的是撤回行的 `recall_status`，那两拍读的是 `send_status` / 任务状态，两套列互不相干，
+     * 所以第三拍放在最后与放在最前等价。它同时是 I-6 那条回程的入口。
+     */
     @Transactional
     public Map<String, Object> reconcile(long tenantId) {
         LocalDateTime staleBefore = LocalDateTime.now(MsgTimes.CHAT_ZONE).minusSeconds(STALE_SECONDS);
         int unknown = taskMapper.markStaleSendingUnknown(tenantId, staleBefore);
         int paused = taskMapper.pauseStaleTasks(tenantId, staleBefore);
-        return Map.of("pausedTasks", paused, "markedUnknown", unknown);
+        int recallFailed = detailMapper.markOrphanRecallingFailed(tenantId,
+                "宿主在撤回途中中断，撤回结果未知");
+        return Map.of("pausedTasks", paused, "markedUnknown", unknown,
+                "markedRecallFailed", recallFailed);
     }
 ```
 
@@ -3751,8 +3776,8 @@ export class BatchEngine {
 - Consumes: Task 8 的 `createBatchApi`；Task 11 的 `BatchEngine`；Task 9 的 `sendText`/`recallText`/`SendLock`；现有 `authedFetch`、`getSession`、`getMainWindow`。
 - Produces:
   - `startBatchHost(): void` / `stopBatchHost(): Promise<void>` / `registerBatchIpc(): void`
-  - IPC 通道：`batch:start`、`batch:pause`、`batch:resume`、`batch:cancel`、`batch:retry-failed`、`batch:recall`、`batch:run`（把待跑明细交给引擎）、`batch:state`（下行广播）
-  - preload `scrm.batch`：七个 invoke（`start`/`pause`/`resume`/`cancel`/`run`/`retryFailed`/`recall`）+ `onState(cb)`
+  - IPC 通道：`batch:start`、`batch:pause`、`batch:resume`、`batch:cancel`、`batch:retry-failed`、`batch:recall`、`batch:state`（下行广播）（M2：`batch:run` 那一跳已删——它是「两条泵」的潜在入口而渲染层零调用）
+  - preload `scrm.batch`：六个 invoke（`start`/`pause`/`resume`/`cancel`/`retryFailed`/`recall`）+ `onState(cb)`
 
 - [ ] **Step 1：`host.ts`——真身依赖都在这里，engine 里一格没有。**
 
@@ -3834,30 +3859,41 @@ const recallDispatch: RecallDispatch = async (t: RecallTarget): Promise<{ ok: bo
 
 （`dispatchFor(task)` 不需要单独一个函数：`new BatchEngine({ ..., dispatch: task.dryRun ? dryDispatch : realDispatch })` 一处选完。）
 
-跑一个任务（`batch:run` 的处理器，也是演练腿唯一要跑的东西）——逐字实现这份：
+跑一个任务（`batch:start`/`batch:resume` 迁移成功后调用它，M2 已把 `batch:run` 那一跳删除）——逐字实现这份：
 
 ```ts
-async function runTask(taskId: number): Promise<{ started: boolean }> {
+async function runTask(taskId: number): Promise<{ started: boolean; duplicate: boolean }> {
   // 占位要在第一个 await 之前同步落表：`running.has` 与真正建泵之间隔着 `api.task` 和整段翻页
   // 拉取（20 000 条明细 = 100 跳 HTTP），那个窗口里第二次 runTask 会读到"没人在飞"，
   // 于是同一个 detailId 有两个投料者——群发最贵的一种事故就是同一条消息发出去两遍。
   // 占位格还有个附带用处：开场期间来的 pause/cancel 能在表里找到它并摘掉，下面两处复查据此止步。
-  if (running.has(taskId)) return { started: true }
+  // `duplicate:true` 是给调用方的止损信号：这一格＝有人正在起、或已经起成，回滚会把别人
+  // 正在起的任务按停，调用方据此只走 `!started && !duplicate` 那一条回滚路径。
+  const existing = running.get(taskId)
+  if (existing) return { started: existing.engine !== null, duplicate: true }
   running.set(taskId, { engine: null, timer: null, misses: 0, beating: false })
   const task = await api.task(taskId)
   // 引擎不裁决、也不发起迁移：谁把任务变成 running 是渲染层点「开始」那一次 batch:start 的事。
   if (!task || task.status !== 'running') {
     running.delete(taskId)
-    return { started: false }
+    return { started: false, duplicate: false }
   }
   const details: BatchDetail[] = []
   for (let page = 1; ; page++) {
     const res = await api.details(taskId, page, 200)
-    if (!res) break
+    if (!res) {
+      // 翻页塌陷不能当"翻完"：一次 `api.details` 抖动会让剩下的几万行不进队列，泵只跑前缀；
+      // 跑完 settle 时 openCount>0，后端既不 done 也不 error，任务停在 running 而没有任何东西在发。
+      // 摘掉占位格、返回 `{started:false, duplicate:false}`，让调用方（batch:start/resume 处理器）
+      // 走回滚那一条路（把刚迁移成功的任务退回 paused，徽标据此说真话）。
+      console.warn(`[batch] task=${taskId} 翻页第 ${page} 跳没成，泵未起来`)
+      running.delete(taskId)
+      return { started: false, duplicate: false }
+    }
     details.push(...res.records)
     if (details.length >= res.total || res.records.length === 0) break
   }
-  if (!running.has(taskId)) return { started: false }
+  if (!running.has(taskId)) return { started: false, duplicate: false }
   const engine = new BatchEngine({
     api, dispatch: task.dryRun ? dryDispatch : realDispatch, viewIdOf,
     sleep, rand: Math.random, now: () => Date.now(),
@@ -3872,7 +3908,7 @@ async function runTask(taskId: number): Promise<{ started: boolean }> {
     console.error(`[batch] task=${taskId} 泵逃出来的异常`, e)
     finish(taskId)
   })
-  return { started: true }
+  return { started: true, duplicate: false }
 }
 
 /** 心跳 + 顺带广播：15 s 一跳，比每跳都发一次吵得要轻，也比"只在收尾发"有用得多。 */
@@ -3933,9 +3969,13 @@ function stopEngine(taskId: number): void {
 
 ```ts
 export function startBatchHost(): void {
-  // 应用一起来就先把上一次崩掉的现场结清：先 unknown 后 paused 的顺序在后端（R4）。
+  // 应用一起来就先把上一次崩掉的现场结清：先 unknown 后 paused 的顺序在后端（R4）；
+  // 第三拍（`markedRecallFailed`）结的是孤儿 `recalling` 撤回行，与那两拍读的是不同列，
+  // 顺序无关——详见 `BatchSendService.reconcile` 里那条注释。
   void api.reconcile().then((r) => {
-    if (r && (r.pausedTasks || r.markedUnknown)) console.log(`[batch] reconcile paused=${r.pausedTasks} unknown=${r.markedUnknown}`)
+    if (r && (r.pausedTasks || r.markedUnknown || r.markedRecallFailed)) {
+      console.log(`[batch] reconcile paused=${r.pausedTasks} unknown=${r.markedUnknown} recallFailed=${r.markedRecallFailed}`)
+    }
   })
   registerBatchIpc()
 }
@@ -3954,14 +3994,24 @@ function broadcastState(payload: BatchStateEvent): void {
 }
 ```
 
-- [ ] **Step 1b：`batch:*` 的七条 handle（都在 host.ts 的 `registerBatchIpc()` 里，一处注册）。**
+- [ ] **Step 1b：`batch:*` 的六条 handle（都在 host.ts 的 `registerBatchIpc()` 里，一处注册；M2：`batch:run` 已删除）。**
 
 ```ts
 export function registerBatchIpc(): void {
-  // start 之后顺手 run：渲染层一次 IPC 就能"开始跑"，不需要自己记得再调 run。
+  // start 之后顺手 run：渲染层一次 IPC 就能"开始跑"，不需要自己记得再调 run（M2 已删 `batch:run`）。
+  // 泵没起来（`runTask` 返回 `!started && !duplicate`）时把刚迁移成功的任务回滚到 `paused`，
+  // 再回一次权威 GET：徽标据此说真话「已暂停」。回滚那一跳自己也塌了 → 返回 `task` 原样：
+  // 这一格确实会说谎，但绝不静默返回 null——渲染层那句 null 文案是「任务保持原状，没有复位任何行」，
+  // 迁移已成功时那是假话。
   ipcMain.handle('batch:start', async (_e, taskId: number) => {
     const task = await api.start(taskId)
-    if (task?.status === 'running') await runTask(taskId)
+    if (task?.status === 'running') {
+      const r = await runTask(taskId)
+      if (!r.started && !r.duplicate) {
+        await api.pause(taskId)
+        return (await api.task(taskId)) ?? task
+      }
+    }
     return task
   })
   ipcMain.handle('batch:pause', async (_e, taskId: number) => {
@@ -3971,7 +4021,13 @@ export function registerBatchIpc(): void {
   })
   ipcMain.handle('batch:resume', async (_e, taskId: number) => {
     const task = await api.resume(taskId)
-    if (task?.status === 'running') await runTask(taskId)
+    if (task?.status === 'running') {
+      const r = await runTask(taskId)
+      if (!r.started && !r.duplicate) {
+        await api.pause(taskId)
+        return (await api.task(taskId)) ?? task
+      }
+    }
     return task
   })
   ipcMain.handle('batch:cancel', async (_e, taskId: number) => {
@@ -3979,32 +4035,59 @@ export function registerBatchIpc(): void {
     stopEngine(taskId)
     return api.cancel(taskId)
   })
-  ipcMain.handle('batch:run', (_e, taskId: number) => runTask(taskId))
   // 重发：detailIds 省略＝整批，带＝单条（R11）。同一跳端点，两种粒度只差 body 里那个数组有没有。
   ipcMain.handle('batch:retry-failed', (_e, taskId: number, detailIds?: number[]) =>
     api.retryFailed(taskId, detailIds))
   // 撤回：清单在后端判（Task 5），这里只把 eligible 逐条交给页内出料口，结清走 recallReports。
+  // I-5：节律与发送走同一档 `chat_interval`（spec §5:159）——打的是同一条 WA 连接，
+  // 撤回连发不加节律，抖动成本与发送连发一样贵；第一条不等待，撤回已经落在用户按下之后。
+  // I-2：逐条 try/catch — 页内一条抛出经 `sendLock.run` 会原样传出来，会打断整批，
+  // 而后端已把这些行推成 `recalling`；孤儿 `recalling` 由 `reconcile` 第三拍结回 `recall_failed`（I-6）。
   ipcMain.handle('batch:recall', async (_e, taskId: number, detailIds: number[]): Promise<BatchRecallResult> => {
     const plan = await api.recall(taskId, detailIds)
     if (!plan) return { eligible: 0, blocked: [] }
+    // 任务取不到就把节律当 0：宁可不加节律也不打断撤回（后端已经推了 recalling）。
+    const cfg: IntervalConfig = await (async () => {
+      const t = await api.task(taskId)
+      return t
+        ? { msgMin: t.msgIntervalMin, msgMax: t.msgIntervalMax,
+            chatMin: t.chatIntervalMin, chatMax: t.chatIntervalMax }
+        : { msgMin: 0, msgMax: 0, chatMin: 0, chatMax: 0 }
+    })()
+    let prev: RecallTarget | null = null
     for (const t of plan.eligible) {
-      // 账号没有可用视图（掉线 / 未挂桥）也要结清：后端已经把这条推成 recalling，
-      // 静默 continue 会让它永远卡在 recalling，界面上看不出"为什么没撤"。
-      if (!viewIdOf(t.accountId)) {
-        await api.recallReports(taskId, [{ detailId: t.detailId, recalled: false, detail: '账号当前没有可用视图' }])
-        continue
+      if (prev) {
+        await sleep(pickIntervalSec(gapKindFor(prev, t), cfg, Math.random) * 1000)
       }
-      // 一条一结清：撤回的成败只由 isRevoked 判（Task 10），后端据此把 recall_status 落成 recalled 或 recall_failed。
-      const r = await recallDispatch(t)
-      await api.recallReports(taskId, [{ detailId: t.detailId, recalled: r.ok && r.isRevoked === true, detail: r.detail }])
+      prev = t
+      try {
+        if (!viewIdOf(t.accountId)) {
+          await api.recallReports(taskId, [{
+            detailId: t.detailId, recalled: false, detail: '账号当前没有可用视图'
+          }]).catch(() => 0)
+          continue
+        }
+        const r = await recallDispatch(t)
+        await api.recallReports(taskId, [{
+          detailId: t.detailId,
+          recalled: r.ok && r.isRevoked === true,
+          detail: r.detail === undefined ? undefined : r.detail.slice(0, REPORT_DETAIL_MAX)
+        }]).catch(() => 0)
+      } catch (e) {
+        console.warn(`[batch] task=${taskId} recall aborted detail=${t.detailId}`, e)
+        await api.recallReports(taskId, [{
+          detailId: t.detailId,
+          recalled: false,
+          detail: '宿主撤回中断'.slice(0, REPORT_DETAIL_MAX)
+        }]).catch(() => 0)
+      }
     }
-    // 挡下的那些后端不写库，`recallDetail` 里永远不会有它们——这一份 reason 列表是唯一的出处。
     return { eligible: plan.eligible.length, blocked: plan.rejected }
   })
 }
 ```
 
-- [ ] **Step 2：`main/ipc.ts` 不碰 batch。** 七条 handle 已经在 Step 1b 的 `registerBatchIpc()` 里（由 `startBatchHost()` 调用）——**不要在 `ipc.ts` 再注册一遍**：`ipcMain.handle` 第二次同名会抛 `Attempted to register a second handler`，而那是在应用启动路径上抛的，表现为整个应用起不来。
+- [ ] **Step 2：`main/ipc.ts` 不碰 batch。** 六条 handle 已经在 Step 1b 的 `registerBatchIpc()` 里（由 `startBatchHost()` 调用）——**不要在 `ipc.ts` 再注册一遍**：`ipcMain.handle` 第二次同名会抛 `Attempted to register a second handler`，而那是在应用启动路径上抛的，表现为整个应用起不来。
 - [ ] **Step 3：`main/index.ts` 接线。** `startBatchHost()` 放在 `startMsgBridge()` 之后（`:35` 那一行下面）；`stopBatchHost()` 放进 `before-quit` 那段清理链，写法与 `stopMsgBridge()` 一致用 `void`，**不要 `await`**：
 
 ```ts
@@ -4025,7 +4108,6 @@ export function registerBatchIpc(): void {
     pause: (taskId: number): Promise<BatchProgress | null> => ipcRenderer.invoke('batch:pause', taskId),
     resume: (taskId: number): Promise<BatchProgress | null> => ipcRenderer.invoke('batch:resume', taskId),
     cancel: (taskId: number): Promise<BatchProgress | null> => ipcRenderer.invoke('batch:cancel', taskId),
-    run: (taskId: number): Promise<{ started: boolean }> => ipcRenderer.invoke('batch:run', taskId),
     retryFailed: (taskId: number, detailIds?: number[]): Promise<number | null> =>
       ipcRenderer.invoke('batch:retry-failed', taskId, detailIds),
     recall: (taskId: number, detailIds: number[]): Promise<BatchRecallResult> =>
@@ -4038,7 +4120,7 @@ export function registerBatchIpc(): void {
   },
 ```
 
-（七条的语义都在 Step 1b 那一段里：`start`/`resume` 迁移成功后顺手 `run`，`pause`/`cancel` 一定 `stopEngine`，`recall` 只把后端判过的 eligible 交页内。**渲染层不许自己拼"先 start 再 run"两次调用**。）
+（六条的语义都在 Step 1b 那一段里：`start`/`resume` 迁移成功后在处理器内部起泵（`runTask`），泵没起来时回滚到 paused；`pause`/`cancel` 一定 `stopEngine`；`recall` 只把后端判过的 eligible 交页内，逐条 try/catch 加节律。**渲染层不许自己拼"先 start 再 run"两次调用**——M2 已把 `batch:run` 那一跳整段拆掉，它是「两条泵」的潜在入口。）
 
 - [ ] **Step 5：跑 `pnpm run typecheck` 四路 + unit（`host.ts` 不在 unit include，typecheck 的 node 路覆盖它）。**
 - [ ] **Step 6：提交。** `feat(P7/群发): 装配真身——心跳定时器、启动 reconcile、batch:state 带销毁守卫`
@@ -4311,10 +4393,10 @@ export const ACTIONS: Record<BatchTaskStatus, BatchAction[]> = {
   - 行点击 → `onOpen(taskId)` 交回 `BroadcastPage` 切详情视图。
 - [ ] **Step 3：向导五步。** `BatchWizard.tsx`（Dialog + step 状态机 `accounts → recipients → contents → pacing → confirm`）：
   - `accounts`：多选在线账号；一个未选时「下一步」disabled。
-  - `recipients`：按已选账号拉会话（`size=200`），勾选进 `conversations`；顶部 `q` 输入框做标题/键过滤，另有一个「按人群包」Select —— 选中后用 `useAudienceCustomers` 拿 `customerId` 集合，在**已拉到的会话列表里**按 `customerId` 命中勾选（纯前端过滤，R10）。实时显示 `已选 N 人 × M 条内容 = K 条`，`K > 20000` 时 disabled 并显示「超过 20000 条上限」。
+  - `recipients`：按已选账号拉会话（一页 `size=200`，游标 infinite query，**按用户点击「加载更多」翻页**，加载到 `MAX_RECIPIENTS=1000`（`BatchRules.java:15` 的镜像）就不再给按钮，改成「请用搜索或人群包收窄」那句点名提示；一次拉完 1000 条会让本地后端几百跳 + 渲染几百个 label，把首屏拖住，这一版按点击翻页认这个代价）。未加载完时账号标题旁显示「仅显示前 N 条（还有未加载的会话）」——`q` 过滤与人群包命中都**只作用于已加载的这些行**，空态文案必须说清这一点，否则第 201 条其实匹配的时候会说谎成「这个客户没加我」。勾选进 `conversations`；顶部 `q` 输入框做标题/键过滤，另有一个「按人群包」Select —— 选中后用 `useAudienceCustomers` 拿 `customerId` 集合，在**已拉到的会话列表里**按 `customerId` 命中勾选（纯前端过滤，R10）。实时显示 `已选 N 人 × M 条内容 = K 条`，`K > 20000` 时 disabled 并显示「超过 20000 条上限」；`N > 1000` 是**另一档**（`overRecipientCap`，不并进 `overCap`：那一档靠减内容条数解决，这一档靠减收件人，文案与修法都不同），同样拦住「下一步」与创建按钮——前端不拦的代价是走完五步才被后端 40011 拒一次。
   - `contents`：`Textarea` 数组，增删至多 20 条；每条实时判 `trim()` 空 → 「第 N 条为空」、`length > 5000` → 「第 N 条超过 5000 字」。**两个数从这里到后端是同一份规则（`BatchRules.MAX_BODY=5000` / `isSendable`），文案不许自造第三个数。** 底部「预览渲染结果」→ `useBatchPreview`（前 5 个收件人），显示渲染后正文，未识别花括号原样、两个变量已填。
   - `pacing`：四个 number + 演练 Switch（**默认开**）。关掉演练时 `msgMin<3` / `chatMin<5` 就地标红，文案「真发不能低于 3 秒」/「真发不能低于 5 秒」。
-  - `confirm`：任务名 + 账号数 + 收件人数 + 内容条数 + 总条数 + 两个区间 + 演练与否。提交 `useCreateBatchTask`；成功后 `rejected.length>0` 时先弹「这 N 个收件人被跳过」并逐条 `chatKey — reason`（R8 的部分接受必须看得见，不许静默丢），然后 `onOpen(taskId)`。
+  - `confirm`：任务名 + 账号数 + 收件人数 + 内容条数 + 总条数 + 两个区间 + 演练与否。两档超限（`K > 20000` 与收件人 `> 1000`）各有一句点名文案，创建按钮 `disabled` 的闸门里两档都在——不许出现「按钮可点、创建静默被后端拒」。提交 `useCreateBatchTask`；成功后 `rejected.length>0` 时先弹「这 N 个收件人被跳过」并逐条 `chatKey — reason`（R8 的部分接受必须看得见，不许静默丢），然后 `onOpen(taskId)`。
 - [ ] **Step 4：`BroadcastPage.tsx` 组装**：`useBatchLive()` + 列表 / 详情切换 + 向导 Dialog。
 - [ ] **Step 5：typecheck + eslint --quiet（四个文件）。**
 - [ ] **Step 6：手工看一眼**：`/broadcast` 能出列表、向导能走完五步并创建出一个 `pending` 任务；**这一步不点「开始」**（起泵的腿在 Task 16 有专门驱动）。
@@ -4347,9 +4429,16 @@ export const ACTIONS: Record<BatchTaskStatus, BatchAction[]> = {
 - [ ] **Step 3：撤回。** 下面这段落在 `batchActions.ts`（shipped 原文，导出点就在那儿；组件文件只导入使用）：
 
 ```ts
-/** 后端四条判据的镜像：`BatchStatus.recallBlocker` 那三条（非演练 / send_status=success / 有 msg_key）+ 服务层那条「recall_status 不是 none = 已经撤过或正在撤」。只用来禁用 checkbox；筛与点名仍在后端 POST /recall。 */
+/**
+ * 后端四条判据的镜像：`BatchStatus.recallBlocker` 那三条（非演练 / send_status=success / 有 msg_key）
+ * + 服务层那条：`recalled` 与 `recalling` 挡死，`recall_failed` 可以再点撤回（I-6 裁定）。
+ * 只用来禁用 checkbox；筛与点名仍在后端 POST /recall。
+ */
 export function recallEligible(task: BatchTask, row: BatchDetailVO): boolean {
-  return !task.dryRun && row.sendStatus === 'success' && !!row.msgKey && row.recallStatus === 'none'
+  return !task.dryRun
+    && row.sendStatus === 'success'
+    && !!row.msgKey
+    && (row.recallStatus === 'none' || row.recallStatus === 'recall_failed')
 }
 ```
 
@@ -4381,7 +4470,7 @@ cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.
 cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 ```
 
-期望：unit `pass` = 212 + 10(Task 7) + 9(Task 8) + 8(Task 9) + 5(Task 10) + 8(Task 11) = **252**，再加 Task 15 修复轮给 `retryFailed` 三态补的那条证人 = **253**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = **115**（实测 = Task 1 基线 81 + 群发纯函数 22 + 整枝修复轮的 12 条证人，其中 `BatchSendServiceTest` 8 条）、0 failures；契约驱动 `33/33 passed`（29 个编号）且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
+期望：unit `pass` = 212 + 10(Task 7) + 9(Task 8) + 8(Task 9) + 5(Task 10) + 8(Task 11) = **252**，再加 Task 15 修复轮给 `retryFailed` 三态补的那条证人 = 253，再加 B7 终审修复轮 I-1 给 `errorDetail` 截断补的那条判别证人 = **254**（实测：本修复轮收口时本机 `pnpm run test:unit` = 254 pass / 0 fail）；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = **118**（实测 = Task 1 基线 81 + 群发纯函数 22 + 整枝修复轮的 12 条证人 + B7 修复轮 I-2/I-6 的 3 条判别证人，`BatchSendServiceTest` 11 条）、0 failures；契约驱动 `node tmp/p7b-batch-contract.mjs` 全过 = **37/37 passed、退出码 0**（实测；F1 为该轮新加的四条判别 #30–#33：`markedRecallFailed` 键名与孤儿 `recalling` 结回、`recall_failed` 回程进 eligible、`recalled` 挡死点名、`recalling` 挡死点名）。**（基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
 
 - [ ] **Step 2：CDP 演练腿（全程 dryRun，不碰页面）。** 前提：主进程改过，dev 必须已被用户重启过一次（dev watcher 不重载 `src/main`）。先 `powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p5c-top.ps1` 断言 `visibilityState==='visible'`，然后跑 `tmp/p7b-dry-run.mjs`，八条：
 

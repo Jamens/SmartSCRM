@@ -1,6 +1,6 @@
 // src/main/services/batchSend/engine.ts
 import {
-  FAIL_STREAK_LIMIT, ReportBacklog, buildQueues, gapKindFor, outcomeStatus, pickIntervalSec
+  FAIL_STREAK_LIMIT, REPORT_DETAIL_MAX, ReportBacklog, buildQueues, gapKindFor, outcomeStatus, pickIntervalSec
 } from '../../../shared/batchSend.ts'
 import type { BatchApi, RecallTarget, ReportItem } from './batchApi.ts'
 import type { BatchDetail, BatchTask, IntervalConfig } from '../../../shared/batchSend.ts'
@@ -126,7 +126,12 @@ export class BatchEngine {
         item.sentAtEpochSec = Math.floor(this.deps.now() / 1000)
       } else {
         item.errorCode = outcome.error ?? 'SEND_FAILED'
-        item.errorDetail = outcome.detail
+        // 截到 `REPORT_DETAIL_MAX`：越界那一跳被后端 `@Size(max=255)` 折成 400，`batchApi` 塌 null 会
+        // 让整条上报进 backlog——而 `flushBacklog` 倒不动会把整段原序塞回，毒条目永远卡在队头，
+        // 后面每一条合法上报永久陪葬。这里截的是给客户的文案，不是引擎的判据，语义无损。
+        item.errorDetail = outcome.detail === undefined
+          ? undefined
+          : outcome.detail.slice(0, REPORT_DETAIL_MAX)
       }
       await this.report(task, [item], false)
       streak = sendStatus === 'failed' ? streak + 1 : 0

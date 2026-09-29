@@ -48,7 +48,15 @@ export const STATUS_VARIANT: Record<BatchTaskStatus, BadgeVariant> = {
   cancelled: 'ghost'
 }
 
-/** 后端四条判据的镜像：`BatchStatus.recallBlocker` 那三条（非演练 / send_status=success / 有 msg_key）+ 服务层那条「recall_status 不是 none = 已经撤过或正在撤」。只用来禁用 checkbox；筛与点名仍在后端 POST /recall。 */
+/**
+ * 后端四条判据的镜像：`BatchStatus.recallBlocker` 那三条（非演练 / send_status=success / 有 msg_key）
+ * + 服务层那条：`recalled` 与 `recalling` 挡死，`recall_failed` 可以再点撤回（Task 12 I-6 裁定：
+ * 撤回是不可回收动作，一次超时或一次页内失败不能把消息永久钉在客户脸上；`recalling` 挡是因为
+ * 可能正在别人的手里）。只用来禁用 checkbox；筛与点名仍在后端 POST /recall。
+ */
 export function recallEligible(task: BatchTask, row: BatchDetailVO): boolean {
-  return !task.dryRun && row.sendStatus === 'success' && !!row.msgKey && row.recallStatus === 'none'
+  return !task.dryRun
+    && row.sendStatus === 'success'
+    && !!row.msgKey
+    && (row.recallStatus === 'none' || row.recallStatus === 'recall_failed')
 }
