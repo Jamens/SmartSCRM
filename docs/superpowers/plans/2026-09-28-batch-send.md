@@ -4272,7 +4272,9 @@ export const ACTIONS: Record<BatchTaskStatus, BatchAction[]> = {
 - [ ] **Step 2：列表。** `BatchTaskList.tsx`：
   - 列：`name` / `status`（Badge）/ 演练徽标 / `sentCount`–`totalCount` 进度条 / `failCount`（0 也写「0」，不许留空）/ `createdAt` / 操作。
   - **演练徽标常驻**：`dryRun ? <Badge>演练</Badge> : <Badge variant="outline">真发</Badge>`，两种状态都有字，跑完的演练任务不许看起来像真发过（spec §7）。
-  - 状态筛选 Select：`全部 | pending | running | paused | done | error | cancelled`。
+  - 状态筛选 Select：`全部 | pending | running | paused | done | error | cancelled`。钉的是那七个 **value**（逐字）；
+    `label` 用中文（`STATUS_LABEL` 在 Task 14 手里留在 `BatchTaskList.tsx` 组件文件里、没导出），
+    CDP 那条腿要断言这七个取值就按 `value` 查，别按可见文字。
   - 行点击 → `onOpen(taskId)` 交回 `BroadcastPage` 切详情视图。
 - [ ] **Step 3：向导五步。** `BatchWizard.tsx`（Dialog + step 状态机 `accounts → recipients → contents → pacing → confirm`）：
   - `accounts`：多选在线账号；一个未选时「下一步」disabled。
