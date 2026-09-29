@@ -42,11 +42,15 @@ const STEP_LABEL: Record<WizardStep, string> = {
   confirm: '确认'
 }
 
-// 这四个数与后端 `BatchRules` 是同一份规则的两处写法（MAX_BODY=5000 / isSendable），
+// 这五个数与后端 `BatchRules` 是同一份规则的两处写法（MAX_BODY=5000 / isSendable），
 // 这里不许自造第三个数；文案同一条口径。
 const MAX_CONTENTS = 20
 const MAX_BODY = 5000
 const MAX_TOTAL_DETAILS = 20000
+// MAX_RECIPIENTS 是 `BatchRules.java:15` 的镜像。前端不拦的代价：用户挑到 1200 人、走完五步、
+// 按创建才在后端那一跳（`BatchRules.java:36-37`，「收件人超过上限 1000 人」）被拒一次——确认页一路都说「可以创建」。
+// 这一档单独判，不并进 overCap：超限减的是收件人，overCap 减的是内容条数，两者文案与修法不同。
+const MAX_RECIPIENTS = 1000
 const REAL_MIN_MSG_INTERVAL = 3
 const REAL_MIN_CHAT_INTERVAL = 5
 const RECIPIENT_FETCH_SIZE = 200
@@ -135,6 +139,8 @@ export function BatchWizard({
   const contentsValid = contents.length > 0 && contentErrors.every((e) => e === null)
   const total = recipients.length * contents.length
   const overCap = total > MAX_TOTAL_DETAILS
+  // 收件人这一档与 overCap 分开：overCap 靠减内容条数解决，这一档靠减收件人解决，文案不同、修法不同。
+  const overRecipientCap = recipients.length > MAX_RECIPIENTS
   const realFloorViolated = !dryRun && (msgMin < REAL_MIN_MSG_INTERVAL || chatMin < REAL_MIN_CHAT_INTERVAL)
 
   const toggleAccount = (id: number): void => {
@@ -158,7 +164,7 @@ export function BatchWizard({
       case 'accounts':
         return accountIds.length > 0
       case 'recipients':
-        return recipients.length > 0 && !overCap
+        return recipients.length > 0 && !overCap && !overRecipientCap
       case 'contents':
         return contentsValid
       case 'pacing':
@@ -248,6 +254,7 @@ export function BatchWizard({
               onToggle={toggleRecipient}
               summary={`已选 ${recipients.length} 人 × ${contents.length} 条内容 = ${total} 条`}
               overCap={overCap}
+              overRecipientCap={overRecipientCap}
             />
           ) : step === 'contents' ? (
             <ContentsStep
@@ -288,6 +295,7 @@ export function BatchWizard({
               contentCount={contents.length}
               total={total}
               overCap={overCap}
+              overRecipientCap={overRecipientCap}
               msgRange={`${msgMin}–${msgMax} 秒`}
               chatRange={`${chatMin}–${chatMax} 秒`}
               dryRun={dryRun}
@@ -324,6 +332,7 @@ export function BatchWizard({
                     recipients.length === 0 ||
                     !contentsValid ||
                     overCap ||
+                    overRecipientCap ||
                     realFloorViolated ||
                     create.isPending
                   }
@@ -393,7 +402,8 @@ function RecipientsStep({
   selectedKeys,
   onToggle,
   summary,
-  overCap
+  overCap,
+  overRecipientCap
 }: {
   accounts: PlatformAccount[]
   q: string
@@ -407,6 +417,7 @@ function RecipientsStep({
   onToggle: (r: Recipient) => void
   summary: string
   overCap: boolean
+  overRecipientCap: boolean
 }): React.JSX.Element {
   return (
     <div className="space-y-3">
@@ -434,6 +445,11 @@ function RecipientsStep({
       <p className="text-xs text-muted-foreground">
         {summary}
         {overCap && <span className="ml-2 text-destructive">超过 {MAX_TOTAL_DETAILS} 条上限</span>}
+        {overRecipientCap && (
+          <span className="ml-2 text-destructive">
+            收件人超过上限 {MAX_RECIPIENTS} 人——减到 {MAX_RECIPIENTS} 人以内才能进下一步
+          </span>
+        )}
       </p>
       {accounts.map((account) => (
         <AccountConversationSection
@@ -465,20 +481,33 @@ function AccountConversationSection({
   selectedKeys: Set<string>
   onToggle: (r: Recipient) => void
 }): React.JSX.Element {
-  const { data, isPending } = useConversations({ accountId: account.id, size: RECIPIENT_FETCH_SIZE })
-  const rows = flattenConversations(data?.pages)
+  const { data, isPending, hasNextPage, isFetchingNextPage, isFetchNextPageError, error, fetchNextPage } =
+    useConversations({ accountId: account.id, size: RECIPIENT_FETCH_SIZE })
+  // 未加载的会话在向导里根本不存在：matchesQuery 与人群包过滤只作用于已加载的这些行。
+  const allLoaded = flattenConversations(data?.pages)
+  const loadedCount = allLoaded.length
+  const rows = allLoaded
     .filter((c) => matchesQuery(c, q))
     .filter((c) => !audienceActive || (c.customerId !== null && audienceCustomerIds.has(c.customerId)))
 
   return (
     <div className="rounded-lg border border-border/60">
-      <p className="border-b border-border/40 px-3 py-1.5 text-xs font-medium text-foreground">{account.name}</p>
+      <p className="border-b border-border/40 px-3 py-1.5 text-xs font-medium text-foreground">
+        {account.name}
+        {hasNextPage && (
+          <span className="ml-2 font-normal text-muted-foreground">仅显示前 {loadedCount} 条（还有未加载的会话）</span>
+        )}
+      </p>
       <div className="max-h-40 space-y-1 overflow-auto p-2">
         {isPending ? (
           <p className="py-4 text-center text-xs text-muted-foreground">加载会话中…</p>
         ) : rows.length === 0 ? (
           <p className="py-4 text-center text-xs text-muted-foreground">
-            {audienceActive ? '人群包在该账号下没有命中会话。' : '没有匹配的会话。'}
+            {loadedCount === 0
+              ? '该账号还没有会话。'
+              : audienceActive
+                ? `已加载的 ${loadedCount} 条里人群包没有命中${hasNextPage ? '，可点下方「加载更多」再筛。' : '，这已是全部会话。'}`
+                : `已加载的 ${loadedCount} 条里没有匹配项${hasNextPage ? '，可点下方「加载更多」再筛。' : '，这已是全部会话。'}`}
           </p>
         ) : (
           rows.map((c) => {
@@ -501,6 +530,34 @@ function AccountConversationSection({
           })
         )}
       </div>
+      {isFetchNextPageError && (
+        <p className="border-t border-border/40 px-3 py-1.5 text-xs text-destructive">
+          加载更多失败：{error?.message ?? '未知错误'}
+        </p>
+      )}
+      {/*
+        按用户点击翻页是这一版的取舍：一次把 1000 条拉完会让本地后端几百跳 + 渲染几百个 label，
+        把向导首屏拖住。代价是用户要点几下才能看到第 201 条之后的会话。
+        到 MAX_RECIPIENTS（M3 那一档）就不再给加载更多——加载再多也建不了单。
+      */}
+      {hasNextPage && loadedCount < MAX_RECIPIENTS && (
+        <div className="border-t border-border/40 px-2 py-1.5">
+          <Button
+            variant="ghost"
+            size="sm"
+            className="w-full"
+            disabled={isFetchingNextPage}
+            onClick={() => void fetchNextPage()}
+          >
+            {isFetchingNextPage ? '加载中…' : `加载更多（已加载 ${loadedCount} / ${MAX_RECIPIENTS}）`}
+          </Button>
+        </div>
+      )}
+      {hasNextPage && loadedCount >= MAX_RECIPIENTS && (
+        <p className="border-t border-border/40 px-3 py-1.5 text-xs text-muted-foreground">
+          已加载到 {MAX_RECIPIENTS} 条上限，请用搜索或人群包收窄后再勾。
+        </p>
+      )}
     </div>
   )
 }
@@ -668,6 +725,7 @@ function ConfirmStep({
   contentCount,
   total,
   overCap,
+  overRecipientCap,
   msgRange,
   chatRange,
   dryRun,
@@ -680,6 +738,7 @@ function ConfirmStep({
   contentCount: number
   total: number
   overCap: boolean
+  overRecipientCap: boolean
   msgRange: string
   chatRange: string
   dryRun: boolean
@@ -709,6 +768,11 @@ function ConfirmStep({
       {overCap && (
         <p className="text-xs text-destructive">
           超过 {MAX_TOTAL_DETAILS} 条上限——减几个收件人或删掉几条内容才能创建。
+        </p>
+      )}
+      {overRecipientCap && (
+        <p className="text-xs text-destructive">
+          收件人超过上限 {MAX_RECIPIENTS} 人——减到 {MAX_RECIPIENTS} 人以内才能创建（创建按钮已禁用）。
         </p>
       )}
       {error && <p className="text-xs text-destructive">创建失败：{error}</p>}
