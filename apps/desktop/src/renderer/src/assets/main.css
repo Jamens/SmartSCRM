@@ -164,6 +164,19 @@
     -webkit-app-region: no-drag;
 }
 
+/* 窄栏里不常驻滚动条：64px 宽的模块栏放一条 Chromium 的 thin 滚动条就要吃掉 11px（标准属性只能到
+   thin，写 `::-webkit-scrollbar { width: 6px }` 会被 Lightning CSS 改写成 `scrollbar-width: thin`，
+   实测占宽 11px）。这里跟 `[data-radix-scroll-area-viewport]` 那两行同一套配方：标准属性 + webkit
+   伪元素都写，滚轮与拖动照常，只是不再占那一列的宽度。 */
+@utility scrollbar-hidden {
+    scrollbar-width: none;
+    &::-webkit-scrollbar {
+        width: 0;
+        height: 0;
+        display: none;
+    }
+}
+
 @keyframes drift-slow {
     0%, 100% { transform: translate(0, 0) scale(1); }
     50% { transform: translate(30px, 40px) scale(1.1); }

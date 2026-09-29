@@ -4,7 +4,7 @@ import { cn } from '@/lib/utils'
 
 export default function ModuleRail(): React.JSX.Element {
   return (
-    <nav className="flex h-full w-16 shrink-0 flex-col items-center gap-1 border-r border-border/60 bg-muted/40 py-3">
+    <nav className="flex h-full w-16 shrink-0 flex-col items-center gap-1 overflow-y-auto scrollbar-hidden border-r border-border/60 bg-muted/40 py-3">
       {NAV_ITEMS.map(({ path, label, icon: Icon }) => (
         <NavLink
           key={path}
