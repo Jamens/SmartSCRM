@@ -112,8 +112,8 @@ export function useBatchPreview(): UseMutationResult<PreviewResult, Error, Previ
  * 状态迁移不直连 REST：群发的"开始"必须由主进程起泵，所以这一跳走 window.scrm.batch。
  * 四个动作都只回 `BatchProgress | null`（后端 `BatchReportsResultVO` 那四列；宿主塌成 null 表示这一跳没成），
  * 不是整张任务——所以成功后一律重新 GET `['batch','task',id]` 取权威的那一份，顺带刷列表那一行的状态徽标。
- * `retry-failed` 返回的是复位条数，形状不同，另立一个 `useBatchRetry`：
- * 一个 hook 两种返回会让调用方无从判定拿到的是哪个。
+ * `retry-failed` 回的是三态的复位读数（`null` = 这一跳没成 / `0` = 打到了但没 failed 行 / `N` = 复位数），
+ * 形状不同，另立一个 `useBatchRetry`：一个 hook 两种返回会让调用方无从判定拿到的是哪个。
  * 这里没有 `run`：起泵是 `batch:start`/`batch:resume` 的处理器自己干的活（`main/services/batchSend/host.ts:175-189`），
  * 渲染层再补一跳就会起出两条泵。
  */
@@ -130,8 +130,8 @@ export function useBatchAction(
   })
 }
 
-/** 重发：detailIds 省略＝整批（表头那颗），带＝只这一行（行末那颗）。返回复位条数，新状态靠下面的 invalidate 重新 GET。 */
-export function useBatchRetry(): UseMutationResult<number, Error, RetryInput, unknown> {
+/** 重发：detailIds 省略＝整批（表头那颗），带＝只这一行（行末那颗）。返回三态复位读数（`null`=这一跳没成 / `0`=没 failed 行 / `N`=复位数），新状态靠下面的 invalidate 重新 GET。 */
+export function useBatchRetry(): UseMutationResult<number | null, Error, RetryInput, unknown> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ taskId, detailIds }: RetryInput) => batchHost().retryFailed(taskId, detailIds),

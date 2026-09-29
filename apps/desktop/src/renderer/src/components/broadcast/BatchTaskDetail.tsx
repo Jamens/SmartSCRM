@@ -69,9 +69,22 @@ function truncate(value: string, max: number): string {
   return value.length > max ? `${value.slice(0, max)}…` : value
 }
 
-/** 墙钟串一律先 `chatMs` 补上写库那个偏移，再交给 `chatClock`：`dayjs(串)` 会在非东八区机器上偏一次。 */
+/**
+ * 墙钟串 → instant 的唯一入口：一律先 `chatMs` 补上写库那个偏移，`dayjs(串)` 会在非东八区机器上偏一次。
+ * 这条 `chatMs` 口径只准写在这一处——表格的「发出」列与详情头部的「心跳」都走它，省得两处各拼各的会漂移。
+ */
+function toChatMs(value: string | null | undefined): number | null {
+  return value ? chatMs(value) : null
+}
+
+/** instant → 东八区 `HH:mm`（`chatClock` 的唯一读数点）；`null` 由调用方给各自的空态文案。 */
+function clockText(ms: number | null, empty: string): string {
+  return ms === null ? empty : chatClock(ms)
+}
+
+/** 「发出」列：墙钟串 → `HH:mm`，没值画「—」。 */
 function clockOf(value: string | null | undefined): string {
-  return value ? chatClock(chatMs(value)) : '—'
+  return clockText(toChatMs(value), '—')
 }
 
 /**
@@ -112,15 +125,18 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
 
   /**
    * 三个通道各说各的话，因为三种读数必须分得开：
-   * - `failure`：这一跳没成（抛出来的那条：preload 未挂载 / IPC 被拒），红色；
-   * - `resetResult`：复位回来了几条（0 也算回来了，只是没有可重发的），中性；
+   * - `failure`：这一跳没成——红色。既收抛出来的那条（preload 未挂载 / IPC 被拒），也收
+   *   `retryFailed` 回来的 `null`（后端 40902/40404 拒绝、不可达、信封不对都塌成 null）；
+   * - `resetResult`：复位真的打回来了几条（`0` = 打到了、确实没有 failed 行；`N` = 复位数），中性；
    * - `recallNote`：撤回计划回来了几条待撤、几条不能撤，中性。
+   * `targeted` 记住这一趟是「单条」还是「整批」——由 detailIds 有没有发出去判，不看 `label` 字符串，
+   * 好让 `0` 那一路在两种粒度下各说各的话（单条留「这几条不是失败状态」，整批去掉这个复数指代）。
    * `resetResult` 存数不存句子：那句「点继续重跑」要配的是**复位之后**的状态
    * （R11 的 done/error → paused 由 hook 里的 invalidate + GET 才落进缓存），
    * 在 mutate 回调里拼句子只会用上取数前的旧状态。
    */
   const [failure, setFailure] = useState<string | null>(null)
-  const [resetResult, setResetResult] = useState<{ count: number; label: string } | null>(null)
+  const [resetResult, setResetResult] = useState<{ count: number; label: string; targeted: boolean } | null>(null)
   const [recallNote, setRecallNote] = useState<string | null>(null)
   const [blocked, setBlocked] = useState<BatchRecallBlocked[]>([])
   const [selected, setSelected] = useState<Set<number>>(() => new Set())
@@ -148,11 +164,20 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
 
   /** `detailIds` 省略＝整批（表头那颗），带＝只这一行（行末那颗）：同一跳端点，两种粒度（R11）。 */
   const doRetry = (detailIds: number[] | undefined, label: string): void => {
+    // 走不走单条那一路文案，看的是 detailIds 有没有真发出去，不是 `label` 那串中文（Fix D）。
+    const targeted = detailIds !== undefined && detailIds.length > 0
     clearNotes()
     retry.mutate({ taskId, detailIds }, {
-      onSuccess: (reset) => setResetResult({ count: reset, label }),
-      // 抛出来的这一路才是确证的"这一跳没成"；主进程 `batchApi.retryFailed` 把后端拒绝也塌成 0，
-      // 所以 0 那一路只能陈述"没有可重发的"并把核对办法一起交给用户（见下面的渲染处）。
+      onSuccess: (reset) => {
+        // `null` = 这一跳没成（后端 40902/40404 拒绝、宿主不可达、信封不对都塌成 null）：
+        // 复用红色 failure 通道，绝不替用户的数据下一句「没有可重发的」——那句得真打到后端才配说。
+        if (reset === null) {
+          setFailure('「重发」这一跳没成：后端拒绝或宿主不可达，任务保持原状，没有复位任何行。')
+          return
+        }
+        setResetResult({ count: reset, label, targeted })
+      },
+      // 抛出来的这一路才是确证的失败（preload 未挂载 / IPC 被拒）；后端拒绝现在塌 null 走 onSuccess，不再混进 0。
       onError: (err) => setFailure(`「重发」这一跳没成：${err.message}`)
     })
   }
@@ -201,21 +226,26 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
   const total = details.data?.total ?? 0
   const pageSize = details.data?.pageSize ?? 1
   const lastPage = Math.max(1, Math.ceil(total / Math.max(pageSize, 1)))
-  const goPage = (next: number): void => setPage(Math.min(Math.max(next, 1), lastPage))
+  const goPage = (next: number): void => {
+    setPage(Math.min(Math.max(next, 1), lastPage))
+    // 翻页要清掉勾选：选中行留在上一页就画不出复选框，但「撤回已发（N）」还在数它们。
+    // 撤回不可逆，用户按下的那个数必须等于他眼前看得见勾选的那些。
+    setSelected(new Set())
+  }
 
   const pct = task.totalCount > 0 ? Math.min(100, Math.round((task.sentCount / task.totalCount) * 100)) : 0
   const acts = ACTIONS[task.status]
   // 复位把终态唤醒成 paused（R11），正常情况下「继续」就在那排按钮上；不在的时候必须说清点哪一颗，
-  // 否则「点继续重跑」会是一句在卡片上点不动的话。
+  // 否则「点继续重跑」会是一句在卡片上点不动的话。running 不在这条链上：正在跑的泵会自己把复位成
+  // pending 的行捡起来重发，叫用户「先暂停」反而会把在跑的批次掐掉（真实副作用），那一句在渲染处单说。
   const resumeStep = acts.includes('resume')
     ? ''
     : acts.includes('start')
       ? `（当前「${STATUS_LABEL[task.status]}」的卡片上没有「继续」，点「开始」才会重跑。）`
-      : acts.includes('pause')
-        ? `（当前「${STATUS_LABEL[task.status]}」的卡片上没有「继续」，先「暂停」再点「继续」才会重跑。）`
-        : `（当前「${STATUS_LABEL[task.status]}」的卡片上没有重跑入口：这一批要等任务回到可执行状态。）`
-  // 心跳是墙钟串：解析走 chatMs，显示走 chatClock（东八区 HH:mm），"距今"由它跟当下比。
-  const heartbeatMs = task.heartbeatAt ? chatMs(task.heartbeatAt) : null
+      : `（当前「${STATUS_LABEL[task.status]}」的卡片上没有重跑入口：这一批要等任务回到可执行状态。）`
+  // 心跳是墙钟串：解析走 toChatMs（与「发出」列同一个 chatMs 读数点），显示走 clockText（同一个 chatClock），
+  // "距今"由它跟当下比。
+  const heartbeatMs = toChatMs(task.heartbeatAt)
   const heartbeatAgo = heartbeatMs === null ? null : secondsSince(heartbeatMs)
 
   return (
@@ -252,7 +282,7 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
         <p className="mt-2 text-xs text-muted-foreground">
           心跳：
           {/* null = 这一条任务从没被泵碰过，空着会被读成"页面没刷出来"。 */}
-          {heartbeatMs === null ? '还没跑过' : `${chatClock(heartbeatMs)} · 距今 ${heartbeatAgo} 秒`}
+          {heartbeatMs === null ? '还没跑过' : `${clockText(heartbeatMs, '还没跑过')} · 距今 ${heartbeatAgo} 秒`}
         </p>
         {/* 「距今 N 秒」才是"引擎还在跑"的那张证人：15 秒一跳在 HH:mm 刻度上看不出来。
             它不进定时器，页面每收到一次 `batch:state` 就重新 GET（Task 13 的 useBatchLive，挂在页面层），
@@ -275,20 +305,18 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
 
         {resetResult && (
           <p className="mt-3 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs text-foreground">
-            {resetResult.count > 0 ? (
-              // 复位本身不投泵：泵只在 running 时捡 pending 行（Task 12 的 runTask），
-              // 少了这一句用户会以为点完就在跑。要不要"点继续"看的是复位之后 GET 回来的状态，不是取数前那一份。
-              `已复位 ${resetResult.count} 条，点继续重跑` + resumeStep
-            ) : (
-              <>
-                {`${resetResult.label}：这几条不是失败状态，没有可重发的。`}
-                {/* 复位 0 条有两解：确实没有 failed 行，或者后端拒了这一跳（宿主把拒绝也塌成 0）。
-                    分辨办法交给用户核对——明细里的「失败」徽标有没有变少。 */}
-                <span className="text-muted-foreground">
-                  （0 条也有可能是这一跳没成——后端拒绝时复位数同样回 0。看下面「失败」徽标的条数有没有变少来分辨。）
-                </span>
-              </>
-            )}
+            {resetResult.count > 0
+              ? task.status === 'running'
+                ? // 正在跑的泵持续投 pending 行（host 的 runTask 起泵后 buildQueues 只捡 pending），
+                  // 复位成 pending 的行会被它自己捡走——既没有「继续」可点，也不该叫用户去暂停。
+                  `已复位 ${resetResult.count} 条，正在跑的泵会自己把这些行捡起来重发，不用暂停。`
+                : // 非 running：复位本身不投泵，要不要「点继续」看复位之后 GET 回来的状态，不是取数前那一份。
+                  `已复位 ${resetResult.count} 条，点继续重跑` + resumeStep
+              : // count=0：这一跳确实打到了、只是没有 failed 行（后端拒绝现在走上面的 failure 红通道，不再混进 0）。
+                // 单条留 brief 原文「这几条不是失败状态」；整批去掉复数指代「这几条」，同一个事实换个说法。
+                resetResult.targeted
+                ? `${resetResult.label}：这几条不是失败状态，没有可重发的。`
+                : `${resetResult.label}：没有可重发的失败条目。`}
           </p>
         )}
       </section>
@@ -304,6 +332,8 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
             onValueChange={(v) => {
               setSendStatus(v)
               setPage(1)
+              // 换筛选后当前页的行全变了，旧勾选对应不到看得见的复选框——清空，同 goPage 一条理由。
+              setSelected(new Set())
             }}
           >
             <SelectTrigger size="sm">
@@ -323,6 +353,8 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
             onValueChange={(v) => {
               setRecallStatus(v)
               setPage(1)
+              // 同发送状态那一档：换筛选清掉看不见页的勾选，撤回计数只认看得见的那些。
+              setSelected(new Set())
             }}
           >
             <SelectTrigger size="sm">

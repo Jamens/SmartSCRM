@@ -23,7 +23,8 @@ test('reports：信封 code=0 才认，返回 data', async () => {
 test('任何非 0 信封 / 非 2xx / 抛错都塌成 null 或 0，不抛出到调用方', async () => {
   const boom = createBatchApi({ fetcher: async () => { throw new Error('ECONNREFUSED') } })
   assert.equal(await boom.heartbeat(1), 0)
-  assert.equal(await boom.retryFailed(1), 0)
+  // Fix A：retryFailed 把「这一跳没成」与「没有 failed 行」分开——抛错是前者，塌 null 不再塌 0。
+  assert.equal(await boom.retryFailed(1), null)
   assert.equal(await boom.recall(1, [1]), null)
   const bad = createBatchApi({ fetcher: async () => json({ code: 40902, message: '状态非法' }, 409) })
   assert.equal(await bad.start(1), null)
@@ -64,6 +65,31 @@ test('retryFailed：省略/空数组都不带 body，非空数组只带那几条
   assert.equal(seen[1].body, undefined)
   await api.retryFailed(1, [7, 8])
   assert.equal(seen[2].body, JSON.stringify({ detailIds: [7, 8] }))
+})
+
+// Fix A：retryFailed 的 0 有两种读法——「后端拒了这一跳」和「这个任务确实没有 failed 行」。
+// 塌成同一个 0，渲染层就分不开，详情页会在后端根本没接住时说「这几条不是失败状态，没有可重发的」，
+// 一句关于用户数据的假话。这一跳从此与 postProgress 同口径：null = 这一跳没成 / 0 = 打到了没得重发 / N = 复位数。
+test('retryFailed：null 是被拒/不可达/信封不对，0 是真没有 failed 行，N 是复位数', async () => {
+  const ok = (reset: number): ReturnType<typeof createBatchApi> =>
+    createBatchApi({ fetcher: async () => json({ code: 0, data: { reset } }) })
+  assert.equal(await ok(0).retryFailed(1), 0, '打到后端、reset=0 = 真的没有 failed 行')
+  assert.equal(await ok(3).retryFailed(1), 3, 'reset=3 = 复位了 3 条')
+  assert.equal(
+    await createBatchApi({ fetcher: async () => json({ code: 40902, message: '状态非法' }, 409) }).retryFailed(1),
+    null,
+    '非 2xx（后端拒绝）塌 null，不再是 0'
+  )
+  assert.equal(
+    await createBatchApi({ fetcher: async () => json({ code: 40902, message: '状态非法' }, 200) }).retryFailed(1),
+    null,
+    '200 但信封 code≠0 塌 null'
+  )
+  assert.equal(
+    await createBatchApi({ fetcher: async () => { throw new Error('ECONNREFUSED') } }).retryFailed(1),
+    null,
+    'fetch 抛错塌 null'
+  )
 })
 
 // 两个「只回一个数」的跳：抽取的键名各有其主（heartbeat=updated / recallReports=settled），

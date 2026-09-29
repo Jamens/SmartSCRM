@@ -159,7 +159,7 @@ const scrm = {
     resume: (taskId: number): Promise<BatchProgress | null> => ipcRenderer.invoke('batch:resume', taskId),
     cancel: (taskId: number): Promise<BatchProgress | null> => ipcRenderer.invoke('batch:cancel', taskId),
     run: (taskId: number): Promise<{ started: boolean }> => ipcRenderer.invoke('batch:run', taskId),
-    retryFailed: (taskId: number, detailIds?: number[]): Promise<number> =>
+    retryFailed: (taskId: number, detailIds?: number[]): Promise<number | null> =>
       ipcRenderer.invoke('batch:retry-failed', taskId, detailIds),
     recall: (taskId: number, detailIds: number[]): Promise<BatchRecallResult> =>
       ipcRenderer.invoke('batch:recall', taskId, detailIds),
