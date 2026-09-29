@@ -77,9 +77,9 @@ export default function LoginPage(): React.JSX.Element {
       </div>
 
       {/* Form panel */}
-      <div className="relative flex flex-1 items-center justify-center bg-gradient-to-b from-slate-50 via-background to-primary/5 p-8">
+      <div className="relative flex flex-1 items-center justify-center bg-gradient-to-b from-muted via-background to-primary/5 p-8">
         <div className="no-drag w-full max-w-[380px]">
-          <div className="rounded-2xl border border-white/60 bg-white/70 p-8 shadow-2xl shadow-primary/10 backdrop-blur-xl">
+          <div className="rounded-2xl border border-border/60 bg-card/70 p-8 shadow-2xl shadow-primary/10 backdrop-blur-xl">
             <h2 className="text-2xl font-bold text-foreground">欢迎回来</h2>
             <p className="mt-1.5 text-sm text-muted-foreground">登录你的 SCRM 工作台</p>
             <div className="mt-3 h-1 w-10 rounded-full bg-gradient-to-r from-primary to-gold" />
@@ -94,7 +94,7 @@ export default function LoginPage(): React.JSX.Element {
                     value={inviteCode}
                     onChange={(e) => setInviteCode(e.target.value)}
                     placeholder="例如 DEMO0001"
-                    className="h-11 bg-white/80 pl-10 font-medium tracking-wide"
+                    className="h-11 pl-10 font-medium tracking-wide"
                     required
                   />
                 </div>
@@ -110,7 +110,7 @@ export default function LoginPage(): React.JSX.Element {
                     onChange={(e) => setUsername(e.target.value)}
                     placeholder="请输入账号"
                     autoComplete="username"
-                    className="h-11 bg-white/80 pl-10"
+                    className="h-11 pl-10"
                     required
                   />
                 </div>
@@ -127,7 +127,7 @@ export default function LoginPage(): React.JSX.Element {
                     onChange={(e) => setPassword(e.target.value)}
                     placeholder="请输入密码"
                     autoComplete="current-password"
-                    className="h-11 bg-white/80 pr-10 pl-10"
+                    className="h-11 pr-10 pl-10"
                     required
                   />
                   <button
@@ -145,7 +145,7 @@ export default function LoginPage(): React.JSX.Element {
                   type="checkbox"
                   checked={remember}
                   onChange={(e) => setRemember(e.target.checked)}
-                  className="size-3.5 accent-[oklch(0.488_0.243_264.376)]"
+                  className="size-3.5 accent-primary"
                 />
                 记住邀请码
               </label>
@@ -176,7 +176,7 @@ export default function LoginPage(): React.JSX.Element {
               <span>
                 演示账号 <code className="rounded bg-muted px-1.5 py-0.5">admin / admin123</code>
               </span>
-              <span className="text-gold-foreground/70">数据仅存储于本机 MySQL</span>
+              <span className="text-muted-foreground">数据仅存储于本机 MySQL</span>
             </div>
           </div>
         </div>
