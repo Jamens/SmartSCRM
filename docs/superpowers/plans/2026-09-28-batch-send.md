@@ -4039,49 +4039,68 @@ export function registerBatchIpc(): void {
   ipcMain.handle('batch:retry-failed', (_e, taskId: number, detailIds?: number[]) =>
     api.retryFailed(taskId, detailIds))
   // 撤回：清单在后端判（Task 5），这里只把 eligible 逐条交给页内出料口，结清走 recallReports。
-  // I-5：节律与发送走同一档 `chat_interval`（spec §5:159）——打的是同一条 WA 连接，
+  // 节律与发送走同一档 `chat_interval`（spec §5:159；B7 终审 I-5）——打的是同一条 WA 连接，
   // 撤回连发不加节律，抖动成本与发送连发一样贵；第一条不等待，撤回已经落在用户按下之后。
-  // I-2：逐条 try/catch — 页内一条抛出经 `sendLock.run` 会原样传出来，会打断整批，
-  // 而后端已把这些行推成 `recalling`；孤儿 `recalling` 由 `reconcile` 第三拍结回 `recall_failed`（I-6）。
+  // 逐条 try/catch（I-2）：`recallText` 经 `sendLock.run` 会把页内抛出原样传出来，一条抛出会打断整批，
+  // 而后端已把这些行推成 `recalling`——那些行永远显示「撤回中」，而撤回不可回收；孤儿 `recalling`
+  // 由 `reconcile` 第三拍在下次启动时统一结回 `recall_failed`（I-6 让它们可以再点撤回）。
   ipcMain.handle('batch:recall', async (_e, taskId: number, detailIds: number[]): Promise<BatchRecallResult> => {
     const plan = await api.recall(taskId, detailIds)
     if (!plan) return { eligible: 0, blocked: [] }
-    // 任务取不到就把节律当 0：宁可不加节律也不打断撤回（后端已经推了 recalling）。
+    // 一条可撤的都没有就别再为节律读一次任务：那一跳除了多一个来回什么都换不到。
+    if (!plan.eligible.length) return { eligible: 0, blocked: plan.rejected }
+    // 节律档位要读任务；塌了就把节律当 0，宁可不加节律也不打断撤回（后端已把 eligible 推成
+    // recalling，静默不撤 = 让它们永远显示「撤回中」，那是 I-2 第三拍要处理的孤儿状态）。
     const cfg: IntervalConfig = await (async () => {
       const t = await api.task(taskId)
       return t
-        ? { msgMin: t.msgIntervalMin, msgMax: t.msgIntervalMax,
-            chatMin: t.chatIntervalMin, chatMax: t.chatIntervalMax }
+        ? {
+            msgMin: t.msgIntervalMin, msgMax: t.msgIntervalMax,
+            chatMin: t.chatIntervalMin, chatMax: t.chatIntervalMax
+          }
         : { msgMin: 0, msgMax: 0, chatMin: 0, chatMax: 0 }
     })()
+    // 第一条不等待：撤回已经落在用户按下之后，第一条再等一档只是让界面像卡住。
     let prev: RecallTarget | null = null
     for (const t of plan.eligible) {
       if (prev) {
         await sleep(pickIntervalSec(gapKindFor(prev, t), cfg, Math.random) * 1000)
       }
       prev = t
+      // catch 只保证这一条被结清、循环继续下一条；结清那一跳自己也可能失败，
+      // 用 `.catch(...)` 吞第二层——那一跳抛了也不许打断循环。
       try {
+        // 账号没有可用视图（掉线 / 未挂桥）也要结清：后端已经把这条推成 recalling，
+        // 静默 continue 会让它永远卡在 recalling，界面上看不出"为什么没撤"。
         if (!viewIdOf(t.accountId)) {
           await api.recallReports(taskId, [{
             detailId: t.detailId, recalled: false, detail: '账号当前没有可用视图'
           }]).catch(() => 0)
           continue
         }
+        // 一条一结清：撤回的成败只由 isRevoked 判（Task 10），后端据此把 recall_status 落成 recalled 或 recall_failed。
         const r = await recallDispatch(t)
+        // 结清载荷也过 REPORT_DETAIL_MAX（I-1）：越界会让这一条 400，永远停在 recalling。
         await api.recallReports(taskId, [{
           detailId: t.detailId,
           recalled: r.ok && r.isRevoked === true,
           detail: r.detail === undefined ? undefined : r.detail.slice(0, REPORT_DETAIL_MAX)
-        }]).catch(() => 0)
+        }]).catch((e: unknown) => {
+          console.warn(`[batch] task=${taskId} recall settle detail=${t.detailId}`, e)
+          return 0
+        })
       } catch (e) {
+        // 页内抛出/网络抖动/任何其他单条中断：把这一条按 recall_failed 结掉，console.warn 带
+        // taskId 与 detailId 后继续下一条。
         console.warn(`[batch] task=${taskId} recall aborted detail=${t.detailId}`, e)
         await api.recallReports(taskId, [{
           detailId: t.detailId,
           recalled: false,
-          detail: '宿主撤回中断'.slice(0, REPORT_DETAIL_MAX)
+          detail: '宿主撤回中断'
         }]).catch(() => 0)
       }
     }
+    // 挡下的那些后端不写库，`recallDetail` 里永远不会有它们——这一份 reason 列表是唯一的出处。
     return { eligible: plan.eligible.length, blocked: plan.rejected }
   })
 }
