@@ -281,7 +281,10 @@ public class BatchSendService {
      * R3 + R11。三跳一个事务：复位 → 刷计数 → 必要时唤醒。
      * `detailIds` 为空＝整批复位（spec §5 的 retry-failed 原语义），非空＝只复位勾选的那几条（spec §7 的单条重发）；
      * 两种都受 `WHERE send_status='failed'` 约束，所以 unknown 永远复位不掉。
-     * 唤醒只在 done/error 上做：running 本来就有泵在捡 pending 行，把它打成 paused 是重发的副作用而不是用户意图；
+     * 唤醒只在 done/error 上做：running 本来就有泵在跑，把它的状态搬走会让那一趟收尾（reports 的
+     * running→done/error 判定）找不到自己认得的状态；但要按「running 中复位出来的 pending 行会被这台
+     * 泵捡走」来理解就错了——主进程那台泵拿的是起泵时拉好的明细快照，这一行不在它的队列里，得由人工
+     * 暂停再续才会重跑（界面按这个口径提示，V1 不做运行中重排队列）。
      * cancelled 不唤醒（那是人明确按下的停）。revive 与 reset 都判：一条都没复位就把终态搬走，
      * 页面上会出现"暂停中但无事可跑"的任务。
      */
