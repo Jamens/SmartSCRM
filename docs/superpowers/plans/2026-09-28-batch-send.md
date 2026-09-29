@@ -2468,7 +2468,7 @@ cd /d/SmartSCRM/apps/desktop && pnpm run test:unit 2>&1 | tail -8 && pnpm run ty
   - `type Fetcher = (path: string, init: RequestInit) => Promise<Response>`（真身是 Task 12 传进来的 `authedFetch`）
   - `interface ReportItem { detailId: number; localId?: string; sendStatus: string; errorCode?: string; errorDetail?: string; msgKey?: string; sentAtEpochSec?: number }`
   - `RecallTarget { detailId: number; accountId: number; chatKey: string; msgKey: string }`、`RecallPlan { eligible: RecallTarget[]; rejected: BatchRecallBlocked[] }`（`rejected` 的元素直接复用 Task 7 的 `BatchRecallBlocked`，不在这里重声明一份同名局部类型）、`RecallReportItem { detailId: number; recalled: boolean; detail?: string }`、`Page<T> { records: T[]; total: number; page: number; pageSize: number }`
-  - `createBatchApi(opts: BatchApiOptions)` → `BatchApi = ReturnType<typeof createBatchApi>`，十二个方法就是 Step 3 实现里那十二个（十跳运行面 + `task`/`details` 两跳只读）：`start/pause/resume/cancel(taskId) → Promise<BatchProgress | null>`、`reports(taskId, items, allHalted) → Promise<BatchProgress | null>`、`task(id) → Promise<BatchTask | null>`、`details(taskId, page, size) → Promise<Page<BatchDetail> | null>`（URL 里拼 `size=`，见 Task 4 Step 4 的「入参 size / 出参 pageSize」）、`heartbeat(taskId) → Promise<number>`、`retryFailed(taskId, detailIds?) → Promise<number>`（省略＝整批，带＝只复位那几条，R11）、`recall(taskId, detailIds) → Promise<RecallPlan | null>`、`recallReports(taskId, items) → Promise<number>`、`reconcile() → Promise<{ pausedTasks: number; markedUnknown: number } | null>`
+  - `createBatchApi(opts: BatchApiOptions)` → `BatchApi = ReturnType<typeof createBatchApi>`，十二个方法就是 Step 3 实现里那十二个（十跳运行面 + `task`/`details` 两跳只读）：`start/pause/resume/cancel(taskId) → Promise<BatchProgress | null>`、`reports(taskId, items, allHalted) → Promise<BatchProgress | null>`、`task(id) → Promise<BatchTask | null>`、`details(taskId, page, size) → Promise<Page<BatchDetail> | null>`（URL 里拼 `size=`，见 Task 4 Step 4 的「入参 size / 出参 pageSize」）、`heartbeat(taskId) → Promise<number>`、`retryFailed(taskId, detailIds?) → Promise<number | null>`（省略＝整批，带＝只复位那几条，R11；`null`＝这一跳没成，`0`＝打到了但没有 `failed` 行——两种读法不许塌成一个数）、`recall(taskId, detailIds) → Promise<RecallPlan | null>`、`recallReports(taskId, items) → Promise<number>`、`reconcile() → Promise<{ pausedTasks: number; markedUnknown: number } | null>`
   - `BatchApiOptions { fetcher: Fetcher; onError?: (where: string, e: unknown) => void }`（两个参数：host 要知道是哪一跳挂了，只给 error 就得上 log 里猜）
 
 - [ ] **Step 1：写失败的测试**（`node --test`，`tsconfig.unit.json` 内，相对导入）：
@@ -2499,7 +2499,7 @@ test('reports：信封 code=0 才认，返回 data', async () => {
 test('任何非 0 信封 / 非 2xx / 抛错都塌成 null 或 0，不抛出到调用方', async () => {
   const boom = createBatchApi({ fetcher: async () => { throw new Error('ECONNREFUSED') } })
   assert.equal(await boom.heartbeat(1), 0)
-  assert.equal(await boom.retryFailed(1), 0)
+  assert.equal(await boom.retryFailed(1), null)
   assert.equal(await boom.recall(1, [1]), null)
   const bad = createBatchApi({ fetcher: async () => json({ code: 40902, message: '状态非法' }, 409) })
   assert.equal(await bad.start(1), null)
@@ -2540,6 +2540,31 @@ test('retryFailed：省略/空数组都不带 body，非空数组只带那几条
   assert.equal(seen[1].body, undefined)
   await api.retryFailed(1, [7, 8])
   assert.equal(seen[2].body, JSON.stringify({ detailIds: [7, 8] }))
+})
+
+// Fix A：retryFailed 的 0 有两种读法——「后端拒了这一跳」和「这个任务确实没有 failed 行」。
+// 塌成同一个 0，渲染层就分不开，详情页会在后端根本没接住时说「这几条不是失败状态，没有可重发的」，
+// 一句关于用户数据的假话。这一跳从此与 postProgress 同口径：null = 这一跳没成 / 0 = 打到了没得重发 / N = 复位数。
+test('retryFailed：null 是被拒/不可达/信封不对，0 是真没有 failed 行，N 是复位数', async () => {
+  const ok = (reset: number): ReturnType<typeof createBatchApi> =>
+    createBatchApi({ fetcher: async () => json({ code: 0, data: { reset } }) })
+  assert.equal(await ok(0).retryFailed(1), 0, '打到后端、reset=0 = 真的没有 failed 行')
+  assert.equal(await ok(3).retryFailed(1), 3, 'reset=3 = 复位了 3 条')
+  assert.equal(
+    await createBatchApi({ fetcher: async () => json({ code: 40902, message: '状态非法' }, 409) }).retryFailed(1),
+    null,
+    '非 2xx（后端拒绝）塌 null，不再是 0'
+  )
+  assert.equal(
+    await createBatchApi({ fetcher: async () => json({ code: 40902, message: '状态非法' }, 200) }).retryFailed(1),
+    null,
+    '200 但信封 code≠0 塌 null'
+  )
+  assert.equal(
+    await createBatchApi({ fetcher: async () => { throw new Error('ECONNREFUSED') } }).retryFailed(1),
+    null,
+    'fetch 抛错塌 null'
+  )
 })
 
 // 两个「只回一个数」的跳：抽取的键名各有其主（heartbeat=updated / recallReports=settled），
@@ -2697,17 +2722,24 @@ export function createBatchApi(opts: BatchApiOptions) {
     reports: (taskId: number, items: ReportItem[], allHalted: boolean) =>
       postProgress(`/api/batch-send/tasks/${taskId}/reports`, { items, allHalted }),
     /**
+     * 三态返回，与 `postProgress` 的「宿主塌成 null 表示这一跳没成」同一条口径——不许再造第二种信号：
+     * - `null` = 这一跳没成：`call` 的三种塌法（非 2xx 的 40902/40404、信封 `code !== 0`、`fetcher` 抛）全落这里；
+     * - `0`    = 打到了，这个任务确实没有 failed 行；
+     * - `N`    = 复位了 N 条。
+     * `0` 与 `null` 必须分开：渲染层据此决定是走「这一跳没成」那条红色失败通道、还是陈述「没有可重发的」。
+     * 塌成同一个 `0`，详情页就会在后端根本没接住时对用户的数据下一句假话——正是这次要拆掉的歧义。
      * 只回复位条数：R11 那次「done/error → paused」的唤醒结果由渲染层随后 GET 任务拿到，
      * 这里不把 status 穿两层 IPC 再穿一次——同一条链上出现两个"任务现在是什么状态"的读数来源，
      * 而其中一个可能是上一跳的旧值。
      * detailIds 省略或空数组 = 整批复位；带 = 只复位勾选的那几条（spec §7 的单条重发）。
      */
-    async retryFailed(taskId: number, detailIds?: number[]): Promise<number> {
+    async retryFailed(taskId: number, detailIds?: number[]): Promise<number | null> {
       const data = await call<{ reset?: number }>(`/api/batch-send/tasks/${taskId}/retry-failed`,
         detailIds?.length
           ? { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ detailIds }) }
           : { method: 'POST' })
-      return data?.reset ?? 0
+      // `data === null`（这一跳没成）与 `data.reset` 缺失（信封形状变了）都塌 null；真打到的 0 原样回 0。
+      return data?.reset ?? null
     },
     recall: (taskId: number, detailIds: number[]) =>
       call<RecallPlan>(`/api/batch-send/tasks/${taskId}/recall`,
@@ -2725,7 +2757,7 @@ export function createBatchApi(opts: BatchApiOptions) {
 export type BatchApi = ReturnType<typeof createBatchApi>
 ```
 
-- [ ] **Step 4：`tsconfig.unit.json` 的 `include` 追加那两支**（`src/main/services/batchSend/batchApi.ts`、`.../batchApi.test.ts`；`host.ts` 这类 import electron 的绝不能加）。`package.json:15` 的 `test:unit` 追加 `"src/main/services/batchSend/**/*.test.ts"`。跑 unit + typecheck 全绿：期望 `pass` 从 **222 → 231**（212 基线 + Task 7 的 10 + 本任务 9），`fail 0`。
+- [ ] **Step 4：`tsconfig.unit.json` 的 `include` 追加那两支**（`src/main/services/batchSend/batchApi.ts`、`.../batchApi.test.ts`；`host.ts` 这类 import electron 的绝不能加）。`package.json:15` 的 `test:unit` 追加 `"src/main/services/batchSend/**/*.test.ts"`。跑 unit + typecheck 全绿：期望 `pass` 从 **222 → 231**（212 基线 + Task 7 的 10 + 本任务 9），`fail 0`。**（本任务 9 条是写计划时的数；Task 15 的修复轮给 `retryFailed` 的三态补了一条证人，这一支现为 10 条，于是本计划后面每一处预测总数都比 shipped 少 1——以实跑为准，别拿算术当证人。）**
 - [ ] **Step 5：提交。** `feat(P7/群发): 主进程群发十二跳，注入 fetcher 且全部塌成 null`
 
 ## Task 9: per-view 发送锁 + `sendText` / `recallText` 挂锁
@@ -3994,7 +4026,7 @@ export function registerBatchIpc(): void {
     resume: (taskId: number): Promise<BatchProgress | null> => ipcRenderer.invoke('batch:resume', taskId),
     cancel: (taskId: number): Promise<BatchProgress | null> => ipcRenderer.invoke('batch:cancel', taskId),
     run: (taskId: number): Promise<{ started: boolean }> => ipcRenderer.invoke('batch:run', taskId),
-    retryFailed: (taskId: number, detailIds?: number[]): Promise<number> =>
+    retryFailed: (taskId: number, detailIds?: number[]): Promise<number | null> =>
       ipcRenderer.invoke('batch:retry-failed', taskId, detailIds),
     recall: (taskId: number, detailIds: number[]): Promise<BatchRecallResult> =>
       ipcRenderer.invoke('batch:recall', taskId, detailIds),
@@ -4146,8 +4178,8 @@ export function useBatchPreview(): UseMutationResult<PreviewResult, Error, Previ
  * 状态迁移不直连 REST：群发的"开始"必须由主进程起泵，所以这一跳走 window.scrm.batch。
  * 四个动作都只回 `BatchProgress | null`（后端 `BatchReportsResultVO` 那四列；宿主塌成 null 表示这一跳没成），
  * 不是整张任务——所以成功后一律重新 GET `['batch','task',id]` 取权威的那一份，顺带刷列表那一行的状态徽标。
- * `retry-failed` 返回的是复位条数，形状不同，另立一个 `useBatchRetry`：
- * 一个 hook 两种返回会让调用方无从判定拿到的是哪个。
+ * `retry-failed` 回的是三态的复位读数（`null` = 这一跳没成 / `0` = 打到了但没 failed 行 / `N` = 复位数），
+ * 形状不同，另立一个 `useBatchRetry`：一个 hook 两种返回会让调用方无从判定拿到的是哪个。
  * 这里没有 `run`：起泵是 `batch:start`/`batch:resume` 的处理器自己干的活（`main/services/batchSend/host.ts:175-189`），
  * 渲染层再补一跳就会起出两条泵。
  */
@@ -4164,8 +4196,8 @@ export function useBatchAction(
   })
 }
 
-/** 重发：detailIds 省略＝整批（表头那颗），带＝只这一行（行末那颗）。返回复位条数，新状态靠下面的 invalidate 重新 GET。 */
-export function useBatchRetry(): UseMutationResult<number, Error, RetryInput, unknown> {
+/** 重发：detailIds 省略＝整批（表头那颗），带＝只这一行（行末那颗）。返回三态复位读数（`null`=这一跳没成 / `0`=没 failed 行 / `N`=复位数），新状态靠下面的 invalidate 重新 GET。 */
+export function useBatchRetry(): UseMutationResult<number | null, Error, RetryInput, unknown> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ taskId, detailIds }: RetryInput) => batchHost().retryFailed(taskId, detailIds),
@@ -4307,7 +4339,9 @@ export const ACTIONS: Record<BatchTaskStatus, BatchAction[]> = {
   - `null` 显示「还没跑过」而不是空白。页面每收到一次 `batch:state` 就 refetch（Task 13 的 `useBatchLive`），距今那个数会跟着跳；**不自设 `setInterval` 重算**，那会在没人看的时候也常驻一个定时器。
 - [ ] **Step 2：明细表。** 列 `seq / accountId / chatKey / contentIndex / body（截断 60 字 + title 全文）/ sendStatus / errorCode+errorDetail / msgKey / recallStatus / sentAt`（`sentAt` 与 `heartbeatAt` 同一口径：`row.sentAt ? chatClock(chatMs(row.sentAt)) : '—'`）；筛选两个 Select（`sendStatus`、`recallStatus`）；翻页用 `useBatchDetails` 的 `page`。
   - **`unknown` 行**只显示不动作：文案「结果未知（可能已发出），不自动重发」。V1 **不给**它任何复位/裁决入口（R3；`retryFailed` 的 WHERE 不含它），并把这个缺口记进 Task 16 的验收文档为「V1 缺 unknown 的人工裁决入口」。
-  - **`failed` 行**：行末一个「重发这一条」→ `useBatchRetry({ taskId, detailIds: [row.id] })`；表头另有一颗「重发失败条目」→ `useBatchRetry({ taskId })`（不带 detailIds＝整批）。两颗粒都走同一跳端点，只是 body 有无 `detailIds`（R11）。成功 toast 用返回的 `reset` 说"复位 N 条"（N 不许写死），**N=0 时要点一句「这几条不是失败状态，没有可重发的」**——否则用户会以为已经重发过了。复位把终态唤醒成 `paused` 时，任务卡上要出现「继续」并配一句「已复位 N 条，点继续重跑」：复位本身不投泵，泵只在 `running` 时捡 `pending` 行（Task 12 的 `runTask`），少了这一句用户会以为点完就在跑。
+  - **`failed` 行**：行末一个「重发这一条」→ `useBatchRetry({ taskId, detailIds: [row.id] })`；表头另有一颗「重发失败条目」→ `useBatchRetry({ taskId })`（不带 detailIds＝整批）。两颗粒都走同一跳端点，只是 body 有无 `detailIds`（R11）。
+    - **返回是三态，不是一条数字**：`null` = 这一跳没成（后端拒绝 / 宿主不可达 / 信封形状变了），`0` = 打到了但这个任务确实没有 `failed` 行，`N` = 复位了 N 条。三者必须在界面上分开——`0` 与 `null` 塌成同一个数，详情页就会在后端根本没接住时对用户的数据下一句假话。文案口径：`null` 走红色失败通道并明说「任务保持原状，没有复位任何行」；`N>0` 说"已复位 N 条"（N 不许写死）；`0` 按有没有点名分两句——点名的说「这几条不是失败状态，没有可重发的」，整批的说「没有可重发的失败条目」。
+    - **复位不投泵，而且正在跑的那台泵也不会捡走复位出来的行**。这条容易写错，按 shipped 事实说清：主进程 `runTask` 是**先翻页把该任务的明细全量拉到手，再 `engine.start(task, details)` 起一次泵**，`buildQueues` 只在这份快照里挑 `pending`，泵按索引走那条数组（读码：`engine.ts:107`、`host.ts` 的 `runTask`）。所以跑途中复位成 `pending` 的行**不在这台泵的队列里**，V1 不做运行中重排队列。后端的唤醒边只在 `done`/`error` → `paused` 上做（`retryFailed` 不看 `running`），`running` 的任务卡上也就不会出现「继续」。两句文案各自说实话：非 `running` → 「已复位 N 条，点继续重跑」（要不要那颗按钮看复位之后 GET 回来的状态，不是取数前那一份）；`running` → 「已复位 N 条，但正在跑的泵不会捡走它们（队列在起泵时就定了）：先「暂停」再点「继续」才会重跑这一批」。**不要**写「泵只在 `running` 时捡 `pending` 行」——那是一句会让人以为点完就在跑的假话（评审轮 Minor #2 的前提，已被 `4807cc1`/`22d080e` 推翻并写进 R-T15-7）。这一缺口同时记进 Task 16 的验收文档：running 中复位的行需人工暂停再续。
 - [ ] **Step 3：撤回。** 下面这段落在 `batchActions.ts`（shipped 原文，导出点就在那儿；组件文件只导入使用）：
 
 ```ts
@@ -4345,7 +4379,7 @@ cd /d/SmartSCRM/apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.
 cd /d/SmartSCRM && node tmp/p7b-batch-contract.mjs
 ```
 
-期望：unit `pass` = 212 + 10(Task 7) + 9(Task 8) + 8(Task 9) + 5(Task 10) + 8(Task 11) = **252**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = **115**（实测 = Task 1 基线 81 + 群发纯函数 22 + 整枝修复轮的 12 条证人，其中 `BatchSendServiceTest` 8 条）、0 failures；契约驱动 `33/33 passed`（29 个编号）且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
+期望：unit `pass` = 212 + 10(Task 7) + 9(Task 8) + 8(Task 9) + 5(Task 10) + 8(Task 11) = **252**，再加 Task 15 修复轮给 `retryFailed` 三态补的那条证人 = **253**，`fail 0`；typecheck 四路 0 error；`eslint --quiet` 对改动文件 0 error；Java `Tests run` = **115**（实测 = Task 1 基线 81 + 群发纯函数 22 + 整枝修复轮的 12 条证人，其中 `BatchSendServiceTest` 8 条）、0 failures；契约驱动 `33/33 passed`（29 个编号）且退出码 0。**（212 与基线数以本次实跑为准，跑出来的真实数字写进文档，不许抄本文档的算术。）**
 
 - [ ] **Step 2：CDP 演练腿（全程 dryRun，不碰页面）。** 前提：主进程改过，dev 必须已被用户重启过一次（dev watcher 不重载 `src/main`）。先 `powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p5c-top.ps1` 断言 `visibilityState==='visible'`，然后跑 `tmp/p7b-dry-run.mjs`，八条：
 
