@@ -202,3 +202,28 @@ test('stop() 之后队列不再投料，剩余 pending 一条都不发', async (
   const skipped = calls.flatMap((c) => c.items).filter((i) => i.sendStatus === 'skipped')
   assert.deepEqual(skipped.map((i) => i.detailId), [], '暂停要留 pending 给 resume')
 })
+
+/**
+ * I-1 判别证人：dispatch 交回 300 字的 `detail` 时，上报出去的 `errorDetail` 长度恰为 255、
+ * 内容是被截的前 255 字——第 256 字之后的字符（这里是 'Z'）不得出现。少了这一格，
+ * `@Size(max=255)` 会让整条上报 400 → `batchApi` 折 null → 进 backlog → `flushBacklog`
+ * 倒不动整段原序塞回，毒条目永远卡队头、后面的合法上报永久陪葬。
+ * 断言的三件事各挡一种"什么都没做"：
+ * - 长度 255：截没截；
+ * - 前缀逐字相等：截的方向对不对（防止反向截或替换成 '...'）；
+ * - 第 256 字之后不出现 'Z'：真的丢了尾巴而不是别的字符。
+ */
+test('dispatch 回超过 255 字的 detail → 上报的 errorDetail 恰为 255 且只留前缀', async () => {
+  const { calls, api } = fakeApi()
+  const long = 'x'.repeat(255) + 'Z'.repeat(45)  // 300 字：第 256 起是 'Z'
+  assert.equal(long.length, 300, '前置：注入串要长过 255 才叫越界')
+  const engine = new BatchEngine(fakeDeps(api, {
+    dispatch: async (): Promise<SendOutcome> => ({ ok: false, error: 'SEND_FAILED', detail: long })
+  }))
+  await engine.start(task({ accountIds: [1] }), [row(1, 1, 1, 'a')])
+  const final = calls.flatMap((c) => c.items).find((i) => i.sendStatus === 'failed')
+  assert.ok(final, '至少要看到那一条 failed 上报')
+  assert.equal(final.errorDetail?.length, 255, 'errorDetail 要被截到 REPORT_DETAIL_MAX=255')
+  assert.equal(final.errorDetail, long.slice(0, 255), '留下的是前缀')
+  assert.ok(!final.errorDetail?.includes('Z'), '第 256 字之后的 Z 不能出现在截断结果里')
+})

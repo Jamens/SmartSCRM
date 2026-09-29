@@ -94,7 +94,7 @@ CREATE TABLE `batch_send_detail` (
 
 - 任务：`pending → running → done`；`running ⇄ paused`；`running → error`（参与账号全部熔断或人工放弃）；任一非终态 `→ cancelled`。`done/error/cancelled` 不可再 `start`。
 - 明细：`pending → sending → success | failed | unknown`；`pending → skipped`（任务被取消或账号熔断时的未跑条目）。`unknown` 只能由人工裁决改写为 `success`（补 `msg_key` 无从谈起，因此不给它撤回资格）或 `failed`。
-- 撤回：`none → recalling → recalled | recall_failed`，只有 `send_status='success' AND msg_key IS NOT NULL AND dry_run=0` 的条目有撤回资格。
+- 撤回：`none → recalling → recalled | recall_failed`，`recall_failed → recalling` 是合法边（B7 I-6：一次超时或页内失败不该把消息永久钉在客户脸上，`recall_failed` 可以再点撤回）；`recalled` 是终态。只有 `send_status='success' AND msg_key IS NOT NULL AND dry_run=0` 的条目有撤回资格。
 
 ## 3. 创建：展开与校验（全在后端事务内）
 

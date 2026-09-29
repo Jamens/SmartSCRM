@@ -149,16 +149,16 @@ const scrm = {
     }
   },
   /**
-   * 批量群发（P7/B7）：七条 invoke + 一条 `batch:state` 推送。
+   * 批量群发（P7/B7）：六条 invoke + 一条 `batch:state` 推送。
    * `start`/`resume` 在主进程迁移成功后顺手把待跑明细交给引擎，渲染层不许自己拼"先 start 再 run"
-   * 两次调用；`onState` 只是"进度变了"的通知，数字仍以渲染层 GET 回来的那一份为准。
+   * 两次调用（M2：`batch:run` 那一跳已删——它是「两条泵」的潜在入口，渲染层零调用，见 host.ts）；
+   * `onState` 只是"进度变了"的通知，数字仍以渲染层 GET 回来的那一份为准。
    */
   batch: {
     start: (taskId: number): Promise<BatchProgress | null> => ipcRenderer.invoke('batch:start', taskId),
     pause: (taskId: number): Promise<BatchProgress | null> => ipcRenderer.invoke('batch:pause', taskId),
     resume: (taskId: number): Promise<BatchProgress | null> => ipcRenderer.invoke('batch:resume', taskId),
     cancel: (taskId: number): Promise<BatchProgress | null> => ipcRenderer.invoke('batch:cancel', taskId),
-    run: (taskId: number): Promise<{ started: boolean }> => ipcRenderer.invoke('batch:run', taskId),
     retryFailed: (taskId: number, detailIds?: number[]): Promise<number | null> =>
       ipcRenderer.invoke('batch:retry-failed', taskId, detailIds),
     recall: (taskId: number, detailIds: number[]): Promise<BatchRecallResult> =>

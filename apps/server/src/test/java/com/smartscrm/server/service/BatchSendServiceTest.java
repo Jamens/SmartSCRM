@@ -18,6 +18,7 @@ import static org.mockito.Mockito.when;
 import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.smartscrm.server.common.BizException;
+import com.smartscrm.server.entity.BatchSendDetail;
 import com.smartscrm.server.entity.BatchSendTask;
 import com.smartscrm.server.entity.ChatConversation;
 import com.smartscrm.server.entity.PlatformAccount;
@@ -31,6 +32,7 @@ import com.smartscrm.server.web.dto.BatchReportsDTO;
 import com.smartscrm.server.web.dto.BatchRecipientDTO;
 import com.smartscrm.server.web.dto.BatchTaskCreateDTO;
 import com.smartscrm.server.web.vo.BatchCreateVO;
+import com.smartscrm.server.web.vo.BatchRecallVO;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
@@ -78,6 +80,7 @@ class BatchSendServiceTest {
     static void installLambdaColumnCache() {
         MapperBuilderAssistant assistant = new MapperBuilderAssistant(new MybatisConfiguration(), "");
         TableInfoHelper.initTableInfo(assistant, BatchSendTask.class);
+        TableInfoHelper.initTableInfo(assistant, BatchSendDetail.class);
         TableInfoHelper.initTableInfo(assistant, PlatformAccount.class);
         TableInfoHelper.initTableInfo(assistant, ChatConversation.class);
     }
@@ -94,6 +97,62 @@ class BatchSendServiceTest {
         order.verify(taskMapper).pauseStaleTasks(eq(TENANT), any());
         assertEquals(2, r.get("markedUnknown"));
         assertEquals(1, r.get("pausedTasks"));
+    }
+
+    /**
+     * I-2 第三拍的判别证人：一行孤儿 `recalling` 必须在一次 `reconcile` 之后落回 `recall_failed`
+     * 且 `recall_detail` 非空、`markedRecallFailed` 键数到 1——少了那一拍，`applyRecallReport` 只结
+     * `recalling` 却没有生产者再报，行永远显示「撤回中」；同时 `markRecalling` 现在认 `recall_failed`
+     * 再进（I-6 的回程入口），少了这一拍回程也开不了。
+     */
+    @Test
+    void reconcileSettlesOrphanRecallingRows() {
+        when(detailMapper.markOrphanRecallingFailed(eq(TENANT), anyString())).thenReturn(1);
+
+        Map<String, Object> r = service.reconcile(TENANT);
+
+        verify(detailMapper).markOrphanRecallingFailed(eq(TENANT), anyString());
+        assertEquals(1, r.get("markedRecallFailed"), "第三拍要数得出几行被结掉");
+    }
+
+    /**
+     * I-6 的四条判据的判别证人：同一批 success + 有 msgKey 的行，四种 `recall_status` 走两条不同的路——
+     * `none` 与 `recall_failed` 进 eligible（撤回是可再试动作，一次超时不能把消息永久钉在客户脸上），
+     * `recalled` 与 `recalling` 各点名挡下（终态 / 别人手里）。少了这两条点名，界面上看不到「为什么
+     * 这一条没被撤」；而 `recall_failed` 落进 blocked 就是「失败即终态」那条错误裁定。
+     */
+    @Test
+    void recallEligibilitySeparatesRecallableFromTerminalAndInFlight() {
+        when(taskMapper.selectOne(any())).thenReturn(realTask());
+        when(detailMapper.selectList(any())).thenReturn(List.of(
+                recallRow(101L, "none"),
+                recallRow(102L, "recall_failed"),
+                recallRow(103L, "recalled"),
+                recallRow(104L, "recalling")));
+
+        BatchRecallVO vo = service.recall(TENANT, TASK, List.of(101L, 102L, 103L, 104L));
+
+        assertEquals(2, vo.eligible().size(), "none 与 recall_failed 都要落到 eligible");
+        assertTrue(vo.eligible().stream().anyMatch(t -> t.detailId() == 101L));
+        assertTrue(vo.eligible().stream().anyMatch(t -> t.detailId() == 102L));
+        assertEquals(2, vo.rejected().size(), "recalled 与 recalling 各点一条名");
+        assertTrue(vo.rejected().stream().anyMatch(b -> b.detailId() == 103L
+                && b.reason() != null && b.reason().contains("撤回成功")),
+                "recalled 的理由要点名「已撤回」");
+        assertTrue(vo.rejected().stream().anyMatch(b -> b.detailId() == 104L
+                && b.reason() != null && b.reason().contains("正在撤回中")),
+                "recalling 的理由要点名「正在撤」");
+    }
+
+    /** markRecalling 现在也认 `recall_failed`（I-6 与 I-2 第三拍同一批改动的一侧），这里判接线。 */
+    @Test
+    void recallPushesEligibleIntoMarkRecalling() {
+        when(taskMapper.selectOne(any())).thenReturn(realTask());
+        when(detailMapper.selectList(any())).thenReturn(List.of(recallRow(102L, "recall_failed")));
+
+        service.recall(TENANT, TASK, List.of(102L));
+
+        verify(detailMapper).markRecalling(eq(TENANT), eq(TASK), eq(List.of(102L)));
     }
 
     @Test
@@ -201,6 +260,28 @@ class BatchSendServiceTest {
         t.setStatus(status);
         t.setTotalCount(4);
         return t;
+    }
+
+    /** 撤回判据的入口要求非演练：`dryRun=true` 时 `BatchStatus.recallBlocker` 会一把挡下全部。 */
+    private BatchSendTask realTask() {
+        BatchSendTask t = task("running");
+        t.setDryRun(false);
+        return t;
+    }
+
+    /** 一条已发出、可寻址的 success 行；只有 `recallStatus` 在不同用例间翻转，把判据钉死在第四支。 */
+    private static BatchSendDetail recallRow(long id, String recallStatus) {
+        BatchSendDetail d = new BatchSendDetail();
+        d.setId(id);
+        d.setTenantId(TENANT);
+        d.setTaskId(TASK);
+        d.setSeq((int) (id - 100L));
+        d.setAccountId(ACCOUNT);
+        d.setChatKey(CHAT);
+        d.setSendStatus("success");
+        d.setMsgKey("true_x@c.us_" + id + "_out");
+        d.setRecallStatus(recallStatus);
+        return d;
     }
 
     private static BatchReportItemDTO item(long detailId, String sendStatus) {

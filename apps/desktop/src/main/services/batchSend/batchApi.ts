@@ -118,8 +118,8 @@ export function createBatchApi(opts: BatchApiOptions) {
         { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ items }) })
       return data?.settled ?? 0
     },
-    reconcile: () => call<{ pausedTasks: number; markedUnknown: number }>('/api/batch-send/reconcile',
-      { method: 'POST' })
+    reconcile: () => call<{ pausedTasks: number; markedUnknown: number; markedRecallFailed: number }>(
+      '/api/batch-send/reconcile', { method: 'POST' })
   }
 }
 

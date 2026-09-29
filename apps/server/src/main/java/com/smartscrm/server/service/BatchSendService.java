@@ -307,6 +307,9 @@ public class BatchSendService {
                 to = "paused";
             }
         }
+        // `status` 这一键桌面侧故意没人读（`batchApi.ts` 的 retryFailed 只取 `reset`，那儿的注释写明
+        // "不穿 status，避免第二个状态真值源"）。留着它是因为唤醒这件事本身要说得出话——契约驱动按
+        // 键名钉死这三列，删一行就会红；权威读数永远在 GET /tasks/{id}，别把这里当状态源。
         return Map.of("reset", reset, "status", to);
     }
 
@@ -328,10 +331,19 @@ public class BatchSendService {
             String reason = BatchStatus.recallBlocker(task.getDryRun(), d.getSendStatus(), d.getMsgKey());
             if (reason != null) {
                 blocked.add(new BatchRecallVO.Blocked(d.getId(), reason));
-            } else if (!"none".equals(d.getRecallStatus())) {
+            } else if ("recalled".equals(d.getRecallStatus())) {
+                // 撤回已经落定：这一条消息在客户脸上撤掉了就是撤掉了，再点一次什么也不会多。
                 blocked.add(new BatchRecallVO.Blocked(d.getId(),
-                        "已经撤过或正在撤（recall_status=" + d.getRecallStatus() + "）"));
+                        "已经撤回成功（recall_status=recalled），没有可再撤的东西"));
+            } else if ("recalling".equals(d.getRecallStatus())) {
+                // 挡死 `recalling`：可能正在别人的手里（另一台宿主或上一趟没跑完的循环），
+                // 让它进 eligible 会把同一条消息扇出两遍，撤回不可回收。孤儿 `recalling` 由
+                // `reconcile` 第三拍结回 `recall_failed`，然后走 `recall_failed` 那一条回程。
+                blocked.add(new BatchRecallVO.Blocked(d.getId(),
+                        "这条正在撤回中（recall_status=recalling），请等这一趟收口"));
             } else {
+                // `none` 与 `recall_failed` 都落到 eligible（I-6 裁定：一次超时或一次页内失败
+                // 不能把消息永久钉在客户脸上；`markRecalling` 现在也认 `recall_failed` 再进）。
                 eligible.add(new BatchRecallVO.Target(d.getId(), d.getAccountId(), d.getChatKey(), d.getMsgKey()));
             }
         }
@@ -348,13 +360,23 @@ public class BatchSendService {
         return new BatchRecallVO(eligible, blocked);
     }
 
-    /** R4 两拍：先 unknown 后 paused，顺序换了就是重复发送事故。 */
+    /**
+     * R4 两拍 + I-2 第三拍。前二拍顺序换了就是重复发送事故（先 unknown 后 paused）；第三拍读的是
+     * 撤回行的 `recall_status`，那两拍读的是 `send_status` / 任务状态，两套列互不相干，所以第三拍
+     * 放在最后与放在最前等价。它是 I-6 那条回程的入口：主进程 `batch:recall` 一条抛出会留下整批
+     * 孤儿 `recalling`（`applyRecallReport` 只结 recalling 的行，没有生产者再报）——这里把它们
+     * 结回 `recall_failed`，`markRecalling` 现在认 `recall_failed` 再进（同一批 Mapper 修改），
+     * 用户才点得动「再试一次撤回」。
+     */
     @Transactional
     public Map<String, Object> reconcile(long tenantId) {
         LocalDateTime staleBefore = LocalDateTime.now(MsgTimes.CHAT_ZONE).minusSeconds(STALE_SECONDS);
         int unknown = taskMapper.markStaleSendingUnknown(tenantId, staleBefore);
         int paused = taskMapper.pauseStaleTasks(tenantId, staleBefore);
-        return Map.of("pausedTasks", paused, "markedUnknown", unknown);
+        int recallFailed = detailMapper.markOrphanRecallingFailed(tenantId,
+                "宿主在撤回途中中断，撤回结果未知");
+        return Map.of("pausedTasks", paused, "markedUnknown", unknown,
+                "markedRecallFailed", recallFailed);
     }
 
     /**
