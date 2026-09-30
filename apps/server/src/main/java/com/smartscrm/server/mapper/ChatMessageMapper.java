@@ -115,6 +115,31 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
                                                @Param("chatKey") String chatKey, @Param("msgId") String msgId);
 
     /**
+     * 一群成员在这个群里的发言统计（spec §7）：最后发言时间、总条数、以及**最后发言那一天**的条数。
+     *
+     * "当日"锚定的是**该成员自己的最近发言日**，不是查询/导出执行日——这一条歧义在 spec §7 钉死。
+     * 所以要先按 (chat_key, sender_key) 求出各人的 MAX(msg_time)，再拿那个日子回去数当天的条数；
+     * 直接写 `DATE(msg_time) = CURDATE()` 会让一个月没说话的人统统显示 0，看起来像"从不发言"。
+     */
+    @Select({"<script>",
+        "SELECT m.sender_key senderKey, MAX(m.msg_time) lastMsgAt, COUNT(*) msgCount,",
+        " COALESCE(SUM(CASE WHEN DATE(m.msg_time) = DATE(d.lastMsgAt) THEN 1 ELSE 0 END), 0) dayMsgCount",
+        " FROM chat_message m",
+        " JOIN (SELECT chat_key, sender_key, MAX(msg_time) lastMsgAt FROM chat_message",
+        "       WHERE tenant_id = #{tenantId} AND chat_key = #{chatKey}",
+        "         AND sender_key IN",
+        "         <foreach collection='senders' item='s' open='(' separator=',' close=')'>#{s}</foreach>",
+        "       GROUP BY chat_key, sender_key) d",
+        "   ON d.chat_key = m.chat_key AND d.sender_key = m.sender_key",
+        " WHERE m.tenant_id = #{tenantId} AND m.chat_key = #{chatKey}",
+        "   AND m.sender_key IN",
+        "   <foreach collection='senders' item='s' open='(' separator=',' close=')'>#{s}</foreach>",
+        " GROUP BY m.chat_key, m.sender_key",
+        "</script>"})
+    List<Map<String, Object>> statsBySenders(@Param("tenantId") Long tenantId, @Param("chatKey") String chatKey,
+                                             @Param("senders") List<String> senders);
+
+    /**
      * 成功译文回写定位到的那一行；只动 translated_* 与（仅当原来为空时）msg_id。
      * 降级/厂商失败不调用这里（服务层把关）。COALESCE 保证懒填只补空、不覆盖既有规范 id。
      */
