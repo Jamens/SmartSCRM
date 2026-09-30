@@ -1,5 +1,6 @@
 // src/shared/chatTypes.ts
 import type { ChatPlatform } from './chatPlatform.ts'
+import type { GroupEventWire, GroupParticipantWire } from './groupMembers.ts'
 
 export type Direction = 'in' | 'out'
 /** `received` 只属于 in；out 用后五个。 */
@@ -138,6 +139,34 @@ export type BridgeReport =
   | { kind: 'ack'; chatKey: string; msgKeys: string[]; status: MsgStatus }
   | { kind: 'active_chat'; chatKey: string | null }
   | { kind: 'logged_out' }
+  // ---- B6 群成员：三条只读通道。都是"桥看见了什么"，不含任何账号归属判断。 ----
+  /** `group_list` 的回执。失败时 groups 不带，主进程记一条缺口而不是当成"这个账号没有群"。 */
+  | {
+      kind: 'group_list_result'
+      reqId: string
+      ok: boolean
+      groups?: Array<{ chatKey: string; title: string | null }>
+      error?: string
+    }
+  /**
+   * `group_snapshot` 的回执。
+   * `ok:false` 与"回一份空名单"是两件事：空名单会把整群人在覆盖率闸前送进 `is_in_group=0`，
+   * 所以页内两方都取不到人时**必须**回 ok:false（见 shared/groupMembers.ts 的 snapshotIsUsable）。
+   */
+  | {
+      kind: 'group_snapshot_result'
+      reqId: string
+      chatKey: string
+      ok: boolean
+      participants?: GroupParticipantWire[]
+      /** 页内自报的人数（主源 + 副源并集的大小），用于与上次成功快照比覆盖率。 */
+      participantCount?: number
+      /** 页内怀疑自己被分页截断了；主进程据此记缺口，不拿它去判退。 */
+      truncated?: boolean
+      error?: string
+    }
+  /** 进退事件，随到随报，不等建档泵。一批一帧，避免一次群变动打出几十个请求。 */
+  | { kind: 'group_event'; events: GroupEventWire[] }
 
 /** 主 → 页，走既有的 `view:host:msg-cmd` 推送通道。 */
 export type BridgeCommand =
@@ -146,6 +175,11 @@ export type BridgeCommand =
   | { kind: 'recall'; localId: string; chatKey: string; msgKey: string }
   | { kind: 'backfill'; limit: number }
   | { kind: 'open_chat'; chatKey: string }
+  // ---- B6 群成员：两条只读命令。刻意不进 sendLock（采集不冒充发送方）。 ----
+  /** 列出账号所在的群。只列，不点开任何会话。 */
+  | { kind: 'group_list'; reqId: string }
+  /** 拉一个群的成员名单。只读：不发消息、不改页面状态。 */
+  | { kind: 'group_snapshot'; reqId: string; chatKey: string }
 
 export interface BridgeInstallConfig {
   bridgeVersion: string
