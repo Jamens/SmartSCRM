@@ -4,8 +4,9 @@ Electron + React + TypeScript 桌面 SCRM 客户端，配 Spring Boot + MySQL �
 本文件说明**项目架构**与**每个文件的作用**，供接手的人继续开发或自查。英文版本见 [README.en.md](./README.en.md)。
 
 - 当前分支：`main`
-- 已交付范围：P0 骨架 → P1 登录/窗口壳 → P2 平台账号与内嵌页 → P3 客户域 → P4 素材库/快捷回复 → P5 翻译中心 → P6 聊天记录
-- 未交付：Telegram 采集/发送链、批量群发、群分析、话术引擎、代理指纹、云手机、报表、设置页、i18n
+- 已交付范围：P0 骨架 → P1 登录/窗口壳 → P2 平台账号与内嵌页 → P3 客户域 → P4 素材库/快捷回复 → P5 翻译中心 → P6 聊天记录 → **P7 批量群发（B7）+ 会话级设置（B16）** → **设置页（A12 角标 / A13 主题 / A14 设备信息 / A15）**
+- **进行中**：**P8 群成员分析（B6）**——数据层与桥侧已交付，主进程建档泵与渲染层未做，见 §10
+- 未交付：Telegram 采集/发送链、话术引擎、代理指纹、云手机、报表、i18n
 - 体检与风险清单：[docs/notes/2026-09-25-module-audit.md](./docs/notes/2026-09-25-module-audit.md)（逐条带 `文件:行`）
 
 ## 一、环境要求
@@ -25,7 +26,7 @@ Electron + React + TypeScript 桌面 SCRM 客户端，配 Spring Boot + MySQL �
 # 0) 装依赖（仓库根目录）
 pnpm install
 
-# 1) 起后端（Flyway 自动跑 V1..V8 建表，DataSeeder 播种子账号）
+# 1) 起后端（Flyway 自动跑 V1..V12 建表，DataSeeder 播种子账号）
 export JAVA_HOME="C:/Program Files/Java/jdk-17.0.18"
 cd apps/server && ./mvnw spring-boot:run
 
@@ -93,6 +94,8 @@ HTTP 请求
 | P4 | `MaterialController` / `QuickReplyController` | `MaterialService` / `QuickReplyService` | 素材组/素材、快捷回复组/回复/条目 |
 | P5 | `TranslationController` | `TranslationService` + `SimulatedTranslationEngine` + `PhraseDict` + `service/provider/*` | 语向设置（全局 / 按客户）、缓存、测速、凭据 |
 | P6 | `MessageController` / `ConversationController` | `MessageService`（写）+ `MessageQueryService`（读） | 批量入库、状态推进、列表/翻页/搜索/统计/时间线 |
+| P7 | `BatchSendController` | `BatchSendService` + `services/batchSend/*` | 批量群发：笛卡尔展开、随机间隔、撤回、看门狗；第一版只认 `whatsapp` 且只到纯文本 |
+| P8 | `GroupMemberController` | `GroupMemberService`（写）+ `GroupMemberQueryService`（读） | 群成员：群登记 / 状态快照 / 进退流水；ingest 三步同事务，覆盖率闸 0.6（见 §10） |
 
 `service/msg/` 放的是**无状态纯函数**，也是 Java 单测主要覆盖的对象：
 
@@ -119,6 +122,10 @@ HTTP 请求
 | `V6__translation_channel_comment.sql` | channel 取值注释 | — |
 | `V7__translation_credential.sql` | `translation_credential` | 密钥按租户存，读出恒掩码 |
 | `V8__chat_history.sql` | `chat_conversation` / `chat_message` | `uk_conv`、`uk_msg`（幂等键）、`idx_msg_conv`、`idx_msg_customer`；两表对 `platform_account` 都是 **`ON DELETE CASCADE`** |
+| `V9__conversation_setting_scope_key.sql` | 会话设置的作用域键（列宽与大小写口径） | — |
+| `V10__message_translation_persistence.sql` | 消息级译文持久化（`translated_*`、`msg_id`） | 译文回显的定位键 |
+| `V11__batch_send.sql` | `batch_send_task` / `batch_send_detail` | `uk_bsd_seq`（同任务不跑出两条同序）；`dry_run` 在任务头不在明细 |
+| `V12__group_member_analysis.sql` | `chat_group` / `group_member_state` / `group_member_event` | `uk_group`、`uk_member`、`uk_event`（重报不双计）；`group_member_event` **刻意不设 `chat_message` 外键**（事件比消息长寿）；`participant_count` 只被闸放行的快照覆盖 |
 
 ## 五、桌面端架构（`apps/desktop`）
 
@@ -225,13 +232,15 @@ HTTP 请求
 | `index.ts` | 桥入口，向主进程报 ready、接收命令 |
 | `host.ts` | 与 `window.ele` 的收发封装 |
 | `types.ts` | 与 `shared/` 对齐的帧类型 |
-| `whatsapp/collect.ts` | 会话/消息采集与补底（backfill） |
+| `whatsapp/collect.ts` | 会话/消息采集与补底（backfill）；命中群变动系统消息时额外产一条 `group_event`（§10） |
 | `whatsapp/normalize.ts` | 原始对象 → `NormalizedMessage`（含 `chatKey`/`msgKey`/方向/媒体类型） |
 | `whatsapp/send.ts` | 真实发送：切会话 → 写输入框 → 点发送 → 回 `send_result` |
+| `whatsapp/recall.ts` | 撤回执行与 `isRevoked` 判定 |
+| `whatsapp/groups.ts` | 群成员采集（§10）：群名单、成员快照（主副两源并集）、`participant_changed` 订阅、群系统消息旁路 |
 
 ### 5.6 `src/shared` 两端共用的纯模型
 
-`chatTypes.ts`（帧形状）、`chatKeys.ts`、`chatTime.ts`、`chatStatus.ts`、`chatPlatform.ts`、`liveTail.ts`（尾巴合并 / 乐观行结清 / 状态推进）、`translateKey.ts`，各配 `.test.ts`。这是"渲染层与桥对同一条消息的理解一致"的地方，**node:test 直接跑**。
+`chatTypes.ts`（帧形状）、`chatKeys.ts`、`chatTime.ts`、`chatStatus.ts`、`chatPlatform.ts`、`liveTail.ts`（尾巴合并 / 乐观行结清 / 状态推进）、`translateKey.ts`、`groupMembers.ts`（群成员的 wire 类型、常量与纯规则：action→event_type、系统消息分类、覆盖率闸）、`theme.ts`（三档主题与落盘）、`badge.ts`（角标口径）、`batchSend.ts`、`machine.ts`，各配 `.test.ts`。这是"渲染层与桥对同一条消息／同一个成员的理解一致"的地方，**node:test 直接跑**。
 
 ### 5.7 构建脚本与产物
 
@@ -246,10 +255,10 @@ HTTP 请求
 ## 六、验证与测试
 
 ```bash
-# 渲染层/主进程/shared/桥：22 个 test 文件，跑在 node:test 上
+# 渲染层/主进程/shared/桥：36 个 test 文件（295 条断言），跑在 node:test 上
 cd apps/desktop && pnpm test:unit
 
-# 后端纯函数与适配器：10 个测试类
+# 后端纯函数与适配器：20 个测试类（118 条），跑在真库上
 export JAVA_HOME="C:/Program Files/Java/jdk-17.0.18"
 cd apps/server && ./mvnw test
 
@@ -284,10 +293,10 @@ cd apps/desktop && pnpm build && pnpm build:win
 
 ## 八、下一步在做什么
 
-任务队列视角（详见 `docs/feature-checklist.md`）：
+任务队列视角（详见 `docs/feature-checklist.md` 与 `docs/feature-backlog.md`）：
 
-- P6 收尾：任务栏未读角标、设置页（含主题切换、设备信息一节）
-- TG 链：真机 DOM 探针 → 注入层选择器 → 采集 → 发送
+- **P8 群成员分析（B6）收尾**：主进程建档泵 + 导出 IPC（exceljs）→ 渲染层客户抽屉群节与成员弹层。数据层与桥侧已交付，见 §10
+- TG 链：真机 DOM 探针 → 注入层选择器 → 采集 → 发送（卡在"本机无 TG 账号"，外部阻塞）
 - 体检文档 §12 列出的优先级修复项（删除确认、`apiBase` allowlist、采集重试停摆、`nickname` 清空、`refresh` 复查租户状态）
 
 ## 九、提交约定
@@ -296,3 +305,31 @@ cd apps/desktop && pnpm build && pnpm build:win
 - 一个任务一个提交，由**完成验证的那个人**提交。
 - 提交后不推送，推送由维护者手动执行。
 - 文档/注释/spec 只描述本项目的设计，不与其他实现做对比。
+
+
+## 十、P8 群成员分析（B6）的核心口径
+
+设计文档：`docs/superpowers/specs/2026-09-30-group-member-analysis-design.md`；
+计划：`docs/superpowers/plans/2026-09-30-group-member-analysis.md`。
+
+一句话形状：**快照定"谁在群里"，事件定"什么时候、被谁"**。
+这两件事在库里就是分开的两张表（`group_member_state` / `group_member_event`），
+读的时候不许互相补位——快照给不出进群时间，事件说不清此刻谁还在。
+
+三条最容易写错的规则：
+
+1. **`latest_join_at` 与 `first_seen_at` 必须分列。** 快照建档的人没有进群时间证据，
+   把建档时刻写进 `latest_join_at` 就是造一条查不出来源的假记录。
+2. **推定退群不写退群时间。** 快照只能证明"这一刻不在名单里"，证明不了何时走的，
+   所以 `exit_method='snapshot_absent'` 的行 `latest_leave_at` 恒为 NULL；
+   只有 `left`/`removed` **事件**才写它。界面上这两者要区分显示。
+3. **覆盖率闸的分母只被"闸放行的快照"覆盖。** 被拦下的截断快照不配叫成功快照——
+   拿它的 4 人覆盖原本 10 人的分母后，下次覆盖率变成"人数/4"，一个 10 人群回 4 人会得到 1.0，
+   闸从此永久失效。代价是群真的缩员会被一直拦着（spec §2#3 明写接受）。
+
+后端 ingest 三步同一事务：**群登记 → 事件先行 → 快照收口**。顺序不能反——
+反过来先跑快照，一条迟到的退群事件会被上次快照的在场结论盖回去。
+
+两处**待实测**（代码里已标注释，拿到真机样本前都是推断）：
+群变动系统消息的 `subtype` 与目标人字段形态（spec §15#1）；
+`getParticipants()` 对超大群是否分页截断（spec §15#3，这是最危险的一条）。
