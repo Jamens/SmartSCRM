@@ -4,8 +4,9 @@ Electron + React + TypeScript desktop SCRM client with a Spring Boot + MySQL bac
 This file documents the **architecture** and **what each file is for**, so a new maintainer can pick up development or run a self-check. Chinese version: [README.md](./README.md) (default).
 
 - Branch: `main`
-- Delivered: P0 scaffold → P1 login / window shell → P2 platform accounts + embedded views → P3 customers → P4 materials / quick replies → P5 translation center → P6 chat history
-- Not delivered: Telegram collect / send chains, bulk send, group analytics, script engine, proxy & fingerprint, cloud phone, reports, settings page, i18n
+- Delivered: P0 scaffold → ... → P6 chat history → **P7 batch send (B7) + conversation-level settings (B16)** → **settings page (A12 badge / A13 theme / A14 device info / A15)**
+- **In progress: P8 group member analysis (B6)** — data layer and bridge side delivered, main-process build pump and renderer pending (see §10)
+- Not delivered: Telegram collect / send chains, script engine, proxy & fingerprint, cloud phone, reports, i18n
 - Audit and risk register (every claim carries `file:line`): [docs/notes/2026-09-25-module-audit.md](./docs/notes/2026-09-25-module-audit.md)
 
 ## 1. Requirements
@@ -25,7 +26,7 @@ This file documents the **architecture** and **what each file is for**, so a new
 # 0) install (repo root)
 pnpm install
 
-# 1) backend (Flyway applies V1..V8; DataSeeder plants seed users)
+# 1) backend (Flyway applies V1..V12; DataSeeder plants seed users)
 export JAVA_HOME="C:/Program Files/Java/jdk-17.0.18"
 cd apps/server && ./mvnw spring-boot:run
 
@@ -245,10 +246,10 @@ Four process boundaries; read them in this order: **renderer (business UI) / mai
 ## 6. Testing and verification
 
 ```bash
-# renderer / main / shared / bridge — 22 test files on node:test
+# renderer / main / shared / bridge — 36 test files (295 assertions) on node:test
 cd apps/desktop && pnpm test:unit
 
-# backend pure functions and adapters — 10 test classes
+# backend pure functions and adapters — 20 test classes (118)
 export JAVA_HOME="C:/Program Files/Java/jdk-17.0.18"
 cd apps/server && ./mvnw test
 
