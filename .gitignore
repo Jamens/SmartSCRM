@@ -42,3 +42,6 @@ apps/desktop/resources/wa-js.bundle.js
 
 # Local verification scratch (throwaway probes and logs)
 tmp/
+
+# WorkBuddy 项目数据（记忆 / 会话产物，非源码）
+.workbuddy/
