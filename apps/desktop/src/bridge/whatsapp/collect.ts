@@ -1,7 +1,8 @@
 // src/bridge/whatsapp/collect.ts
-import type { MsgStatus } from '../../shared/chatTypes.ts'
+import type { MsgStatus, NormalizedMessage } from '../../shared/chatTypes.ts'
 import { canAdvance, fromAck } from '../../shared/chatStatus.ts'
 import type { CollectCtx, WaChatModel, WaMsgModel, WppLike } from '../types.ts'
+import { systemEventsFromRaw } from './groups.ts'
 import { normalizeWa, type NormalizeCtx } from './normalize.ts'
 
 /** 会话之间至少隔 200ms：WhatsApp 页面在自己的主线程上跑，挤太狠会直接把界面卡住。 */
@@ -15,6 +16,26 @@ const wait = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms)
 
 function wpp(): WppLike | null {
   return typeof window !== 'undefined' && window.WPP ? window.WPP : null
+}
+
+/**
+ * 群系统消息旁路（spec §4）：消息行照旧入库，命中"加减人"时**额外**产一条进退事件。
+ *
+ * 刻意不新增 `chat_message` 列、也不 ALTER V8——消息与事件是两件寿命不同的事，
+ * 混进同一行会让"清理聊天记录"连带删掉进退史。
+ *
+ * 整体包 try：消息面是主业，事件是旁路。旁路解析炸了就当这条没解析出事件，
+ * 绝不能反过来把消息行也吞掉。
+ */
+function emitGroupSystemEvents(raw: WaMsgModel, row: NormalizedMessage, ctx: CollectCtx): void {
+  try {
+    const events = systemEventsFromRaw(raw, row.chatKey, row.msgKey, Math.floor(Date.now() / 1000))
+    if (events.length > 0) {
+      ctx.emit({ kind: 'group_event', events })
+    }
+  } catch {
+    /* 旁路失败不影响主业：见上面说明 */
+  }
 }
 
 /**
@@ -40,6 +61,7 @@ export function startLiveCollect(ctx: CollectCtx): () => void {
       if (!row) return
       if (row.status !== 'received') rememberStatus(row.msgKey, row.status)
       ctx.emit({ kind: 'message', message: row })
+      emitGroupSystemEvents(msg, row, ctx)
     }),
     store.on('chat.msg_ack_change', (payload) => {
       const status = fromAck(payload.ack, 'out')
@@ -162,6 +184,9 @@ export async function runBackfill(limit: number, ctx: CollectCtx): Promise<void>
         if (!row) continue
         row.chatTitle = chat.name ?? chat.formattedTitle
         ctx.emit({ kind: 'message', message: row })
+        // 补底这一腿才是系统消息旁路的主要战场：在线事件只覆盖页面在线时段，
+        // 离线时段的进退变更全靠翻历史系统消息补回来（去重键是 msgKey，重跑不双计）。
+        emitGroupSystemEvents(raw, row, ctx)
         messages += 1
       }
     } catch (e) {

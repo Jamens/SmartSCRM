@@ -1,11 +1,12 @@
 // src/bridge/index.ts —— 握手 + 心跳应答 + 采集接线（whatsapp 一支；telegram 在 Task 12c 登记）
 import { makeThrottledReporter, onCommand, report } from './host.ts'
 import * as whatsappCollect from './whatsapp/collect.ts'
+import { listGroups, snapshotGroup, subscribeGroupEvents } from './whatsapp/groups.ts'
 import { sendViaWa } from './whatsapp/send.ts'
 import { recallViaWa } from './whatsapp/recall.ts'
 import type { BridgeCommand, BridgeInstallConfig } from '../shared/chatTypes.ts'
 import type { ChatPlatform } from '../shared/chatPlatform.ts'
-import type { CollectCtx, CollectImpl, WppChatApi } from './types.ts'
+import type { CollectCtx, CollectImpl, WppChatApi, WppLike } from './types.ts'
 
 /**
  * 采集实现按平台查表，本任务只有 whatsapp 一项。用查表而不是在四个 case 里各判一次平台：
@@ -20,6 +21,8 @@ let offCommand: (() => void) | null = null
 let handle: ((cmd: BridgeCommand) => void) | null = null
 let collectorRef: (() => void) | null = null
 let activeRef: (() => void) | null = null
+/** 群成员在线事件的取消订阅；随 destroy 一起走，否则卸载后事件还会往主进程打。 */
+let groupEventsRef: (() => void) | null = null
 let pushRef: ReturnType<typeof makeThrottledReporter> | null = null
 /**
  * 补底轮次代号：每来一轮新的 backfill、每次 destroy 都推进它。
@@ -32,6 +35,13 @@ let backfillSeq = 0
 /** 发送这一路只在这里碰 `window.WPP`：`sendViaWa` 吃的是 chat 对象，测试给假的即可。 */
 const wppChat = (): WppChatApi | undefined =>
   typeof window !== 'undefined' && window.WPP ? window.WPP.chat : undefined
+
+/**
+ * 群成员这一路拿整个 `window.WPP`（要 group / contact / on 三处，不是一个子对象）。
+ * 与 wppChat 同口径：只在这里碰全局，叶子模块吃传进来的句柄，测试给假对象即可。
+ */
+const wppAll = (): WppLike | undefined =>
+  typeof window !== 'undefined' ? window.WPP : undefined
 
 export function install(config: BridgeInstallConfig): boolean {
   if (installed && installed.bridgeVersion === config.bridgeVersion) return false
@@ -49,6 +59,12 @@ export function install(config: BridgeInstallConfig): boolean {
   pushRef = push
   const collector = impl.startLiveCollect({ emit: push })
   const stopActiveWatch = impl.watchActiveChat({ emit: push })
+  /**
+   * 群成员在线事件（spec §4）。与消息采集是两条独立的订阅：
+   * 它只在页面在线并处理到那条 action 时才报，离线时段的变更靠快照 diff 兜。
+   * 订阅失败不抛——页内没有这个事件不该让整条桥挂掉，主进程有建档泵的空名单缺口兜住。
+   */
+  groupEventsRef = subscribeGroupEvents(wppAll(), push)
   handle = (cmd: BridgeCommand): void => {
     switch (cmd.kind) {
       case 'ping':
@@ -81,6 +97,20 @@ export function install(config: BridgeInstallConfig): boolean {
           push({ kind: 'recall_result', ...receipt })
         })
         return
+      /**
+       * 两条只读命令，都不 await（同上），且都**不进 sendLock**：
+       * 采集不冒充发送方，群成员采集连页面状态都不改。
+       */
+      case 'group_list':
+        void listGroups(wppAll()).then((r) => {
+          push({ kind: 'group_list_result', reqId: cmd.reqId, ...r })
+        })
+        return
+      case 'group_snapshot':
+        void snapshotGroup(wppAll(), cmd.chatKey).then((r) => {
+          push({ kind: 'group_snapshot_result', reqId: cmd.reqId, chatKey: cmd.chatKey, ...r })
+        })
+        return
     }
   }
   offCommand = onCommand((cmd) => handle?.(cmd))
@@ -106,6 +136,8 @@ export function destroy(): void {
   offCommand = null
   tryCall(collectorRef)
   tryCall(activeRef)
+  tryCall(groupEventsRef)
+  groupEventsRef = null
   // 先停钩子再撤定时器：destroy 之后不允许再有在途的 backfill_progress 出 IPC。
   pushRef?.cancel()
   // 在跑的补底循环还活在 await 里，下一趟就会重新起一个定时器。推进代号让它剩下的帧全部作废。
