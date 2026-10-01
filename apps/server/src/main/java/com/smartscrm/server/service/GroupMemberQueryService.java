@@ -193,22 +193,30 @@ public class GroupMemberQueryService {
      * 匹配用两路：已经回填的 {@code customer_id}，以及手机号相等（客户手机号改过、成员行还没回填时靠它）。
      * 两路都不是精确外键——客户与成员之间没有外键关系，所以这里是"尽力匹配"，匹配不上就是没有。
      */
-    public List<GroupVO> customerGroups(Long tenantId, Long customerId) {
+    public List<GroupVO> customerGroups(Long tenantId, Long accountId, Long customerId) {
         Customer customer = customerMapper.selectById(customerId);
         if (customer == null || !tenantId.equals(customer.getTenantId())) {
             throw new BizException(40404, "客户不存在: " + customerId);
         }
         String phone = ChatKeys.normalizePhone(customer.getPhone());
+        // 8b：accountId 是账号收窄的那一维（R16/R40 不许跨账号混读）。传 null 时退化为旧行为（匹配该客户全部账号的群）。
         LambdaQueryWrapper<GroupMemberState> w = new LambdaQueryWrapper<GroupMemberState>()
             .eq(GroupMemberState::getTenantId, tenantId)
             .eq(GroupMemberState::getCustomerId, customerId);
+        if (accountId != null) {
+            w.eq(GroupMemberState::getAccountId, accountId);
+        }
         List<GroupMemberState> byCustomer = stateMapper.selectList(w);
 
         List<GroupMemberState> all = new ArrayList<>(byCustomer);
         if (phone != null) {
-            List<GroupMemberState> byPhone = stateMapper.selectList(new LambdaQueryWrapper<GroupMemberState>()
+            LambdaQueryWrapper<GroupMemberState> phoneW = new LambdaQueryWrapper<GroupMemberState>()
                 .eq(GroupMemberState::getTenantId, tenantId)
-                .eq(GroupMemberState::getPhone, phone));
+                .eq(GroupMemberState::getPhone, phone);
+            if (accountId != null) {
+                phoneW.eq(GroupMemberState::getAccountId, accountId);
+            }
+            List<GroupMemberState> byPhone = stateMapper.selectList(phoneW);
             Set<Long> seen = new java.util.HashSet<>();
             for (GroupMemberState s : all) {
                 seen.add(s.getId());

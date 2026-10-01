@@ -6,6 +6,7 @@ import { attachWindowEvents, registerIpcHandlers } from './ipc'
 import { viewManager } from './webContentsView/manager'
 import { startMsgBridge, stopMsgBridge } from './services/msgBridge'
 import { startBatchHost, stopBatchHost } from './services/batchSend/host'
+import { startGroupHost, stopGroupHost } from './services/groupCollect/host'
 import { applyThemeSource, loadSettings } from './state/settings'
 
 const gotLock = app.requestSingleInstanceLock()
@@ -35,6 +36,7 @@ if (!gotLock) {
     registerIpcHandlers()
     startMsgBridge()
     startBatchHost()
+    startGroupHost()
     const mainWindow = createMainWindow()
     attachWindowEvents(mainWindow)
     createTray()
@@ -48,6 +50,7 @@ if (!gotLock) {
     setQuitting(true)
     void stopMsgBridge()
     void stopBatchHost()   // 这里不 await：before-quit 不等监听器的返回值，而 stopBatchHost 体内没有异步等待点
+    void stopGroupHost()   // 同上：flush 的 await 在宿主内部，before-quit 不等它的返回值
     viewManager.destroyAll()
   })
 

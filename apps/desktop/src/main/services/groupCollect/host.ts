@@ -12,10 +12,71 @@
 // engine.ts 的假 dispatch 单测覆盖。
 
 import { getMainWindow } from '../../window/mainWindow.ts'
+import { getSession } from '../../state/session.ts'
 import { oneLine, type GroupBuildOutcome, type GroupStateEvent } from '../../../shared/groupMembers.ts'
 import { runGroupBuild } from './dispatch.ts'
+import { createGroupCollectApi } from './api.ts'
+import { EventCollectorHub, type EventBatchPayload } from './collector.ts'
+import { failView } from './registry.ts'
+import { setGroupHooks, type GroupBridgeHooks } from '../msgBridge/index.ts'
 
 const building = new Set<number>()
+
+/**
+ * 群事件的实时攒批器（Task 10）。事件随到随报，不等人点建档：攒够 `EVENT_BATCH_SIZE` 一批或
+ * 攒满 `EVENT_BATCH_INTERVAL_MS`，才 POST 一次 /api/group-members/batch（只带 events 段，
+ * groups / snapshot 留 null）。分组（每 accountId 一个 POST）在 collector 内部完成。
+ *
+ * flush 失败必须 reject（不返假值）：collector 的退回重试只认 reject；而 ingest 在后端不可达 /
+ * 业务拒绝时抛错，正好满足——失败就退避退回队首，而不是把这一批当成成功丢了。
+ */
+const groupApi = createGroupCollectApi({ token: () => getSession()?.accessToken ?? null })
+const eventHub = new EventCollectorHub({
+  flush: async (payload: EventBatchPayload) => {
+    await groupApi.ingest({ accountId: payload.accountId, events: payload.events })
+  }
+})
+
+/**
+ * 每个账号只自动建档一次：桥握手成功（onReady）就跑一轮，避免每次登录 / 重连都重跑几分钟的全量建档。
+ * 用 Set 去重：同一账号的桥可能掉线重连多次，每次 ready 只触发首轮。
+ */
+const autoBuilt = new Set<number>()
+
+const hooks: GroupBridgeHooks = {
+  onFrame(_viewId, accountId, events) {
+    const taken = eventHub.push(accountId, events)
+    if (taken === 0) {
+      console.log(`[group] 群事件被剔除或丢弃 account=${accountId} in=${events.length}`)
+    }
+  },
+  onReady(accountId) {
+    if (autoBuilt.has(accountId)) return
+    autoBuilt.add(accountId)
+    void runBuild(accountId)
+  },
+  onViewDown(viewId) {
+    // 视图没了，该视图未决的群命令回执不可能再来：只清这一视图的，不连坐别的账号在跑的建档。
+    const n = failView(viewId)
+    if (n > 0) console.log(`[group] 结清未决群回执 ${n} 条（视图掉线）view=${viewId}`)
+  }
+}
+
+/**
+ * 群成员宿主的启动钩子。只注入生命周期钩子——`group:build` / `group:export` 两个 IPC 已在
+ * webContentsView/ipc.ts 注册，这里不重复。必须在 startMsgBridge 之后、任何桥挂载之前调用：
+ * 否则第一只桥 ready 时 onReady 还没接上，自动建档就漏了。
+ */
+export function startGroupHost(): void {
+  setGroupHooks(hooks)
+}
+
+/** 退出前把队列里攒着的事件冲一次；冲不掉也不追（下次建档由建档泵兜底）。 */
+export async function stopGroupHost(): Promise<void> {
+  setGroupHooks(null)
+  await eventHub.flush().catch(() => undefined)
+  eventHub.dispose()
+}
 
 function broadcast(event: GroupStateEvent): void {
   // 与 `broadcastState`/`broadcastTheme` 同一条口径：`getMainWindow()` 可能给回一枚已销毁的窗口。

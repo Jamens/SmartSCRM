@@ -23,6 +23,7 @@ import { createMsgApi, isSendable } from './msgApi'
 import { RecallRegistry, SendAttribution, SendRegistry } from './sendRegistry'
 import { SendLock } from './sendLock'
 import { settleGroupReply } from '../groupCollect/registry.ts'
+import type { GroupEventWire } from '@shared/groupMembers.ts'
 
 /** spec §4 的 msgHistoryLimit：每会话补底条数。 */
 export const HISTORY_LIMIT_DEFAULT = 200
@@ -62,6 +63,27 @@ const attribution = new SendAttribution()
 const sendLock = new SendLock()
 const recallRegistry = new RecallRegistry()
 
+/**
+ * B6 群事件 / 建档泵的生命周期钩子。host.ts 在 `startGroupHost()` 时把实现注入进来，
+ * 这里只负责在正确的时机调用，不持有任何群状态——避免与 groupCollect 形成循环依赖
+ * （api.ts 已经为了切断这个环独立成文件）。
+ */
+export interface GroupBridgeHooks {
+  /** 页内 `group_event` 帧到达（随到随报，不等建档泵）。events 已从帧里取出的一批原始事件。 */
+  onFrame(viewId: string, accountId: number, events: GroupEventWire[]): void
+  /** 某个账号的桥握手成功：host 在这里触发一次自动建档。 */
+  onReady(accountId: number, viewId: string): void
+  /** 某个视图掉线 / 销毁：host 在这里结清该视图未决的群命令回执。 */
+  onViewDown(viewId: string): void
+}
+
+let groupHooks: GroupBridgeHooks | null = null
+
+/** host.ts 在启动 / 退出时注入或撤销群钩子。传 null = 清空（stopGroupHost 用）。 */
+export function setGroupHooks(hooks: GroupBridgeHooks | null): void {
+  groupHooks = hooks
+}
+
 function broadcastState(): void {
   const states = bridgeStates()
   for (const s of states) {
@@ -70,13 +92,15 @@ function broadcastState(): void {
     if (s.phase === 'retry' || s.phase === 'offline' || s.phase === 'destroyed') {
       const n = registry.failView(s.viewId, 'BRIDGE_OFFLINE', s.detail ?? '桥未在线')
       attribution.dropView(s.viewId)
-      // 撤回与发送共用这一条掉线出口：桥没了，在途那条 invoke 必须当场拿到 ok:false，
-      // 不能干等自己的 20s 超时（这里的 detail 会原样进后端的 recall_failed）。
-      const m = recallRegistry.failView(s.viewId, s.detail ?? '桥未在线')
-      if (n > 0) console.log(`[msgBridge] 结清未决发送 ${n} 条 view=${s.viewId}`)
-      // 页内那条 deleteMessage 可能其实成功了，只是回执赶不上这张表——这条日志是唯一能看到那一格的痕迹。
-      if (m > 0) console.log(`[msgBridge] 结清未决撤回 ${m} 条 view=${s.viewId}`)
-    }
+    // 撤回与发送共用这一条掉线出口：桥没了，在途那条 invoke 必须当场拿到 ok:false，
+    // 不能干等自己的 20s 超时（这里的 detail 会原样进后端的 recall_failed）。
+    const m = recallRegistry.failView(s.viewId, s.detail ?? '桥未在线')
+    if (n > 0) console.log(`[msgBridge] 结清未决发送 ${n} 条 view=${s.viewId}`)
+    // 页内那条 deleteMessage 可能其实成功了，只是回执赶不上这张表——这条日志是唯一能看到那一格的痕迹。
+    if (m > 0) console.log(`[msgBridge] 结清未决撤回 ${m} 条 view=${s.viewId}`)
+    // 群命令回执的掉线出口：只清这一视图的未决（不连坐别的账号在跑的建档）。
+    groupHooks?.onViewDown(s.viewId)
+  }
   }
   // 与 `broadcastTheme`/`broadcastSettings` 同一条口径：`getMainWindow()` 可能给回一枚已销毁的窗口，
   // 可选链只防 `null`，防不住它——退出时序里这一句抛过「Object has been destroyed」。
@@ -128,7 +152,11 @@ function mountOne(entry: AccountEntry, viewId: string): void {
   mounts.set(viewId, mount)
   void mount.mount().then((ok) => {
     // 握手成功才补底：没 ready 就发 backfill 命令，桥还没挂上钩子，等于白发。
-    if (ok) mount.push({ kind: 'backfill', limit: HISTORY_LIMIT_DEFAULT })
+    if (ok) {
+      mount.push({ kind: 'backfill', limit: HISTORY_LIMIT_DEFAULT })
+      // 桥 ready = 这个账号可以建档了：通知 host 触发一次自动建档（每账号只触发一次，去重在 host 侧）。
+      groupHooks?.onReady(entry.accountId, viewId)
+    }
   })
 }
 
@@ -177,6 +205,13 @@ export function handleBridgeReport(viewId: string, data: unknown): void {
     if (!settleGroupReply(report)) {
       console.log(`[msgBridge] 群回执无人认领（迟到或已超时）reqId=${report.reqId} kind=${report.kind}`)
     }
+    return
+  }
+  // ---- B6 群事件：页内随到随报的一批进退事件，不等建档泵。这里只负责转交给 host 的攒批器，
+  // 不查 account entry 之外的状态——entry 缺失时直接丢（没有账号绑定，事件落不了库）。
+  if (report.kind === 'group_event') {
+    const e = accountOfView(viewId)
+    if (e && report.events.length > 0) groupHooks?.onFrame(viewId, e.accountId, report.events)
     return
   }
   const entry = accountOfView(viewId)

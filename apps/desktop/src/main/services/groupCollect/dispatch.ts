@@ -41,7 +41,7 @@ export function createGroupDispatch(accountId: number, opts?: { timeoutMs?: numb
         dropPending(cmd.reqId)
         resolve(timeoutReply(cmd))
       }, timeout)
-      addPending(cmd.reqId, resolve, timer)
+      addPending(cmd.reqId, viewId, resolve, timer)
     })
     // 命令发出去之后再等回执：push 失败（mount 中途失效）时 engine 的 ask() 会捕获 reject 并重试。
     pushToBridge(viewId, cmd)
