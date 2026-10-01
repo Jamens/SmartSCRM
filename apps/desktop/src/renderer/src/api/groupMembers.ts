@@ -23,7 +23,13 @@ export const GROUP_MEMBER_PAGE_SIZE = 50
 export const GROUP_EVENT_PAGE_SIZE = 30
 const BASE = '/api/group-members'
 
-/** `GET /api/group-members/groups` 的一行（群列表，本期渲染层不消费——见文件末尾说明）。 */
+/**
+ * `GET /api/group-members/groups` / `customer/{id}/groups` 的一行。字段后端 `GroupVO` 逐字对上。
+ *
+ * 注：后端 8b 计划给 `GroupVO` 末尾补 `lastCoverage` / `lastReconcileReason` 两键（闸读数落到群行上），
+ * 那两键**尚未落地**，所以这里不声明——声明了就是谎报（运行时 undefined，而类型说有）。
+ * 8b 落地时补回这两行，界面读侧不用改（本期的名单页读的是 `/group/members` 那份 `coverage`）。
+ */
 export interface GroupRowVO {
   chatKey: string
   title: string | null
@@ -34,8 +40,6 @@ export interface GroupRowVO {
   lastSnapshotAt: string | null
   lastEventAt: string | null
   isFinal: boolean
-  lastCoverage: number | null
-  lastReconcileReason: string | null
 }
 
 export interface GroupMemberRowVO {

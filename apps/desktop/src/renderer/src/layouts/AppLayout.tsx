@@ -5,6 +5,7 @@ import { useTranslationSync } from '@/lib/translationSync'
 import { useLoginStatusSync } from '@/lib/loginStatusSync'
 import { useLiveTailSync } from '@/lib/liveTailSync'
 import { useUnreadBadge } from '@/lib/unreadBadge'
+import { useGroupStateInvalidation } from '@/api/groupMembers'
 
 interface Props {
   onLogout: () => void
@@ -19,6 +20,9 @@ export default function AppLayout({ onLogout }: Props): React.JSX.Element {
   // 同样挂在布局层：切走记录页时角标还得继续报（最小化的窗口最需要在别的软件上看得见未读）。
   // 放在这里也意味着未登录时不跑——`/api/messages/unread-total` 要 token，登录页上轮询只会 401。
   useUnreadBadge()
+  // 群与成员的缓存失效也挂布局层：`group:state` 是广播，切走客户页时那一轮建档照样会结。
+  // 挂在这里还有一层意义——没登录时不跑，`window.scrm.group.onState` 不需要 token，但读数要。
+  useGroupStateInvalidation()
   return (
     <div className="flex h-screen flex-col overflow-hidden bg-background">
       <TitleBar onLogout={onLogout} />

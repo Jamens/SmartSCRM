@@ -8,6 +8,7 @@ import { Label } from '@/components/ui/label'
 import { Separator } from '@/components/ui/separator'
 import { Avatar, AvatarFallback, AvatarImage } from '@/components/ui/avatar'
 import CustomerTimeline from '@/components/customers/CustomerTimeline'
+import CustomerGroupsSection from '@/components/customers/CustomerGroupsSection'
 import { cn } from '@/lib/utils'
 import {
   useDeleteCustomer,
@@ -225,6 +226,9 @@ export default function CustomerDrawer({ customer, tree, onClose }: Props): Reac
             <h3 className="mb-2 text-sm font-semibold">最近消息</h3>
             <CustomerTimeline customerId={customer.id} />
           </div>
+
+          {/* 「所在群」放在最近消息之后：它是同一位客户的另一条读数线，也是「导出所选」的家（R48）。 */}
+          <CustomerGroupsSection customerId={customer.id} />
         </div>
 
         <footer className="flex items-center justify-between border-t border-border/60 px-5 py-3">
