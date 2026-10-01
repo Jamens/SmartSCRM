@@ -4,6 +4,7 @@ import { getMainWindow } from '../window/mainWindow'
 import { requestTranslation } from '../services/translationBridge'
 import { handleBridgeReport, observeLoginStatus, activeChatOf } from '../services/msgBridge'
 import { accountOfView } from '../services/msgBridge/accountDirectory'
+import { requestGroupBuild } from '../services/groupCollect/host.ts'
 import { activeChatKeyOf } from '@shared/chatKeys'
 import { platformMsgIdOf } from '@shared/msgIds'
 
@@ -71,6 +72,12 @@ export function registerViewIpc(): void {
     if (!ALLOWED_PUSH_CHANNELS.has(channel)) return false
     return viewManager.sendToView(viewId, channel, payload)
   })
+
+  // B6 群成员建档：渲染层「刷新成员 / 全量建档」按钮触发。后台跑、立即返回 accepted/busy，
+  // 不在 invoke 里 await 整轮（建档可能跑几分钟）。进度/完成由 Task 5 的渲染层订阅事件。
+  ipcMain.handle('group:build', (_e, accountId: number, chatKeys?: string[]) =>
+    requestGroupBuild({ accountId, chatKeys })
+  )
 
   // Page (injected script) -> host window. `event.sender` identifies which view sent it.
   const routePageMessage = (event: IpcMainEvent, kind: 'toHost' | 'send', arg: { channel: string; data: unknown }): void => {
