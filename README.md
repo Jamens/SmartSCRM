@@ -297,6 +297,7 @@ cd apps/desktop && pnpm build && pnpm build:win
 
 - **P8 群成员分析（B6）收尾**：主进程建档泵（4a）与导出（4b，exceljs 14 列 XLSX + `group:export` IPC）已通电；切面 5 渲染层已装到界面——客户抽屉「所在群」节（`CustomerGroupsSection`，含账号下拉、勾选与「导出所选」）与群成员弹层（`GroupMembersDialog`，两个 tab、三档筛选、「刷新成员」/「导出本群」）。**尚未声称界面可用**：判档只到编译，真读出数要等 CDP 界面腿 20 条（5c）。见 §10
 - TG 链：真机 DOM 探针 → 注入层选择器 → 采集 → 发送（卡在"本机无 TG 账号"，外部阻塞）
+- **B27 WhatsApp 协议号通道（入站识别层已通电）**：`chatPlatform.ts` 与 `ChatKeys.java` 已把 `platform_type=7` 映射成 `whatsapp` 形态（`chat_key` 同 `@c.us/@g.us`、走外部 protocol 服务、复用现有入库面，B27 入站腿）。后端 `MessageService`/`GroupMemberService` 的 `resolveAccount` 不再对协议号账号拒收，消息/群事件落库后记录页、全局搜索、统计卡直接消费。出站腿（第二套发送实现）与 WS 状态推送仍依赖外部 protocol 服务，属 P16 受阻块，未做。
 - 体检文档 §12 列出的优先级修复项（删除确认、`apiBase` allowlist、采集重试停摆、`nickname` 清空、`refresh` 复查租户状态）
 
 ## 九、提交约定

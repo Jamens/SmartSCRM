@@ -29,6 +29,8 @@ public final class ChatKeys {
         return switch (platformType) {
             case 1 -> "whatsapp";
             case 4 -> "telegram";
+            // WA 协议号：与 WA 同形态，复用现有入库面（B27 入站腿）。出站腿依赖外部 protocol 服务。
+            case 7 -> "whatsapp";
             default -> null;
         };
     }

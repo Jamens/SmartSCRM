@@ -126,8 +126,9 @@ export function activeChatOf(viewId: string): string | null {
 
 function mountOne(entry: AccountEntry, viewId: string): void {
   // 闸门按"这个平台有没有页内采集实现"过，不按"平台认不认识"过。本任务只登记 whatsapp（Task 11）。
-  // 不能写成 `if (!platform) return`：`platformOfAccountType` 只把 1/4 映射成采集平台，Facebook /
-  // Messenger 天然是 null 被挡下；但"认得"不等于"接得上"：真接 TG 的是 bridge/index.ts 里那次分派，
+  // 不能写成 `if (!platform) return`：`platformOfAccountType` 把 1/4/7 映射成可识别平台（7 是协议号，
+  // 但无 WebContentsView），Facebook / Messenger 仍是 null 被挡下；"认得"不等于"接得上"：真接 TG 的是
+  // bridge/index.ts 里那次分派，
   // 那里没登记 telegram 时，TG 视图会挂上一条没有 collect 实现的空桥——握手会 ready、心跳会 pong，
   // 却永远采不到东西，比"压根没挂"难查得多。所以 telegram 进这一行必须与 Task 12c 的那次分派同批落地。
   const platform = platformOfAccountType(entry.platformType)

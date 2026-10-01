@@ -13,7 +13,8 @@ class ChatKeysTest {
     void mapsPlatformTypes() {
         assertEquals("whatsapp", ChatKeys.platformOfAccountType(1));
         assertEquals("telegram", ChatKeys.platformOfAccountType(4));
-        assertNull(ChatKeys.platformOfAccountType(7));
+        // WA 协议号：与 WA 同形态，复用现有入库面（B27 入站腿）
+        assertEquals("whatsapp", ChatKeys.platformOfAccountType(7));
         assertNull(ChatKeys.platformOfAccountType(null));
     }
 
