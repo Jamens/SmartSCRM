@@ -5,7 +5,7 @@ Electron + React + TypeScript 桌面 SCRM 客户端，配 Spring Boot + MySQL �
 
 - 当前分支：`main`
 - 已交付范围：P0 骨架 → P1 登录/窗口壳 → P2 平台账号与内嵌页 → P3 客户域 → P4 素材库/快捷回复 → P5 翻译中心 → P6 聊天记录 → **P7 批量群发（B7）+ 会话级设置（B16）** → **设置页（A12 角标 / A13 主题 / A14 设备信息 / A15）**
-- **进行中**：**P8 群成员分析（B6）**——切面 1–5 已装到界面；**5c 交付闸已通过**（CDP 复检脚本 `tmp/cdp-recheck.mjs` 跑绿，界面真读到数 1 条群，验收台账见 `docs/notes/2026-10-02-b6-5c-acceptance.md`）；采集管线（Task 10 collector / 8b 校准八条）仍缺，见 §10
+- **进行中**：**P8 群成员分析（B6）**——切面 1–5 已装到界面；**5c 交付闸已通过**（CDP 复检脚本 `tmp/cdp-recheck.mjs` 跑绿，界面真读到数 1 条群，验收台账见 `docs/notes/2026-10-02-b6-5c-acceptance.md`）；采集管线（Task 10 collector → Task 12 桥侧接线 → 8b 校准）**已交付**，见 §10
 - 未交付：Telegram 采集/发送链、话术引擎、代理指纹、云手机、报表、i18n
 - 体检与风险清单：[docs/notes/2026-09-25-module-audit.md](./docs/notes/2026-09-25-module-audit.md)（逐条带 `文件:行`）
 
@@ -347,5 +347,17 @@ cd apps/desktop && pnpm build && pnpm build:win
 事件攒批器已落地（Task 10）：`collector.ts` 的 `EventCollectorHub` 已建，6 条单测全过——长度闸（CHAT_KEY/MEMBER/DEDUP/BODY）、
 越界丢最旧并计 `dropped`、投失败退避重试且退回队首不丢数据、跨账号拆分（POST /batch 一次一个 accountId）均覆盖；
 `shared/groupMembers.ts` 补齐 `EVENT_BATCH_SIZE` / `EVENT_BATCH_INTERVAL_MS` / `EVENT_QUEUE_MAX` / `CHAT_KEY_MAX` / `MEMBER_KEY_MAX` / `DEDUP_KEY_MAX` / `GROUP_BODY_MAX`（数字照 V12 列宽）。
-仍缺（Task 12，非阻塞）：`host.ts` 接 `setGroupHooks` / `onReady` 自动建档 / `onViewDown` 结清，以及桥侧 `group_event` 订阅——
-不接则 collector 只是被单测覆盖的死代码、`group_event` 仍无落库通道。另 8b 校准八条（coverage 返回 null 而非空串、`customerGroups` 加 accountId）仍缺。
+
+**采集管线已闭环（Task 12 + 8b，截至 2026-10-02）**：`group_event` 帧不再是死代码——
+1. **桥侧路由**：`msgBridge/index.ts` 导出 `GroupBridgeHooks`（`onFrame` / `onReady` / `onViewDown`）与 `setGroupHooks`，
+   `handleBridgeReport` 新增 `group_event` 分支转交 host 攒批；`mountOne` 握手成功后调 `onReady`（每账号只触发一次自动建档，去重在 host），
+   `broadcastState` 掉线分支调 `onViewDown`。
+2. **宿主接线**：`host.ts` 持有 `EventCollectorHub`（flush → `groupApi.ingest` 只带 events 段），`onFrame` 把事件 push 进攒批器，
+   `onReady` 经 `autoBuilt` Set 每账号跑一次 `runBuild`，`onViewDown` 调 `registry.failView` 只结清该视图未决的群回执（不连坐别的账号在跑的建档）；
+   新增 `startGroupHost()` / `stopGroupHost()` 在 `main/index.ts` 与 `startMsgBridge/stopMsgBridge` 同生命周期启停。
+3. **registry 收窄**：`registry.ts` 的 `Pending` 增加 `viewId`，`addPending` 签名加 `viewId`，新增 `failView(viewId)`（只清指定视图），
+   既有 `failAllPending` 行为不变；`dispatch.ts` 同步传 `viewId`；`registry.test.ts` 同步 + 新增 `failView` 隔离性单测。
+4. **8b 校准**：后端 `GroupMemberController` 的 `members` 接口 `coverage` 为 null 时返回 `null`（不再折成空串，前端 `coverage: number | null` 拿到首次建档信号）；
+   `customerGroups` 新增 `@RequestParam(required=false) Long accountId`，透传到 `GroupMemberQueryService.customerGroups(tenantId, accountId, customerId)`，
+   按 `accountId` 收窄「所在群」匹配（byCustomer 与 byPhone 两路都加 `eq(accountId)`），`accountId` 为 null 时退化为旧行为。
+   验证：桌面侧 `test:unit` 349 全过、`typecheck`（node/web/inject/unit 四路）全过、`eslint --quiet` 零输出；后端 `./mvnw -o compile` 通过。
