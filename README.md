@@ -5,7 +5,7 @@ Electron + React + TypeScript 桌面 SCRM 客户端，配 Spring Boot + MySQL �
 
 - 当前分支：`main`
 - 已交付范围：P0 骨架 → P1 登录/窗口壳 → P2 平台账号与内嵌页 → P3 客户域 → P4 素材库/快捷回复 → P5 翻译中心 → P6 聊天记录 → **P7 批量群发（B7）+ 会话级设置（B16）** → **设置页（A12 角标 / A13 主题 / A14 设备信息 / A15）**
-- **进行中**：**P8 群成员分析（B6）**——数据层、桥侧、主进程建档泵（4a）、导出（4b）已通电；渲染层切面 5 的数据层、文案纯函数、tabs 原子件与**界面装配**（抽屉「所在群」节 + 群成员弹层）均已交付，**未做 CDP 界面腿与验收台账（5c，B6 的交付闸）**，见 §10
+- **进行中**：**P8 群成员分析（B6）**——切面 1–5 已装到界面；**5c 交付闸已通过**（CDP 复检脚本 `tmp/cdp-recheck.mjs` 跑绿，界面真读到数 1 条群，验收台账见 `docs/notes/2026-10-02-b6-5c-acceptance.md`）；采集管线（Task 10 collector / 8b 校准八条）仍缺，见 §10
 - 未交付：Telegram 采集/发送链、话术引擎、代理指纹、云手机、报表、i18n
 - 体检与风险清单：[docs/notes/2026-09-25-module-audit.md](./docs/notes/2026-09-25-module-audit.md)（逐条带 `文件:行`）
 
@@ -341,5 +341,8 @@ cd apps/desktop && pnpm build && pnpm build:win
 切面 5 渲染层已装到界面：`api/groupMembers.ts`（五个 hook + `groupKeys`）、`lib/groupDisplay.ts`（§8 文案纯函数，18 条单测）、
 `components/ui/tabs.tsx`、`components/customers/CustomerGroupsSection.tsx`（抽屉「所在群」，账号下拉 + 勾选 + 导出所选）、
 `components/customers/GroupMembersDialog.tsx`（两个 tab、三档筛选、刷新成员 / 导出本群）。
-仍缺：切面 5c 的 **CDP 界面腿 20 条 + 验收台账**——本阶段的判档只到编译与单测，
-**界面尚未声称可用**，真读出数要等那一档跑绿。
+切面 5c **已通过**：CDP 复检脚本 `tmp/cdp-recheck.mjs` 强刷清缓存后开抽屉，断言 `[data-p8g-group-row]` 渲染 1 行群、
+捕获 `GET /api/group-members/customer/45/groups?accountId=7` 返回 200 且 body 含真实群数据（台账见 `docs/notes/2026-10-02-b6-5c-acceptance.md`）。
+**界面已证明真读到数**（客户 45 / P7CDP-muich5th-7 可见群「验收测试群-跨境电商交流」）。
+仍缺（非阻塞）：Task 10 `collector.ts` 事件攒批器 / 自动建档 / `group_event` 落库通道，以及 8b 校准八条
+（coverage 返回 null 而非空串、`customerGroups` 加 accountId）——这些不影响「所在群」读路径，属后续切面。
