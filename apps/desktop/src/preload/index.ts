@@ -10,6 +10,11 @@ import type {
 import type { AppSettings, ThemeSnapshot } from '../main/state/settings'
 import type { BadgeEcho } from '@shared/badge'
 import type { BatchProgress, BatchRecallResult, BatchStateEvent } from '@shared/batchSend'
+import type {
+  GroupBuildOutcome,
+  GroupExportResult,
+  GroupStateEvent
+} from '@shared/groupMembers'
 import type { MachineProfile, StorageUsage } from '@shared/machine'
 
 export interface StoredSession {
@@ -167,6 +172,24 @@ const scrm = {
       const listener = (_event: IpcRendererEvent, e: BatchStateEvent): void => cb(e)
       ipcRenderer.on('batch:state', listener)
       return () => ipcRenderer.removeListener('batch:state', listener)
+    }
+  },
+  /**
+   * 群成员（P8/B6）：两条 invoke + 一条推送。
+   * 五个读端点不在这里——渲染层 `lib/http.ts` 自己带 token 对与 401 刷新链，做成 IPC 转发
+   * 只会多出五份 dead code 与两条白名单（R26）。留着这两条的理由是它们必须经主进程：
+   * 建档命令要下给内嵌页（页里才有 wa-js），导出要在主进程编码 XLSX（渲染包不带编码库）。
+   */
+  group: {
+    /** `chatKey` 省略 = 整账号一轮；带上 = 只补这一群（R49 单数码）。整轮跑完才 resolve。 */
+    build: (req: { accountId: number; chatKey?: string }): Promise<GroupBuildOutcome | null> =>
+      ipcRenderer.invoke('group:build', req),
+    export: (req: { accountId: number; chatKeys: string[] }): Promise<GroupExportResult | null> =>
+      ipcRenderer.invoke('group:export', req),
+    onState: (cb: (e: GroupStateEvent) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, e: GroupStateEvent): void => cb(e)
+      ipcRenderer.on('group:state', listener)
+      return () => ipcRenderer.removeListener('group:state', listener)
     }
   }
 }

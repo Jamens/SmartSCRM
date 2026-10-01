@@ -16,7 +16,7 @@ import { bridgeOf, pushToBridge } from '../msgBridge/index.ts'
 import { addPending, dropPending, timeoutReply } from './registry.ts'
 import {
   GroupCollectEngine,
-  type BuildResult,
+  type GroupBuildOutcome,
   type GroupCommand,
   type GroupDispatch,
   type GroupReply
@@ -53,13 +53,13 @@ export function createGroupDispatch(accountId: number, opts?: { timeoutMs?: numb
  * 跑一个账号的一轮建档。每个账号一个 engine 实例（dispatch 闭包已绑定 accountId），
  * 故引擎内的全局 running 锁等价于"每账号串行"（spec §5）。
  *
- * chatKeys 不传 = 全量建档（从没建过档的优先，超 MAX 截断、剩下的 deferred 留给下一轮）；
- * 传入 = 只建这几个（弹层「刷新成员」）。
+ * `chatKey` 不传 = 全量建档（从没建过档的优先，超 MAX 截断、剩下的留给下一轮）；
+ * 传入 = 只补这一个群（弹层「刷新成员」，R49 单数码）。
  *
  * snapshotAtOf 暂返回 null：排序优化当前不生效（所有群都当"从没建过档"，保输入顺序）。
  * 要真正按"上次成功快照时间"优先，需后端给一个按群查 last_snapshot_at 的端点——待补（spec §5 只要求排序，不要求精确值）。
  */
-export function runGroupBuild(accountId: number, chatKeys?: string[]): Promise<BuildResult> {
+export function runGroupBuild(accountId: number, chatKey?: string): Promise<GroupBuildOutcome> {
   const api = createGroupCollectApi({ token: () => getSession()?.accessToken ?? null })
   const dispatch = createGroupDispatch(accountId)
   const engine = new GroupCollectEngine({
@@ -70,5 +70,5 @@ export function runGroupBuild(accountId: number, chatKeys?: string[]): Promise<B
     log: (where, e) => console.log(`[groupCollect] ${where} ${String(e)}`),
     snapshotAtOf: () => null
   })
-  return engine.runBuildForAccount(accountId, chatKeys)
+  return engine.runBuildForAccount(accountId, chatKey)
 }
