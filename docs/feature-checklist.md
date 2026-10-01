@@ -117,14 +117,15 @@ B6 不是一次交付，按四个切面推进，前三个已提交，第四个�
 | 2 | Java 数据层（3 实体 / 3 Mapper / 2 Service / Controller / DTO / 4 VO） | ✅ 契约 34/34 | `3771927` |
 | 3 | 桥侧采集（名单 / 快照 / 在线事件 / 系统消息旁路） | ✅ 20 条单测 | `ade904e` |
 | 4a | 主进程建档泵（engine 通电：ingest POST / dispatch 命令→视图 / host 去重 / `group:build` IPC） | ✅ 17 条单测 | 本提交 |
-| 4b | 导出 IPC + exceljs（拉 `export-rows` → 写 14 列 XLSX） | ⬜ 未开始 | — |
+| 4b | 导出 IPC + exceljs（拉 `export-rows` → 写 14 列 XLSX，落盘经 `group:export` IPC） | ✅ 4 条单测 | 本提交 |
 | 5 | 渲染层（客户抽屉群节 + 群成员弹层 + tabs 原子件） | ⬜ 未开始 | — |
 
 **口径提醒**：B6 的"事件流水 + 状态快照"两块数据面在切面 1–3 已经能进库了，
-建档泵（切面 4a）也通了电——`group:build` IPC 触发后全量建档可在后台跑，不用等在线事件。
-但**没有渲染面**（切面 5）之前，用户在界面上看不到任何群成员数据；
-**没有导出**（切面 4b）之前，库内能查、不能落 XLSX。
-所以 B6 的"可用"以切面 5 + 4b 完成为准，前四个切面只是地基。
+建档泵（切面 4a）也通了电——`group:build` IPC 触发后全量建档可在后台跑，不用等在线事件；
+导出（切面 4b）也已通电——`group:export` IPC 触发后主进程拉 `export-rows` 生成 14 列 XLSX 落盘，
+不占渲染内存。
+但**没有渲染面**（切面 5）之前，用户在界面上看不到任何群成员数据，导出按钮也无从点起。
+所以 B6 的"可用"以切面 5 完成为准，前四个切面只是地基。
 
 ## 技术选型
 - desktop: Electron 39 + React 19 + TS(strict) + electron-vite + Tailwind v4 + shadcn/ui + Zustand + TanStack Query + react-i18next

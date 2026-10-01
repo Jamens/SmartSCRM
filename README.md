@@ -5,7 +5,7 @@ Electron + React + TypeScript 桌面 SCRM 客户端，配 Spring Boot + MySQL �
 
 - 当前分支：`main`
 - 已交付范围：P0 骨架 → P1 登录/窗口壳 → P2 平台账号与内嵌页 → P3 客户域 → P4 素材库/快捷回复 → P5 翻译中心 → P6 聊天记录 → **P7 批量群发（B7）+ 会话级设置（B16）** → **设置页（A12 角标 / A13 主题 / A14 设备信息 / A15）**
-- **进行中**：**P8 群成员分析（B6）**——数据层、桥侧、主进程建档泵已通电（ingest POST / dispatch 命令→视图 / host 去重 / `group:build` IPC），导出 exceljs 与渲染层未做，见 §10
+- **进行中**：**P8 群成员分析（B6）**——数据层、桥侧、主进程建档泵（4a）、导出（4b：exceljs 14 列 XLSX + `group:export` IPC）已通电，渲染层（切面 5）未做，见 §10
 - 未交付：Telegram 采集/发送链、话术引擎、代理指纹、云手机、报表、i18n
 - 体检与风险清单：[docs/notes/2026-09-25-module-audit.md](./docs/notes/2026-09-25-module-audit.md)（逐条带 `文件:行`）
 
@@ -295,7 +295,7 @@ cd apps/desktop && pnpm build && pnpm build:win
 
 任务队列视角（详见 `docs/feature-checklist.md` 与 `docs/feature-backlog.md`）：
 
-- **P8 群成员分析（B6）收尾**：主进程建档泵已通电；待补导出 IPC（exceljs）→ 渲染层客户抽屉群节与成员弹层。数据层与桥侧已交付，见 §10
+- **P8 群成员分析（B6）收尾**：主进程建档泵（4a）与导出（4b，exceljs 14 列 XLSX + `group:export` IPC）已通电；待补渲染层客户抽屉群节与成员弹层（切面 5）。数据层与桥侧已交付，见 §10
 - TG 链：真机 DOM 探针 → 注入层选择器 → 采集 → 发送（卡在"本机无 TG 账号"，外部阻塞）
 - 体检文档 §12 列出的优先级修复项（删除确认、`apiBase` allowlist、采集重试停摆、`nickname` 清空、`refresh` 复查租户状态）
 
