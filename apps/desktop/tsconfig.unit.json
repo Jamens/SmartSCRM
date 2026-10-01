@@ -33,7 +33,11 @@
     "src/renderer/src/lib/scopeLabel.ts",
     "src/renderer/src/lib/scopeLabel.test.ts",
     "src/renderer/src/lib/groupDisplay.ts",
-    "src/renderer/src/lib/groupDisplay.test.ts"
+    "src/renderer/src/lib/groupDisplay.test.ts",
+    "src/main/services/groupCollect/registry.ts",
+    "src/main/services/groupCollect/registry.test.ts",
+    "src/main/services/groupCollect/collector.ts",
+    "src/main/services/groupCollect/collector.test.ts"
   ],
   "compilerOptions": {
     "composite": false,
