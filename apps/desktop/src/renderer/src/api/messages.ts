@@ -146,7 +146,8 @@ export const queryKeys = {
   root: ['msg'] as const
 }
 
-const qs = (input: Record<string, unknown>): string => {
+/** 查询串组装。渲染层只有一份：`groupMembers.ts` 也用它（键的形状要与这里一致，两份各写就会各漏一个空值判断）。 */
+export const qs = (input: Record<string, unknown>): string => {
   const p = new URLSearchParams()
   for (const [k, v] of Object.entries(input)) {
     if (v === undefined || v === null || v === '') continue

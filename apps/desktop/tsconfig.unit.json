@@ -31,7 +31,9 @@
     "src/renderer/src/lib/chatTimeline.ts",
     "src/renderer/src/lib/chatTimeline.test.ts",
     "src/renderer/src/lib/scopeLabel.ts",
-    "src/renderer/src/lib/scopeLabel.test.ts"
+    "src/renderer/src/lib/scopeLabel.test.ts",
+    "src/renderer/src/lib/groupDisplay.ts",
+    "src/renderer/src/lib/groupDisplay.test.ts"
   ],
   "compilerOptions": {
     "composite": false,
