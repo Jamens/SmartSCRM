@@ -5,7 +5,7 @@ Electron + React + TypeScript 桌面 SCRM 客户端，配 Spring Boot + MySQL �
 
 - 当前分支：`main`
 - 已交付范围：P0 骨架 → P1 登录/窗口壳 → P2 平台账号与内嵌页 → P3 客户域 → P4 素材库/快捷回复 → P5 翻译中心 → P6 聊天记录 → **P7 批量群发（B7）+ 会话级设置（B16）** → **设置页（A12 角标 / A13 主题 / A14 设备信息 / A15）**
-- **进行中**：**P8 群成员分析（B6）**——数据层、桥侧、主进程建档泵（4a）、导出（4b：exceljs 14 列 XLSX + `group:export` IPC）已通电；渲染层切面 5 的数据层与 tabs 原子件已交付，**界面装配（抽屉群节 + 成员弹层）未做**，见 §10
+- **进行中**：**P8 群成员分析（B6）**——数据层、桥侧、主进程建档泵（4a）、导出（4b）已通电；渲染层切面 5 的数据层、文案纯函数、tabs 原子件与**界面装配**（抽屉「所在群」节 + 群成员弹层）均已交付，**未做 CDP 界面腿与验收台账（5c，B6 的交付闸）**，见 §10
 - 未交付：Telegram 采集/发送链、话术引擎、代理指纹、云手机、报表、i18n
 - 体检与风险清单：[docs/notes/2026-09-25-module-audit.md](./docs/notes/2026-09-25-module-audit.md)（逐条带 `文件:行`）
 
@@ -295,7 +295,7 @@ cd apps/desktop && pnpm build && pnpm build:win
 
 任务队列视角（详见 `docs/feature-checklist.md` 与 `docs/feature-backlog.md`）：
 
-- **P8 群成员分析（B6）收尾**：主进程建档泵（4a）与导出（4b，exceljs 14 列 XLSX + `group:export` IPC）已通电；切面 5 的数据层（`api/groupMembers.ts`）、文案纯函数（`lib/groupDisplay.ts`）与 `components/ui/tabs.tsx` 已交付，待装界面（客户抽屉「所在群」节 + 群成员弹层）。数据层与桥侧已交付，见 §10
+- **P8 群成员分析（B6）收尾**：主进程建档泵（4a）与导出（4b，exceljs 14 列 XLSX + `group:export` IPC）已通电；切面 5 渲染层已装到界面——客户抽屉「所在群」节（`CustomerGroupsSection`，含账号下拉、勾选与「导出所选」）与群成员弹层（`GroupMembersDialog`，两个 tab、三档筛选、「刷新成员」/「导出本群」）。**尚未声称界面可用**：判档只到编译，真读出数要等 CDP 界面腿 20 条（5c）。见 §10
 - TG 链：真机 DOM 探针 → 注入层选择器 → 采集 → 发送（卡在"本机无 TG 账号"，外部阻塞）
 - 体检文档 §12 列出的优先级修复项（删除确认、`apiBase` allowlist、采集重试停摆、`nickname` 清空、`refresh` 复查租户状态）
 
@@ -338,5 +338,8 @@ cd apps/desktop && pnpm build && pnpm build:win
 `engine.ts`（纯编排）+ `registry.ts`（reqId 未决表）+ `api.ts`（POST `/api/group-members/batch`）
 + `dispatch.ts`（命令→视图→回执）+ `host.ts`（`runBuild` 每账号去重、等整轮、广播 `group:state`）
 + `export.ts`（14 列 XLSX，六档结论）+ `group:build` / `group:export` 两条 IPC 与 `window.scrm.group.{build,export,onState}`。
-切面 5 渲染层已完成数据层与原子件：`api/groupMembers.ts`（五个 hook + `groupKeys`）、`lib/groupDisplay.ts`（§8 文案纯函数，7 条单测）、`components/ui/tabs.tsx`。
-仍缺：切面 5 的**界面装配**（客户抽屉「所在群」节 + 群成员弹层）。没有渲染面之前界面看不到群成员数据。
+切面 5 渲染层已装到界面：`api/groupMembers.ts`（五个 hook + `groupKeys`）、`lib/groupDisplay.ts`（§8 文案纯函数，18 条单测）、
+`components/ui/tabs.tsx`、`components/customers/CustomerGroupsSection.tsx`（抽屉「所在群」，账号下拉 + 勾选 + 导出所选）、
+`components/customers/GroupMembersDialog.tsx`（两个 tab、三档筛选、刷新成员 / 导出本群）。
+仍缺：切面 5c 的 **CDP 界面腿 20 条 + 验收台账**——本阶段的判档只到编译与单测，
+**界面尚未声称可用**，真读出数要等那一档跑绿。

@@ -9,8 +9,19 @@
 // 而 `pnpm run typecheck` 认 `@shared/*`。相对路径两边都走得通（先例 `lib/chatDays.ts:4`）。
 // 只用类型的 import 可以留别名——编译后被擦除，运行时不需要解析。
 
-import { exitMethodLabel, formatExportTime } from '../../../shared/groupMembers.ts'
-import type { CoverageReason } from '@shared/groupMembers'
+import {
+  MAX_EXPORT_GROUPS,
+  MAX_GROUPS_PER_BUILD,
+  exitMethodLabel,
+  formatExportTime
+} from '../../../shared/groupMembers.ts'
+import type {
+  CoverageReason,
+  GroupBuildOutcome,
+  GroupEventSource,
+  GroupEventType,
+  GroupExportResult
+} from '@shared/groupMembers'
 
 /**
  * 覆盖率 → 「少 x%」。一位小数：`DOUBLE` 列会带浮点尾巴（0.9333333333333333），
@@ -45,9 +56,17 @@ export function memberAreaState(row: {
   return row.snapshotCount === 0 ? 'never_built' : 'built'
 }
 
+/**
+ * 空给 `—`，有值只换形不换算。§8 那几格里"没有这个时刻"永远是 `—`，不是空格、不是 0。
+ * 「空 → `—`」这条规则从此只有这一处（`joinTimeCopy` / `firstSeenCopy` 都走它）。
+ */
+export function timeCopy(value: string | null | undefined): string {
+  return value ? formatExportTime(value) : '—'
+}
+
 /** 进群时间**只**取 `latestJoinAt`（§11 第 2 条：`first_seen_at` 不是进群时间，空就是"我们没看见他进来"）。 */
 export function joinTimeCopy(row: { latestJoinAt: string | null }): string {
-  return row.latestJoinAt ? formatExportTime(row.latestJoinAt) : '—'
+  return timeCopy(row.latestJoinAt)
 }
 
 /**
@@ -72,7 +91,123 @@ export function exitCell(row: {
 
 /** 「首次见到」不是「进群时间」：它说的是我们第一次在快照里看见这个人。 */
 export function firstSeenCopy(firstSeenAt: string | null): string {
-  return firstSeenAt ? formatExportTime(firstSeenAt) : '—'
+  return timeCopy(firstSeenAt)
 }
+
+/** 成员区三档的两句长短：横幅用长的，徽标用短的。`built` 那一档没有话要说。 */
+export function memberAreaCopy(state: 'unavailable' | 'never_built' | 'built'): string {
+  if (state === 'unavailable') return '该平台的成员采集尚未开通'
+  if (state === 'never_built') return '这个群还没建过档——名单为空不等于群里没人'
+  return ''
+}
+
+export function memberAreaShort(state: 'unavailable' | 'never_built' | 'built'): string {
+  if (state === 'unavailable') return '未开通'
+  if (state === 'never_built') return '未建档'
+  return ''
+}
+
+/**
+ * 事件类型与来源的中文词（R51）：只有界面读它们，所以作者在这里而不是 shared。
+ * 形状照 shared 那两张表（`Partial<Record<…>>` + 未知回落原词）——未知值留空白是最坏的回落。
+ */
+const EVENT_TYPE_LABEL: Partial<Record<GroupEventType, string>> = {
+  added: '被加入',
+  joined: '主动加入',
+  left: '自行退群',
+  removed: '被移出',
+  promoted: '升为管理员',
+  demoted: '降为成员'
+}
+const EVENT_SOURCE_LABEL: Partial<Record<GroupEventSource, string>> = {
+  system_message: '系统消息',
+  live_event: '实时事件'
+}
+
+export function eventTypeCopy(eventType: string): string {
+  return EVENT_TYPE_LABEL[eventType as GroupEventType] ?? eventType
+}
+
+export function sourceCopy(source: string): string {
+  return EVENT_SOURCE_LABEL[source as GroupEventSource] ?? source
+}
+
+/**
+ * 「是 / 否」这一对在 Java 侧已经格式化过一次（§A.2 ⑥ 的 `inGroup`）。跨语言共不了同一份表，
+ * 所以这里用 `groupDisplay.test.ts` 那条断言把两侧钉住：改成"在群/已退群"会红，改 Java 也会红。
+ */
+export function inGroupCopy(isInGroup: boolean): string {
+  return isInGroup ? '是' : '否'
+}
+
+/** 操作人：有名字用名字，没名字用键，两个都没有才是 `—`（系统消息那一路常常没有 actorName）。 */
+export function actorCopy(row: { actorName: string | null; actorKey: string | null }): string {
+  if (row.actorName) return row.actorName
+  if (row.actorKey) return row.actorKey
+  return '—'
+}
+
+/** 「首次见到」只在"没有进群时间"时补一句——两行并排会把人引向"到底哪个是进群时间"。 */
+export function firstSeenNote(row: { latestJoinAt: string | null; firstSeenAt: string | null }): string {
+  if (row.latestJoinAt || !row.firstSeenAt) return ''
+  return `首次见到 ${firstSeenCopy(row.firstSeenAt)}`
+}
+
+/**
+ * 导出上限那一句话在**渲染层**的唯一作者：界面前拦带 `count`（「当前勾了 51 个」），
+ * 主进程回 `too_many` 时不带（「一次最多导出 50 个群」）。
+ */
+export function tooManyCopy(count?: number): string {
+  return `一次最多导出 ${MAX_EXPORT_GROUPS} 个群${count == null ? '' : `，当前勾了 ${count} 个`}`
+}
+
+/**
+ * 导出结论 → 界面文案（spec §10 的六格 + preload 没接上那一格）。
+ * `null` 与 `failed` 必须分开：前者是"这个构建里宿主没接上"，后者是"接上了但取数/写文件没成"，
+ * 塌成一句会让人去重试一个根本不存在的通道。
+ */
+export function exportOutcomeCopy(result: GroupExportResult | null): string {
+  if (!result) return '宿主没有给出导出结果（这个构建里 `group:export` 没接上）'
+  switch (result.reason) {
+    case 'saved':
+      return `已导出 ${result.rows} 行：${result.path ?? ''}`
+    case 'cancel':
+      return '已取消保存，什么都没写'
+    case 'empty_keys':
+      return '没有可导出的群：先勾选至少一个'
+    case 'too_many':
+      return tooManyCopy()
+    case 'no_rows':
+      return '这些群还没有成员名单，先建一次档再导'
+    case 'failed':
+      return '导出没成：后端取数或本地写文件失败，详情看主进程日志'
+    default:
+      return `导出结果：${result.reason}` // 以后加新 reason 时至少能看见码，不给空白
+  }
+}
+
+/**
+ * 一轮建档的结论 → 若干行提示（§8 第一行的本期形状，R50：逐群原因不在 IPC 载荷里）。
+ *
+ * 返回数组是因为一轮里"截断 + 两群快照没成"可以同时成立，合成一行就会只剩第一个；
+ * 但 `skipped` 那一档要**早退**——那意味着这一轮根本没去读，此时再报"页内没答"是假话。
+ */
+export function buildFailureNotes(outcome: GroupBuildOutcome | null): string[] {
+  if (!outcome) return ['宿主没有给出建档结果（这个构建里 `group:build` 没接上）']
+  if (outcome.skipped === 'busy') return ['这个账号已有一轮建档在跑，这一轮没开']
+  if (outcome.skipped === 'no_view') return ['这个账号的窗口没挂着，采集下不去']
+  const notes: string[] = []
+  if (outcome.list === 'silent') notes.push('页内没回答群名单（桥没就绪或 wa-js 没答），这一轮没建档')
+  if (outcome.list === 'error') notes.push('群名单没读到（页内报错了）')
+  if (outcome.aborted) notes.push('这一轮被中止（账号掉线或退出），已经入库的那部分仍算数')
+  if (outcome.truncated) notes.push(`这一轮只跑了 ${MAX_GROUPS_PER_BUILD} 个群，剩下的等下一次触发`)
+  if (outcome.failed > 0) notes.push(`${outcome.failed} 个群的快照没成`)
+  if (outcome.postedFailed > 0) notes.push(`${outcome.postedFailed} 个群入库没成（后端没答或报错）`)
+  return notes
+}
+
+/** 流水页脚那句（§15#5）：说的是这一列的读数含义，不预报偏差量级——那条还没实测。 */
+export const LIVE_EVENT_TIME_NOTE =
+  '来源为「实时事件」的行，时间是主进程收到它的时刻；平台本身没给出发生时刻。'
 
 export type { CoverageReason }
