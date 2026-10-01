@@ -361,3 +361,5 @@ cd apps/desktop && pnpm build && pnpm build:win
    `customerGroups` 新增 `@RequestParam(required=false) Long accountId`，透传到 `GroupMemberQueryService.customerGroups(tenantId, accountId, customerId)`，
    按 `accountId` 收窄「所在群」匹配（byCustomer 与 byPhone 两路都加 `eq(accountId)`），`accountId` 为 null 时退化为旧行为。
    验证：桌面侧 `test:unit` 349 全过、`typecheck`（node/web/inject/unit 四路）全过、`eslint --quiet` 零输出；后端 `./mvnw -o compile` 通过。
+5. **`unmountView` 补丁（闭环收尾）**：视图彻底销毁时主动调 `groupHooks?.onViewDown(viewId)` 结清该视图未决群回执，覆盖「destroyed 视图」这一格（原先只靠引擎 dispatch 超时兜底）。
+   端到端验证：对 8180 跑 `POST /api/group-members/batch`（只带 events 段，等价于 `EventCollectorHub.flush` 的载荷）→ 返回 `eventsInserted:1`、事件计数 +1、events 接口读回命中。群事件后端落库链路 OK。

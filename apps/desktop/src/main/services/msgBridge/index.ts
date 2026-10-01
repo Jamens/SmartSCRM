@@ -451,6 +451,9 @@ export function unmountView(viewId: string): void {
   // 已经抓住了自己的 gate，摘掉 tails 会让下一条与它并发上飞，把归属认领的"同视图同会话同文本
   // FIFO"判据摊开。放在早退之前：一条从没挂上桥的 viewId 也不该留下尾链。
   sendLock.dropView(viewId)
+  // 视图彻底销毁：该视图未决的群命令回执不可能再来，主动结清（与 broadcastState 掉线分支同一条出口）。
+  // 放在早退之前：即便 mount 为空（从没挂上桥），pending 表若残留该视图的回执也要清。
+  groupHooks?.onViewDown(viewId)
   if (!mount) return
   mount.dispose()
   mounts.delete(viewId)
