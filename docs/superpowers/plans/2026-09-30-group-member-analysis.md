@@ -10,6 +10,112 @@
 
 **Spec:** `docs/superpowers/specs/2026-09-30-group-member-analysis-design.md`（本计划相对它的每一处偏离都记在下面的决策表里；冲突时以 spec 为准，spec 未覆盖处按下表裁定）
 
+## §A as-built 校准（执行前先读这一节）
+
+B6 的实现分成了两段交付：**Java 数据层**（`3771927`）与**桥侧采集 + shared 纯模型**（`2b2df31` + `ade904e`）已经进了 `main`，而本计划的 Task 1–8 正文写的是设计时的契约形状。两者不一致。用户裁定（2026-10-01）：**形状跟代码，语义跟 spec**——命名与线形以已提交代码为权威（下面的 §A.2 / §A.3 / §A.4），已提交代码与 spec 冲突的语义**改代码**（Task 8b），Task 9 之后的任务一律按本节读写。
+
+### §A.1 交付状态（读码取证）
+
+| 提交 | 内容 | 对应本计划 | 状态 |
+|---|---|---|---|
+| `2b2df31` | V12 三表迁移 + `shared/groupMembers.ts` 纯模型与 JS 单测 | Task 1（迁移部分）、Task 2 | 已交付 |
+| `3771927` | 三实体 + 三 Mapper + `GroupMemberService` / `GroupMemberQueryService` + `GroupMemberController` | Task 1、5、6、7、8 | 已交付，**无 JUnit 覆盖**（`apps/server/src/test` 下没有 `GroupMember*Test.java`，实测：该目录只有 batch/msg/provider/translation 几类）——补测就是 Task 8b 的载体 |
+| `ade904e` | 桥侧群名单/快照/在线事件 + 系统消息旁路（`bridge/whatsapp/groups.ts` +311 行、`chatTypes.ts` 三帧两命令、299 行单测） | Task 3、4 | 已交付 |
+| `954eb58` `4852494` | 计划与本 spec 的文档同步 | — | 已交付 |
+
+**未开工**：Task 8b、9、10、12、13、14、15、16、17。
+
+**Task 11 是例外，且这一条例外要写成现场判定而不是结论**（实测 2026-10-01）：`git status --porcelain -- apps/desktop/src/main/services/groupCollect/` 返回 `?? apps/desktop/src/main/services/groupCollect/`，`git log --oneline -- …groupCollect/` 无输出，Glob 可见 `engine.ts`（导出 `GroupListReply`/`GroupSnapshotReply`/`GroupCommand`/`GroupDispatch`/`IngestPayload`/`GroupCollectApi`/`GroupCollectDeps`/`BuildResult`/`class GroupCollectEngine`，方法 `get busy()` 与 `runBuildForAccount(accountId: number, chatKeys?: string[]): Promise<BuildResult>`，唯一 import 是 `../../../shared/groupMembers.ts`）与 `engine.test.ts`（10 条 `test(...)`）。**读码**：这两支文件不在 `apps/desktop/tsconfig.unit.json` 的 `include` 里（该表的 groupCollect 条目由 Task 9 补，见其 Files），也不在另外三路 typecheck 覆盖面内——所以这台泵**从未被编译过、从未被 `node --test` 跑过**，它的"存在"目前只是磁盘事实，不是验收事实。
+
+**它因此不享有 R30 的"形状跟代码"**：R30 认的是**已提交且已验收**的代码（§A.1 那张表里的四个提交），而一支没进任何闸门、也没进版本库的文件只是编辑区里的一个候选形状。Task 11 的 Interfaces 段（`GroupEngine` / `GroupEngineDeps{api,pull,viewIdOf,sleep,now,log}` / `runForAccount(accountId, chatKey?)` / `GroupBuildOutcome`）才是 Task 12/15/16 已经按它写就的契约；那台树里的泵与之有五处实差（读码，逐条都要在 Step 0 报告里判掉）：
+
+| # | 树里那份 | 计划契约 | 影响 |
+|---|---|---|---|
+| 1 | `GroupCollectEngine` / `runBuildForAccount` | `GroupEngine` / `runForAccount` | 名字；Task 12 的 host 按后者 import |
+| 2 | `chatKeys?: string[]`（复数） | `chatKey?: string`（单数） | IPC 与 preload 的入参形状；见 R49 |
+| 3 | `deps.dispatch(cmd, timeoutMs)`（泵不知视图） | `deps.pull(viewId, cmd)` + `viewIdOf(accountId)` | 视图归属由谁解析；Task 10 的 registry 与 Task 12 的路由按后者接线 |
+| 4 | `deps.snapshotAtOf(chatKey)` 本地排序，且 `GroupCollectApi` 只有 `ingest` | 读 `GET /groups?sort=stale`（R28/R41，Task 9 的 `groups()` 那一跳） | 树里那份压根没接后端排序，`sort=stale` 这条已交付能力没人用 |
+| 5 | `BuildResult{built,failed,abandoned?,deferred}` | `GroupBuildOutcome{skipped,list,registered,attempted,snapshotted,postedFailed,failed,skippedFinal,truncated,aborted,accountId}` | `group:state` 广播与 §8 的「未建档/已定档/截断」三格全靠 outcome 的字段；`skippedFinal` 那一格在树里那份没有对应实现（R21 的 `is_final` 跳过没做） |
+
+Step 0 的量法与判读（Task 11 执行席第一件事，先量后写）：
+
+```bash
+cd apps/desktop
+git status --porcelain -- src/main/services/groupCollect/    # ?? = 仍未纳管；无输出 = 已被前席提交，按下面 ③ 判
+pnpm run typecheck:unit                                       # 期望：Task 9 接完 include 后这两支才进编译，否则本命令对它们零覆盖
+pnpm run test:unit 2>&1 | tail -15                            # 期望：泵那 10 条进总数
+```
+
+① 编译与 10 条断言全绿，且逐条对上 Interfaces 段 → 本任务的实现步降级为"复核 + 补 `is_final` 与 `sort=stale` 两处缺的语义 + 改名对齐 + 提交"；② 有红或对不上契约 → 按正文实现覆盖那两支文件（实现是本计划写的，覆盖它不算重写别人的成果）；③ 若届时 `git log` 显示它已被提交进主干且与正文不符 → 那才轮到 R30，停手按代码对齐 Task 12/15/16 的引用名，并在决策表补一行。**推断**（不进判据）：`??` 更可能是前一段会话留下的半成品，理由是同目录里没有 Task 9/10 的 `api.ts`/`registry.ts`/`collector.ts`，而单独一份泵无法装配。
+
+### §A.2 权威线形——后端六跳（`/api/group-members`，已提交）
+
+信封、`PageResult` 的 JSON 键（`records/total/page/pageSize`）、401 无 `data` 等横切形状与 P6/P7 相同，这里只列本节特有的部分。字段名逐字抄自 `GroupMemberController.java` / `GroupMemberService.java` / `GroupMemberBatchDTO.java` / `web/vo/Group*.java`。
+
+**① `POST /batch`** — 入参 `GroupMemberBatchDTO`（可变类，校验**只有** `accountId` 一处 `@NotNull`）：
+
+```
+{ accountId, groups?:[{chatKey,title}], snapshot?:{chatKey,participants:[{memberKey,phone,displayName,roleType}]},
+  events?:[{chatKey,memberKey,actorKey,actorName,eventType,occurredAtEpochSec,dedupKey,source,rawType,rawSubtype,bodySnapshot}] }
+```
+
+出参 `IngestResult(groupsUpserted:int, eventsInserted:int, reconciled:boolean, coverage:Double|null, reason:String)`：
+
+- `groupsUpserted` / `eventsInserted` 是**两个计数**，计划正文里的 `eventsAccepted / eventsDuplicated / membersUpserted` 三计数与 `reasons[]` 逐条拒收文案**都不存在**。
+- `reason` **四值**：`ok | first_build | coverage_too_low | no_snapshot`。第四种的含义是「这一批根本没带可用快照」（缺 `snapshot`、`chatKey` 非群键、去重后名单为空都算），此时 `reconciled=false`、`coverage=null`、HTTP 200。
+- **空名单不是 40000**：正文 Task 5 里「空名单整批拒收」那一格没实现，实现走的是 §A.5 的 `no_snapshot`（语义与 spec §4「空名单不当成功快照」一致，只是不拒收）。闸放行时才 `markSnapshotSuccess`；被闸拦下时**分母、`last_snapshot_at`、`snapshot_count` 三列都不动**（R20 已落实，读码确认）。
+- 非法 `roleType` 归 `member`；非法 `eventType` / `source` 静默丢弃；`bodySnapshot` 与展示文本 clip 512。
+
+**② `GET /groups?accountId&page&size`** → `PageResult<GroupVO>`，`GroupVO(chatKey,title,platform,participantCount,snapshotCount,inGroupCount,lastSnapshotAt,lastEventAt,isFinal)`。`isFinal` 是 Java `boolean` → JSON `true|false`，**不是 0/1**。`platform` 由账号反查，客户端说了不算。
+
+**③ `GET /group/members?accountId&chatKey&isInGroup&role&q&page&size`** → 一个三键对象 `{members, coverage, reason}`：`members` 是 `PageResult<GroupMemberVO>`；`coverage` 是 `Double`；`reason` 是上面那四值之一。**当前实现**因为 `Map.of` 不许 null，把 `coverage==null` 压成了空串 `""`——这是缺陷，Task 8b ③ 修；修完才是 `null`。`GroupMemberVO` 的 `isInGroup` 是 `boolean`。
+
+**④ `GET /group/events?accountId&chatKey&eventType&page&size`** → `PageResult<GroupEventVO(id,chatKey,groupTitle,memberKey,actorKey,actorName,eventType,occurredAt,source,rawType,rawSubtype,bodySnapshot)>`。`groupTitle` 列存在但**写入侧恒为 NULL**（Task 8b 不修它，界面按「可能为空」渲染）。
+
+**⑤ `GET /customer/{customerId}/groups`** → `List<GroupVO>`，**没有 `accountId` 参数**：这一跳今天跨账号混读，与 R16 冲突，Task 8b ④ 修。
+
+**⑥ `GET /group/members/export-rows?accountId&chatKeys`**（`chatKeys` 是逗号分隔的 `List<String>`）→ `List<GroupExportRowVO>`：
+
+```
+{seq, groupName, groupId, phone, name, role, inGroup, joinAt, joinCount, leaveAt, exitMethod, lastMsgAt, dayMsgCount, msgCount}
+```
+
+四处与正文不同，Task 13 的 exporter 逐字按这里写：群键列叫 **`groupId`** 不叫 `chatKey`；**没有 `memberKey`、没有 `firstSeenAt`**（14 列本来就不含它们）；`inGroup` 已经是中文串 **`'是'|'否'`**（后端 `GroupExportRowVO` 里格式化过，主进程**不许再映射一次**）；`role` 仍是原始码 `member|admin|super`（要过 `groupRoleLabel`）。三个消息列叫 `lastMsgAt / dayMsgCount / msgCount`，不叫 `lastChatAt / dayCount / totalCount`。
+
+**V12 列宽（写夹具用）**：`chat_key` 128、`member_key` 160、`phone` 32、`display_name` 128、`role_type` 16、`exit_method` 24、`group_title` 256、`body_snapshot` 512、`dedup_key` 160。V12 **没有** `last_coverage` / `last_reconcile_reason` 两列（R1 要的，Task 8b ③ 补迁移）。
+
+### §A.3 权威线形——已交付的 JS 侧实名
+
+`shared/groupMembers.ts`（`2b2df31`，`ade904e` 续）：`GroupMemberRole`、`GroupEventType`、`GroupEventSource`、`GroupParticipantWire{memberKey,phone,displayName,roleType}`、`GroupEventWire`、`GROUP_GAP_MS=600`、`SNAPSHOT_TIMEOUT_MS=15_000`、`RETRY_BACKOFF_MS=2_000`、`MAX_GROUPS_PER_BUILD=200`、`COVERAGE_MIN=0.6`、`MAX_EXPORT_GROUPS=50`、`EXPORT_COLUMNS`（14 项，`as const`）、`eventTypeFromAction`、`liveEventDedupKey`、`GroupSystemRaw`、`GroupSystemClassification`、`classifyGroupSystemMessage`、`mergeParticipants`、`snapshotIsUsable`、`CoverageReason`（四值）、`CoverageVerdict`、`snapshotCoverage`。
+
+命令与帧（`shared/chatTypes.ts`）：下行 `{kind:'group_list', reqId}`、`{kind:'group_snapshot', reqId, chatKey}`；上行 `group_list_result{reqId,ok,groups?:[{chatKey,title}],error?}`、`group_snapshot_result{reqId,ok,chatKey,participants?,participantCount?,truncated?,error?}`、`group_event{events:GroupEventWire[]}`。
+
+**`participantCount` / `truncated` 只存在于页内那一帧**（桥 → 主进程，读码 `chatTypes.ts:157-166`），`GroupMemberBatchDTO.SnapshotItem` 里没有这两个字段。所以主进程**发不出去**它们：泵把它们用作本地排序与日志依据（Task 11 的技术要点相应改写），不进 POST 体。
+
+### §A.4 计划正文名 → as-built 名
+
+| 正文里的名字 | as-built | 说明 |
+|---|---|---|
+| `GroupBatchDTO` | `GroupMemberBatchDTO` | 嵌套类 `GroupItem / SnapshotItem / ParticipantItem / EventItem` |
+| `GroupBatchVO` / `GroupBatchResult` | `IngestResult` / `GroupIngestResult` | 两计数，无 `reasons[]` |
+| `eventsAccepted` `eventsDuplicated` `membersUpserted` | `eventsInserted` `groupsUpserted` | 拒收不落库，所以没有「重复」计数 |
+| `GroupReconcileReason`（三值） | `CoverageReason`（四值） | 已在 shared 交付，Task 9 **不许重复声明** |
+| `MemberPageVO` | `{members, coverage, reason}` | 读侧容器；Task 8b ③ 后换成 record `MemberPageVO` 且 `coverage` 可为 null |
+| `GroupRowVO` / `GroupMemberRowVO` / `GroupEventRowVO` / `CustomerGroupVO` | `GroupVO` / `GroupMemberVO` / `GroupEventVO` / 复用 `GroupVO` | **全是 record**：它们是服务层组装的出参，不是 MyBatis 行载体，所以 R24 那条「行载体必须可变 POJO」的顾虑在这里不适用（R31） |
+| `GROUP_EXPORT_COLUMNS` / `EXPORT_GROUP_MAX` | `EXPORT_COLUMNS` / `MAX_EXPORT_GROUPS` | |
+| `GroupExportRowWire` | 同名单但字段换成 §A.2 ⑥ 那 14 个键 | 无 `chatKey/memberKey/displayName/firstSeenAt/isInGroup` |
+| `groupEventTypeOfAction` / `phoneOfMemberKey` | `eventTypeFromAction` / 无（号码在桥侧 `groups.ts` 内取） | |
+| `tmp/P8Cleanup.java` | `tmp/P8Purge.java` | 定义在 Task 14 |
+| `tmp/p8a-group-contract.mjs` | `tmp/p8-group-members-contract.mjs` | 已有草稿，Task 14 校正它 |
+
+### §A.5 语义偏差 → 全部归 Task 8b
+
+形状可以各叫各的，语义不行。已提交代码与 spec 冲突的地方逐条列在 **Task 8b**（①–⑧），每条先写红的 Java 单测再改代码。**Task 14 的契约腿按 §A.2 的"修完之后"那一列断言**，红格一律回 Task 8b 修，不许放宽判据凑绿。
+
+### §A.6 本节怎么对下游任务生效
+
+SDD 的执行单元是**单任务节选**（brief 只切一个 Task），所以 §A 不能作为唯一出处——每个受影响的任务节里都有一份「as-built 修正」块，修正写进了正文的代码与 Interfaces 里。Task 1–8 的正文**不改写**：它们是已交付那两段的过程记录，与 §A 冲突处以 §A 为准；谁要动那一层的语义，走 Task 8b。
+
 ## Global Constraints
 
 每一天的每一个任务都受这些约束管辖，逐字生效：
@@ -55,12 +161,39 @@
 | R16 | `GET /groups`、`/group/members`、`/group/events`、`export-rows` **一律要求 `accountId`** | `uk_group` 与 `uk_member` 都含 `account_id`，同一个 `chat_key` 在两个账号下是两行；spec §7 的查询串少写了这一维，照抄就会跨账号串数据 | 渲染层每次读都要带着当前账号（本来就有） |
 | R17 | `/customer/{id}/groups` 走 `group_member_state.customer_id`，不走 `chat_conversation.customer_id` | 契约的「这个人在哪些群里」定义在成员状态表；用会话头就只能看见发过言的群，正是 §2#8 建登记册要修的洞 | `customer_id` 为空（没匹配上客户）的成员不在反查结果里——这是 §9 已经承认的后果 |
 | R18 | 泵**不进** `SendLock`；与发送链的互斥靠「只发只读命令」这一条事实，不靠锁 | `sendLock.ts` 那条锁管的是「同一视图同时只有一条在途发送」，采集不是发送方；进锁会让群建档把用户正在敲的回复排在 15s 超时后面 | 无（页内命令回路本身是同步分派，不排队） |
-| R19 | 契约驱动的清理用 `tmp/P8Cleanup.java`（JDBC DELETE），只删驱动自造的 `12036399999999%`（群键）与 `86139999999%`（成员键）前缀 | 群面本期不提供 DELETE 端点（§14 没写，§7 也没有）；断言仍全部走 :8180，只有清理这一跳例外 | 有一条读码之外的写库通道，必须把它锁死在两个前缀上并在探针输出删了几行 |
+| R19 | 契约驱动的清理用 `tmp/P8Purge.java`（JDBC DELETE），**只删驱动自己那一轮造出来的键**（把 `GROUP_KEY` 与 `mk(n)` 系列作为参数传进去，按精确键删，不按前缀删） | 群面本期不提供 DELETE 端点（§14 没写，§7 也没有）；断言仍全部走 :8180，只有清理这一跳例外。改成精确键清单是因为驱动用的是 `12036<运行号>@g.us`，前缀删法会连着删掉别人上一轮留下的数据，而那份数据正是另一条腿的判据 | 有一条读码之外的写库通道，必须把它锁死在「参数来自本进程」这一条上并在探针输出每张表删了几行（**删不动 = 断言失败**，不是 = 无事发生） |
 | R20 | `participant_count`（分母）只由**成功**快照覆盖；失败拉取永不写它，也不写 `last_snapshot_at` | spec §6 陷阱 ① 的直接落实；一旦失败拉取能写分母，一次网络抖动就会把整群人在闸前推定成退群 | 「成功」的定义必须包含「两方皆空 ⇒ 不算成功」（Task 3 的页内判定 + Task 6 的入库判定两头都挡） |
 | R21 | `is_final=1` 的群泵跳过、读面仍返回 | spec §8 那格的直译 | 泵的单测要专门有一例断言它「没拉」，而不是断言返回里没有它 |
 | R22 | 导出取数走 `GET /group/members/export-rows?accountId&chatKeys`，**行序在后端**排；exceljs 只负责写字面量 | §10 的行序规则（群序 + 群内 `latest_join_at` 升序、NULL 沉底按 `first_seen_at` + 跨群连续序号）一旦在渲染层或主进程各排一遍就分叉；后端一份 `Comparator` 是唯一出处 | 主进程只做编码与落盘，测试面变小 |
 | R23 | exceljs 进 `dependencies`（不是 devDependencies） | electron-vite 只把 `dependencies` 里的包当外部留在 `node_modules`；进 dev 就会被打进主进程 bundle，`out/` 里出现两份，§15#4 那条构建产物实测也就失去意义 | 打包体积（Task 12 要量一次实际大小并记档） |
-| R24 | `@Select` 的返回类型（`GroupRowVO` / `GroupMemberRowVO` / `GroupEventRowVO` / `CustomerGroupVO` / Task 8 的 `GroupExportRowVO`）是 Lombok `@Data` 可变 POJO；只有服务层自己组装的出参（`MemberPageVO`、Task 5 的 `GroupBatchVO`）才是 record | MyBatis 对没有默认构造器的目标走**构造器自动映射、按列序不按列名**（仓库只开了 `map-underscore-to-camel-case`，`application.yml:19-21`，没开 `arg-name-based-constructor-auto-mapping`）。record 当行载体时，SELECT 清单一改顺序就按位置错填且全静默 | 读面少一点「record 更纯」的审美；这四个类的类注释要写明为什么可变，否则下一个端点会把 record 抄进来 |
+| R24 | `@Select` 的返回类型（`GroupRowVO` / `GroupMemberRowVO` / `GroupEventRowVO` / `CustomerGroupVO` / Task 8 的 `GroupExportRowVO`）是 Lombok `@Data` 可变 POJO；只有服务层自己组装的出参（`MemberPageVO`、Task 5 的 `GroupBatchVO`）才是 record | MyBatis 对没有默认构造器的目标走**构造器自动映射、按列序不按列名**（仓库只开了 `map-underscore-to-camel-case`，`application.yml:19-21`，没开 `arg-name-based-constructor-auto-mapping`）。record 当行载体时，SELECT 清单一改顺序就按位置错填且全静默 | 读面少一点「record 更纯」的审美；这四个类的类注释要写明为什么可变，否则下一个端点会把 record 抄进来。**本行的形状部分已被 R31 与已提交代码取代**：`3771927` 里那四个读侧 VO、`GroupExportRowVO` 与 `MemberPageVO` 全是 record（读码 `web/vo/GroupExportRowVO.java:11`），因为交付形态是服务层组装（`GroupMemberQueryService.java:120,136` 用 `selectList` 取实体再在 Java 里映射），**没有任何 VO 当过 `@Select` 的行载体**。R24 那条规则本身仍然有效，只是触发条件换成「以后若把某个 VO 直接当 `@Select` 的返回类型」——Task 7/8 正文里「`@Data` 可变 POJO」那几段是当时的预测，按各节「本节正文不改写」的约定留着不改，以本行与 R31 为准 |
+| R25 | 「一轮建档」是一个有界批次：上限 `MAX_GROUPS_PER_BUILD = 200`，跑不完的留给下一轮；三条触发点（上线全量 / 进群详情补拉 / 弹层手动刷新）合成 `group:build` 两支——`chatKey` 省略 = 整账号一轮，带上 = 只补这一群。**不做定时器** | 定时的重扫会长期在页面上打 `getParticipants`，而本期没有任何读数依赖"定时"；上限给一轮一个终点，跑不完就留到下一次触发 | 一个从没被再触发的群可能长期不建档——`GET /groups?sort=stale`（R28 / Task 8b ⑥）与 §8 的「未建档」标注就是这一格的可见面 |
+| R26 | 主进程只挂三跳（`postBatch` / `groups` / `exportRows`）；成员名单、进退流水、客户反查三支走渲染层自己的 `lib/http.ts` | 那三支的唯一读者是界面，做成 IPC 转发只会得到三份没人调用的代码 + 两条白名单，而界面读它们时用的是渲染层那一份 | 同一批 VO 类型要放 `shared/` 给两侧共用（R27） |
+| R27 | 读侧 wire 类型放 `shared/groupMembers.ts`，不放 `api.ts` | 渲染层不 import `main/**`；「字段命名与序列化只在 shared 定一处，两侧都从它取型」（spec §4 末行）在跨进程边界上同样成立 | shared 里多出几个纯类型 |
+| R28 | 泵按 `GET /groups?sort=stale` 返回的**位置**当建档优先级（第 i 行 rank=i，册子上查不到的键 rank=-1 排最前），**不解析** `lastSnapshotAt` 字符串 | `LocalDateTime` 的 Jackson 形状不是本项目定的；拿一个没实测过的外部格式做字典序比较就是把猜测当依据。位置是后端 SQL 承诺的 | 后端没起时 rank 表为空，整轮退化为页内本地顺序（不漏群，只不精确，有日志）。这一支依赖 Task 8b ⑥ |
+| R29 | 一轮先一跳登记**全部**可见群，再逐群一跳补快照 | spec §5 的伪码把 `groups + snapshot` 写在同一跳，那样快照失败的群永远进不了登记册；而「账号在哪些群里」这份名册要的恰恰是"群行存在但 `last_snapshot_at IS NULL`"这一格（与"压根没这个群"是两种可见状态） | 每群那一跳多带一条只含它自己的 `groups`，upsert 幂等，无副作用 |
+| R30 | **混合裁定（用户，2026-10-01）**：命名与线形认已提交代码（`3771927` / `ade904e`，逐字见 §A.2 / §A.3），已提交代码与 spec 冲突的语义改代码（Task 8b）。Task 1–8 正文**不改写**，与 §A 冲突处以 §A 为准 | 推翻已交付且带 299 行单测的桥侧形状去迁就设计稿，代价是把验证过的东西重新变成没验证过的；反过来全认代码会把 spec §7/§8 的三条硬口径（闸读数、账号维度、搜索转义）丢掉 | 一份 §A + 一个 Task 8b；下游每个受影响的任务节里都要有一份就地修正（brief 是按任务切的，§A 不会跟着走） |
+| R31 | §A.2 那四个读侧 VO 与 `GroupExportRowVO` **保持 record**，不改可变 POJO | R24 管的是 MyBatis 的**行载体**；这四个是服务层组装的出参，字段来自 Java 代码而不是列序，构造器自动映射那条风险不适用 | 以后若把某个 VO 直接当 `@Select` 的返回类型，就必须按 R24 改回可变 POJO——这一条写在类注释里 |
+| R32 | `IngestResult(groupsUpserted, eventsInserted, reconciled, coverage, reason)` 定稿：两计数，**没有** `eventsDuplicated` 与 `reasons[]` | 「重复」在这一层的定义是"没落库"，它不进计数器就不会有任何读数依赖它；逐条拒收文案要的是"哪一条被丢"，而丢的只有非法值（`roleType` 归 `member`、非法 `eventType/source` 静默丢弃），本期没有界面读它 | 界面说不出"这批里有 3 条被丢了"；要补就先补契约，别先补字段 |
+| R33 | `reason` 四值定稿（`ok / first_build / coverage_too_low / no_snapshot`），`no_snapshot` = 本批没有可用快照；空名单**不返 40000**，返 HTTP 200 + `reconciled=false` | 页内「空名单不当成功快照」与后端「空名单不进判退」两条闸都在（R20 落实），拒收只是把同一件事换成错误码；而泵的一跳里 `groups` 与 `events` 常常合法地没有快照，用 400 表达"没做判退"会让泵对一批已经写进去的数据重试 | Task 5 正文里「空名单 40000」那一格作废（见 §A.5） |
+| R34 | 快照的 `participantCount` / `truncated` **止于页内那一帧**，不进 POST 体；分母的唯一来源是后端去重后的名单长度 | `GroupMemberBatchDTO.SnapshotItem` 没有这两个字段，写进去就是一行没人读的 JSON；而"页内给的群 metadata 人数"与"实际收到的名单长度"是两个数，让后端信前者就等于把 §6 陷阱 ① 的分母交给一个量过的截断值 | 泵把它们降级为本地日志与排序依据（Task 11 相应改写）；§15#3 的超大群截断实测仍靠那行日志取数 |
+| R35 | 闸读数落库走**新增 V13 迁移**（`chat_group` 补 `last_coverage DECIMAL(5,4) NULL`、`last_reconcile_reason VARCHAR(24) NULL`），**不改 V12** | V12 已经在本地库跑过，改它的文件会撞 Flyway 校验和；Flyway 校验和报错的现场是"后端起不来"，那是最贵的一种冲突 | 多一个迁移文件；回滚段写在 V13 里（`ALTER TABLE … DROP COLUMN`） |
+| R36 | 名单页的 `latest_join_at IS NULL` 沉底，与导出同序（`ORDER BY ISNULL(latest_join_at), latest_join_at, first_seen_at`） | MySQL 的 `ASC` 把 NULL 排最前，于是界面第一屏全是"没有进群时间的人"，而 §7 承诺的排序口径与 R22 的导出行序是同一件事——两份顺序就是两个答案 | 读侧那条 wrapper 要写函数排序键，不是纯列名（判退腿 14.8 断言这一格） |
+| R37 | `/group/members` 的返回容器换成允许 `coverage=null` 的 record（`MemberPageVO(members, coverage, reason)`——三键就是 §A 名表里那份已提交线形的三键，`members` 是 `PageResult<GroupMemberVO>`），撤销 `Map.of` 把 null 压成空串 `""` | `""` 是"不知道"与"0.0"挤进同一个 JSON 值：界面判 `coverage === ''` 才能拿到"没分母"，而 `0` 是合法读数（覆盖率 0 会被压成 `0`，两者在 `== ` 下还会相等）。这是拿容器限制冒充语义 | 换容器只换 Java 侧的装法，**线形三键不变**（Task 15 的 `MemberPageVO` TS 类型已按这三键写，`coverage: number | null`）；R24 说的那条"服务层组装的出参可以是 record"在这里同样成立 |
+| R38 | 成员的 `phone` **入库即归一**（`ChatKeys.normalizePhone`，取不到给 NULL），且**超长给 NULL 不截断** | 现在写库的是原样字符串（带 `+` / 空格都进库），而按号码反查客户与 §9 的匹配走的是归一值——两路都存在但只在"页内恰好给了裸号"时才命中，这种"有时匹配得上"比从不匹配更难查。截断一个超长号会得到一个**看起来像号码的假号码**，那是 §2#3 明令不许的 | 存量行的 `phone` 形状在新写入后是归一的；本期不回填历史行（没有读侧依赖它，且回填是一次不可回的写库动作） |
+| R39 | 事件投影只在**真的新行**上做：以 `INSERT … ON DUPLICATE KEY UPDATE` 的 affected rows 判"这条是不是新"，`1` 才投影 | 现在的去重是"查已落库的键 + 批内集合"，两条都在写之前，所以并发两批同键会都判定为新鲜、都投影——`join_count` 双计且永远回不去。uk 挡住的是行，挡不住计数器 | MyBatis 的 affected rows 语义（1=插入、2=更新）要在单测里实测坐实，不能推断（先例：Task 91 那条 `insertIgnoreBatch` 实测） |
+| R40 | `/customer/{id}/groups` 补 `accountId`（必填），`export-rows` 的超限与空名单错误码统一用 **40016**、且在计数**之前**按群键去重 | R16 的同一句话在两支读端点上没落实：`uk_group` 含 `account_id`，跨账号读会把两个同名群混成一份名单。去重早于计数是因为"51 个键里有 3 个重复"该报的和"51 个不同键"不一样，前者其实在限制内 | 渲染层与导出腿都要带 `accountId`；已提交代码的 40000 改成 40016 属响应码变化，Task 14 的契约腿有专门一格断言它 |
+| R41 | `GET /groups?sort=stale`：`ORDER BY (last_snapshot_at IS NULL) DESC, last_snapshot_at ASC, id ASC`，参数缺省=今天那份顺序 | R28 的 rank 要有来源，而"从没成功快照的群排最前"正是 §5 建档队列的语义；把它做成后端的一个排序参数，比在 JS 里比日期串少一处外部格式依赖 | `sort` 是新参数，Task 9 的 `groups()` 签名多一个可选形参（泵传 `'stale'`，界面不传） |
+| R42 | 入参按列宽处理：`chatKey`/`memberKey`/`dedupKey` 超长 → 整批 **40000** 拒收；展示文本（`title` / `displayName` / `actorName` / `bodySnapshot`）超长 → clip 到列宽 | 超长键进了 `uk` 会得到一个**被数据库截断后才会撞上的键**（MySQL 非严格模式下的静默截断 + 唯一键 = 两个不同的人合成一行成员状态）；展示文本截断丢的是可读性，不是身份 | 键超长时整批失败会让同批合法数据一起等下一轮——泵的重试语义（Task 11）本来就是"这一跳没成"，不新增死路 |
+| R43 | 「所在群」那一节的账号上下文：优先 `useSelectionStore().selectedId`，为 null 时回落到 `useAccounts()` 里第一个 `platformType===1 && status===1 && viewId` 非空的账号；节头标出账号名，多于一档时给一个下拉切换 | Task 8b ④ 把 `accountId` 变成必填（R40），而 `CustomerDrawer` 挂在 `CustomersPage`，那一页没有 `AccountSidebar`（读码：`HomePage.tsx:12` 是唯一挂侧栏的页面），`selectedId` 完全可能是 null。另一种做法是"叫用户先去工作台选账号"——那等于把客户管理页的一节功能绑在另一个页面的操作上 | 客户可能同时在两个账号下进群，界面一次只读一个账号（与 R16/R40 一致：本就不许混读）；回落选中的账号是"第一个在线的"，不是"客户最常聊的那个" |
+| R44 | 契约腿的收尾清理走 `tmp/P8Purge.java` 的 JDBC `DELETE`，范围钉死 `account_id = ? AND chat_key IN (本轮两个键)`，并在 `finally` 里跑、跑完复查三表 0 行 | Global Constraints 只把**表形状**列为 JDBC 例外，但成员域没有任何删除端点（本期不做删，§11 的契约面也不含写侧清理），HTTP 腿清不掉自己留下的行。留着这些行的代价不是磁盘：下一轮 `RUN` 换了群键就读不到上一轮，而**同键复跑**会因 `participant_count` 已有值而把"首次建档"那条断言变成 `ok`——验证数据会伪装成产品行为（与 memory 里那条"客户档残留会伪装成产品故障"同源） | 多一个不进 git 的探针；`DELETE` 是写动作，靠 `chat_key` 的本轮随机命名空间 + `account_id` 双条件把误删面收到"只能删我自己造的群" |
+| R45 | 成员名单与流水用**普通分页**（`page`/`size`，读 `PageResult` 的四键），不套 `useInfiniteQuery` 的游标形状 | 后端这两支给的是 `PageResult`（`records/total/page/pageSize`，§A.2），不是消息面那套 `nextCursor/hasMore`。为了复用 `useMessages` 的形状去改后端分页契约，是拿已交付的读端点迁就一个前端 hook 的写法 | 名单翻页要自己写「上一页/下一页 + 总数」，不能靠 `fetchNextPage`；`total` 的口径由后端 `COUNT(*)` 给 |
+| R46 | **时刻文本与"退群方式"的中文词各只有一份作者，都在 `shared/groupMembers.ts`**：`formatExportTime`（Task 13 迁入 shared）与 `exitMethodLabel`；Task 15 的 `groupDisplay.ts` 用**相对路径 + `.ts` 后缀**引它们，自己不再写 `TIME` / `EXIT_METHOD` 两张本地表 | 导出文件（主进程）与弹层名单（渲染层）是同一份读数的两个出口，两处各写一遍就会出现"文件里到秒、界面里到毫秒"「表格里叫『被移出』、界面上叫『被移出群』」这种只有把两个出口并排看才发现的错；而渲染层要进 `node --test` 闸门，别名 `@shared/*` 在那一侧解析不了，只有相对路径能两边都走得通（先例 `lib/chatDays.ts:4`） | `shared` 因此多两个导出；`groupDisplay` 依赖 shared 的形状，改 shared 会同时红两边（这正是想要的耦合） |
+| R47 | 渲染层**不导出 `useGroups`**（`GET /groups` 这一支本期没有界面读者） | 选群面在 §14 的"本期不做"里，客户抽屉只读 ⑤ `/customer/{id}/groups`；泵与 Task 14 的契约腿各有自己的读法（`api.ts` / HTTP）。留一个没人调的 hook 就是留一份永不失效也没有消费者的缓存键，评审只会问"谁在用" | 群运营阶段（B9/B10）要做选群面时得新写这一支——那时它有真实调用方，`groupKeys.groups` 一并补 |
+| R48 | 「导出所选」放在抽屉的**「所在群」那一节**顶栏（导的是勾选的那几个群），弹层顶栏只留「刷新成员 / 导出本群」；spec §9 那句把两处按钮写在同一行的措辞随本任务改口 | `group:export` 的入参是 `chatKeys: string[]`（群键数组，Task 13），契约里**不存在**"勾选若干成员"这件事；而弹层一次只开一个群，"所选"在弹层里无所指。spec §9 的原文是"顶栏（刷新成员、导出所选、导出本群）"，读起来像三个按钮都在弹层里——那是把两处面写进了一行 | 用户要导多个群得先回抽屉勾选，不能在被打开的弹层里跨群选；代价是一句改口，换来的是界面按钮与 IPC 入参一一对应 |
+| R49 | `group:build` / `window.scrm.group.build` / `GroupEngine.runForAccount` 三处的入参形状统一为**单数** `{ accountId: number; chatKey?: string }`（省略 = 整账号一轮，给一个 = 只补那一群）。工作区里那支未纳管的 `groupCollect/engine.ts` 签名是复数 `chatKeys?: string[]`，**本计划不采它**（判据见 §A.1 的 Task 11 例外段与五处实差表） | R30 的"形状跟代码"认的是**已提交且已过闸门的代码**（那节列的 `3771927` / `ade904e` 两个提交），而 `git status` 给 `??`、`git log` 给空、`tsconfig.unit.json` 又不含它的一支文件，只是编辑区里的一个候选形状——它没被编译过，也就没被验证过。真正的判据是需求面：本期只有两种触发（整账号一轮、弹层「刷新成员」补一群），没有任何界面要"只建这 N 个群"；复数是给一个不存在的调用方留的门（YAGNI），而它已经在计划里造出两处互相矛盾的写法。导出的 `chatKeys: string[]` 保持复数——那边"勾选若干群"是真的 | 泵内部要处理"单键 → 一群队列"这一层转换，多一行代码；代价的反面是：若将来真出现批量补建，那是新增一层（`chatKeys?: string[]` 与单数共存），不是把三处 IPC 契约再改一遍。Step 0 若判读成 ③（那时它已进主干且不符），按 §A.1 那一条回到本裁定重新裁定 |
+| R50 | spec §8 第一行那句"未建档的群要写明 `<原因>`"**本期给不出逐群原因**：`GroupBuildOutcome` 只有账号级的 `list: 'ok' \| 'error' \| 'silent'` 与 `skipped: 'busy' \| 'no_view' \| null`，没有 per-chatKey 的错误位；改法是把 spec 的措辞收成"未建档 + 账号级结论"，而不是扩展 IPC 契约 | 逐群原因的真实产地是主进程日志（泵按群键逐条 dispatch，失败的 `error` 字符串只进 `log`），要把它送到界面得让 registry 的结清值带上 error 文本、`GroupBuildOutcome` 长出 `Map<chatKey, string>`、IPC 与 preload 类型跟着变——为一句界面文案开一条新的跨进程数据通道，代价和收益不成比 | 用户在弹层里看到的是"这个群还没建过档——名单为空不等于群里没人"，不是"因为页内超时没建上"。真要逐群原因，留到群运营阶段与选群面（R47）一起做 |
+| R51 | 事件类型与来源的中文表放 `lib/groupDisplay.ts`（`EVENT_TYPE_LABEL` / `EVENT_SOURCE_LABEL`），**不放 shared**；但用三条 unit 断言把它们与 shared 的 `exitMethodLabel('left'/'removed'/'added')` 钉在一起 | 导出（主进程）读的是 `exitMethod` 那一列，`groupDisplay` 里的 `eventTypeCopy`/`sourceCopy` 只有渲染层读者，塞进 shared 就是让主进程背一张永不查的表——与 R46"两处都有读者才上移"的判据相反。跨语言共享不了（Java 的 `event_type` 字面量在 `GroupRules.java`），能共享的只有 JS 侧，那就用断言把三组词对齐，改一处会同时红 | 词表有两份 JS 拷贝 + 一份 Java 字面量，靠断言而不是 import 约束；新增一种 `event_type` 时若忘了补 `EVENT_TYPE_LABEL`，`eventTypeCopy` 回显原始码，日志与界面能对上，评审也不会把它读成"没有类型" |
 
 ---
 
@@ -71,22 +204,25 @@
 | DB | `apps/server/src/main/resources/db/migration/V12__group_member_analysis.sql` | 三张表 + 回滚段 | 1 |
 | Java | `entity/ChatGroup.java` `entity/GroupMemberState.java` `entity/GroupMemberEvent.java` | 三行形状 | 1 |
 | Java | `mapper/ChatGroupMapper.java` `mapper/GroupMemberStateMapper.java` `mapper/GroupMemberEventMapper.java` | upsert / INSERT IGNORE / NOT IN 收口 / 聚合 | 1 |
-| Java | `service/GroupMemberService.java` + `service/msg/GroupRules.java` | ingest 三步 + 覆盖率闸 | 5, 6 |
-| Java | `service/GroupMemberQueryService.java` | 四个读端点 + export-rows 取数与行序 | 7, 8 |
-| Java | `web/GroupMemberController.java` `web/dto/*` `web/vo/*` | `/api/group-members` 六跳 | 5, 7, 8 |
-| 探针 | `tmp/P8Tables.java` `tmp/P8Cleanup.java` | 表形状实测 / 退出路径清理（不进 git） | 1, 13 |
-| shared | `apps/desktop/src/shared/groupMembers.ts` | wire 类型、action 映射、快照并集、系统消息分类、泵常量、导出列序 | 2, 3, 4 |
-| shared | `apps/desktop/src/shared/chatTypes.ts` | `BridgeCommand` +2 kind、`BridgeReport` +3 kind | 3 |
-| 桥 | `apps/desktop/src/bridge/types.ts` `bridge/whatsapp/groups.ts` `bridge/whatsapp/normalize.ts` `bridge/index.ts` | 群能力声明、快照/列表/事件订阅、命令分派 | 3, 4 |
-| 主进程 | `services/groupCollect/{api,registry,collector,engine,host,export}.ts` | 六跳 HTTP、reqId 表、事件攒批、建档泵、装配 + IPC、XLSX | 9–12 |
-| 主进程 | `services/msgBridge/index.ts`（改） | 三种新帧路由 + `setBridgeReadyHook` | 10, 11 |
-| 主进程 | `main/ipc.ts` `preload/index.ts`（改） | `group:export` / `group:build` / `group:state` | 11, 12 |
-| 渲染层 | `renderer/src/api/groupMembers.ts` `renderer/src/components/ui/tabs.tsx` `components/customers/{CustomerGroupsSection,GroupMembersDialog}.tsx` `CustomerDrawer.tsx`（改） | hooks、Tabs 原子件、两节界面 | 14, 15 |
-| 驱动 | `tmp/p8a-group-contract.mjs` `tmp/p8c-ui.mjs` | HTTP 契约腿 / CDP 腿（不进 git） | 13, 16 |
+| Java | `service/GroupMemberService.java` + `service/msg/GroupRules.java` | ingest 三步 + 覆盖率闸 | 5（已交付）, 6（已交付）, **8b** |
+| Java | `service/GroupMemberQueryService.java` | 四个读端点 + export-rows 取数与行序 | 7（已交付）, 8（已交付）, **8b** |
+| Java | `web/GroupMemberController.java` `web/dto/*` `web/vo/*` | `/api/group-members` 六跳 | 5, 7, 8（均已交付）；**8b** 改容器与参数 |
+| Java | `src/test/java/.../service/GroupMember*Test.java` + `db/migration/V13__group_gate_reading.sql` | 校准项 ①–⑧ 的红→绿单测 + 闸读数落库 | **8b** |
+| 探针 | `tmp/P8Tables.java` `tmp/P8Purge.java` | 表形状实测 / 退出路径清理（不进 git） | 1, 14 |
+| shared | `apps/desktop/src/shared/groupMembers.ts` | wire 类型、action 映射、快照并集、系统消息分类、泵常量、导出列序 | 2（已交付）, 3（已交付）, 4（已交付）, 9, 13 |
+| shared | `apps/desktop/src/shared/chatTypes.ts` | `BridgeCommand` +2 kind、`BridgeReport` +3 kind | 3（已交付） |
+| 桥 | `apps/desktop/src/bridge/types.ts` `bridge/whatsapp/groups.ts` `bridge/whatsapp/normalize.ts` `bridge/index.ts` | 群能力声明、快照/列表/事件订阅、命令分派 | 3, 4（均已交付） |
+| 主进程 | `services/groupCollect/{api,registry,collector,engine,host,exporter}.ts` | 三跳 HTTP、reqId 表、事件攒批、建档泵、装配 + `group:*` IPC、XLSX | 9–12 |
+| 主进程 | `services/msgBridge/index.ts`（改） | 三种新帧路由 + `setBridgeReadyHook` | 10, 12 |
+| 主进程 | `preload/index.ts`（改） | `window.scrm.group.{build,export,onState}` | 12, 13 |
+| 渲染层 | `renderer/src/api/groupMembers.ts` `renderer/src/components/ui/tabs.tsx` `renderer/src/components/customers/{CustomerGroupsSection,GroupMembersDialog}.tsx` `CustomerDrawer.tsx`（改） | hooks、Tabs 原子件、两节界面 | 15, 16 |
+| 驱动 | `tmp/p8-group-members-contract.mjs`（已有草稿，Task 14 校正）`tmp/p8c-ui.mjs` | HTTP 契约腿 / CDP 腿（不进 git） | 14, 17 |
 
 ---
 
 ## Task 1: V12 迁移 + 三实体 + 三 Mapper 原语
+
+> **已交付**（`2b2df31` 迁移、`3771927` 实体与 Mapper）。V12 里**没有** R1 要的 `last_coverage` / `last_reconcile_reason` 两列，它们走 V13 增量迁移（R35 / Task 8b ③）。本节正文是实现过程记录，不改写。
 
 **Files:**
 - Create: `apps/server/src/main/resources/db/migration/V12__group_member_analysis.sql`
@@ -364,6 +500,8 @@ EOF
 
 ## Task 2: `shared/groupMembers.ts` 纯模型 + 第一组 JS 单测
 
+> **已交付**（`2b2df31`，`ade904e` 续）。实名清单见 §A.3——常量与函数名以仓库为权威（`MAX_EXPORT_GROUPS` / `EXPORT_COLUMNS` / `CoverageReason` 四值 / `eventTypeFromAction`），本节正文不改写。
+
 **Files:**
 - Create: `apps/desktop/src/shared/groupMembers.ts`
 - Create: `apps/desktop/src/shared/groupMembers.test.ts`
@@ -581,6 +719,8 @@ EOF
 ---
 
 ## Task 3: 桥的群能力（命令、快照、列表、在线事件）
+
+> **已交付**（`ade904e`）。两命令三帧的字段名与 §A.3 一致；`participantCount` / `truncated` 止于页内那一帧，不进 POST（R34）。本节正文不改写。
 
 **Files:**
 - Modify: `apps/desktop/src/shared/chatTypes.ts:126-148`（`BridgeReport` +3 支、`BridgeCommand` +2 支）
@@ -990,6 +1130,8 @@ EOF
 
 ## Task 4: 群系统消息分类旁路（第二事件源）
 
+> **已交付**（`ade904e`，分类器 `classifyGroupSystemMessage` 在 shared、事件成形 `systemEventsFromRaw` 在桥侧 `groups.ts`）。本节正文不改写。
+
 **Files:**
 - Modify: `apps/desktop/src/shared/groupMembers.ts`（加 `classifyGroupSystemMessage` 与两张 subtype 表）
 - Modify: `apps/desktop/src/shared/groupMembers.test.ts`（追加 6 条）
@@ -1211,6 +1353,8 @@ EOF
 ---
 
 ## Task 5: 后端 ingest——群登记 + 事件先行投影
+
+> **已交付**（`3771927`：`GroupMemberService` + `GroupMemberBatchDTO` + `GroupMemberController`）。线形以 §A.2 ① 为准（两计数、四值 reason、空名单不返 40000）；这一层**没有 JUnit 覆盖**，补测在 Task 8b。本节正文不改写。
 
 **Files:**
 - Create: `apps/server/src/main/java/com/smartscrm/server/web/dto/GroupBatchDTO.java`（内嵌 record 或同包四支：`GroupRefDTO` `GroupSnapshotDTO` `GroupMemberDTO` `GroupEventDTO`）
@@ -1691,6 +1835,8 @@ EOF
 
 ## Task 6: 后端快照收口与覆盖率闸
 
+> **已交付**（`3771927`）。闸放行才记账那一条读码确认落实（R20：`markSnapshotSuccess` 只在 `allowed` 分支调用）；闸读数没落库（R1 那两列走 V13，见 Task 8b ③）。本节正文不改写。
+
 **Files:**
 - Modify: `apps/server/src/main/java/com/smartscrm/server/service/GroupMemberService.java`（补 `reconcile`，`accept` 的第 ① ③ 步接上）
 - Modify: `apps/server/src/main/java/com/smartscrm/server/mapper/GroupMemberStateMapper.java`（补 `upsertFromSnapshot`、`countInGroup`）
@@ -1973,6 +2119,8 @@ EOF
 
 ## Task 7: 后端读端点四支
 
+> **已交付**（`3771927`：`GroupMemberQueryService` + `GroupVO` / `GroupMemberVO` / `GroupEventVO`，全是 record，见 R31）。四处语义偏差见 Task 8b（① 搜索转义、② 名单行序、③ 闸读数与 `coverage` 容器、⑥ `sort=stale`）；`sort=stale` 尚未实现。本节正文不改写。
+
 **Files:**
 - Modify: `apps/server/src/main/java/com/smartscrm/server/service/GroupMemberQueryService.java`
 - Modify: `apps/server/src/main/java/com/smartscrm/server/web/GroupMemberController.java`
@@ -1986,7 +2134,7 @@ EOF
 - Consumes: Task 1 的表、Task 5/6 写入的行、`PageResult.of(list, total, current, size)`、`ChatKeys.isGroup`
 - Produces（渲染层与主进程 api 从这里取形状，字段名逐字）：
   - `GET /api/group-members/groups?accountId&page&size` → `PageResult<GroupRowVO>`，`GroupRowVO(chatKey, title, participantCount, inGroupCount, lastSnapshotAt, snapshotCount, isFinal, lastCoverage, lastReconcileReason, lastEventAt)`
-  - `GET /api/group-members/group/members?accountId&chatKey&isInGroup&role&q&page&size` → `MemberPageVO(records, total, page, size, coverage, reconcileReason, lastSnapshotAt)`
+  - `GET /api/group-members/group/members?accountId&chatKey&isInGroup&role&q&page&size` → 三键容器 `{members: PageResult<GroupMemberVO>, coverage, reason}`（§A 名表第 103 行的 as-built 形状；`coverage` 今天由 `Map.of` 在 null 时压成 `""`，Task 8b ③ 换成 record 后回真 `null`。本任务草稿里写过的 `records/total/page/size` 平铺七键**不是**落地形状，下游一律按这三键读）
   - `GET /api/group-members/group/events?accountId&chatKey&eventType&page&size` → `PageResult<GroupEventRowVO>`
   - `GET /api/group-members/customer/{customerId}/groups?accountId` → `List<CustomerGroupVO>`
   - `GroupMemberQueryService.membersRaw(long tenantId, long accountId, String chatKey)`（Task 8 的导出取数复用它，不走分页）
@@ -2000,7 +2148,7 @@ EOF
 
 - **每一支都必须带 `account_id`**（R16）：`uk_group` / `uk_member` / `uk_event` 三个唯一键都含 `account_id`，同一 `chat_key` 在两个账号下是两行。照 spec §7 那个只写 `chatKey` 的查询串实现，就会在两个账号都挂着同一个群时把两账号的行混着读出来。**判别力**：Task 13 的契约腿会为「同 chatKey 换 accountId」单开一格，断言换账号后读到 0 行。
 - **`q` 参数走 LIKE，转义沿用现成的那一条**：`service/msg/SearchPattern.like(q)`（P6 起在用）返回**已带 `%` 的转义模式**，`null` 表示「不过滤」。**坑**：`q` 里带 `%` 或 `_` 时不转义就变成通配，一个 `_` 会让「按姓名搜」命中所有人——这一格在 Task 13 要有断言。因为 null 已经代表「不过滤」，`<if>` 判的是 `like != null`，SQL 里也**不能再 `CONCAT('%',…,'%')`**（那是二次包裹，会把转义过的模式搅成通配）。
-- **`MemberPageVO` 为什么不用 `PageResult`**：§8 要界面上把 `coverage_too_low` 标出来，那份新鲜度读数属于「这一页的来源」而不是「这一页的记录」。多包一层是有意的，字段名 `reconcileReason` 与 `chat_group.last_reconcile_reason` 同源（R1），所以弹层单独打开时也有出处。
+- **`MemberPageVO` 为什么不用 `PageResult`**：§8 要界面上把 `coverage_too_low` 标出来，那份新鲜度读数属于「这一页的来源」而不是「这一页的记录」。多包一层是有意的：`reason` 这一键在 Java 侧的出处是 `chat_group.last_reconcile_reason`（R1 的同源命名在列上，不在 JSON 键上——线形键名 `members/coverage/reason` 三个是已提交代码给渲染层的契约，Task 15/16/17 都按它读），所以弹层单独打开时也有出处。
 - **`lastEventAt` 是相关子查询，不是 JOIN**：`chat_group` 一页 20 行 × 一条 `MAX(occurred_at)` 子查询，比 `LEFT JOIN group_member_event ... GROUP BY` 少一次整表聚合；`idx_event_group` 的前三列正好被这个子查询吃掉（`tenant_id, account_id, chat_key`），第四列 `occurred_at` 让 MAX 走索引右缘。**归因**：这一列读的是流水，不是消息，别和「最近聊天时间」（Task 8 从 `chat_message` 聚合）混成同一个数。
 - **`isInGroup` 的三态**：`null` = 不看这一列；`0` / `1` 各自下推。用 `Integer` 而不是 `boolean`，因为「未筛选」与「筛在群外（false）」是两件事，写成 `boolean` 就只剩两种。
 - **`customer/{id}/groups` 走 R17**（`group_member_state.customer_id`），并且要求 `account_id`：客户可以同时在两个账号的群里，跨账号混读会让「这个账号在哪些群里」这个问题没有答案。该端点本期不分页（一个客户所在群数的量级是个位数到几十），返回 `List`——加 `PageResult` 会逼渲染层先判 page 再判 records，而这里没有翻页界面。
@@ -2233,6 +2381,8 @@ EOF
 ---
 
 ## Task 8: 第五支读端点 `export-rows`（14 列取数 + 后端行序）
+
+> **已交付**（`3771927`：`GroupExportRowVO`，14 个键逐字见 §A.2 ⑥——群键叫 `groupId`，`inGroup` 已是 `'是'|'否'`，三个消息列叫 `lastMsgAt / dayMsgCount / msgCount`）。超限错误码今天用 40000 而非 40016、不去重、不校验群键形态——见 Task 8b ⑤。本节正文不改写。
 
 **Files:**
 - Modify: `apps/server/src/main/java/com/smartscrm/server/mapper/GroupMemberStateMapper.java`（+ `selectMembersForExport`）
@@ -2638,6 +2788,588 @@ EOF
 
 ---
 
+## Task 8b: 后端校准——把已提交代码的八条语义改回 spec（Java 单测先红）
+
+> R30「混合裁定」的另一半：**形状认代码，语义认 spec**。Task 1–8 的正文不再改，本任务是那一层唯一被允许动 Java 语义的入口。
+> `3771927` 那一层**没有任何 JUnit 覆盖**（§A.1），所以本任务同时是它的补测：八条每条先落一条会红的测试，再改代码。
+>
+> **本任务的判档**：Java 单测 = 实测（`./mvnw test`）；V13 两列真进库 = `tmp/P8Tables.java` 探针实测。
+> 本任务**不**声称证明了「行序在真 MySQL 上的 NULL 语义」「覆盖率端到端读数」——那两条是 Task 14 契约腿的活（§13 的 HTTP 那一档）。
+
+**校准清单**（后面每一步用编号点名）：
+
+| # | 现状（读码） | 改成 | 依据 |
+|---|---|---|---|
+| ① | `GroupMemberQueryService:109-114` 自己拼 `"%" + q + "%"` 再交给 MP 的 `like()`，`like()` 外面又包一层 `%`；`%`/`_` 不转义 | 走 `SearchPattern.like(q)` + `apply("col LIKE {0}", like)`；`q` 只含 `%`/`_` 时按「不搜」处理，返回空名单 | spec §7 搜索口径；与 `MessageQueryService:75-90` 同形 |
+| ② | `:116` `orderByAsc(latestJoinAt)`——MySQL ASC 把 NULL 排**最前**，没进群时间的人占据了名单第一页 | 名单与导出同一份行序：`ISNULL(latest_join_at)` 先、再 `latest_join_at`、再 `first_seen_at`、最后 `id` 定全序 | R36 / spec §10 行序 |
+| ③ | `:122-133` 现场拿**当前这一页**的 `inGroup` 数除以分母算 coverage（翻页就变数）；`Controller:70` 用 `Map.of` 装容器，`coverage==null` 被压成空串 `""` | 闸读数改从 `chat_group` 的两列读（V13），算的一侧只写不读；容器换成 record `MemberPageVO`，`null` 就是 `null` | R1 / R33 / R37 |
+| ④ | `customerGroups(tenantId, customerId)` 不带账号，同一客户在两个账号下的群混在一起回 | 加必填 `accountId`，两路查询都按 `(platform, account_id)` 收窄 | R16 / spec §9 |
+| ⑤ | `exportRows:255-260` 不去重、超限给 40000、不校验群键形态 | 先去重再计数再查；超限给 **40016**；剔掉非 `@g.us` 的键，剔空了给 40000 | R40 / spec §10 |
+| ⑥ | `pageGroups` 只按 `last_snapshot_at DESC` 排，泵读不到「谁最该补档」 | 加 `sort=stale`：`ISNULL(last_snapshot_at), last_snapshot_at, id`（未建档最前，最旧的其次） | R28 / R41 |
+| ⑦ | `GroupMemberService:197-200` 批量 `insertIgnoreBatch` 后**无条件**逐条 `projectEvent`——并发重报时 `join_count` 双计且回不去 | 改单条 `insertIgnore`，只有 affected rows = 1 才投影 | R39 / spec §6 |
+| ⑧ | 入参长度无闸：`member_key`/`dedup_key` 超列宽会让整条 SQL 抛 500；`phone` 入库写原样（`+8613800000000`）而匹配用归一值，按号码那一路永远命中不上 | 长度超限整批 40000；`phone` 入库前过 `ChatKeys.normalizePhone`；`display_name` clip 到 128 | R42 / R38 |
+
+**Files:**
+- Create: `apps/server/src/main/resources/db/migration/V13__group_gate_reading.sql`
+- Create: `apps/server/src/main/java/com/smartscrm/server/web/vo/MemberPageVO.java`
+- Modify: `entity/ChatGroup.java`（+2 字段）、`mapper/ChatGroupMapper.java`（③）、`mapper/GroupMemberEventMapper.java`（⑦）、`service/GroupMemberService.java`（③⑦⑧）、`service/GroupMemberQueryService.java`（①②③④⑤⑥）、`web/GroupMemberController.java`（③④⑥）、`web/vo/GroupVO.java`（③）
+- Test: `src/test/java/com/smartscrm/server/service/GroupMemberWriteCalibrationTest.java`（③⑦⑧）、`src/test/java/com/smartscrm/server/service/GroupMemberReadCalibrationTest.java`（①②④⑤⑥）
+
+**Interfaces:**
+- Consumes：已交付的 `GroupMemberService` / `GroupMemberQueryService` / `GroupMemberController` / 三 Mapper（`3771927`），`SearchPattern.like`（`service/msg/SearchPattern.java`，返回**已带 `%` 的模式**，SQL 侧不得再包一层）、`ChatKeys.normalizePhone` / `ChatKeys.isGroup`、`BizException(code, msg)`。
+- Produces（Task 9 的 `api.ts` 与 Task 14 的契约腿按这一份读）：
+  - `V13`：`chat_group.last_coverage DOUBLE NULL`、`chat_group.last_reconcile_reason VARCHAR(24) NULL`
+  - `ChatGroup`：`Double lastCoverage`、`String lastReconcileReason`
+  - `ChatGroupMapper.markSnapshotSuccess(Long id, int count, Double coverage, String reason, LocalDateTime now)`（**签名变了**，多两个参数）
+  - `ChatGroupMapper.markGate(Long id, Double coverage, String reason, LocalDateTime at)`
+  - `GroupMemberEventMapper.insertIgnore(GroupMemberEvent e)`；`insertIgnoreBatch` **删除**
+  - `GroupVO(..., boolean isFinal, Double lastCoverage, String lastReconcileReason)`（两键追加在末尾）
+  - `MemberPageVO(PageResult<GroupMemberVO> members, Double coverage, String reason)`
+  - `GroupMemberQueryService.pageGroups(Long, Long, String, int, int, String sort)`、`customerGroups(Long tenantId, Long accountId, String platform, Long customerId)`
+  - `GET /groups` 多一个可选参数 `sort`；`GET /customer/{id}/groups` 多一个**必填** `accountId`；`GET /group/members` 的 `data.coverage` 现在是 `number | null`
+
+**技术要点**
+
+- **两条写闸读口的分工**（③）：放行时 `markSnapshotSuccess` 一次写五列（分母 + 时间戳 + 次数 + 两列读数），被拦时 `markGate` 只写那两列读数。R20 那条「三列一起挡」不许松动——被截断的名单一旦参与记账，分母就被污染，而那种污染在界面上永远看不出来。**没带快照的那一批两种都不写**：一次纯事件上报不该把上一轮的读数抹成 `no_snapshot`，那样 §8 的「本次未做退群判定」会变成「上一轮的好结果被抹掉」。
+- **覆盖率用 `DOUBLE` 不用 `DECIMAL`**：它是比值不是金额，`DECIMAL(6,4)` 的精度收益在这一列上没有读者，而实体侧要因此多一次 `BigDecimal → double` 换算。代价：读数会带浮点尾巴（0.9333333333333333），由渲染层格式化到 1 位小数（Task 16）。
+- **②⑥ 的 ORDER BY 只能这么测**：把 wrapper 从 `LambdaQueryWrapper` 换成 `QueryWrapper<GroupMemberState>`（字符串列名），排序写成 `orderByAsc("ISNULL(latest_join_at)", "latest_join_at", "first_seen_at", "id")`。测试用 `ArgumentCaptor` 抓 wrapper，断言 `getSqlSegment()` 里 `latest_join_at` **第一次出现的位置紧跟在 `ISNULL(` 之后**——只比「谁在前」，不比整串（MP 小版本会在列名后追加 `ASC`，把整串写进断言等于把一个版本相关的字面量当契约）。这一条只证明了「Java 这边把 ISNULL 放在了裸列前面」，MySQL 真按这个序输出行是 Task 14 契约腿第 7 组那两格的活。失去 lambda 类型安全的补偿：那条测试同时断言 WHERE 段里出现的列名逐个是 snake_case（`tenant_id`/`account_id`/`platform`/`chat_key`），列名拼错会在那里响。
+- **① 的 `apply("col LIKE {0}", like)` 是既有形状**（`MessageQueryService:85`），不是新发明：`like()` 会把参数再包一层 `%`，与 `SearchPattern` 已经包过的那一层叠成 `%%…%%`，于是搜 `%` 变成搜全表。绑定值断言 `%a\\%b%`（反斜杠先自转义、`%` 再转义后的产物原样进参数）。
+- **④ 的 `accountId` 设成必填**：客户抽屉本来就在某个账号的上下文里，跨账号合并是 §9 没有要求的行为。代价：老脚本手搓不带 `accountId` 的 URL 会得到 400（Spring 缺参），这正是要它响。
+- **⑦ 从批量退回单条**是**量级判断**：事件攒批每批 ≤100 条、每 2s 一趟，一百次本地 INSERT 往返在这个量级上不构成瓶颈；换来的是「投影只对真新行跑」这条能被单测证明的性质。批量与单条的差别在 `insertIgnoreBatch` 的注释里已经写明它说不出「哪几行是新的」——那正是缺陷的来源，所以把它删掉而不是留着等下一个人误用。
+- **⑧ 整批拒收，不静默跳过**：混进一个超长键就把 100 条事件全丢是贵得多的错吗？不是——**客户端已经有一道同名同值的闸**（Task 10 的 `fits()`），超长键能走到 Java 只可能是手搓请求或桥侧漏了一处过滤。那种情况下 400 加一句「member_key 超过 160 字符」是把问题指出来，静默跳过是把一个契约违约藏进 200。
+- **不动的两处**：`GroupEventVO.groupTitle` 仍恒 NULL（写侧没有可信的「发生时的群名」，Task 9 的帧类型注释同口径）；`applyRole` 0 行受影响仍保持沉默（升降级说明不了在不在群里）。这两条读码确认过是**有意的**，不是漏的。
+
+- [ ] **Step 1: V13 迁移**
+
+```sql
+-- V13__group_gate_reading.sql
+-- 覆盖率闸的读数落库（R1 / R35）。V12 没建这两列，§8 的「本次快照人数较上次少 x%」与
+-- 泵的位置优先（R28）都读不到东西。
+ALTER TABLE chat_group
+    ADD COLUMN last_coverage DOUBLE NULL COMMENT '最近一次快照判定的覆盖率；NULL = 没做过可判定的快照' AFTER snapshot_count,
+    ADD COLUMN last_reconcile_reason VARCHAR(24) NULL COMMENT 'ok | first_build | coverage_too_low | no_snapshot' AFTER last_coverage;
+
+-- 回滚段（与 V9 / V12 同形，人工执行）：
+-- ALTER TABLE chat_group DROP COLUMN last_reconcile_reason, DROP COLUMN last_coverage;
+```
+
+`entity/ChatGroup.java` 在 `snapshotCount` 之后补两字段，注释各写一句「谁写这一列」：
+
+```java
+    /** 最近一次快照判定的覆盖率。只有 {@link com.smartscrm.server.mapper.ChatGroupMapper} 的 `markSnapshotSuccess` / `markGate` 写它。 */
+    private Double lastCoverage;
+    /** 最近一次判定结论：`ok | first_build | coverage_too_low | no_snapshot`。 */
+    private String lastReconcileReason;
+```
+
+- [ ] **Step 2: 两个测试文件的骨架**
+
+两份都用 mock 掉的 mapper（不碰库、不碰页面），形状照 `BatchSendServiceTest:65-86`。`@BeforeAll` 那段手工装载 TableInfo 是**必需**的——`QueryWrapper` 的字符串列不进缓存也要解析，但 `customerMapper.selectList` 那一路的 lambda 会当场解析列名：
+
+```java
+// GroupMemberWriteCalibrationTest / GroupMemberReadCalibrationTest 各自的一份
+@BeforeAll
+static void installLambdaColumnCache() {
+    MapperBuilderAssistant assistant = new MapperBuilderAssistant(new MybatisConfiguration(), "");
+    TableInfoHelper.initTableInfo(assistant, ChatGroup.class);
+    TableInfoHelper.initTableInfo(assistant, GroupMemberState.class);
+    TableInfoHelper.initTableInfo(assistant, GroupMemberEvent.class);
+    TableInfoHelper.initTableInfo(assistant, PlatformAccount.class);
+    TableInfoHelper.initTableInfo(assistant, Customer.class);
+}
+```
+
+写侧那份的固定件：
+
+```java
+    private static final long TENANT = 1L;
+    private static final long ACCOUNT = 9L;
+    private static final String GROUP = "120363111@g.us";
+    private static final String MEMBER = "8613800000000@c.us";
+
+    private final ChatGroupMapper groupMapper = mock(ChatGroupMapper.class);
+    private final GroupMemberStateMapper stateMapper = mock(GroupMemberStateMapper.class);
+    private final GroupMemberEventMapper eventMapper = mock(GroupMemberEventMapper.class);
+    private final PlatformAccountMapper accountMapper = mock(PlatformAccountMapper.class);
+    private final CustomerMapper customerMapper = mock(CustomerMapper.class);
+    private final GroupMemberService service = new GroupMemberService(
+        groupMapper, stateMapper, eventMapper, accountMapper, customerMapper);
+
+    /** 账号必须解析得动，否则每条测试都先死在 resolveAccount 上。 */
+    @BeforeEach
+    void accountResolves() {
+        PlatformAccount a = new PlatformAccount();
+        a.setId(ACCOUNT);
+        a.setTenantId(TENANT);
+        a.setPlatformType(1);              // WhatsApp：与 ChatKeys.platformOfAccountType 的映射一致
+        when(accountMapper.selectById(ACCOUNT)).thenReturn(a);
+    }
+```
+
+读侧那份同样五个 mock，构造 `new GroupMemberQueryService(groupMapper, stateMapper, eventMapper, messageMapper, customerMapper)`（五个参数的顺序照构造器，`messageMapper` 也在其中）。**mock 的形参一律以文件里的实际签名为准**，别照本节手敲——签名对不上是编译错，不是测试判据。
+
+- [ ] **Step 3: 八条红测试全部写下**
+
+判别力规则：每条测试都要能指出「改坏哪一行它会红」。下面八条里没有一条是 `assertNotNull` 式的存在性断言。
+
+```java
+// —— GroupMemberWriteCalibrationTest ——
+
+/** ③：闸放行 → 五列一起写，读数就是这一跳的 0.4 之上那个值。 */
+@Test
+void allowedSnapshotRecordsDenominatorAndGateReadingTogether() {
+    ChatGroup g = new ChatGroup();
+    g.setId(3L);
+    g.setParticipantCount(10);
+    when(groupMapper.selectByKey(TENANT, "whatsapp", ACCOUNT, GROUP)).thenReturn(g);
+    when(stateMapper.selectByGroup(TENANT, "whatsapp", ACCOUNT, GROUP)).thenReturn(List.of());
+
+    GroupMemberBatchDTO dto = batchWithSnapshot(10);       // 夹具见下
+    GroupMemberService.IngestResult r = service.ingest(TENANT, dto);
+
+    assertEquals("ok", r.reason());
+    verify(groupMapper).markSnapshotSuccess(eq(3L), eq(10), eq(1.0), eq("ok"), any());
+    verify(groupMapper, never()).markGate(anyLong(), any(), any(), any());
+}
+
+/** ③：闸拦下 → 只写读数那两列。这条是 R20 的守门人：一旦有人把 markGate 换成 markSnapshotSuccess，分母就被 4 人污染。 */
+@Test
+void blockedSnapshotWritesGateReadingOnly() {
+    ChatGroup g = new ChatGroup();
+    g.setId(3L);
+    g.setParticipantCount(10);
+    when(groupMapper.selectByKey(TENANT, "whatsapp", ACCOUNT, GROUP)).thenReturn(g);
+    when(stateMapper.selectByGroup(TENANT, "whatsapp", ACCOUNT, GROUP)).thenReturn(List.of());
+
+    GroupMemberService.IngestResult r = service.ingest(TENANT, batchWithSnapshot(4));
+
+    assertEquals("coverage_too_low", r.reason());
+    assertFalse(r.reconciled());
+    assertEquals(0.4, r.coverage(), 1e-9);
+    verify(groupMapper, never()).markSnapshotSuccess(anyLong(), anyInt(), any(), any(), any());
+    verify(groupMapper).markGate(eq(3L), eq(0.4), eq("coverage_too_low"), any());
+}
+
+/** ③：只报事件、没带快照 → 两种都不写。上一轮的好读数不能被抹成 no_snapshot。 */
+@Test
+void eventOnlyBatchWritesNeitherGatePath() {
+    GroupMemberBatchDTO dto = new GroupMemberBatchDTO();
+    dto.setAccountId(ACCOUNT);
+    dto.setEvents(List.of(event("added", "dedup-1")));
+    when(eventMapper.insertIgnore(any())).thenReturn(1);
+
+    GroupMemberService.IngestResult r = service.ingest(TENANT, dto);
+
+    assertEquals("no_snapshot", r.reason());
+    assertFalse(r.reconciled());
+    verify(groupMapper, never()).markSnapshotSuccess(anyLong(), anyInt(), any(), any(), any());
+    verify(groupMapper, never()).markGate(anyLong(), any(), any(), any());
+}
+
+/** ⑦：批量 IGNORE 里被去重掉的那条不许再投影一次——join_count 双计永远回不去。 */
+@Test
+void onlyActuallyInsertedEventsProject() {
+    GroupMemberBatchDTO dto = new GroupMemberBatchDTO();
+    dto.setAccountId(ACCOUNT);
+    dto.setEvents(List.of(event("added", "d-1"), event("added", "d-2"), event("added", "d-3")));
+    when(groupMapper.selectByKey(TENANT, "whatsapp", ACCOUNT, GROUP)).thenReturn(null);
+    // 第 2 条撞 uk_event：affected rows = 0。旧实现批量插入 + 无条件投影，这里会投三条。
+    when(eventMapper.insertIgnore(any())).thenReturn(1, 0, 1);
+
+    GroupMemberService.IngestResult r = service.ingest(TENANT, dto);
+
+    assertEquals(2, r.eventsInserted());
+    verify(stateMapper, times(2)).applyJoin(eq(TENANT), eq(ACCOUNT), eq("whatsapp"), eq(GROUP),
+        eq(MEMBER), any(), any(), any());
+}
+
+/** ⑧：超长键整批拒收，且响在投影之前——不许留下"事件没进但状态改了"的半套。 */
+@Test
+void oversizedKeyRejectsWholeBatchBeforeAnyProjection() {
+    GroupMemberBatchDTO dto = new GroupMemberBatchDTO();
+    dto.setAccountId(ACCOUNT);
+    GroupMemberBatchDTO.EventItem e = event("added", "d-1");
+    e.setMemberKey("x".repeat(161));
+    dto.setEvents(List.of(e));
+
+    BizException bx = assertThrows(BizException.class, () -> service.ingest(TENANT, dto));
+    assertEquals(40000, bx.getCode());
+    verify(eventMapper, never()).insertIgnore(any());
+    verify(stateMapper, never()).applyJoin(anyLong(), anyLong(), anyString(), anyString(), anyString(),
+        any(), any(), any());
+}
+
+/** ⑧ / R38：phone 入库前归一，界面上才只有一个号码形状，且按号码匹配客户那条路真能命中。 */
+@Test
+void snapshotPhoneIsNormalisedOnWrite() {
+    ChatGroup g = new ChatGroup();
+    g.setId(3L);
+    g.setParticipantCount(1);
+    when(groupMapper.selectByKey(TENANT, "whatsapp", ACCOUNT, GROUP)).thenReturn(g);
+    when(stateMapper.selectByGroup(TENANT, "whatsapp", ACCOUNT, GROUP)).thenReturn(List.of());
+    ArgumentCaptor<GroupMemberState> cap = ArgumentCaptor.forClass(GroupMemberState.class);
+
+    service.ingest(TENANT, batchWithSnapshot(1, "+86 138-0000-0000"));
+
+    verify(stateMapper).upsertFromSnapshot(cap.capture(), any());
+    assertEquals("8613800000000", cap.getValue().getPhone());
+}
+```
+
+```java
+// —— GroupMemberReadCalibrationTest ——
+
+/** ① / ②：搜索词交给 SearchPattern，绑定值里必须已经带好反斜杠转义；名单排序必须 ISNULL 打头。 */
+@Test
+void memberSearchUsesEscapedPatternAndNullSinkingOrder() {
+    when(groupMapper.selectByKey(TENANT, "whatsapp", ACCOUNT, GROUP)).thenReturn(null);
+    when(messageMapper.statsBySenders(any(), any(), any())).thenReturn(List.of());
+    ArgumentCaptor<QueryWrapper<GroupMemberState>> cap = ArgumentCaptor.forClass(QueryWrapper.class);
+    when(stateMapper.selectPage(any(), cap.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+    query.pageMembers(TENANT, ACCOUNT, "whatsapp", GROUP, null, null, "a%b", 1, 50);
+
+    String seg = cap.getValue().getSqlSegment();
+    assertTrue(seg.contains("display_name LIKE"), seg);
+    assertTrue(cap.getValue().getParamNameValuePairs().containsValue("%a\\%b%"),
+        String.valueOf(cap.getValue().getParamNameValuePairs()));
+    int first = seg.indexOf("latest_join_at");
+    assertTrue(first > 0 && seg.startsWith("ISNULL(", first - 7, first),
+        "ORDER BY 里裸列排在 ISNULL 之前，NULL 会占满第一页: " + seg);
+    assertTrue(seg.indexOf("latest_join_at", first + 1) > first, "裸列没出现: " + seg);
+    for (String col : List.of("tenant_id", "account_id", "platform", "chat_key")) {
+        assertTrue(seg.contains(col), "WHERE 段缺列 " + col + ": " + seg);
+    }
+}
+
+/** ①：只由通配符组成的词按「不搜」处理，而且**不发查询**——当成"没有过滤条件"就是一次全表扫。 */
+@Test
+void wildcardOnlyQuerySearchesNothingAndDoesNotHitDb() {
+    query.pageMembers(TENANT, ACCOUNT, "whatsapp", GROUP, null, null, "%%", 1, 50);
+    verify(stateMapper, never()).selectPage(any(), any());
+}
+
+/** ④：另一个账号下的成员行不能混进这个客户的所在群。 */
+@Test
+void customerGroupsAreScopedToTheAccount() {
+    Customer c = new Customer();
+    c.setId(1L);
+    c.setTenantId(TENANT);
+    c.setPhone("8613800000000");
+    when(customerMapper.selectById(1L)).thenReturn(c);
+    ArgumentCaptor<LambdaQueryWrapper<GroupMemberState>> cap = ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+    when(stateMapper.selectList(cap.capture())).thenReturn(List.of());
+
+    query.customerGroups(TENANT, ACCOUNT, "whatsapp", 1L);
+
+    for (LambdaQueryWrapper<GroupMemberState> w : cap.getAllValues()) {
+        assertTrue(w.getSqlSegment().contains("account_id"), w.getSqlSegment());
+        assertTrue(w.getSqlSegment().contains("platform"), w.getSqlSegment());
+    }
+}
+
+/** ⑤：同一群勾两遍不许出一遍成员，也不许绕过 50 群上限（拦的是工作量）。 */
+@Test
+void exportDeduplicatesKeysBeforeCounting() {
+    List<String> keys = new ArrayList<>();
+    for (int i = 0; i < 51; i++) keys.add("12036311" + i + "@g.us");
+    keys.add(keys.get(0));                       // 重复一次 → 去重后正好 50：必须放行
+    when(groupMapper.selectByKey(any(), any(), any(), any())).thenReturn(null);
+    when(stateMapper.selectByGroup(any(), any(), any(), any())).thenReturn(List.of());
+    when(messageMapper.statsBySenders(any(), any(), any())).thenReturn(List.of());
+
+    assertDoesNotThrow(() -> query.exportRows(TENANT, ACCOUNT, "whatsapp", keys));
+
+    // 51 个**互不相同**的键才该被 40016 拦下
+    keys.add("120363999@g.us");
+    BizException bx = assertThrows(BizException.class,
+        () -> query.exportRows(TENANT, ACCOUNT, "whatsapp", keys));
+    assertEquals(40016, bx.getCode());           // 不是 40000：界面要能分清"选太多"和"参数不对"
+}
+
+/** ⑤：非群键（有人拿单聊键来导）不进 IN，剔空了要响。 */
+@Test
+void exportRejectsNonGroupKeys() {
+    BizException bx = assertThrows(BizException.class, () -> query.exportRows(
+        TENANT, ACCOUNT, "whatsapp", List.of("8613800000000@c.us")));
+    assertEquals(40000, bx.getCode());
+    verify(stateMapper, never()).selectByGroup(any(), any(), any(), any());
+}
+
+/** ⑥：sort=stale 那一路未建档（last_snapshot_at IS NULL）排最前；默认那一路仍是新的在前。 */
+@Test
+void staleSortPutsNeverSnapshottedGroupsFirst() {
+    ArgumentCaptor<QueryWrapper<ChatGroup>> cap = ArgumentCaptor.forClass(QueryWrapper.class);
+    when(groupMapper.selectPage(any(), cap.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+    query.pageGroups(TENANT, ACCOUNT, "whatsapp", 1, 200, "stale");
+
+    String seg = cap.getValue().getSqlSegment();
+    int first = seg.indexOf("last_snapshot_at");
+    assertTrue(first > 0 && seg.startsWith("ISNULL(", first - 7, first),
+        "未建档的群没排在最前: " + seg);
+
+    query.pageGroups(TENANT, ACCOUNT, "whatsapp", 1, 200, null);
+    assertFalse(cap.getAllValues().get(1).getSqlSegment().contains("ISNULL("), "默认顺序被顺手改成了旧→新");
+}
+```
+
+夹具（写侧那份的私有方法，别写成 `public`）：
+
+```java
+    private static GroupMemberBatchDTO.EventItem event(String type, String dedup) {
+        GroupMemberBatchDTO.EventItem e = new GroupMemberBatchDTO.EventItem();
+        e.setChatKey(GROUP);
+        e.setMemberKey(MEMBER);
+        e.setEventType(type);
+        e.setOccurredAtEpochSec(1_700_000_000L);
+        e.setDedupKey(dedup);
+        e.setSource("live_event");
+        return e;
+    }
+
+    private static GroupMemberBatchDTO batchWithSnapshot(int n) {
+        return batchWithSnapshot(n, "+8613800000000");
+    }
+
+    private static GroupMemberBatchDTO batchWithSnapshot(int n, String phone) {
+        List<GroupMemberBatchDTO.ParticipantItem> parts = new ArrayList<>();
+        for (int i = 0; i < n; i++) {
+            GroupMemberBatchDTO.ParticipantItem p = new GroupMemberBatchDTO.ParticipantItem();
+            p.setMemberKey(i == 0 ? MEMBER : "861380000000" + i + "@c.us");
+            p.setPhone(phone);
+            p.setDisplayName("成员" + i);
+            p.setRoleType("member");
+            parts.add(p);
+        }
+        GroupMemberBatchDTO.SnapshotItem snap = new GroupMemberBatchDTO.SnapshotItem();
+        snap.setChatKey(GROUP);
+        snap.setParticipants(parts);
+        GroupMemberBatchDTO dto = new GroupMemberBatchDTO();
+        dto.setAccountId(ACCOUNT);
+        dto.setSnapshot(snap);
+        return dto;
+    }
+```
+
+- [ ] **Step 4: 跑到红**
+
+```bash
+export JAVA_HOME="C:/Program Files/Java/jdk-17.0.18"
+set -o pipefail
+cd /d/SmartSCRM/apps/server
+powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p7b-kill8180.ps1
+./mvnw -Dtest='GroupMember*CalibrationTest' test 2>&1 | tee /d/SmartSCRM/tmp/p8b-red.log | tail -40
+```
+期望：编译期就红（`markGate` / `insertIgnore` / `MemberPageVO` / 新签名不存在）。**先把编译门槛清掉再谈测试红**：Step 5 先补方法签名与空实现，Step 6 起逐条改到红变绿。把「几条红、红在哪」记进提交正文。
+
+- [ ] **Step 5: 补齐新签名，让编译过**
+
+`ChatGroupMapper` 的两条（③）、`GroupMemberEventMapper.insertIgnore`、`MemberPageVO`、`GroupVO` 的两个新键、`pageGroups`/`customerGroups` 的新参数。此步**只加不改**：新方法先 `throw new UnsupportedOperationException()`，服务层调用点先接上；跑一次 `./mvnw -Dtest='GroupMember*CalibrationTest' test`，期望换成「`UnsupportedOperationException`」与断言失败两种红。
+
+- [ ] **Step 6: ③ 覆盖率闸读数**
+
+`markSnapshotSuccess` 实现成五列一起写、`markGate` 只写两列（SQL 见上），`reconcileSnapshot` 末尾：
+
+```java
+        if (allowed) {
+            ChatGroup after = groupMapper.selectByKey(tenantId, acc.platform(), acc.accountId(), chatKey);
+            if (after != null) {
+                groupMapper.markSnapshotSuccess(after.getId(), cur, coverage, reason, now);
+            }
+        } else if (group != null) {
+            groupMapper.markGate(group.getId(), coverage, reason, now);
+        }
+```
+
+读侧 `pageMembers` 尾巴换成「只读列、不现场算」，并把 `MemberPage` 内部 record 删掉、改回 `MemberPageVO`：
+
+```java
+        ChatGroup g = groupMapper.selectByKey(tenantId, platform, accountId, chatKey);
+        // 新鲜度读闸落下来的那两列，不在这里现场算：现场算用的是**当前这一页**的在群数，
+        // 翻页会给出不同的 coverage，而 §8 那句"本次未做退群判定"必须只有一个答案。
+        Double coverage = g == null ? null : g.getLastCoverage();
+        String reason = (g == null || g.getLastReconcileReason() == null)
+            ? "no_snapshot" : g.getLastReconcileReason();
+        return new MemberPageVO(PageResult.of(vos, p.getTotal(), p.getCurrent(), p.getSize()), coverage, reason);
+```
+
+`GroupMemberController.members` 的返回从 `Map.of(...)` 换成 `ApiResponse<MemberPageVO>`（`Map.of` 不许 null，那正是 `coverage` 今天被压成 `""` 的原因）。Controller 里那段「名单与新鲜度同一份响应」的注释搬过来别丢。
+
+`GroupVO` 两处构造点补上 `g.getLastCoverage(), g.getLastReconcileReason()`。
+
+- [ ] **Step 7: ①②⑥ 读侧的 wrapper 换成 QueryWrapper**
+
+```java
+    // 成员名单（①②）。用 QueryWrapper 的字符串列名，为的是那一条 ORDER BY：
+    // MP 的 lambda 排序给不出 ISNULL(...) 这种表达式，而 MySQL 的 ASC 会把 NULL 排在最前，
+    // 于是"没有进群时间的人"占满第一页——那正是 R36 要消掉的形状。
+    QueryWrapper<GroupMemberState> w = new QueryWrapper<GroupMemberState>()
+        .eq("tenant_id", tenantId).eq("account_id", accountId)
+        .eq("platform", platform).eq("chat_key", chatKey);
+    if (isInGroup != null) w.eq("is_in_group", isInGroup ? 1 : 0);
+    if (role != null && !role.isBlank()) w.eq("role_type", role);
+    String like = SearchPattern.like(q);
+    if (like == null) {
+        // null 的契约是"不该发起搜索"（SearchPattern:10-13）。词只由 %/_ 组成时给空名单，
+        // 给全表就是拿一次误输入换一遍群扫描。
+        return new MemberPageVO(PageResult.of(List.<GroupMemberVO>of(), 0L, Math.max(1, page),
+            Math.min(Math.max(1, size), 200)), null, "no_snapshot");
+    }
+    w.and(x -> x.apply("display_name LIKE {0}", like)
+        .or().apply("phone LIKE {0}", like)
+        .or().apply("member_key LIKE {0}", like));
+    w.orderByAsc("ISNULL(latest_join_at)", "latest_join_at", "first_seen_at", "id");
+```
+
+**这一段的两个坑**：① `q == null`（没在搜）时 `SearchPattern.like` 同样返回 `null`，所以「不搜」与「搜了个只含通配符的词」在这条分支上撞车——必须**先分**：`q` 本身为空就跳过整个搜索块（正常查全量），`q` 非空而 `like == null` 才返回空名单。写成上面那样会让不带 `q` 的名单永远空，而测试里那格 `wildcardOnlyQuery...` 恰好看不出这个错（它传的 `q` 非空）。补一条测试：`pageMembers(..., q = null, ...)` 必须 `verify(stateMapper).selectPage(any(), any())`。② `apply` 的 `{0}` 是 MP 的占位而不是 `?`，写成 `{0}` 之外任何形式都会在真库上以参数数量不匹配收场。
+
+`pageGroups`（⑥）：
+
+```java
+    public PageResult<GroupVO> pageGroups(Long tenantId, Long accountId, String platform,
+                                          int page, int size, String sort) {
+        Page<ChatGroup> p = new Page<>(Math.max(1, page), Math.min(Math.max(1, size), 200));
+        QueryWrapper<ChatGroup> w = new QueryWrapper<ChatGroup>()
+            .eq("tenant_id", tenantId).eq("account_id", accountId).eq("platform", platform);
+        if ("stale".equals(sort)) {
+            // 建档泵那一支（R28 / R41）：没成功快照的最前，其余按上次成功快照从旧到新。
+            w.orderByAsc("ISNULL(last_snapshot_at)", "last_snapshot_at", "id");
+        } else {
+            w.orderByDesc("last_snapshot_at").orderByDesc("id");
+        }
+        ...
+```
+
+`Controller.groups` 加 `@RequestParam(required = false) String sort` 并透传。**后端不认识 `sort` 之前它也不报错**（Spring 忽略未声明的请求参数），所以 Task 9 可以先接线、本任务再补读数——但两者都进 `main` 之后，`sort=stale` 才有真顺序。
+
+- [ ] **Step 8: ④ 客户反查按账号收窄**
+
+```java
+    public List<GroupVO> customerGroups(Long tenantId, Long accountId, String platform, Long customerId) {
+        ...
+        List<GroupMemberState> byCustomer = stateMapper.selectList(new LambdaQueryWrapper<GroupMemberState>()
+            .eq(GroupMemberState::getTenantId, tenantId)
+            .eq(GroupMemberState::getAccountId, accountId)
+            .eq(GroupMemberState::getPlatform, platform)
+            .eq(GroupMemberState::getCustomerId, customerId));
+        ...   // 按号码那一路同样加这两个条件
+```
+
+`Controller.customerGroups` 加 `@RequestParam Long accountId`（**必填**），先 `service.resolveAccount(...)` 拿 platform 再传下去——与另外四支读端点同一条租户/账号闸。
+
+- [ ] **Step 9: ⑤ 导出去重、错误码与群键形态**
+
+```java
+        List<String> keys = new ArrayList<>(new LinkedHashSet<>(chatKeys));   // 先去重（R40）
+        keys.removeIf(k -> k == null || k.isBlank() || !ChatKeys.isGroup(k));
+        if (keys.isEmpty()) {
+            throw new BizException(40000, "chatKeys 里没有一个是群键");
+        }
+        if (keys.size() > MAX_EXPORT_GROUPS) {
+            // 40016 而不是 40000：界面要能把"选太多"与"参数不对"分成两句文案说，
+            // 前者的下一步是少勾两个群，后者的下一步是看请求怎么拼的。
+            throw new BizException(40016, "一次最多导出 " + MAX_EXPORT_GROUPS + " 个群，当前 " + keys.size());
+        }
+        for (String chatKey : keys) {   // 行序：入参顺序 = 去重后保留的首次出现顺序
+```
+
+`seq` 仍只由这一段写（R22）。**两句 40016 的话不完全一样，别当成回填漏了**：Task 8 正文（`EXPORT_GROUP_MAX`、「当前 N 个」）是当时的预测，已提交代码（读码 `GroupMemberQueryService.java:39,259`）用的是 `MAX_EXPORT_GROUPS`、「当前 N」不带尾「个」，本节按已提交的那句改常量名与码数、只把 `40000` 换成 `40016`。这句话不进界面（Task 16 技术要点 8），Task 14 的 12.1 只断 `code`，所以两种写法都不会被腿读到——但下游要照**已提交**那句，别照正文。
+
+- [ ] **Step 10: ⑦⑧ 写侧**
+
+`GroupMemberEventMapper`：加 `insertIgnore(GroupMemberEvent e)`（单条 `INSERT IGNORE`，列清单照 `insertIgnoreBatch` 那份逐字抄，别漏 `group_title`），**删掉 `insertIgnoreBatch`**。注释里保留那句「返回值 = 真正插入的行数」，并补一句它为什么单条：批量只给得出总数，给不出「哪几行是新的」，而投影必须按行决定。
+
+`GroupMemberService.ingest` 开头加长度闸（⑧），常量照 §A.2 的 V12 列宽：
+
+```java
+        requireFits("chatKey", dto.getSnapshot() == null ? null : dto.getSnapshot().getChatKey(), CHAT_KEY_MAX);
+        if (dto.getGroups() != null) {
+            for (GroupItem g : dto.getGroups()) {
+                if (g != null) requireFits("chatKey", g.getChatKey(), CHAT_KEY_MAX);
+            }
+        }
+        if (dto.getSnapshot() != null && dto.getSnapshot().getParticipants() != null) {
+            for (ParticipantItem p : dto.getSnapshot().getParticipants()) {
+                if (p != null) requireFits("memberKey", p.getMemberKey(), MEMBER_KEY_MAX);
+            }
+        }
+        if (dto.getEvents() != null) {
+            for (EventItem e : dto.getEvents()) {
+                if (e != null) {
+                    requireFits("chatKey", e.getChatKey(), CHAT_KEY_MAX);
+                    requireFits("memberKey", e.getMemberKey(), MEMBER_KEY_MAX);
+                    requireFits("dedupKey", e.getDedupKey(), DEDUP_KEY_MAX);
+                }
+            }
+        }
+```
+
+`resolveAccount` 之后、任何 upsert 之前跑这一段——**闸在任何写动作之前**，否则一条超长键会留下"前面的都写了、这条抛 500"的半套事务（同一 `@Transactional` 会回滚，但 `upsertGroup` 那些 `ON DUPLICATE KEY` 的副作用在回滚前会占着行锁，别去试那个形状）。
+
+`upsertFromSnapshot` 那一处（⑧ / R38）：
+
+```java
+            String normalized = ChatKeys.normalizePhone(p.getPhone());
+            e.setPhone(normalized == null || normalized.length() > PHONE_MAX ? null : normalized);
+            e.setDisplayName(clip(trimToNull(p.getDisplayName()), DISPLAY_NAME_MAX));
+```
+
+- [ ] **Step 11: 全量 Java 绿**
+
+```bash
+export JAVA_HOME="C:/Program Files/Java/jdk-17.0.18"
+set -o pipefail
+cd /d/SmartSCRM/apps/server
+./mvnw test 2>&1 | tee /d/SmartSCRM/tmp/p8b-test.log | tail -30
+```
+期望：`BUILD SUCCESS`，测试总数 = 接线前 + 12（写侧 6 + 读侧 6，逐格点名）。日志落在 `tmp/p8b-test.log`（gitignored），条数记进提交正文。**这一档不许用「之前有几条红的」放宽**：P7 之前 `./mvnw test` 是绿的，红了就是本任务弄的。
+
+- [ ] **Step 12: 起服让 V13 生效 + 表形状探针实测**
+
+```bash
+export JAVA_HOME="C:/Program Files/Java/jdk-17.0.18"
+set -o pipefail
+cd /d/SmartSCRM/apps/server
+powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p7b-kill8180.ps1
+./mvnw -q -DskipTests package
+java -jar target/*.jar 2>&1 | tee /d/SmartSCRM/tmp/p8b-server.log &
+# 等 :8180 起来（条件轮询，不 sleep）
+for i in $(seq 1 60); do curl -sf http://localhost:8180/api/health >/dev/null && break; sleep 1; done
+javac -cp "$(cat /d/SmartSCRM/tmp/mvn-cp.txt)" -d /d/SmartSCRM/tmp/p8bcls /d/SmartSCRM/tmp/P8Tables.java 2>/dev/null || true
+node /d/SmartSCRM/tmp/p8b-tables.mjs   # 见下：JDBC 走 java，或直接用现成的 P6Tables 形状
+```
+
+**Flyway 只在启动时跑**，所以 V13 必须靠这一次重启才进库。表形状的实测按老规矩走 `tmp/*.java` 的 JDBC 探针（`tmp/P6Tables.java` 是形状先例）：读 `information_schema.COLUMNS`，断言 `chat_group` 有 `last_coverage`（`double`、`IS_NULLABLE=YES`）与 `last_reconcile_reason`（`varchar(24)`）两列，缺任何一列 exit 1。**探针脚本不落 git，但日志要 tee 进 `tmp/`**，否则这一格停在「推断」。
+
+- [ ] **Step 13: 文档同步 + 提交**
+
+- 本计划：§A.1 交付状态表加一行（8b 已交付 + commit 号）；§A.2 里那三处「当前实现是缺陷」的括注改成「已修（8b）」；Task 9 的 `lastCoverage` 可选注释与 `sort` 参数注释各加一句「8b 之后后端给这两个键」。
+- `docs/superpowers/specs/2026-09-30-group-member-analysis-design.md`：§7 的 `GET /groups` 补 `sort` 参数、`GET /customer/{id}/groups` 补 `accountId`、导出超限那句把「400」改成 40016 的口径；§3 的 `chat_group` 列清单补两列。**spec 只写规则，不与旧版比较。**
+
+```bash
+cd /d/SmartSCRM
+git add apps/server/src/main/java apps/server/src/main/resources/db/migration/V13__group_gate_reading.sql \
+        apps/server/src/test/java/com/smartscrm/server/service apps/desktop/src/shared/groupMembers.ts \
+        docs/superpowers/specs/2026-09-30-group-member-analysis-design.md \
+        docs/superpowers/plans/2026-09-30-group-member-analysis.md
+git commit -m "$(cat <<'EOF'
+fix(P8/B6): 后端校准八条——闸读数落库、搜索转义、行序、账号收窄、导出与事件投影
+
+已交付的 Java 层形状是权威（R30），但八处语义与 spec 冲突，逐条改回：
+闸读数落 V13 两列并换 record 容器（Map.of 把 null 压成空串）；名单排序 ISNULL 沉底；
+搜索走 SearchPattern 不再二次包 %；客户反查按账号收窄；导出去重早于计数并给 40016；
+事件投影按 affected rows（批量 INSERT IGNORE 说不出哪几行是新的）；入参长度整批拒收、phone 入库即归一。
+
+同时补上 3771927 那一层缺的 JUnit：12 条，先红后绿。
+EOF
+)"
+```
+
+**提交前自查**：`git status --short` 里不许出现 `tmp/` 下任何东西、不许出现 `apps/desktop/tsconfig.node.tsbuildinfo`、差距表 `docs/notes/2026-09-22-legacy-feature-gap.md` 永不进暂存。
+
+---
+
 ## Task 9: 主进程 `groupCollect/api.ts`（泵用的三跳）+ unit 闸门接线
 
 **Files:**
@@ -2648,19 +3380,19 @@ EOF
 - Modify: `apps/desktop/package.json`（`test:unit` 的 glob 列表补一条）
 
 **Interfaces:**
-- Consumes：Task 5 的 `GroupBatchDTO` / `GroupBatchVO`、Task 7 的 `PageResult<GroupRowVO>`、Task 8 的 `List<GroupExportRowVO>`——字段名逐字取自那三节。
-- Produces（Task 10 的攒批器、Task 11 的泵、Task 12 的导出全从这里取型）：
-  - shared：`GroupReconcileReason` `GroupSnapshotPayload` `GroupBatchPayload` `GroupBatchResult` `PageWire<T>` `GroupRowWire` `GroupExportRowWire`
+- Consumes：Task 5 的 `GroupMemberBatchDTO` / `IngestResult`、Task 7 的 `PageResult<GroupVO>`、Task 8 的 `List<GroupExportRowVO>`——**字段名逐字取自 §A.2**（那三节的正文是设计过程记录，与 §A.2 冲突处以 §A.2 为准）。
+- Produces（Task 10 的攒批器、Task 11 的泵、Task 13 的导出全从这里取型）：
+  - shared（追加，不动已交付的那 327 行）：`GroupListWire` `GroupSnapshotPayload` `GroupBatchPayload` `GroupIngestResult` `PageWire<T>` `GroupRowWire` `GroupExportRowWire`；**外加 §A.3 缺的那七个常量** `CHAT_KEY_MAX=128` `MEMBER_KEY_MAX=160` `DEDUP_KEY_MAX=160` `GROUP_BODY_MAX=512` `EVENT_BATCH_SIZE=100` `EVENT_BATCH_INTERVAL_MS=2_000` `EVENT_QUEUE_MAX=5_000`（Task 2 正文写了、实现没落；下游按它们判长度与攒批）。**`CoverageReason` 已在 shared 交付，本任务不重复声明、不改它的四值**（R33）；`GroupIngestResult.reason` 就是它。`GroupListWire` 是新声明：已交付的 `chatTypes.ts:148` 把同一个形状内联写在 `group_list_result` 帧里，本任务把它提到 shared 给 POST 体与渲染层共用，**不动 `chatTypes.ts`**（两处形状由 Step 1 末尾那条形状锁住，判据是 `typecheck:unit`）。
   - api：`type Fetcher`、`interface GroupApiOptions { fetcher: Fetcher; onError?: (where: string, e: unknown) => void }`、`createGroupApi(opts): GroupApi`、`type GroupApi = ReturnType<typeof createGroupApi>`
-    - `postBatch(payload: GroupBatchPayload): Promise<GroupBatchResult | null>`
-    - `groups(accountId: number, page: number, size: number): Promise<PageWire<GroupRowWire> | null>`
+    - `postBatch(payload: GroupBatchPayload): Promise<GroupIngestResult | null>`
+    - `groups(accountId: number, page: number, size: number, sort?: 'stale'): Promise<PageWire<GroupRowWire> | null>`（`sort` 是 Task 8b ⑥ / R41 那一支；泵传 `'stale'`）
     - `exportRows(accountId: number, chatKeys: string[]): Promise<GroupExportRowWire[] | null>`
 
 **技术要点**
 
 - **工厂形状取 `batchApi.ts` 那一份，不取 `msgApi.ts` 那一份**：`msgApi` 是 `{ token, apiBase, fetchImpl }` 的老形状，每次调用现取一次令牌，**没有 401→刷新→重试**；`batchApi` 走 `authedFetch`（`main/services/authedFetch.ts`：401 时共用一条 in-flight 的 `refreshAccessToken`，只重放一次）。泵的 `POST /batch` 一旦赶上令牌到期，老形状会把整批事件变成 401 丢弃，而新形状只是慢一跳。**这条判据写给下一个采集面用**：主进程新开的 HTTP 面默认接 `authedFetch`，除非它比消息量小三个数量级。
 - **只有三跳，不是六跳**：`/group/members`、`/group/events`、`/customer/{id}/groups` 三支不进主进程——渲染层有自己的 `renderer/src/lib/http.ts`（自带 token 对、401 刷新链、`code!==0 ⇒ throw ApiError`），P6/P7 的读面全走它。主进程只留「泵要写的」（`postBatch`）、「泵要读的」（`groups`）、「导出要落盘的」（`exportRows`）。**少写的三跳不是偷懒**：把它们做成 IPC 转发会得到三份没人调用的代码 + 两条 IPC 白名单，而界面将来读它们时用的是渲染层那一份。记 R26。
-- **`null` 只有一种含义：这一跳没成**（非 2xx / `code!==0` / `code=0` 但缺 `data` / `fetcher` 抛，四类都落到 `onError` 再塌 `null`）。Task 11 的泵靠它区分「重试一次」与「放弃这一轮」；`GroupBatchResult` 里 `eventsAccepted=0` 是**成了但一条没收**，两者混成一件事就会让泵对着一个已经写坏的后端一直重试。这与 `batchApi.retryFailed` 当年把「没成」与「没有 failed 行」分开是同一格教训。
+- **`null` 只有一种含义：这一跳没成**（非 2xx / `code!==0` / `code=0` 但缺 `data` / `fetcher` 抛，四类都落到 `onError` 再塌 `null`）。Task 11 的泵靠它区分「重试一次」与「放弃这一轮」；`GroupIngestResult` 里 `eventsInserted=0` 是**成了但一条没收**（多半是重复上报），两者混成一件事就会让泵对着一个已经写坏的后端一直重试。这与 `batchApi.retryFailed` 当年把「没成」与「没有 failed 行」分开是同一格教训。
 - **`exportRows` 的分隔符不能被编码**：后端签名是 `@RequestParam List<String> chatKeys`，Spring 按**裸逗号**拆分。正确做法是逐个 `encodeURIComponent` 之后 `join(',')`；整串编码会把分隔符变成 `%2C`，Spring 就收到一个「50 个群键黏在一起」的怪键，导出静默返回 0 行。**判别力**：测试断言 path 里既有 `%40`（每个 `@` 被编码）又有裸 `,`（分隔符没被编码）——只断言「不含 `%2C`」的话，把整个 join 结果再编码一次的实现也能过（`@` 也没编码），而那恰恰是坏的。
 - **群键里不能有逗号**这条前提在 Task 8 的注释里已经钉过（WA 群键 `<数字>-<数字>@g.us`）；`exportRows` 不做逗号剥离，剥离就是把前提当参数校验糊过去。
 - **50 个键的 URL 长度 ~1.5KB**，远在 Tomcat 默认 8KB 请求头上限内；**不要**为了「将来也许能导 500 群」把它改成 POST——那一改行序契约（R22）就要多一处出口。
@@ -2675,7 +3407,8 @@ EOF
 import assert from 'node:assert/strict'
 import { test } from 'node:test'
 import { createGroupApi } from './api.ts'
-import type { GroupBatchPayload } from '../../../shared/groupMembers.ts'
+import type { BridgeReport } from '../../../shared/chatTypes.ts'
+import type { GroupBatchPayload, GroupListWire } from '../../../shared/groupMembers.ts'
 
 const json = (body: unknown, status = 200): Response =>
   new Response(JSON.stringify(body), { status, headers: { 'content-type': 'application/json' } })
@@ -2701,15 +3434,17 @@ test('postBatch：信封 code=0 才认，返回 data 原文；path 与 body 逐�
         code: 0,
         message: 'ok',
         data: {
-          eventsAccepted: 1, eventsDuplicated: 0, membersUpserted: 0,
-          reconciled: true, coverage: null, reason: 'first_build', reasons: []
+          groupsUpserted: 0, eventsInserted: 1,
+          reconciled: false, coverage: null, reason: 'no_snapshot'
         }
       })
     }
   })
   const out = await api.postBatch(payload)
-  assert.equal(out?.reason, 'first_build')
-  assert.equal(out?.eventsAccepted, 1)
+  assert.equal(out?.reason, 'no_snapshot')
+  assert.equal(out?.eventsInserted, 1)
+  // 判别力：把「这一跳没成」与「成了但没做判退」混成一件事的实现，这里会塌成 null 或给出 reconciled=true。
+  assert.equal(out?.reconciled, false)
   assert.equal(calls[0].path, '/api/group-members/batch')
   assert.ok(calls[0].body.includes('"accountId":7'), calls[0].body)
   assert.ok(calls[0].body.includes('"source":"system_message"'), calls[0].body)
@@ -2722,8 +3457,10 @@ test('groups：accountId/page/size 进 query，整页原样返回（泵要的是
       seen.push(path)
       return json({ code: 0, data: {
         records: [{
-          chatKey: '120363111@g.us', title: 'G', participantCount: 30, inGroupCount: 28,
-          lastSnapshotAt: '2026-09-30T10:00:00', snapshotCount: 2, isFinal: 0,
+          chatKey: '120363111@g.us', title: 'G', platform: 'whatsapp',
+          participantCount: 30, inGroupCount: 28,
+          lastSnapshotAt: '2026-09-30T10:00:00', snapshotCount: 2, isFinal: false,
+          // 这两格要等 Task 8b ③（V13 + 落库）才有读数；那之前后端不给这两个键。
           lastCoverage: 0.9333, lastReconcileReason: 'ok', lastEventAt: null
         }],
         total: 1, page: 1, pageSize: 200
@@ -2734,6 +3471,11 @@ test('groups：accountId/page/size 进 query，整页原样返回（泵要的是
   assert.equal(seen[0], '/api/group-members/groups?accountId=7&page=1&size=200')
   assert.equal(out?.records[0].lastSnapshotAt, '2026-09-30T10:00:00')
   assert.equal(out?.pageSize, 200)
+  // `isFinal` 是 JSON 布尔（§A.2 ②：Java `boolean` → `true|false`），不是 0/1。
+  // 判据写成 `=== false`：用 `!r.isFinal` 的话，`0`、`undefined`、`null` 都能冒充"没解散"。
+  assert.equal(out?.records[0].isFinal, false)
+  await api.groups(7, 1, 200, 'stale')   // 泵那一支（R28 / R41，Task 8b ⑥ 交付这一参数）
+  assert.equal(seen[1], '/api/group-members/groups?accountId=7&page=1&size=200&sort=stale')
 })
 
 // 这一格是全文件最容易静默坏掉的地方：分隔符一旦被编码，后端收到一个 50 群黏在一起的键，
@@ -2801,6 +3543,29 @@ test('宿主的日志实现抛异常不该把这一跳变成抛：postBatch 仍�
   })
   assert.equal(await api.postBatch(payload), null)
 })
+
+/**
+ * 形状锁（Step 3 那条「不动 `chatTypes.ts`」的兑现处）。
+ *
+ * `GroupListWire` 与 `group_list_result` 帧里的内联 `{chatKey, title}` 是同构的两份声明，光看代码
+ * 谁也不会发现它们错开——直到渲染层拿到一个 `title: undefined` 的空列。这里让同一份对象**两个方向**
+ * 各赋一次：帧改成 `{chatKey, name}` 或 shared 多出必填键，`typecheck:unit` 就编译不过（运行期这两个
+ * 断言只是普通赋值，`node --test` 不会因它们变化，所以**判据是四路 typecheck，不是这条测试红**）。
+ */
+type FrameGroupItem = Extract<BridgeReport, { kind: 'group_list_result' }> extends {
+  groups?: infer G
+}
+  ? NonNullable<G>[number]
+  : never
+
+test('shared 的 GroupListWire 与桥帧里的群项同形（双向赋值，错开则 typecheck 红）', () => {
+  const wire: GroupListWire = { chatKey: '120363111@g.us', title: null }
+  const fromFrame: FrameGroupItem = wire
+  const backToWire: GroupListWire = fromFrame
+  void fromFrame
+  assert.equal(backToWire.chatKey, '120363111@g.us')
+  assert.equal(backToWire.title, null)
+})
 ```
 
 - [ ] **Step 2: 跑到红**
@@ -2816,21 +3581,44 @@ cd /d/SmartSCRM/apps/desktop && node --test src/main/services/groupCollect/api.t
 
 ```ts
 /**
- * Task 9：主进程 ↔ 后端的三份线形。读端点里只有 `groups` 与 `export-rows` 进主进程——
+ * Task 9：主进程 ↔ 后端的线形。读端点里只有 `groups` 与 `export-rows` 进主进程——
  * 成员名单 / 流水 / 客户反查由渲染层自己的 `lib/http.ts` 读（它自带 token 对与 401 刷新链），
- * 所以这三份类型同样放这里给两侧共用（R26、R27）。
+ * 所以这些类型同样放这里给两侧共用（R26、R27）。
+ *
+ * 键名一律照 §A.2 的已提交后端，不照 Task 5/7/8 正文里那些设计名——那两个计数、
+ * `reasons[]`、三值 reason 都不存在，抄过来会得到一份"看着有类型、读出来全是 undefined"的契约。
+ *
+ * **Task 2 正文里那九个常量只落了五个**（§A.3）：长度闸与攒批常量在已交付的 shared 里**不存在**，
+ * 而 Task 10/11/13 要消费它们。本任务补齐，数字一律照 §A.2 的 V12 列宽——列宽才是会让 INSERT
+ * 报错的那道闸，不是设计稿里的数。
  */
-export type GroupReconcileReason = 'ok' | 'first_build' | 'coverage_too_low'
+export const CHAT_KEY_MAX = 128
+export const MEMBER_KEY_MAX = 160
+/** `dedup_key` 与 `member_key` 今天同为 160，但分开命名：它俩约束的是不同的列。 */
+export const DEDUP_KEY_MAX = 160
+export const GROUP_BODY_MAX = 512
 
-/** `GroupSnapshotDTO`。「空名单不当成功快照」的判定在页内（Task 3）与后端（Task 6）各一道闸（R20）。 */
+export const EVENT_BATCH_SIZE = 100
+export const EVENT_BATCH_INTERVAL_MS = 2_000
+/** 事件不像消息行可以「同步历史」补底：越界即永久缺口，所以这一格必须带 dropped 计数（Task 10/12）。 */
+export const EVENT_QUEUE_MAX = 5_000
+
+/** 群名单的一行。已交付的 `chatTypes.ts:148` 把同一形状内联在 `group_list_result` 帧里，这里提到 shared 给 POST 体用；**不改 `chatTypes.ts`**，两者结构相同即可，Step 1 末尾那条形状锁住它。 */
+export interface GroupListWire {
+  chatKey: string
+  title: string | null
+}
+
+/**
+ * 快照那一跳的体。刻意**只有** `chatKey` + `participants`：`GroupMemberBatchDTO.SnapshotItem`
+ * 就这两个字段（R34），页内帧上的 `participantCount` / `truncated` 到主进程为止，发不出去也不该发。
+ */
 export interface GroupSnapshotPayload {
   chatKey: string
   participants: GroupParticipantWire[]
-  participantCount: number
-  truncated?: boolean
 }
 
-/** `GroupBatchDTO`：一次 POST 可以只带 events（攒批）、只带 groups（建档首轮）、或 groups + snapshot（每群一跳）。 */
+/** `GroupMemberBatchDTO`：一次 POST 可以只带 events（攒批）、只带 groups（建档首轮）、或 groups + snapshot（每群一跳）。 */
 export interface GroupBatchPayload {
   accountId: number
   groups?: GroupListWire[]
@@ -2838,15 +3626,17 @@ export interface GroupBatchPayload {
   events?: GroupEventWire[]
 }
 
-/** `GroupBatchVO`。`coverage=null` = 首建或本次没做快照；`reasons` 是逐条拒收文案，只进日志不进界面。 */
-export interface GroupBatchResult {
-  eventsAccepted: number
-  eventsDuplicated: number
-  membersUpserted: number
+/**
+ * `IngestResult`（§A.2 ①）：两个计数 + 判退结论。
+ * `coverage=null` 有两种——首次建档（没有分母可除）与这一批没做快照，靠 `reason` 分：`first_build` vs `no_snapshot`。
+ * 后端**不给** `reasons[]`（逐条拒收文案这一层不存在，R32），别在这里声明一个永远 undefined 的字段。
+ */
+export interface GroupIngestResult {
+  groupsUpserted: number
+  eventsInserted: number
   reconciled: boolean
   coverage: number | null
-  reason: GroupReconcileReason
-  reasons?: string[]
+  reason: CoverageReason
 }
 
 /** `PageResult<T>` 的线上形状：注意字段是 `pageSize`，不是 `size`。 */
@@ -2858,41 +3648,52 @@ export interface PageWire<T> {
 }
 
 /**
- * `GroupRowVO`。两个口径别混：`lastEventAt` 来自流水表，「最近聊天时间」来自 `chat_message`（Task 8）。
- * 日期一律当不透明字符串：泵只拿 `lastSnapshotAt` 排序，不做时区运算（后端 `MsgTimes.CHAT_ZONE` 是唯一折算处）。
+ * `GroupVO`（§A.2 ②）的线上形状。两个口径别混：`lastEventAt` 来自流水表，「最近聊天时间」是成员/导出那一层从 `chat_message` 聚合的（Task 8）。
+ * 日期一律当不透明字符串：泵只按后端给的位置排建档优先级（R28），不做时区运算（后端 `MsgTimes.CHAT_ZONE` 是唯一折算处）。
  */
 export interface GroupRowWire {
   chatKey: string
   title: string | null
+  /** 由账号反查得出（`platform_account.platform_type`），客户端说了不算。 */
+  platform: string
   participantCount: number | null
-  inGroupCount: number
-  lastSnapshotAt: string | null
+  inGroupCount: number | null
   snapshotCount: number
-  /** `tinyint(1)` → Java `Integer` → JSON `0|1`。不是 boolean：判 `=== 1` 而不是判真值，`null` 与 0 是两件事。 */
-  isFinal: number
-  lastCoverage: number | null
-  lastReconcileReason: GroupReconcileReason | null
+  lastSnapshotAt: string | null
+  /**
+   * Java `boolean` → JSON `true | false`，**不是 0/1**（§A.2 ②）。
+   * 判 `=== true` / `=== false`，不判真值：`undefined`（后端没给这一键）在真值判法下会冒充"没解散"。
+   */
+  isFinal: boolean
+  /** 闸读数（R1 / R35）：Task 8b ③ 之前后端**不给这两个键**，所以类型上是可选。 */
+  lastCoverage?: number | null
+  lastReconcileReason?: CoverageReason | null
   lastEventAt: string | null
 }
 
-/** `GroupExportRowVO`：14 列的取数结果，列序由 `GROUP_EXPORT_COLUMNS` 定，行序由后端定（R22）。 */
+/**
+ * `GroupExportRowVO`（§A.2 ⑥）：14 列的取数结果，列序由 `EXPORT_COLUMNS` 定，行序由后端定（R22）。
+ *
+ * 三处与"成员行"不同，抄错就会得到一列 `undefined`：群键这一列叫 **`groupId`** 不叫 `chatKey`；
+ * **没有** `memberKey` / `displayName` / `firstSeenAt`（14 列本来不含它们，人名列叫 `name`、角色列叫 `role`）；
+ * `inGroup` 已经是**中文串** `'是' | '否'`（后端格式化过），主进程再映射一次就是把同一个事实写两个词。
+ * `role` 与 `exitMethod` 仍是原始码，进表格时才过 `groupRoleLabel` / `exitMethodLabel`（Task 13）。
+ */
 export interface GroupExportRowWire {
   seq: number | null
   groupName: string | null
-  chatKey: string
-  memberKey: string
+  groupId: string
   phone: string | null
-  displayName: string | null
-  roleType: string | null
-  isInGroup: number | null
-  latestJoinAt: string | null
+  name: string | null
+  role: string | null
+  inGroup: string | null
+  joinAt: string | null
   joinCount: number | null
-  latestLeaveAt: string | null
+  leaveAt: string | null
   exitMethod: string | null
-  firstSeenAt: string | null
-  lastChatAt: string | null
-  dayCount: number | null
-  totalCount: number | null
+  lastMsgAt: string | null
+  dayMsgCount: number | null
+  msgCount: number | null
 }
 ```
 
@@ -2902,7 +3703,7 @@ export interface GroupExportRowWire {
 // src/main/services/groupCollect/api.ts
 import type {
   GroupBatchPayload,
-  GroupBatchResult,
+  GroupIngestResult,
   GroupExportRowWire,
   GroupRowWire,
   PageWire
@@ -2973,11 +3774,13 @@ export function createGroupApi(opts: GroupApiOptions) {
 
   return {
     postBatch: (payload: GroupBatchPayload) =>
-      call<GroupBatchResult>('/api/group-members/batch', jsonInit(payload)),
+      call<GroupIngestResult>('/api/group-members/batch', jsonInit(payload)),
 
-    groups: (accountId: number, page: number, size: number) =>
+    /** `sort` 只有泵用（R28 / R41）；不传就是后端的默认顺序。这一参数要等 Task 8b ⑥ 落地才有读数，传了也不报错（Spring 忽略未声明的请求参数）。 */
+    groups: (accountId: number, page: number, size: number, sort?: 'stale') =>
       call<PageWire<GroupRowWire>>(
-        `/api/group-members/groups?accountId=${accountId}&page=${page}&size=${size}`,
+        `/api/group-members/groups?accountId=${accountId}&page=${page}&size=${size}` +
+          (sort === undefined ? '' : `&sort=${sort}`),
         { method: 'GET' }
       ),
 
@@ -3052,7 +3855,7 @@ EOF
 - Modify: `apps/desktop/tsconfig.unit.json`（include 补这四支中的两支 `.ts`，测试支靠 Task 9 已接好的 `groupCollect/**` glob 覆盖）
 
 **Interfaces:**
-- Consumes：`BridgeReport`（Task 3 加过三种 `kind` 的那一份联合）、`GroupEventWire` / `EVENT_BATCH_SIZE` / `EVENT_BATCH_INTERVAL_MS` / `EVENT_QUEUE_MAX` / `CHAT_KEY_MAX` / `MEMBER_KEY_MAX` / `GROUP_BODY_MAX` / `SNAPSHOT_TIMEOUT_MS`（`shared/groupMembers.ts`）、`GroupApi`（Task 9）
+- Consumes：`BridgeReport`（Task 3 加过三种 `kind` 的那一份联合）、`GroupEventWire` / `EVENT_BATCH_SIZE` / `EVENT_BATCH_INTERVAL_MS` / `EVENT_QUEUE_MAX` / `CHAT_KEY_MAX` / `MEMBER_KEY_MAX` / `DEDUP_KEY_MAX` / `GROUP_BODY_MAX` / `SNAPSHOT_TIMEOUT_MS`（`shared/groupMembers.ts`——**前四个攒批常量与三个长度常量不在已交付的那 327 行里**，由 Task 9 Step 3 补齐，见 §A.3）、`GroupApi`（Task 9）
 - Produces（Task 11 的泵与 Task 12 的装配全用这些名字）：
   - `type GroupWireResult = Extract<BridgeReport, { kind: 'group_list_result' }> | Extract<BridgeReport, { kind: 'group_snapshot_result' }>`
   - `class GroupRegistry`：`constructor(timeoutMs?: number)`、`get size(): number`、`add(reqId: string, viewId: string): Promise<GroupWireResult | null>`、`settle(result: GroupWireResult): boolean`、`failView(viewId: string): number`、`dispose(): void`
@@ -3383,6 +4186,7 @@ test('空数组不占队列也不起定时器；dispose 后 push 一律不收、
 // src/main/services/groupCollect/collector.ts
 import {
   CHAT_KEY_MAX,
+  DEDUP_KEY_MAX,
   EVENT_BATCH_INTERVAL_MS,
   EVENT_BATCH_SIZE,
   EVENT_QUEUE_MAX,
@@ -3553,7 +4357,7 @@ function groupBy(items: Item[]): EventBatchPayload[] {
 function sanitize(accountId: number, raw: GroupEventWire): Item | null {
   if (!raw || typeof raw !== 'object') return null
   if (!Number.isFinite(accountId) || accountId <= 0) return null
-  if (!fits(raw.chatKey, CHAT_KEY_MAX) || !fits(raw.memberKey, MEMBER_KEY_MAX) || !fits(raw.dedupKey, MEMBER_KEY_MAX)) {
+  if (!fits(raw.chatKey, CHAT_KEY_MAX) || !fits(raw.memberKey, MEMBER_KEY_MAX) || !fits(raw.dedupKey, DEDUP_KEY_MAX)) {
     return null
   }
   if (!Number.isFinite(raw.occurredAtEpochSec)) return null
@@ -3811,83 +4615,46 @@ test('postBatch 返回 null：这一群记 postedFailed，整轮继续，不抛'
 })
 
 test('同账号第二次调用直接 skipped=busy：不排队也不并发', async () => {
-  const pulls: number[] = []
+  const h = harness({ groups: [{ chatKey: 'a@g.us', title: null }] })
   let release: () => void = () => {}
   const gate = new Promise<void>((r) => { release = r })
-  const deps = harness({ groups: [{ chatKey: 'a@g.us', title: null }] })
-  const slow: GroupEngineDeps = {
-    ...deps.engine ? ({} as GroupEngineDeps) : ({} as GroupEngineDeps),
-  }
-  void slow
-  void pulls
-  // 直接用一条会被 gate 住的 pull 造"还在跑"的现场，再断言第二次调用没发出任何新命令。
-  const h = harness()
-  const busy = new GroupEngine({
-    ...(() => {
-      const base = harness({ groups: [{ chatKey: 'a@g.us', title: null }], snapshots: ['ok'] })
-      return {
-        api: base.posts.length >= 0 ? (undefined as unknown as GroupEngineDeps['api']) : (undefined as unknown as GroupEngineDeps['api']),
-        pull: () => { throw new Error('不该走到这里') },
-        viewIdOf: () => 'view-1',
-        sleep: async () => {},
-        now: () => 0,
-        log: () => {}
-      }
-    })()
-  })
-  void busy
-  void gate
-  void release
-  assert.ok(true)
-})
-```
-
-**上面最后一条是占位级的坏测试，不许照抄**——它断言不了任何东西。写这一节时按下面这条实现它，跑绿再提交：
-
-```ts
-test('同账号第二次调用直接 skipped=busy：不排队也不并发', async () => {
-  let releaseFirst: () => void = () => {}
-  const gate = new Promise<void>((r) => { releaseFirst = r })
-  const pulls: string[] = []
-  const deps: GroupEngineDeps = {
-    api: {
-      postBatch: async () => ({ eventsAccepted: 0, eventsDuplicated: 0, membersUpserted: 0, reconciled: true, coverage: null, reason: 'ok' }),
-      groups: async () => ({ records: [], total: 0, page: 1, pageSize: 200 })
-    } as unknown as GroupEngineDeps['api'],
-    // 列表那一跳立刻答，快照那一跳卡在 gate 上：这就是"泵正在跑"的现场。
+  const kinds: string[] = []
+  // 列表那一跳立刻答，快照那一跳卡在 gate 上——这就是「泵正在跑」的现场。
+  const engine = new GroupEngine({
+    ...h.deps,
     pull: async (_viewId, cmd) => {
-      pulls.push(cmd.kind)
+      kinds.push(cmd.kind)
       if (cmd.kind === 'group_list') {
         return { kind: 'group_list_result', reqId: cmd.reqId, ok: true, groups: [{ chatKey: 'a@g.us', title: null }] }
       }
       await gate
-      return { kind: 'group_snapshot_result', reqId: cmd.reqId, chatKey: cmd.chatKey, ok: true, participants: [], participantCount: 0 }
-    },
-    viewIdOf: () => 'view-1',
-    sleep: async () => {},
-    now: () => 0,
-    log: () => {}
-  }
-  const engine = new GroupEngine(deps)
+      return {
+        kind: 'group_snapshot_result', reqId: cmd.reqId, chatKey: cmd.chatKey, ok: true,
+        participants: [member('8613800000001')], participantCount: 9
+      }
+    }
+  })
   const first = engine.runForAccount(7)
-  while (engine.running(7) === false) await new Promise((r) => setTimeout(r, 0))
+  // 有界自旋而不是无限等：等不到「在跑」就是 gate 没生效，直接失败而不是挂死测试。
+  for (let i = 0; i < 1_000 && !engine.running(7); i++) await new Promise((r) => setTimeout(r, 0))
+  assert.equal(engine.running(7), true, '快照那一跳确实还挂在 gate 上')
   const second = await engine.runForAccount(7)
   assert.equal(second.skipped, 'busy')
-  assert.equal(pulls.filter((k) => k === 'group_list').length, 1, '第二次连列表都不该发')
-  releaseFirst()
-  const done = await first
-  assert.equal(done.skipped, null)
+  assert.equal(kinds.filter((k) => k === 'group_list').length, 1, '第二次连列表都不该发')
+  release()
+  assert.equal((await first).skipped, null)
 })
 
 test('账号没绑视图：skipped=no_view，一条命令都不发', async () => {
-  const deps = { ...harnessDeps(), viewIdOf: () => null }
-  const out = await new GroupEngine(deps).runForAccount(7)
+  const h = harness({ groups: [{ chatKey: 'a@g.us', title: null }] })
+  const out = await new GroupEngine({ ...h.deps, viewIdOf: () => null }).runForAccount(7)
   assert.equal(out.skipped, 'no_view')
   assert.equal(out.attempted, 0)
+  // 判别力：只看 skipped 的值拦不住「先发了命令再补一句没绑视图」；这一跳必须压根没发生。
+  assert.equal(h.pulls.length, 0)
+  assert.equal(h.posts.length, 0)
 })
 ```
-
-（`harnessDeps()` 就是上面那个 `harness()` 的 deps 部分；最后两条测试落地时把 `harness()` 重构成返回 `deps` 可覆盖的形式，别复制第二份 harness。）
 
 - [ ] **Step 2: 跑到红**
 
@@ -4162,5 +4929,3486 @@ EOF
 
 ---
 
-<!-- APPEND-SENTINEL: Task 12 起接在这里 -->
+## Task 12: 装配——`groupCollect/host.ts` + 桥三帧路由 + preload + 启停
+
+**Files:**
+- Create: `apps/desktop/src/main/services/groupCollect/host.ts`
+- Modify: `apps/desktop/src/shared/groupMembers.ts`（`GroupBuildOutcome` 迁入 + `GroupStateEvent` + `oneLine()`）
+- Modify: `apps/desktop/src/main/services/groupCollect/engine.ts:1-40`（本地 `GroupBuildOutcome` / 私有 `line()` 换成 shared 那两份）
+- Modify: `apps/desktop/src/main/services/msgBridge/index.ts`（`GroupBridgeHooks` 一处注入点 + 三帧路由 + ready/掉线接线）
+- Modify: `apps/desktop/src/preload/index.ts`（`group` 命名空间）
+- Modify: `apps/desktop/src/main/index.ts:36-50`（`startGroupHost()` / `stopGroupHost()`）
+
+**Interfaces:**
+- Consumes：`GroupRegistry` / `EventCollectorHub` / `EventBatchPayload`（Task 10）、`createGroupApi` / `GroupApi`（Task 9）、`GroupEngine` / `GroupEngineDeps` / `GroupBuildOutcome`（Task 11）、`pushToBridge` / `accountOfId` / `accountOfView`（既有 msgBridge）、`authedFetch`（既有）、`BridgeReport` 的三种群 `kind`（Task 3）
+- Produces（Task 15 的渲染层与 Task 16 的界面只认这些名字）：
+  - `shared/groupMembers.ts`：`interface GroupBuildOutcome { accountId: number; skipped: 'busy' | 'no_view' | null; list: 'ok' | 'error' | 'silent'; registered: number; attempted: number; snapshotted: number; postedFailed: number; failed: number; skippedFinal: number; truncated: boolean; aborted: boolean }`
+  - `shared/groupMembers.ts`：`interface GroupStateEvent { accountId: number; phase: 'running' | 'settled'; outcome: GroupBuildOutcome | null }`
+  - `shared/groupMembers.ts`：`function oneLine(text: string | undefined, max?: number): string`
+  - msgBridge：`interface GroupBridgeHooks { onFrame(viewId: string, accountId: number, report: GroupFrameReport): void; onReady(accountId: number, viewId: string): void; onViewDown(viewId: string): void }`、`type GroupFrameReport = Extract<BridgeReport, { kind: 'group_list_result' } | { kind: 'group_snapshot_result' } | { kind: 'group_event' }>`、`function setGroupHooks(hooks: GroupBridgeHooks | null): void`
+  - host：`function startGroupHost(): void`、`function stopGroupHost(): Promise<void>`
+  - IPC：`invoke('group:build', { accountId: number; chatKey?: string }) → Promise<GroupBuildOutcome | null>`（**单数**，R49：`chatKey` 省略 = 整账号一轮，给一个 = 只补那一群，弹层「刷新成员」用后者）、`on('group:state', GroupStateEvent)`
+  - preload：`window.scrm.group.build(req)`、`window.scrm.group.onState(cb)`
+
+**技术要点**
+
+- **依赖方向只有一条边：`groupCollect/host.ts` → `msgBridge/index.ts`**。反过来 import（msgBridge 直接拿 host 里的 `GroupRegistry` 实例）会做成 `index ↔ host` 的运行时循环——esbuild 打包下表现为 `host.ts` 顶层的 `new GroupRegistry()` 在 `msgBridge/index.ts` 求值时还没初始化，`handleBridgeReport` 一读就是 TDZ。所以 msgBridge 只认识一个可注入的 `GroupBridgeHooks`（类型来自 `shared/chatTypes` 的 `BridgeReport`，不 import 任何 groupCollect 的东西），host 在 `startGroupHost()` 里把自己装上去。这也保住了 P6 已验收那块地基的单方面可读性：想知道群帧去哪了，只看一次 `setGroupHooks` 的调用点。
+- **三种群帧不进 `mount.handle`**（`bridgeMount.ts:114-130` 的 `default: return false` 是它唯一的处理法）：那条支路对未知 `kind` 只是返回 false，落到底等于**静默丢弃**。更关键的是 `group_event` 根本没有 `reqId`，它不属于任何未决表；而两支 `*_result` 的结清对象是 groupCollect 那张 15s 表，不是 mount 的生命周期状态机。所以路由必须插在 `handleBridgeReport` 的分支链里（`active_chat` 那支之后、`mount?.handle(report)` 之前），三条都带 `return`。
+- **`pull` 里先登记再下命令**（与 `sendTextUnlocked` 同一次序，`msgBridge/index.ts` 的 `registry.add` 在 `mount.push` 之前）：页内可能在我们登记之前就把帧送上来了，反过来会把那一帧变成「无人认领」，而泵只能干等 15s 超时——把一次成功读成一次超时是这条链上最贵的判读错误。
+- **`pushToBridge` 返回 false 时当场结 `null`**：桥没 ready 就意味着这条命令永远不会有答案。不结的话表里留一条幽灵气泡，泵按「页内没答」处理但要多等 15s，一次建档 200 群就是 200 次白等。用 `failView(viewId)` 结是安全的：同一视图同一时刻至多一条在飞群命令（泵 per-account 一条，视图与账号 1:1），所以它只会结掉刚登记的那一条。
+- **账号归属由主进程盖，页内帧不带 `accountId`**（R13）：`handleBridgeReport` 已经在最前面用 `accountOfView(viewId)` 做过一次归属判定（`if (!entry) return`），群帧复用同一个 `entry.accountId`。页内不知道自己对应哪个平台账号 id，让它带就是给伪造留门。
+- **掉线结清挂在既有的那处分支上**，不新开监听：`broadcastState()` 里 `phase === 'retry' | 'offline' | 'destroyed'` 那一段已经在结 `registry`（发送）与 `recallRegistry`（撤回），`groupHooks?.onViewDown(s.viewId)` 加在同一段里，三个结清出口就只有一条"什么时候算掉线"的判据。host 那一侧的实现就是 `groupRegistry.failView(viewId)`，结出来一律 `null`（Task 10 第 2 条）。
+- **自动建档每个账号只跑一次**（`autoBuilt: Set<number>`）：`onReady` 在每次 `mount()` 成功时都发（含心跳掉线后的重挂），照字面接会让一次网络抖动换一轮 200 群的采集。代价：运行中真的换过一次登录（同视图退出再登录）时，第二次 ready 不自动补档——**手动按钮能补**，界面文案说清这一点。为什么不用时间窗（"距上次自动建档 >N 分钟就再跑"）：spec 没有"N 分钟算过期"的依据，编一个数字就是把它当事实用。
+- **`group:state` 只报"这一轮在跑 / 结了"，不报进度**：进度的真值在后端（`snapshot_count`、`last_snapshot_at`），渲染层要进度就 GET 群列表（Task 15），广播再带一份计数就会造出"两个真值"那条老问题（对照 `msgBridge` 里 `active_chat` 不另开通道、统一走 `msg:state` 的理由，`index.ts:323-331`）。`phase:'running'` 那一格的意义是让按钮当场变灰——引擎的 `skipped:'busy'` 只有配合它才有可见反馈。
+- **`startGroupHost()` 排在 `startMsgBridge()` 之前**：`startMsgBridge()` 的 `refreshAccounts → mountOne → mount().then(ok)` 全在微任务里跑，同一次 `whenReady` 里如果先启桥，第一条 `onReady` 有实现在 hook 装上之前落地的可能，症状正是"账号上线那一格静默不采"。顺序写死比"应该来不及"可靠。
+- **`stopGroupHost()` 的三件套**：`setGroupHooks(null)`（不再有新帧进来挂表）→ `engine.stop()`（这一轮跑完就止步，不打断在途那一跳）→ `groupRegistry.dispose()`（超时定时器没 `unref`，不 dispose 就是退出路上最多 15s 的挂起，Task 10 第 4 条）→ `await eventHub.flush()` 再打 `dropped` 那行 → `eventHub.dispose()`。`main/index.ts` 的 `before-quit` 用 `void` 调它，与既有的 `void stopMsgBridge()` / `void stopBatchHost()` 同一档事实：**能不能冲完取决于进程还活多久**，冲不掉的缺口由下次启动的快照收口补（spec §9），这里不假称"退出前必达"。
+- **`runBuild` 的 catch 是给实现缺陷准备的，不是给业务失败准备的**：泵把所有可预期失败都结成了 `GroupBuildOutcome` 的字段（Task 11），逃到这里的只剩"页内帧形状变了导致 `settle` 之外抛"这一类。它仍必须广播一条 `settled`——否则界面永远等在 `running` 那一格。合成那一条 `outcome`（`list:'error'`、计数全 0）并在日志里点名是 catch 段，界面文案不许把这一格说成"没有群"。
+- **`accountId` 入参校验落在 host**：`ipcMain.handle` 收到的是渲染层给的任意值，`Number.isInteger(accountId) && accountId > 0` 不合格直接返回 `null`（不抛），日志写"入参不合格"。为什么不等 `accountOfId` 去过：那一只按 id 查表，查不到返回 undefined，与"传进来的是字符串 `"7"`/负数/NaN"是两种诊断，界面拿到的都是 null 但日志能分开。
+- **本任务没有 unit 腿**（诚实的验证档次）：`host.ts` import 了 `electron` 的 `ipcMain` 与主窗口，`node --test` 那条闸门进不去——与 `batchSend/host.ts`（P7 Task 12）同一处境，那一任务的装配也是靠四路 typecheck + 构建 + 后面的实机腿结的。所以这里的判据分两档：**可自动化**= 四路 typecheck + `test:unit` 总数不变（Task 10/11 的表与泵仍绿）+ `pnpm run build`；**待实机**= Task 17 的 CDP 腿按两行主进程日志取证（`[group] 建档结清 …`、`[group] 事件剔除 …`）。不许在本任务写"已验证装配可用"。
+- **`oneLine` 上移到 shared 而不是第三份拷贝**：Task 11 的 engine 里已经写了一份私有 `line()`，host 还要用第二次（`reqId` 进日志前收一行）。msgBridge 那份保持不动（改它要动 P6 已验收文件，不值），但 groupCollect 内部不留两份。
+- **`GroupBuildOutcome` 从 engine.ts 迁到 shared 的唯一理由是 preload**：preload 不许 import `main/services/**`（两个 tsconfig 的边界，`batchSend.ts:76-78` 同一条注释），而 `window.scrm.group.build` 的返回类型必须是它。engine.ts 改成 `import type` + `export type { GroupBuildOutcome }`，Task 11 已写好的测试与类型引用一行都不用动。
+
+- [ ] **Step 1: shared 补两份类型与一行文本收口**
+
+`apps/desktop/src/shared/groupMembers.ts` 末尾追加：
+
+```ts
+/**
+ * 一轮建档的结论。放在 shared 而不是 `engine.ts`：`window.scrm.group.build` 的返回类型
+ * 要经 preload，而 preload 不许 import `main/services/**`（与 `batchSend.ts` 的
+ * `BatchProgress` 同一条边界理由）。
+ * `skipped` 与 `list` 是两种「什么都没做」：前者这一账号不该做（在跑 / 没绑视图），
+ * 后者做了但页内没给答案。渲染层的文案必须分开，混成一句就看不出该重试还是该等。
+ */
+export interface GroupBuildOutcome {
+  accountId: number
+  skipped: 'busy' | 'no_view' | null
+  list: 'ok' | 'error' | 'silent'
+  registered: number
+  attempted: number
+  snapshotted: number
+  postedFailed: number
+  failed: number
+  skippedFinal: number
+  truncated: boolean
+  aborted: boolean
+}
+
+/** `group:state` 的唯一载荷：只说"这一轮在跑 / 结了"，进度另有真值（见 Task 12 技术要点）。 */
+export interface GroupStateEvent {
+  accountId: number
+  phase: 'running' | 'settled'
+  outcome: GroupBuildOutcome | null
+}
+
+/**
+ * 页内来的文本进主进程日志前收成一行：留着换行等于允许伪造日志行，长度也不该无界。
+ * 与 `msgBridge/index.ts:163-167` 同口径的第三份实现，唯一区别是它在这里是共享的：
+ * groupCollect 的 engine 与 host 都要用，两处各写一份就是两份要各自改的规矩。
+ */
+export function oneLine(text: string | undefined, max = 200): string {
+  // \v \f 之类也算换行（Chrome 的 console 会把它们断行），所以按 C0 控制字符整体收。
+  // eslint-disable-next-line no-control-regex
+  return (text ?? '').replace(/[\x00-\x1f]+/g, ' ').slice(0, max)
+}
+```
+
+`engine.ts` 里删掉本地那段 `export interface GroupBuildOutcome { … }` 与私有的 `function line(…)`，改成：
+
+```ts
+import { GROUP_GAP_MS, MAX_GROUPS_PER_BUILD, RETRY_BACKOFF_MS, oneLine, type GroupBuildOutcome } from '../../../shared/groupMembers.ts'
+export type { GroupBuildOutcome }
+```
+调用点里 `line(x)` 换成 `oneLine(x)`（同签名，机械替换）。
+
+- [ ] **Step 2: msgBridge 加一处注入点与三条路由**
+
+`msgBridge/index.ts` 顶部（`import` 之后、`HISTORY_LIMIT_DEFAULT` 之前）加：
+
+```ts
+/**
+ * 群能力帧的出口。msgBridge 只认识这一个注入点，不认识 groupCollect：
+ * 反向 import 会把 `index ↔ host` 做成运行时循环（Task 12 技术要点第 1 条），
+ * 而这里想要的只是"这三种 kind 有别人在处理"，用不着知道那是谁。
+ */
+export interface GroupBridgeHooks {
+  onFrame(viewId: string, accountId: number, report: GroupFrameReport): void
+  /** 桥 ready（首次挂上，或掉线后重挂成功）：spec §5 的"账号上线"那一格。 */
+  onReady(accountId: number, viewId: string): void
+  /** 视图进入 retry / offline / destroyed：在飞的群命令不会再有答案。 */
+  onViewDown(viewId: string): void
+}
+
+/** 三种群帧的合集；两支 `*_result` 带 reqId，`group_event` 不带（它不属于任何未决表）。 */
+export type GroupFrameReport = Extract<
+  BridgeReport,
+  { kind: 'group_list_result' } | { kind: 'group_snapshot_result' } | { kind: 'group_event' }
+>
+
+let groupHooks: GroupBridgeHooks | null = null
+
+export function setGroupHooks(hooks: GroupBridgeHooks | null): void {
+  groupHooks = hooks
+}
+```
+
+`broadcastState()` 里那段 `if (s.phase === 'retry' || …)` 内，紧接 `recallRegistry.failView(...)` 之后加：
+
+```ts
+      // 群命令共用这一条掉线出口：未决的快照结 null，泵据此中止整轮而不是对死页连发 200 跳。
+      groupHooks?.onViewDown(s.viewId)
+```
+
+`handleBridgeReport` 里，`active_chat` 那一支的 `return` 之后、`mount?.handle(report)` 之前插入：
+
+```ts
+  // 三种群帧直接交给 groupCollect。不走 `mount?.handle`：那一只对未知 kind 只返回 false，
+  // 落到底等于静默丢弃，而 `group_event` 连 reqId 都没有，挂到任何未决表上都是错的。
+  if (report.kind === 'group_list_result' || report.kind === 'group_snapshot_result' || report.kind === 'group_event') {
+    if (!groupHooks) {
+      // host 没装 hook（只在启动的极短窗口与测试现场可能命中）：留一行痕迹，静默丢弃查不到。
+      console.log(`[msgBridge] 群帧无人接 view=${viewId} kind=${report.kind}`)
+      return
+    }
+    groupHooks.onFrame(viewId, entry.accountId, report)
+    return
+  }
+```
+
+`mountOne()` 里那句 `void mount.mount().then((ok) => { … })` 改成：
+
+```ts
+  void mount.mount().then((ok) => {
+    // 握手成功才补底：没 ready 就发 backfill 命令，桥还没挂上钩子，等于白发。
+    if (!ok) return
+    mount.push({ kind: 'backfill', limit: HISTORY_LIMIT_DEFAULT })
+    // 同一次 ready 的两个消费者：补底是消息链，建档是群链，两条都由"钩子真的在页里了"触发。
+    groupHooks?.onReady(entry.accountId, viewId)
+  })
+```
+
+- [ ] **Step 3: 写 `groupCollect/host.ts`**
+
+```ts
+// src/main/services/groupCollect/host.ts
+import { ipcMain } from 'electron'
+import { getMainWindow } from '../../window/mainWindow'
+import { authedFetch } from '../authedFetch'
+import { accountOfId } from '../msgBridge/accountDirectory'
+import { pushToBridge, setGroupHooks, type GroupBridgeHooks } from '../msgBridge'
+import { createGroupApi } from './api'
+import { EventCollectorHub } from './collector'
+import { GroupEngine } from './engine'
+import { GroupRegistry } from './registry'
+import { oneLine, type GroupBuildOutcome, type GroupStateEvent } from '../../../shared/groupMembers'
+
+const sleep = (ms: number): Promise<void> => new Promise((r) => setTimeout(r, ms))
+
+const api = createGroupApi({
+  fetcher: (path, init) => authedFetch(path, init),
+  onError: (where, e) => console.warn(`[group] ${where}`, e)
+})
+
+const groupRegistry = new GroupRegistry()
+
+const eventHub = new EventCollectorHub({
+  flush: async (payload) => {
+    const result = await api.postBatch(payload)
+    // Task 10 的契约：投不出去必须 reject（`drain()` 的退回重试只认这一种失败信号）。
+    // `null` 在这里不返回假值而是抛，与 `msgBridge` 那条采集链同一处理（`index.ts:44-50`）。
+    if (!result) throw new Error('group batch rejected')
+  }
+})
+
+const engine = new GroupEngine({
+  api,
+  // 先登记再下命令：反过来会把已经在路上的帧读成一次超时。
+  pull: async (viewId, cmd) => {
+    const wait = groupRegistry.add(cmd.reqId, viewId)
+    if (!pushToBridge(viewId, cmd)) {
+      // 桥不在线 = 这条命令永远没人答。当场结 null：留着就是泵多等 15s，而 200 个群是 200 次白等。
+      // `failView` 在这里只会结掉刚登记的那一条（同视图同一时刻至多一条在飞群命令）。
+      groupRegistry.failView(viewId)
+      return null
+    }
+    return wait
+  },
+  viewIdOf: (accountId) => accountOfId(accountId)?.viewId ?? null,
+  sleep,
+  now: () => Date.now(),
+  log: (where, e) => console.warn(`[group] ${where}`, e)
+})
+
+/** 自动建档每账号一次：重连不再换一轮 200 群（代价与文案见计划技术要点）。 */
+const autoBuilt = new Set<number>()
+
+const hooks: GroupBridgeHooks = {
+  onFrame(viewId, accountId, report) {
+    if (report.kind === 'group_event') {
+      const incoming = Array.isArray(report.events) ? report.events.length : 0
+      const kept = eventHub.push(accountId, report.events)
+      // 返回值是「收下几条」：差值就是被剔掉的非法条目。少了这一行，"页内报了一堆、库里 0 行"
+      // 与"页内压根没报"在日志里长得一模一样。
+      if (kept !== incoming) console.log(`[group] 事件剔除 view=${viewId} 收=${kept} 来=${incoming}`)
+      return
+    }
+    // false = 表里已经没有这一格（超时先结了 / 视图销毁先结了）。迟到帧不重试也不补：
+    // 泵那边已经按「页内没答」处理过，这一行只是把"页内其实答了"这件事留下来。
+    if (!groupRegistry.settle(report)) {
+      console.log(`[group] 群帧无人认领（迟到或已结）view=${viewId} reqId=${oneLine(report.reqId)}`)
+    }
+  },
+  onReady(accountId) {
+    if (autoBuilt.has(accountId)) return
+    autoBuilt.add(accountId)
+    void runBuild(accountId)
+  },
+  onViewDown(viewId) {
+    const n = groupRegistry.failView(viewId)
+    if (n > 0) console.log(`[group] 结清未决群命令 ${n} 条 view=${viewId}`)
+  }
+}
+
+function broadcast(event: GroupStateEvent): void {
+  // 与 `broadcastState`/`broadcastTheme` 同一条口径：`getMainWindow()` 可能给回一枚已销毁的窗口。
+  const win = getMainWindow()
+  if (win && !win.isDestroyed()) win.webContents.send('group:state', event)
+}
+
+/** 泵抛出来时的合成结论：界面必须拿到一个 settled，不能让按钮永远灰在 running。 */
+function crashOutcome(accountId: number): GroupBuildOutcome {
+  return {
+    accountId, skipped: null, list: 'error', registered: 0, attempted: 0, snapshotted: 0,
+    postedFailed: 0, failed: 0, skippedFinal: 0, truncated: false, aborted: false
+  }
+}
+
+async function runBuild(accountId: number, chatKey?: string): Promise<GroupBuildOutcome | null> {
+  if (!Number.isInteger(accountId) || accountId <= 0) {
+    console.log(`[group] 建档入参不合格 account=${oneLine(String(accountId))}`)
+    return null
+  }
+  broadcast({ accountId, phase: 'running', outcome: null })
+  let outcome: GroupBuildOutcome
+  try {
+    outcome = await engine.runForAccount(accountId, chatKey)
+  } catch (e) {
+    // 泵把可预期失败都结进了 outcome，逃到这里的只剩实现缺陷（帧形状变了 / 空引用）。
+    // 日志点名是 catch 段，界面那句「这一轮没跑成」不许写成「这个账号没有群」。
+    console.warn(`[group] 建档抛出（非业务失败）account=${accountId}`, e)
+    outcome = crashOutcome(accountId)
+  }
+  broadcast({ accountId, phase: 'settled', outcome })
+  console.log(
+    `[group] 建档结清 account=${accountId} list=${outcome.list} 登记=${outcome.registered}` +
+    ` 尝试=${outcome.attempted} 成=${outcome.snapshotted} 投败=${outcome.postedFailed}` +
+    ` 拉败=${outcome.failed} 终态跳=${outcome.skippedFinal} 截断=${outcome.truncated}` +
+    ` 中止=${outcome.aborted} 跳过=${outcome.skipped ?? '-'}`
+  )
+  return outcome
+}
+
+export function startGroupHost(): void {
+  // 先装 hook 再启桥：`startMsgBridge()` 的 refresh → mount → ready 全在微任务里跑，
+  // 顺序反了第一条 onReady 有落在 hook 装上之前的可能，症状正是"账号上线那一格静默不采"。
+  setGroupHooks(hooks)
+  // `chatKey` 省略 = 整账号一轮；带上 = 只补这一群（spec §5 的 ②③ 两条触发点合成这一支，R25）。
+  ipcMain.handle('group:build', (_e, req: { accountId: number; chatKey?: string }) =>
+    runBuild(Number(req?.accountId), req?.chatKey))
+}
+
+export async function stopGroupHost(): Promise<void> {
+  setGroupHooks(null)
+  // 只停"下一群"：在途那一跳仍然答它自己的，硬掐会让一条快照结果无主。
+  engine.stop()
+  // 这张表的超时定时器没有 unref：不 dispose 就是退出路上最多 15s 的挂起（Task 10 第 4 条）。
+  groupRegistry.dispose()
+  // 退出前把队列里剩下的事件冲一次。冲不掉也不追：下一次启动由快照收口补（spec §9 同一口径）。
+  await eventHub.flush().catch(() => undefined)
+  // 事件不像消息行可以"同步历史"补底，页内不重发历史 → 队列越界丢的是永久缺口，必须留一行。
+  if (eventHub.dropped > 0) console.log(`[group] 本次运行丢弃群事件 ${eventHub.dropped} 条（队列越界丢最旧）`)
+  eventHub.dispose()
+}
+```
+
+- [ ] **Step 4: preload 与主进程启停**
+
+`preload/index.ts` 顶部 type import 补一行：
+
+```ts
+import type { GroupBuildOutcome, GroupStateEvent } from '@shared/groupMembers'
+```
+
+在 `batch: { … }` 之后加一个 `group` 命名空间（同层、同形状）：
+
+```ts
+  /**
+   * 群成员（P8/B6）：一条 invoke + 一条推送。
+   * 五个读端点不在这里——渲染层 `lib/http.ts` 自己带 token 对与 401 刷新链，做成 IPC 转发
+   * 只会多出三份 dead code 与两条白名单（R26）。留着这一条的理由是它必须经主进程：
+   * 命令要下给内嵌页，页里才有 wa-js。
+   */
+  group: {
+    build: (req: { accountId: number; chatKey?: string }): Promise<GroupBuildOutcome | null> =>
+      ipcRenderer.invoke('group:build', req),
+    onState: (cb: (e: GroupStateEvent) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, e: GroupStateEvent): void => cb(e)
+      ipcRenderer.on('group:state', listener)
+      return () => ipcRenderer.removeListener('group:state', listener)
+    }
+  }
+```
+
+`main/index.ts`：import 补 `import { startGroupHost, stopGroupHost } from './services/groupCollect/host'`；`registerIpcHandlers()` 之后、`startMsgBridge()` **之前**插 `startGroupHost()`；`before-quit` 里 `void stopBatchHost()` 之后补 `void stopGroupHost()`。
+
+```ts
+    registerIpcHandlers()
+    // 顺序有含义：群采集要先装好 hook，再让桥开始挂载并上报 ready（Task 12 技术要点第 8 条）。
+    startGroupHost()
+    startMsgBridge()
+    startBatchHost()
+```
+
+- [ ] **Step 5: 机械校验**
+
+```bash
+cd /d/SmartSCRM/apps/desktop
+pnpm run typecheck:node && pnpm run typecheck:web && pnpm run typecheck:inject && pnpm run typecheck:unit
+pnpm run test:unit 2>&1 | tail -15
+pnpm exec eslint src/main/services/groupCollect/host.ts src/main/services/msgBridge/index.ts src/preload/index.ts src/main/index.ts src/shared/groupMembers.ts src/main/services/groupCollect/engine.ts --quiet
+pnpm run build 2>&1 | tail -20
+```
+期望：四路 typecheck 全过；`test:unit` 总数与 Task 11 收尾时**相同**（本任务不加 unit 腿，见技术要点最后一条）；`--quiet` 零输出；`build` 打出 `msg-bridge.bundle.js` 与主进程产物。
+
+- [ ] **Step 6: 实机两行日志（等用户重启，不进本任务的通过判据）**
+
+主进程重启是用户的手。请用户在 dev 实例里让某个 WhatsApp 账号进 ready，然后到 dev 终端取两行：
+
+```bash
+# dev 终端的输出落在会话里；没有落盘就先按下面这条 grep（会话里没有就 exit 非 0，不要改写判据）
+grep -nE '\[group\] (建档结清|事件剔除|群帧无人)' tmp/p8d-main.log || echo '没有落盘副本：这一格记为待实机，Task 17 用 CDP 腿补'
+```
+判据：`[group] 建档结清 account=… list=ok …` 至少一行，且 `尝试>0`。只有 `[msgBridge] 群帧无人接` 说明 hook 没装上（Step 4 的启动顺序没落地）；`list=silent` 说明页内没答，回到 Task 3 的 `group_list` 那一支查。
+
+- [ ] **Step 7: 提交**
+
+```bash
+git add apps/desktop/src/main/services/groupCollect/host.ts apps/desktop/src/main/services/groupCollect/engine.ts apps/desktop/src/shared/groupMembers.ts apps/desktop/src/main/services/msgBridge/index.ts apps/desktop/src/preload/index.ts apps/desktop/src/main/index.ts
+git commit -m "$(cat <<'EOF'
+feat(P8/群成员): 装配——群帧路由、group:build 一条 IPC 与退出结清
+
+依赖方向只做一条边：groupCollect 认识 msgBridge，反向靠一处可注入 hook，
+否则 index 与 host 会做成运行时循环。
+
+未决群命令与发送、撤回共用同一条掉线出口；桥不在线时下命令当场结 null，
+不让泵对着一页死代码等 15s。
+
+Co-Authored-By: Qoder <noreply@qoder.com>
+EOF
+)"
+```
+
+---
+
+## Task 13: 导出——`exporter.ts`（纯工作簿）+ `group:export`（落盘）
+
+**Files:**
+- Create: `apps/desktop/src/main/services/groupCollect/exporter.ts`
+- Create: `apps/desktop/src/main/services/groupCollect/exporter.test.ts`
+- Modify: `apps/desktop/src/shared/groupMembers.ts`（`GroupExportResult` + 两张中文标签表 + 标签函数 + `formatExportTime`）
+- Modify: `apps/desktop/src/main/services/groupCollect/host.ts`（`group:export` 那一支 IPC）
+- Modify: `apps/desktop/src/preload/index.ts`（`group.export`）
+- Modify: `apps/desktop/tsconfig.unit.json`（`include` 补 `src/main/services/groupCollect/exporter.ts`；`exceljs` 的类型走 node_modules，不用另配 `types`）
+- Modify: `apps/desktop/package.json` + `pnpm-lock.yaml`（`exceljs`，安装动作属用户的手）
+
+**Interfaces:**
+- Consumes：`GroupExportRowWire`（Task 9）、`EXPORT_COLUMNS` / `MAX_EXPORT_GROUPS`（Task 2）、`api.exportRows`（Task 9）、`GroupApi`（Task 9）
+- Produces（Task 16 的界面与 Task 14 的契约腿只认这些名字）：
+  - `shared/groupMembers.ts`：`type GroupExportReason = 'cancel' | 'empty_keys' | 'too_many' | 'no_rows' | 'failed' | 'saved'`
+  - `shared/groupMembers.ts`：`interface GroupExportResult { reason: GroupExportReason; path: string | null; rows: number; bytes: number }`
+  - `shared/groupMembers.ts`：`GROUP_ROLE_LABEL` / `EXIT_METHOD_LABEL`（`Partial<Record<…,string>>`）、`groupRoleLabel(role: string | null): string`、`exitMethodLabel(method: string | null): string`、`formatExportTime(value: string | null): string`（时间文本的唯一作者，Task 15 的 `groupDisplay.ts` 也引它）
+  - `exporter.ts`：`function buildWorkbook(rows: GroupExportRowWire[]): ExcelJS.Workbook`
+  - IPC：`invoke('group:export', { accountId: number; chatKeys: string[] }) → Promise<GroupExportResult | null>`
+  - preload：`window.scrm.group.export(req)`
+
+**技术要点**
+
+- **纯工作簿与落盘分成两个文件，是为了这一节能有自己的 unit 腿**：`exporter.ts` 只 import `exceljs` 与 shared，不碰 `electron`，所以 `node --test` 进得去；`dialog` / `fs` / IPC 那一段留在 `host.ts`，与 Task 12 的装配同一处境（只有 typecheck + 构建 + 实机腿）。装配任务最容易出的事故是"整节都无法自动验证"，这一刀把它切成两半。
+- **单元格一律写文本，日期不写成 Excel 日期类型**：后端给的是 Jackson 序列化的 `LocalDateTime` 字符串，`new Date(s)` 会按本地时区重读它（无 `Z` 的串在 JS 里是本地时间），于是同一份数据在两个时区的机器上打开会差几小时。写文本 `2026-09-30 12:00:00` 的代价是那一列不能直接参与 Excel 的日期筛选与排序——**取舍理由**：这份文件是给人核对名单用的，读数错一小时比不能排序更坏，而排序的缺省形状本来就是"群内按进群时间升序"（R22 已在后端排好）。
+- **`formatExportTime` 只做「`T` 换成空格、截到秒」，不解析、不换算**：`null` / 空串给空串（不给 `null`、不给 `-`），因为空单元格在表格里读作"没有这个时间"，而 `-` 在 §8 的口径里专指"有事件缺时间证据"（`exit_method='snapshot_absent'` 且 `latest_leave_at IS NULL` 那一格才是 `—`）。
+- **`序号` 取后端的 `seq`，前端一律不许重算**（R22）：行序与跨群连续序号的唯一出处是后端那条 SQL，主进程重排一次就会造出"文件里的顺序与界面看到的不一样"。**判别力**：测试要喂一段 `seq` 不连续、顺序已定的行（`[5,6,1,2]`），断言第 1 列逐字是 `5,6,1,2`——重算实现的输出是 `1,2,3,4`，一眼分得开。
+- **`0 行不落盘`**：`exportRows` 给回空数组意味着这些群一行成员都没有——最常见的原因是"从没建过档"，而不是"群里没人"。写一份只有表头的文件会让人读成后者（§8 明令"不显示空名单冒充结果"，导出面同一条口径要成立），所以 `reason:'no_rows'` 直接返回，界面提示先建档。代价：真要一份空表头的模板时导不出来，本期没有这个需求（§14）。
+- **`null` 与 `[]` 必须分开**（Task 9 第 3 条的下游）：`exportRows` 返回 `null` 有两种——空名单（我们自己在 `exportPath` 挡的）与这一跳没成。界面拿到 `failed` 该说"取数没成，重试或看后端"，拿到 `no_rows` 该说"还没建档"。**归因**：`empty_keys` 那一格在 host 里先判（不让 `null` 的两个来源混进同一句文案）。
+- **`MAX_EXPORT_GROUPS` 主进程再判一次**：界面按所选数量提前拦（spec §10），后端 `export-rows` 也 40016。三处判的不是同一件事——界面省一次 IPC、后端守租户配额、主进程挡住"拿 51 个群键去换一次 400 再报'取数没成'"这种把用户误导到重试死路上的诊断。主进程这一判的写法是 `chatKeys.length > MAX_EXPORT_GROUPS` → `too_many`，**不发请求**。
+- **`chatKeys` 入参先剔非法再交给 api**：页内/渲染层来的数组是半可信的，`exportRows` 内部按裸逗号拼 query，一个含逗号的键会把一个键拆成两个（与 Task 9 的编码口径同源）。剔掉 `typeof !== 'string'`、空串、`> CHAT_KEY_MAX`、不含 `@` 的四类，并留一行日志说剔了几条。
+- **中文标签表放 shared，不放 exporter**：`GroupMembersDialog` 的角色列与退出方式列要读同一份，两处各写一份就会出现"表格里叫『群主』、界面上叫『超管』"这种同一事实两个词的结果。未知取值回落成原词（`super` 之外的平台新值不许显示空白），`null` 给 `—`。
+- **体积只量一次、不优化**（R23）：写完打一行 `bytes=`，Task 17 的验收文档记一个真实数字。本期不做列宽自适应、不做样式、不做多 sheet——每一项都是"没有需求支撑的实现面"（§14 的同一把尺）。
+- **`exceljs` 必须只进主进程产物**（§15#4，本任务给出实测方法）：`electron-vite` 把 `dependencies` 里的包在主进程侧外部化，渲染层是 vite 打包，只要渲染层不 `import` 它就不会进包。取证用两条 grep（见 Step 6），**跑出来是"渲染产物里出现 exceljs"就是改口径的事**，要回来把这条改成"自己写最小 XLSX"或把导出挪到后端出文件，不许悄悄把 grep 删掉当通过。
+- **安装 `exceljs` 属用户的手**（出网），且要 `pnpm`：`pnpm --filter @smartscrm/desktop add exceljs`。装完由本任务在 Step 5 里验证 `node --test` 能在纯 Node 下 import 它（CJS 包的默认导出互操作在这一档是唯一没量过的外部事实，跑不通就在测试里改 `import * as ExcelJS`，属实现细节不属口径变更）。
+
+- [ ] **Step 1: 装依赖（用户的手）**
+
+```bash
+cd /d/SmartSCRM && pnpm --filter @smartscrm/desktop add exceljs
+```
+期望：`apps/desktop/package.json` 的 `dependencies` 多出 `exceljs`。这一步要出网，由用户执行；没装好之前 Step 3 之后的一切跑不动，也不许用「先写个假 exceljs」绕过——本任务的全部价值之一就是量到真实库的行为。
+
+- [ ] **Step 2: shared 补标签与结果类型**
+
+```ts
+/** 导出结论六选一，界面按它给文案。`saved` 之外 `path` 一定是 null。 */
+export type GroupExportReason = 'cancel' | 'empty_keys' | 'too_many' | 'no_rows' | 'failed' | 'saved'
+
+export interface GroupExportResult {
+  reason: GroupExportReason
+  path: string | null
+  rows: number
+  bytes: number
+}
+
+/**
+ * 角色与退出方式的中文词只在这里有一份：表格里叫「群主」而界面上叫「超管」
+ * 是同一事实写了两个词的结果。未知取值回落原词（平台以后加新角色时导出不许留空白）。
+ */
+const GROUP_ROLE_LABEL: Record<string, string> = { member: '成员', admin: '管理员', super: '群主' }
+const EXIT_METHOD_LABEL: Record<string, string> = {
+  removed: '被移出',
+  left: '自行退群',
+  invited_join: '受邀加入',
+  added: '被加入',
+  join: '主动加入',
+  snapshot_absent: '快照中已不在'
+}
+
+export function groupRoleLabel(role: string | null): string {
+  if (role === null) return '—'
+  return GROUP_ROLE_LABEL[role] ?? role
+}
+
+export function exitMethodLabel(method: string | null): string {
+  if (method === null) return '—'
+  return EXIT_METHOD_LABEL[method] ?? method
+}
+
+/**
+ * 群成员这一路的所有时刻都是后端 `LocalDateTime` 序列化出来的墙钟串（不带 `Z`）。
+ * 「`T` 换空格、截到秒」这一手**只有这一处作者**：导出表格（`exporter.ts`）与渲染层名单
+ * （`renderer/src/lib/groupDisplay.ts`）都 import 它。两处各写一遍，就会出现"文件里到秒、
+ * 界面里到毫秒"这种同一个读数两个样子的错——而它只会在这两个界面并排看时被发现的。
+ * 不用 `new Date(s)`：JS 会把不带偏移的串按本地时区读，于是同一行在两台机器上显示两个时刻。
+ */
+export function formatExportTime(value: string | null): string {
+  if (!value) return ''
+  const iso = value.replace('T', ' ')
+  // `2026-09-30 12:00:03.417` → 秒；长度不足（后端以后只给到分）就原样给回，不补零。
+  return iso.length > 19 ? iso.slice(0, 19) : iso
+}
+```
+
+（`formatExportTime` 放 shared 而不是 exporter，是因为渲染层也要用它：`exporter.ts` 在主进程侧、
+`groupDisplay.ts` 在渲染层侧，两边都不许 import 对方，唯一能共处的地方就是 `shared/`。
+渲染层引它走**相对路径 + `.ts` 后缀**（`../../../shared/groupMembers.ts`），理由见 Task 15 技术要点 10。）
+
+- [ ] **Step 3: 先写失败的 exporter 单测**
+
+```ts
+// src/main/services/groupCollect/exporter.test.ts
+import assert from 'node:assert/strict'
+import { test } from 'node:test'
+import type { Worksheet } from 'exceljs'
+import {
+  EXPORT_COLUMNS,
+  formatExportTime,
+  type GroupExportRowWire
+} from '../../../shared/groupMembers.ts'
+import { buildWorkbook } from './exporter.ts'
+
+/**
+ * 夹具的字段名逐字取 §A.2 ⑥（后端 `GroupExportRowVO` 的 14 个键）。
+ * 这里**没有** `chatKey / memberKey / displayName / firstSeenAt / isInGroup`：群键叫 `groupId`，
+ * 名称叫 `name`，角色叫 `role`，在群叫 `inGroup` 且**已经是后端格式化过的中文 `'是'|'否'`**。
+ * 用旧名写夹具 = 测试跟着实现一起对不上后端（§A 那条"形状跟代码"的裁定在这里的落点）。
+ */
+const row = (over: Partial<GroupExportRowWire> = {}): GroupExportRowWire => ({
+  seq: 1, groupName: '测试群', groupId: '12036@g.us', phone: '86138', name: null,
+  role: 'member', inGroup: '是', joinAt: '2026-09-30T12:00:00', joinCount: 2,
+  leaveAt: null, exitMethod: null, lastMsgAt: null, dayMsgCount: 0, msgCount: 0, ...over
+})
+
+/**
+ * 读回第 n 行的值并收成字符串：断言走「这一格人看得见的是什么」，不走 workbook 的内部结构。
+ * `String(v)` 这一手有判读力：日期被写成 Date 对象、缺值被写成 `undefined` 时，
+ * 这里分别会在第三条与第六条用例上露出来。
+ */
+const cells = (ws: Worksheet, n: number): string[] =>
+  ws.getRow(n).values.slice(1).map((v: unknown) => (v === undefined || v === null ? '' : String(v)))
+
+/**
+ * 本期只有一张 sheet，取 `worksheets[0]` 而不是按名查：`getWorksheet` 的返回带 `undefined`，
+ * 每一处都要多一次判空，而"有没有第二张 sheet"这件事就由本文件写死。
+ */
+const sheet = (rows: GroupExportRowWire[]): Worksheet => buildWorkbook(rows).worksheets[0]
+
+test('表头逐字等于 EXPORT_COLUMNS，顺序也没动', () => {
+  assert.deepEqual(cells(sheet([row()]), 1), [...EXPORT_COLUMNS])
+  assert.equal(EXPORT_COLUMNS.length, 14)
+})
+
+test('日期写成文本：T 换空格、截到秒，null 给空串而不是 null / —', () => {
+  assert.equal(formatExportTime('2026-09-30T12:00:03.417'), '2026-09-30 12:00:03')
+  assert.equal(formatExportTime('2026-09-30T12:00:00'), '2026-09-30 12:00:00')
+  assert.equal(formatExportTime(null), '')
+  assert.equal(formatExportTime(''), '')
+  // 判别力：`new Date(s)` 那一派会把它变成时区相关的 Date 对象；这里必须还是文本。
+  assert.equal(typeof formatExportTime('2026-09-30T12:00:00'), 'string')
+})
+
+test('角色取中文词、在群列逐字用后端给的字、快照推定那一格退群时间给 —', () => {
+  const ws = sheet([
+    row({ seq: 1, role: 'super' }),
+    row({ seq: 2, role: 'member', inGroup: '否', exitMethod: 'snapshot_absent' }),
+    row({ seq: 3, role: 'member', inGroup: '否', exitMethod: 'left', leaveAt: '2026-09-20T01:02:03' })
+  ])
+  assert.equal(cells(ws, 2)[5], '群主')
+  // 「在群」这一列不许主进程再映射一次：后端 `GroupExportRowVO` 已经把 0/1 写成 `'是'/'否'`，
+  // 这里再判断一回就是第二个作者——以后后端改成「在/不在」，文件会一列对不上。
+  assert.equal(cells(ws, 2)[6], '是')
+  assert.equal(cells(ws, 3)[6], '否')
+  // §8 那一格的逐字形状：snapshot_absent 且 leaveAt 为空 ⇒ 时间 —、方式「快照中已不在」
+  assert.equal(cells(ws, 3)[9], '—')
+  assert.equal(cells(ws, 3)[10], '快照中已不在')
+  assert.equal(cells(ws, 4)[9], '2026-09-20 01:02:03')
+  assert.equal(cells(ws, 4)[10], '自行退群')
+})
+
+test('序号原样透传：后端给 5,6,1,2 就写 5,6,1,2（重算会写成 1,2,3,4）', () => {
+  const ws = sheet([row({ seq: 5 }), row({ seq: 6 }), row({ seq: 1 }), row({ seq: 2 })])
+  assert.deepEqual([2, 3, 4, 5].map((n) => cells(ws, n)[0]), ['5', '6', '1', '2'])
+})
+
+test('缺值不许写成 undefined / null 字样；群组名称与手机号给空串', () => {
+  const c = cells(sheet([row({ name: null, phone: null, groupName: null })]), 2)
+  assert.equal(c[1], '')
+  assert.equal(c[3], '')
+  assert.equal(c[4], '')
+  assert.ok(!c.some((v) => v === 'undefined' || v === 'null'), `缺值被写成了字面量：${c.join('|')}`)
+})
+
+test('只有表头的那一份也能构造出来（host 的空判据不靠它落盘）', () => {
+  assert.equal(sheet([]).rowCount, 1)
+})
+```
+
+```bash
+cd /d/SmartSCRM/apps/desktop && node --test src/main/services/groupCollect/exporter.test.ts
+```
+期望：FAIL（模块不存在）。
+
+- [ ] **Step 4: 实现 exporter**
+
+```ts
+// src/main/services/groupCollect/exporter.ts
+import ExcelJS from 'exceljs'
+import {
+  EXPORT_COLUMNS,
+  exitMethodLabel,
+  formatExportTime,
+  groupRoleLabel,
+  type GroupExportRowWire
+} from '../../../shared/groupMembers'
+
+/** 单元格取值：缺值一律空串，`序号` 与四个计数用数字。键名逐字取 §A.2 ⑥。 */
+function cellOf(row: GroupExportRowWire, index: number): string | number {
+  switch (index) {
+    case 0: return row.seq ?? ''
+    case 1: return row.groupName ?? ''
+    case 2: return row.groupId
+    case 3: return row.phone ?? ''
+    case 4: return row.name ?? ''
+    case 5: return groupRoleLabel(row.role)
+    // 后端已经把 0/1 写成 `'是'|'否'`（§A.2 ⑥）。主进程再判断一次 = 同一个事实两个作者，
+    // 以后后端换词，这一列会和界面各说一半。
+    case 6: return row.inGroup ?? ''
+    case 7: return formatExportTime(row.joinAt)
+    case 8: return row.joinCount ?? 0
+    // §8 那一格：`snapshot_absent` 的退群时间没有事件证据，留 `—` 而不是空白——
+    // 空白在表格里读作"不知道"，而这里的事实是"有证据说人没了、没有证据说时间"。
+    case 9: return row.leaveAt ? formatExportTime(row.leaveAt) : row.inGroup === '否' ? '—' : ''
+    case 10: return row.inGroup === '否' ? exitMethodLabel(row.exitMethod) : ''
+    case 11: return formatExportTime(row.lastMsgAt)
+    case 12: return row.dayMsgCount ?? 0
+    default: return row.msgCount ?? 0
+  }
+}
+
+/**
+ * 一份 sheet、14 列、纯文本 + 计数。列序取 `EXPORT_COLUMNS` 的字面顺序，
+ * 这里不 `.sort()` 也不另列名——那份常量就是列序的唯一出处。
+ */
+export function buildWorkbook(rows: GroupExportRowWire[]): ExcelJS.Workbook {
+  const wb = new ExcelJS.Workbook()
+  const ws = wb.addWorksheet('群成员')
+  ws.addRow([...EXPORT_COLUMNS])
+  for (const r of rows) ws.addRow(EXPORT_COLUMNS.map((_c, i) => cellOf(r, i)))
+  ws.getRow(1).font = { bold: true }
+  // 固定列宽：自适应要遍历全部单元格，而 50 群 × 几百人那一档的量正是我们不想付的。
+  const widths = [6, 24, 26, 15, 20, 10, 8, 20, 8, 20, 14, 20, 12, 10]
+  widths.forEach((w, i) => {
+    ws.getColumn(i + 1).width = w
+  })
+  return wb
+}
+```
+
+- [ ] **Step 5: host 的 `group:export` 那一支**
+
+`host.ts` 顶部补 import：
+
+```ts
+import { dialog } from 'electron'
+import { promises as fs } from 'node:fs'
+import { CHAT_KEY_MAX, MAX_EXPORT_GROUPS, type GroupExportResult } from '../../../shared/groupMembers'
+import { buildWorkbook } from './exporter'
+```
+（`fs` 走 `node:fs` 的 promise API：`electron` 导出的那个 `fs` 是 40 才有的，本项目锁在 `electron ^39`，
+照记忆写会直接过不了 `typecheck:node`。）
+
+`startGroupHost()` 里 `group:build` 之后加：
+
+```ts
+  ipcMain.handle('group:export', (_e, req: { accountId: number; chatKeys: string[] }) =>
+    exportGroups(Number(req?.accountId), Array.isArray(req?.chatKeys) ? req.chatKeys : []))
+```
+
+模块作用域加：
+
+```ts
+/**
+ * 半可信入参的四道剔非法：非字符串、空串、超长、形状不对。
+ * `!k.includes(',')` 单列一条是必须的：`exportRows` 用裸逗号拼 query（Task 9），
+ * 一个含逗号的键会被后端拆成两个键，静默导出两份不相干的数据。
+ */
+function sanitizeChatKeys(keys: string[]): { kept: string[]; dropped: number } {
+  const kept = keys.filter(
+    (k) => typeof k === 'string' && k.length > 0 && k.length <= CHAT_KEY_MAX && k.includes('@') && !k.includes(',')
+  )
+  return { kept, dropped: keys.length - kept.length }
+}
+
+async function exportGroups(accountId: number, rawKeys: string[]): Promise<GroupExportResult> {
+  const none = (reason: GroupExportResult['reason']): GroupExportResult => ({ reason, path: null, rows: 0, bytes: 0 })
+  if (!Number.isInteger(accountId) || accountId <= 0) {
+    console.log(`[group] 导出入参不合格 account=${oneLine(String(accountId))}`)
+    return none('failed')
+  }
+  const { kept, dropped } = sanitizeChatKeys(rawKeys)
+  if (dropped > 0) console.log(`[group] 导出剔除非法群键 ${dropped} 条，留 ${kept.length} 条`)
+  if (kept.length === 0) return none('empty_keys')
+  // 主进程这一判不是为了省一跳，是为了不把"选了 51 个群"报成"取数没成"（三处判的分工见技术要点）。
+  if (kept.length > MAX_EXPORT_GROUPS) return none('too_many')
+  const rows = await api.exportRows(accountId, kept)
+  // `null` = 这一跳没成（后端拒了 / 没起来），与"成了但 0 行"是两件事：文案与下一步动作都不同。
+  if (!rows) return none('failed')
+  if (rows.length === 0) return none('no_rows')
+  const win = getMainWindow()
+  if (!win || win.isDestroyed()) return none('failed')
+  const stamp = new Date().toISOString().slice(0, 16).replace(/[-:T]/g, '')
+  const picked = await dialog.showSaveDialog(win, {
+    title: '导出群成员',
+    defaultPath: `群成员-${stamp}.xlsx`,
+    filters: [{ name: 'Excel', extensions: ['xlsx'] }]
+  })
+  if (picked.canceled || !picked.filePath) return none('cancel')
+  try {
+    const buffer = await buildWorkbook(rows).xlsx.writeBuffer()
+    await fs.writeFile(picked.filePath, Buffer.from(buffer))
+    // 体积量一次（R23）：这一行是 §15#4 之外唯一能拿到"50 群 × 几百人有多大"的地方。
+    console.log(`[group] 导出落盘 rows=${rows.length} bytes=${buffer.byteLength} path=${oneLine(picked.filePath, 260)}`)
+    return { reason: 'saved', path: picked.filePath, rows: rows.length, bytes: buffer.byteLength }
+  } catch (e) {
+    // 写盘失败（目标被占用 / 只读目录 / 权限）：日志留原文，界面上只说"没写成"。
+    console.warn('[group] 导出写盘失败', e)
+    return none('failed')
+  }
+}
+```
+
+preload 的 `group` 命名空间里加一行，`shared` 的类型 import 补 `GroupExportResult`：
+
+```ts
+    export: (req: { accountId: number; chatKeys: string[] }): Promise<GroupExportResult | null> =>
+      ipcRenderer.invoke('group:export', req),
+```
+
+- [ ] **Step 6: 跑绿 + 产物归属取证**
+
+```bash
+cd /d/SmartSCRM/apps/desktop
+node --test src/main/services/groupCollect/exporter.test.ts 2>&1 | tail -20
+pnpm run test:unit 2>&1 | tail -15
+pnpm run typecheck:node && pnpm run typecheck:web && pnpm run typecheck:inject && pnpm run typecheck:unit
+pnpm exec eslint src/main/services/groupCollect/exporter.ts src/main/services/groupCollect/exporter.test.ts src/main/services/groupCollect/host.ts src/preload/index.ts src/shared/groupMembers.ts --quiet
+pnpm run build 2>&1 | tail -20
+# §15#4 的取证：主进程产物里有（外部化的 require），渲染产物里没有（谁都没 import 它）
+grep -l 'exceljs' out/main/*.js 2>/dev/null || echo 'MISS:main'
+grep -l 'exceljs' out/renderer/assets/*.js 2>/dev/null && echo 'FAIL:渲染包出现了 exceljs' || echo 'OK:渲染包干净'
+```
+期望：exporter 6 条全过、`test:unit` 比 Task 11 收尾时多 6；四路 typecheck 过；`--quiet` 零输出；两条 grep 一条命中 `out/main/index.js`、另一条给 `OK:渲染包干净`。**第二条给 `FAIL` 时不许改 grep 的写法**——那是 §15#4 那条待验证项的答案，出现了就是要改口径（导出挪后端或自写最小 XLSX），按 R24 的方式回来裁定。
+
+- [ ] **Step 7: 提交**
+
+```bash
+git add apps/desktop/src/main/services/groupCollect/exporter.ts apps/desktop/src/main/services/groupCollect/exporter.test.ts apps/desktop/src/main/services/groupCollect/host.ts apps/desktop/src/preload/index.ts apps/desktop/src/shared/groupMembers.ts apps/desktop/tsconfig.unit.json apps/desktop/package.json pnpm-lock.yaml
+git commit -m "$(cat <<'EOF'
+feat(P8/群成员): 14 列 XLSX 导出——纯工作簿与落盘分两半
+
+日期写成文本：不带时区标记的 LocalDateTime 交给 new Date 会按本地时区重读，
+代价是那一列不参与 Excel 日期筛选，比读数差一小时轻。
+
+序号原样透传后端的值、0 行不落盘、51 群在主进程就挡下：
+三处都在防同一件事——把"还没建档 / 选太多"报成"取数没成"。
+
+Co-Authored-By: Qoder <noreply@qoder.com>
+EOF
+)"
+```
+
+---
+
+## Task 14: 契约腿校正与补漏——`tmp/p8-group-members-contract.mjs` + `tmp/P8Purge.java`
+
+> **判档**：这一节是 §13 五档里的「HTTP 契约」档，跑出来的读数才算**实测**。它同时是 Task 8b 那八条在**真 MySQL** 上的证人——8b 的 Java 单测只证到 mock 的调用形状（`verify(...)` 收到了什么参数），而 `ISNULL(...)` 的 NULL 沉底、`LIKE` 的反斜杠转义、`DOUBLE` 列的读数、`INSERT IGNORE` 的 affected rows 这四件事，只有真库给答案。**8b 的注释里不许写"已验证行序"，本任务的日志才是它的下游证据。**
+>
+> **顺序硬约束**：本任务必须排在 **Task 8b 之后**跑。今天（8b 之前）跑草稿会得到两条红：`2.4 coverage===null`（现在是 `""`）与 `9.1 /customer/{id}/groups`（④ 之后 `accountId` 必填，现在不带也能过）。这两条**不许放宽**去迁就现状——§A.5 定的口径是"红格回 8b 修"。
+>
+> **本任务不碰页面、不发消息**：全程只打 `:8180` 的读写端点，数据全落在本轮自己造的群键上。真实登录档（§13 最后一档）不在这里。
+
+**Files:**
+- Modify: `tmp/p8-group-members-contract.mjs`（现有 267 行草稿；`tmp/` 已 gitignore，**永不进提交**）
+- Create: `tmp/P8Purge.java`（清理探针，同样不进提交；形制照 `tmp/P6Tables.java` / `tmp/PurgeCredentials.java`）
+- Modify: 本计划 §A.1（加一行契约腿读数）；spec §15 的 ②③ 若被本任务的读数部分回答，只记读数、不改口径（那两条要真机页内数据才能收口）
+
+**Interfaces:**
+- Consumes：§A.2 六跳的已提交形状 + Task 8b Produces 的四处变化——`data.coverage` 是 `number | null`、`GET /customer/{id}/groups` 的 `accountId` **必填**、`GET /groups` 的可选 `sort=stale`、导出超限 **40016** 且 `chatKeys` **去重早于计数**。以及 `PageResult` 的四键（`records/total/page/pageSize`）、`/api/auth/login`（`inviteCode/username/password/deviceId`，本地种子账号见 `DataSeeder.java:29`）、`GET /api/customers?platformType=1&page&pageSize` 的 `records[].{id,phone,platformType}`。
+- Produces：没有源码接口（tmp 不进 git）。产出两份可引用的读数文件：`tmp/p8-contract.log`（逐条 check 名 + 期望/实际 + 末尾退出码）与 `tmp/p8-purge.log`（三表清理前后的行数 + affected rows）。Task 17 的验收文档直接抄这两份，**不接受"跑过了"这种无文件口的说法**。
+
+**校正清单**（草稿那一格 → 改成；逐条有名，Step 里给代码）：
+
+| # | 草稿现状（读码 `tmp/p8-group-members-contract.mjs`） | 改成 | 为什么这格必须动 |
+|---|---|---|---|
+| N1 | `0.1 服务活着` / `0.2 登录成功` 走 `ok()`，失败只 `fail++`，最后 `exit 1` | 前置档独立：health 拿不到 `code===0`、登录没过、`:8180` 拒绝连接 → `die(2, 原因)`；只有**断言**红才 `exit 1` | 「后端根本没起」与「产品行为坏了」是两个完全不同的结论。草稿会把环境问题报成 12 条产品失败，而 memory 里那条纪律就是为这个付过费的：断言必须区分「生效了」与「什么都没做」 |
+| N2 | 注释承认「每跑一轮在库里留一批验证数据」 | 清理腿：`tmp/P8Purge.java` 按 `(account_id, chat_key IN 本轮两键)` 删三表，包在 `finally` 里，跑完复查 0 行（R44） | 残留不只占磁盘。同键复跑时 `participant_count` 已有值 → "首次建档"那条断言读到 `ok` 而不是 `first_build`，**验证数据会伪装成产品行为**。换 `RUN` 键只是把问题推迟，不是解决 |
+| N3 | 只有一个群键 `GROUP_KEY` | 再加 `GROUP_KEY2`（只登记不快照），专门喂 `sort=stale` 那一腿 | ⑥ 的判据是「`last_snapshot_at IS NULL` 的排最前」，需要一个真未建档的群。用本轮已有的群做会与本任务的其它断言互相污染 |
+| N4 | 2.4 `coverage === null` | 保留，并补 **2.4b `'coverage' in data`** | `undefined`（容器压根没这个键）与 `null`（有键、值就是空）在 `=== null` 上都为假，但含义完全不同：前者是容器换了形状，后者才是"没有分母" |
+| N5 | 夹具 `phone: '+86138000...'`，落库形状无断言 | 补 **2.9**：`rows[0].phone === '861380000001'`（无 `+`），且夹具里放一个 `'+86 138 0000 0002'`（带空格）证明归一吃掉了空白 | ⑧ 归一这一半今天在库里是看不出来的：写原样、匹配用归一值，按号码那一路永远命中不上——只有把落库值钉成断言，改回来的那一拍才有证人 |
+| N6 | 段 3 只断 `reconciled===false` 与「人没被误判退群」 | 补 **3.6** 闸读数入库（`lastCoverage≈0.4`、`lastReconcileReason==='coverage_too_low'`）、**3.7** `lastSnapshotAt` 与 `snapshotCount` 没被坏快照推进 | ③ 的两列是 §8 界面标注唯一的数据来源；R20 那三列（分母 / 时间戳 / 次数）不动是这条闸最贵的性质，而 8b 的 `markGate(...,at)` 带了一个 `at` 形参——一旦实现顺手把它写进 `last_snapshot_at`，只有真库读数能抓到 |
+| N7 | 段 7 只断 `seq` 连续与 `groupId` 值 | 补 **7.5** 键集逐字等于那 14 个键名、**7.6** `inGroup ∈ {'是','否'}` 且本轮真退群的那人是 `'否'` | §A.2 ⑥ 那四处"与正文不同"里没有一条有证人。列名与"后端已格式化过中文"这两件事都是 Task 13 的 exporter 逐字依赖的，改了后端不改 exporter 就出现两份列名 |
+| N8 | 段 9 的 `/customer/1/groups` 不带 `accountId`，且只断「不报错」 | 改成带 `accountId`，并新增段 11 造一次**真匹配**（客户号 → 成员 → 反查得到本轮群） | ④ 收窄之后"不报错"这条断言永远为真（400 也是响应）。要证明的是"收窄了仍然读得到该读的"与"跨账号的那一份读不到了" |
+| N9 | 无搜索腿 | 新增段 10：**10.1** `q='%'` ⇒ 空名单、**10.2** `q='a%b'` ⇒ 只命中 displayName 里真含 `a%b` 的那一行、**10.3** `q` 只有全角空格 ⇒ 空名单 | ① 的整个效果（`SearchPattern` 的 `null` 契约 + 反斜杠转义）在 mock 单测里只能断"绑定值长这样"。真库里 `%%…%%` 会变成搜全表——那恰好是这条腿要抓的错法，而它只有 HTTP 档看得见 |
+| N10 | 无行序腿 | **10.4**：名单第一页里，`latestJoinAt` 非空的行必须整体排在为空的行之前（真 MySQL 的 `ASC` 默认 NULL **最前**，② 改的就是这个默认） | ② 是本计划里唯一一条"数据库默认与产品口径相反"的修法，Mockito 证不了 `ORDER BY ISNULL(...)`；这一格不跑就等于没改 |
+| N11 | 无导出上限/去重腿 | 新增段 12：**12.1** 51 个唯一键 ⇒ 40016、**12.2** `[G1,G1,G2]` ⇒ `code===0` 且行数 = 两群人数之和、**12.3** 只给一个 `@c.us` 键 ⇒ 40000 | ⑤ 三半各一条。特别是 12.2：不去重的实现会返回翻倍行数、`seq` 跟着双计，而"同一群勾两遍绕过 50 群上限"是 spec §10 明令拦住的那件事 |
+| N12 | 无 `sort` 腿 | 新增段 13：**13.1** `sort=stale` 的第一行是 `GROUP_KEY2`（未建档），默认顺序的第一行是 `GROUP_KEY` | ⑥ 是 R28 那条"泵读位置不读日期串"的唯一来源；这一格红 = 泵的建档优先级会一直按页内顺序跑，看不出后端根本没排 |
+
+**技术要点**
+
+1. **前置探测当版本闸，但它在**本轮第一发首建之后**（Step 2 那段代码）**：判 `'lastCoverage' in (records[0] ?? {})`，拿不到就 `die(2, '后端不含 Task 8b 的 V13 读数')`。为什么不放在骨架里：这条读数是**按账号取一页群**，账号名下没有行时 `records[0]` 是 `undefined`，判据塌成 false——而清理腿（N2）每轮末尾就把本轮两键删干净了，于是"旧 jar"与"库还空着"会共用同一个 `die(2)`，那种红归不了因。为什么不先跑断言再看红：`LocalDateTime`/新列没进库时，症状是"一片红"，而真相是"你连的那个 jar 不是本构建"——这正是上一期踩过并记进 memory 的那类归因错（文件 mtime ≠ 库里的形状；Flyway 只在启动时跑）。**这一条把环境问题从产品失败里摘出来，比任何断言都值钱。** Task 17 的技术要点 13 ① 是同一条纪律的第二处应用。
+2. **本轮的写动作只在两个群键上**。`chat_group` / `group_member_state` / `group_member_event` 三张表里，本任务只允许碰 `chat_key IN (GROUP_KEY, GROUP_KEY2)` 这两块地盘；`P8Purge` 的 `DELETE` 因此必须带 `account_id` 双条件，并在打印里给出三个 affected rows——**affected rows 为 0 也是失败**（说明本轮数据压根没进去，清理没跑成 ≠ 清理干净，两件事不许混报）。
+3. **`RUN` 键的形态要像真群键**。`12036` + 9 位 + `@g.us` 是 `ChatKeys.isGroup` 认的形状；草稿这一格是对的，保留（`resolveAccount` 与 `isGroupKey` 都会拒非 `@g.us`，夹具一旦不像真键，段 2 就变成在测参数校验）。代价：真实 WhatsApp 群键是 18 位，我们的 14 位不会与真数据撞车——这是**故意的**，撞上了清理腿就会删掉不该删的行。
+4. **断言一律读"实际落库的那一列"，不读响应的回声**。最典型的是覆盖率：POST 响应里的 `coverage` 是当场算的，`/groups` 里的 `lastCoverage` 才是写进去的——只断前者会漏掉"`markGate` 没被调用 / 调用时 SQL 没写列"这一整类失败（3.6 因此必须存在，且它读的是 ⑥ 那一份而不是 ① 那一份）。
+5. **`DOUBLE` 的比较用差值不用等值**：`Math.abs(x - 0.4) < 1e-9`。8b 的技术要点里已经写明这一列会有浮点尾巴；用 `=== 0.4` 的断言一旦在某个 Java/MySQL 版本组合上红，会把一条口径改动误报成产品缺陷。
+6. **"当日发言数"这一格本任务不测**。它锚定的是"该成员最近发言的那一天"，而自动化腿不许碰页面发送链（Global Constraints），库里造不出真消息。做法是**在日志里显式打印 `dayMsgCount` 与 `msgCount` 的实际值并注明"待真实登录档核对"**，把这一格留在"待验证"而不是用假数据冒充通过（§13 最后一档）。这一句要抄进 Task 17 的验收文档。
+7. **退出码是判据的一部分**：`0` 全绿、`1` 断言红（产品）、`2` 前置不满足（环境/版本/凭据/账号平台不支持）。草稿只有 1/2 且用反了（凭据缺失是 2、登录失败是 1）。跑法与 P7 那两个驱动一致：`node tmp/p8-group-members-contract.mjs; echo "exit=$?"`，日志 `tee` 进 `tmp/`（后台任务的输出文件在 AppData 下我读不到，仓库内 `tmp/` 是唯一能引用的位置）。
+8. **红格不许在本任务里修后端**。发现红就三选一：记进 §A.1（"8b 的第 N 条在真库里没生效"）→ 回 8b 修 → 重跑本任务；或者确认是**契约腿自己写错**（夹具、期望值），改这里要在提交正文里写明"改了判据的哪一半、判别力为什么还在"；第三种是这条断言本来就不该由 HTTP 档证（如 N6 的浮点尾巴），那把它降级成日志读数，不许静默删掉。
+
+- [ ] **Step 1: 骨架改造（N1 + N3；版本闸的位置见 Step 2）**
+
+文件头把退出码约定写进注释，并换成 `die()` / `check()` 两件套：
+
+```js
+// 退出码：0=全绿；1=断言红（产品）；2=前置不满足（服务没起 / 登录没过 / 后端 jar 不含 8b
+//          / 本租户没有平台支持的账号 / 没有 platformType=1 且带 phone 的客户档）。
+// 用法：SCRM_USER=admin SCRM_PASS=admin123 node tmp/p8-group-members-contract.mjs 2>&1 | tee tmp/p8-contract.log
+//       （本地种子口令读码自 DataSeeder.java:29，不在脚本里新增秘密）
+const die = (code, why) => { console.error(`前置不满足：${why}`); process.exit(code) }
+
+function check(name, pass, expected, actual) {
+  if (pass) { pass_++; console.log(`  PASS  ${name}`) }
+  else { fail_++; failures.push(name); console.log(`  FAIL  ${name}  expect=${expected}  actual=${JSON.stringify(actual)?.slice(0, 220)}`) }
+  return pass
+}
+```
+
+`req()` 里把 `fetch` 的 reject 塌成 `{ code: -1 }`（照 `tmp/p7b-detail-ui.mjs:M1` 那条：后端不可达时裸 reject 会崩栈按 1 收，把环境问题的退出码判反）。**前置版本闸不在这一步**——它要读一行已存在的群，位置在 Step 2，理由见那里的注释与技术要点 1。
+
+两个群键：
+
+```js
+const RUN = String(Date.now()).slice(-9)
+const GROUP_KEY = `12036${RUN}@g.us`        // 本轮主战场：建档 + 闸 + 事件
+const GROUP_KEY2 = `12036${RUN}9@g.us`      // 只登记不快照，专门给 sort=stale（N3）
+const KEYS = [GROUP_KEY, GROUP_KEY2]
+```
+
+- [ ] **Step 2: 段 2 补断言（N4 + N5）+ 前置版本闸**
+
+先在 `2.1` 那条之后（也就是**本轮第一发首建落库之后**）装版本闸，再往下写断言：
+
+```js
+// 前置版本闸（技术要点 1）。为什么不在骨架里：`GET /groups` 的 `accountId` 是必填参数
+//（读码 `GroupMemberController.java:48-54`），而判 `GroupVO` 有没有 8b 那两列又必须**有一行群**
+// 才读得出键名。清理腿（N2）每轮末尾会把本轮两键删干净，所以下一轮刚进来时那个账号名下很可能
+// 一行都没有：`records[0]` 是 `undefined`，判据塌成 false，于是"旧 jar"和"还没写库"混成同一个
+// `die(2)`——那种红归因不了，只能整跑重来。放在 2.1 之后，读的才是 jar 的形状而不是库的空。
+const gateRow = (await call('GET', `/api/group-members/groups?accountId=${accountId}&page=1&size=1`, { token })).json?.data?.records?.[0]
+if (!gateRow) die(2, '版本闸读不到任何群行：2.1 那一发首建没落库，先修写入再谈版本')
+if (!('lastCoverage' in gateRow)) die(2, '后端不含 Task 8b 的 V13 读数（jar 是旧构建？）')
+```
+
+`2.4` 保留原判据，紧随其后补两格，并把 `first` 那一批的夹具改成"带 `+` 与带空格各一半"：
+
+```js
+check('2.4b coverage 键存在（区分 null 与"容器没这个键"）', 'coverage' in (first.json?.data ?? {}), '有键', Object.keys(first.json?.data ?? {}))
+// N5：⑧ 的 phone 归一——写进去的必须是纯数字
+const phoneRows = rows1.map((r) => r.phone)
+check('2.9 phone 落库无 + 无空白（⑧ 归一生效）',
+  phoneRows.every((p) => /^\d+$/.test(p ?? '')) && phoneRows[0] === '861380000001', '/^\\d+$/', phoneRows.slice(0, 3))
+```
+
+```js
+// 夹具：1 号带 +，2 号带空格与连字符，两者都必须归一成同一形状
+const participants = (from, count) =>
+  Array.from({ length: count }, (_, i) => {
+    const n = from + i
+    const raw = n === 1 ? '+8613800000001' : n === 2 ? '+86 138-0000-0002' : `+86138000${String(n).padStart(4, '0')}`
+    return { memberKey: mk(n), phone: raw, displayName: n === 3 ? '搜a%b的人' : `成员${n}`, roleType: n === 1 ? 'admin' : 'member' }
+  })
+```
+
+（3 号那一行同时是 N9 的搜索夹具——`displayName` 里真含 `a%b`。）
+
+- [ ] **Step 3: 段 3 补断言（N6，③ + R20 的真库读数）**
+
+```js
+const gs = await call('GET', `/api/group-members/groups?accountId=${accountId}&page=1&size=50`, { token })
+const g1 = (gs.json?.data?.records ?? []).find((x) => x.chatKey === GROUP_KEY)
+check('3.6 闸读数入库（V13 两列，界面唯一来源）',
+  Math.abs((g1?.lastCoverage ?? -1) - 0.4) < 1e-9 && g1?.lastReconcileReason === 'coverage_too_low',
+  '0.4 / coverage_too_low', { lastCoverage: g1?.lastCoverage, reason: g1?.lastReconcileReason })
+check('3.7 坏快照没推进时间戳与次数（R20 三列一起挡）',
+  g1?.lastSnapshotAt === beforeGateSnapshotAt && g1?.snapshotCount === beforeGateCount,
+  { at: beforeGateSnapshotAt, count: beforeGateCount }, { at: g1?.lastSnapshotAt, count: g1?.snapshotCount })
+```
+
+`beforeGateSnapshotAt` / `beforeGateCount` 在段 2 结束、段 3 开始之前读一次（同一次 `/groups` 里就有），不许拿 POST 响应里的字段当"库里的值"——那是回声，不是落库。**这一格就是 `markGate(...,at)` 那个多余形参的守门人**：实现若把它写进 `last_snapshot_at`，3.7 必红，红格回 8b 删参数或删赋值。
+
+- [ ] **Step 4: 段 10 —— 搜索与行序（N9 + N10，①② 的真库效果）**
+
+```js
+// 10.1 SearchPattern 的 null 契约：只含通配符的词按"不搜"处理，返回空名单而不是全表
+const wild = await call('GET', memberUrl({ q: '%' }), { token })
+check('10.1 q="%" 不搜全表（① 的 null 契约）', (wild.json?.data?.members?.records ?? []).length === 0,
+  '0 行', `${(wild.json?.data?.members?.records ?? []).length} 行 / total=${wild.json?.data?.members?.total}`)
+
+// 10.2 字面量 % 要搜得到：转义没生效时这里会命中全表（10 人）而不是 1 人
+const lit = await call('GET', memberUrl({ q: 'a%b' }), { token })
+const litRows = lit.json?.data?.members?.records ?? []
+check('10.2 q="a%b" 只命中真含 a%b 的那一行（反斜杠转义生效）',
+  litRows.length === 1 && litRows[0].displayName === '搜a%b的人', 1, litRows.map((r) => r.displayName))
+
+// 10.3 全角空格：strip() 用错成 trim() 时这里会命中全表
+const full = await call('GET', memberUrl({ q: '\u3000' }), { token })
+check('10.3 全角空格按空白处理（strip 而非 trim）', (full.json?.data?.members?.records ?? []).length === 0,
+  '0 行', `${(full.json?.data?.members?.records ?? []).length} 行`)
+
+// 10.4 NULL 沉底：② 改的就是 MySQL ASC 的默认（NULL 最前）
+const page = await call('GET', memberUrl({ page: 1, size: 50 }), { token })
+const ordered = page.json?.data?.members?.records ?? []
+const lastNonNull = ordered.reduce((acc, r, i) => (r.latestJoinAt != null ? i : acc), -1)
+const firstNull = ordered.findIndex((r) => r.latestJoinAt == null)
+check('10.4 名单里 latestJoinAt 为 NULL 的整体沉到非空之后（② 真库生效）',
+  firstNull === -1 || lastNonNull === -1 || firstNull > lastNonNull,
+  'NULL 行索引 > 非空行索引', { firstNull, lastNonNull, n: ordered.length })
+```
+
+`memberUrl(extra)` 是本任务新加的小函数，把重复的六次 `?accountId=&chatKey=&page=&size=` 拼法收成一处（`encodeURIComponent` 一个都不许漏——`chatKey` 里的 `@` 与 `q` 里的 `%` 都是要编的）：
+
+```js
+const memberUrl = (extra = {}) => {
+  const p = new URLSearchParams({ accountId: String(accountId), chatKey: GROUP_KEY, page: '1', size: '50' })
+  for (const [k, v] of Object.entries(extra)) if (v !== undefined && v !== null && v !== '') p.set(k, String(v))
+  return `/api/group-members/group/members?${p}`
+}
+```
+
+- [ ] **Step 5: 段 11 —— 账号收窄与客户匹配（N8，④ + ⑧ 的另一半）**
+
+先用 HTTP 找一个**本租户内**可当夹具的客户（`platformType===1` 且 `phone` digits ≥ 7）：
+
+```js
+const custs = await call('GET', '/api/customers?platformType=1&page=1&pageSize=50', { token })
+const cust = (custs.json?.data?.records ?? [])
+  .find((c) => /^\d{7,}$/.test(String(c.phone ?? '').replace(/\D/g, '')))
+if (!cust) die(2, '本租户没有 platformType=1 且带 phone 的客户档——④ 与 ⑧ 的匹配腿做不了')
+const custDigits = String(cust.phone).replace(/\D/g, '')
+```
+
+再报一批带这个号码的快照，然后用**带 `accountId`** 的反查读回来：
+
+```js
+await call('POST', '/api/group-members/batch', {
+  token,
+  body: { accountId, snapshot: { chatKey: GROUP_KEY,
+    participants: [{ memberKey: `${custDigits}@c.us`, phone: `+${custDigits}`, displayName: '客户夹具', roleType: 'member' }] } }
+})
+const withAcct = await call('GET', `/api/group-members/customer/${cust.id}/groups?accountId=${accountId}`, { token })
+check('11.1 反查带 accountId 读得到本轮群（④ 收窄后仍可用）',
+  (withAcct.json?.data ?? []).some((g) => g.chatKey === GROUP_KEY), '含本轮 GROUP_KEY', (withAcct.json?.data ?? []).map((g) => g.chatKey))
+const row = (await call('GET', memberUrl({ q: '客户夹具' }), { token })).json?.data?.members?.records?.[0]
+check('11.2 成员行按号码挂上客户（⑧ 的归一在这里闭环）', row?.customerId === cust.id, cust.id, row?.customerId)
+const badAcct = await call('GET', `/api/group-members/customer/${cust.id}/groups`, { token })
+check('11.3 不带 accountId 的反查被拒（④ 的必填是真必填）', badAcct.status === 400 || badAcct.json?.code !== 0,
+  '400 或非 0 code', { status: badAcct.status, code: badAcct.json?.code })
+```
+
+**11.2 是这条链上唯一能把 ⑧ 的两半接起来的断言**：入库不归一 → 按号码匹配不上（NULL）；匹配用原样比 → 带 `+` 的入参与不带 `+` 的客户档永远不等。两种失败都表现为 `customerId` 为空，而 11.1/11.3 都还是绿的——所以这一格不许省。
+
+- [ ] **Step 6: 段 12 —— 导出键面与上限（N7 + N11，⑤ 的三半）**
+
+```js
+const EXPORT_KEYS = ['seq','groupName','groupId','phone','name','role','inGroup','joinAt',
+  'joinCount','leaveAt','exitMethod','lastMsgAt','dayMsgCount','msgCount']   // §A.2 ⑥ 逐字
+
+// 7.5 / 7.6 打在已有的那次 export 上
+check('7.5 导出键集逐字等于那 14 个键（§A.2 ⑥）',
+  expRows.length > 0 && JSON.stringify(Object.keys(expRows[0]).sort()) === JSON.stringify([...EXPORT_KEYS].sort()),
+  EXPORT_KEYS.length, expRows[0] ? Object.keys(expRows[0]).length : '无行')
+check('7.6 inGroup 已是中文且退群那个人是「否」（后端格式化过，主进程不许再映射）',
+  expRows.every((r) => r.inGroup === '是' || r.inGroup === '否') &&
+  expRows.filter((r) => r.name === '客户夹具').every((r) => r.inGroup === '是'),
+  "'是'|'否'", [...new Set(expRows.map((r) => r.inGroup))])
+
+// 12.1 51 个唯一键 → 40016
+const fiftyOne = Array.from({ length: 51 }, (_, i) => `12036000000000${String(i).padStart(2, '0')}@g.us`)
+const over = await call('GET', `/api/group-members/group/members/export-rows?accountId=${accountId}&chatKeys=${encodeURIComponent(fiftyOne.join(','))}`, { token })
+check('12.1 去重后仍 51 群 → 40016（不是 40000）', over.json?.code === 40016, 40016, over.json?.code)
+
+// 12.2 同一群写两遍：不翻倍
+const dup = await call('GET', `/api/group-members/group/members/export-rows?accountId=${accountId}&chatKeys=${encodeURIComponent([GROUP_KEY, GROUP_KEY, GROUP_KEY2].join(','))}`, { token })
+const single = await call('GET', `/api/group-members/group/members/export-rows?accountId=${accountId}&chatKeys=${encodeURIComponent(GROUP_KEY)}`, { token })
+check('12.2 群键重复不翻倍行数，且 50 上限按去重后算',
+  dup.json?.code === 0 && (dup.json?.data ?? []).length === (single.json?.data ?? []).length,
+  (single.json?.data ?? []).length, (dup.json?.data ?? []).length)
+
+// 12.3 非群键被剔干净 → 40000
+const notGroup = await call('GET', `/api/group-members/group/members/export-rows?accountId=${accountId}&chatKeys=${encodeURIComponent(`${custDigits}@c.us`)}`, { token })
+check('12.3 只给单聊键 → 剔完为空 → 40000（不是 0 行成功）', notGroup.json?.code === 40000, 40000, notGroup.json?.code)
+```
+
+- [ ] **Step 7: 段 13 —— `sort=stale`（N12，⑥）**
+
+```js
+// GROUP_KEY2 只登记、从没成功快照 → stale 那一路必须排最前
+await call('POST', '/api/group-members/batch', { token, body: { accountId, groups: [{ chatKey: GROUP_KEY2, title: '契约验证群B' }] } })
+const stale = await call('GET', `/api/group-members/groups?accountId=${accountId}&page=1&size=50&sort=stale`, { token })
+const staleRows = (stale.json?.data?.records ?? []).filter((g) => KEYS.includes(g.chatKey))
+const plain = await call('GET', `/api/group-members/groups?accountId=${accountId}&page=1&size=50`, { token })
+const plainRows = (plain.json?.data?.records ?? []).filter((g) => KEYS.includes(g.chatKey))
+check('13.1 sort=stale 把未建档的排在本轮两键之前，默认顺序仍是它之后（⑥）',
+  staleRows[0]?.chatKey === GROUP_KEY2 && plainRows[0]?.chatKey === GROUP_KEY,
+  { stale: GROUP_KEY2, plain: GROUP_KEY }, { stale: staleRows.map((g) => g.chatKey), plain: plainRows.map((g) => g.chatKey) })
+```
+
+**两条顺序反了就是红**：后端 SQL 里 `ISNULL(last_snapshot_at)` 与 `DESC` 配错、或者 `sort` 参数压根没接（Spring 忽略未声明参数 ⇒ 两趟返回同一份顺序），这份断言都抓得到——后者尤其：不比较两趟的差异而只断 `staleRows[0]`，参数没接上时可能碰巧通过。
+
+- [ ] **Step 8: 段 8 补一格（空快照不许抹掉上一轮读数）**
+
+```js
+check('8.2 纯空快照这一批既不写分母也不写读数（③ 的"没带可用快照两种都不写"）',
+  emptySnap.json?.data?.coverage === null && gAfterEmpty?.lastReconcileReason === 'coverage_too_low',
+  { coverage: null, reason: 'coverage_too_low（上一轮的）' },
+  { coverage: emptySnap.json?.data?.coverage, reason: gAfterEmpty?.lastReconcileReason })
+```
+
+`gAfterEmpty` 在 8.1 之后重新读一次 `/groups`。这一格守的是 8b 技术要点里那句"一次纯事件上报不该把上一轮的好结果抹成 `no_snapshot`"——症状是界面上"本次未做退群判定"的标注突然消失，而实际上什么也没重算。
+
+- [ ] **Step 9: 清理腿（N2，R44）——`tmp/P8Purge.java`**
+
+```java
+// tmp/P8Purge.java —— 契约腿的收尾清理。只删本轮自己造的两个群键（account_id 双条件），
+// affected rows 为 0 视为失败：那说明数据根本没进去，"清理没跑成"不能报成"清理干净"。
+import java.sql.*;
+
+public class P8Purge {
+    public static void main(String[] a) throws Exception {
+        long accountId = Long.parseLong(a[0]);
+        String url = "jdbc:mysql://localhost:3306/smartscrm_react?useSSL=false&allowPublicKeyRetrieval=true";
+        try (Connection c = DriverManager.getConnection(url, "root", "1234560")) {
+            for (String sql : new String[] {
+                "DELETE FROM group_member_event  WHERE account_id = ? AND chat_key IN (?, ?)",
+                "DELETE FROM group_member_state  WHERE account_id = ? AND chat_key IN (?, ?)",
+                "DELETE FROM chat_group          WHERE account_id = ? AND chat_key IN (?, ?)" }) {
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    ps.setLong(1, accountId); ps.setString(2, a[1]); ps.setString(3, a[2]);
+                    int n = ps.executeUpdate();
+                    System.out.println(sql.split(" ")[2] + " deleted=" + n);
+                    if (n == 0) { System.out.println("WARN 这一张表本轮没有行（数据没写进去？清理没跑成 ≠ 清理干净）"); }
+                }
+            }
+            // 复查：区分"删了"与"什么都没做"
+            try (Statement s = c.createStatement(); ResultSet r = s.executeQuery(
+                "SELECT COUNT(*) FROM chat_group WHERE account_id = " + accountId + " AND chat_key IN ('" + a[1] + "','" + a[2] + "')")) {
+                r.next();
+                System.out.println("residual chat_group=" + r.getInt(1));
+                if (r.getInt(1) != 0) System.exit(1);
+            }
+        }
+    }
+}
+```
+
+```bash
+export JAVA_HOME="C:/Program Files/Java/jdk-17.0.18"
+set -o pipefail
+cd /d/SmartSCRM
+java -cp "$HOME/.m2/repository/com/mysql/mysql-connector-j/9.1.0/mysql-connector-j-9.1.0.jar" \
+  tmp/P8Purge.java "$ACCOUNT_ID" "$GROUP_KEY" "$GROUP_KEY2" 2>&1 | tee tmp/p8-purge.log
+```
+
+jar 版本号以 `~/.m2/repository/com/mysql/mysql-connector-j/` 下实际目录为准（`tmp/P6Tables.java` 那一格早就这么写的）。驱动里把这条挂在 `finally`：`ACCOUNT_ID` 与两个群键在段 1/段 2 就已知，**任何退出路径**（断言红、`die(2)`、`main()` 抛错）都要先冲一遍清理再退出；清理失败只打日志不改主退出码（否则产品失败会被清理噪声盖掉），但 `tmp/p8-purge.log` 里的 `deleted=0` 必须在验收文档里点名。
+
+- [ ] **Step 10: 跑一遍并留日志**
+
+```bash
+cd /d/SmartSCRM
+powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p7b-kill8180.ps1
+cd apps/server && ./mvnw -DskipTests package 2>&1 | tail -5
+cd /d/SmartSCRM && (java -jar apps/server/target/*.jar > tmp/p8-server.log 2>&1 &)
+for i in $(seq 1 60); do curl -sf http://localhost:8180/api/health >/dev/null && break; sleep 1; done
+cd /d/SmartSCRM
+SCRM_USER=admin SCRM_PASS=admin123 node tmp/p8-group-members-contract.mjs 2>&1 | tee tmp/p8-contract.log
+echo "exit=$?"
+```
+
+期望：`exit=0`，日志末尾「通过 N / 失败 0」，**N 必须等于脚本里 `check(` 的调用条数**（跑之前 `grep -c "^check(\|  check(" tmp/p8-group-members-contract.mjs` 数一遍，把那个数抄进验收文档当分母）。按本任务的清单推：磁盘上那份草稿有 **34** 条编号断言（`0.1` 到 `9.1`，实测 `grep -oE "ok\('[0-9]"` 得 34），N1 把其中四条改判成前置（`0.1 服务活着`、`0.2 登录成功`、`0.3 拿到 access token`、`1.2 找到可用于群成员采集的账号`——`die(2)` 的口径，不再记账；`1.1 拿到账号列表` 留着，它证的是端点本身可读），Step 2–7 新增 **18** 条（`2.4b 2.9 3.6 3.7 7.5 7.6 8.2 10.1 10.2 10.3 10.4 11.1 11.2 11.3 12.1 12.2 12.3 13.1`）⇒ **34 − 4 + 18 = 48**。分母对不上就是有一条腿没被记账（写漏了或中途抛错），这条纪律与 Task 17 的 `x+y=20` 同源；跑出来的实际数与 48 不符时，以脚本里的 `check(` 数为准并在提交正文里写明差在哪几条。**先记退出码再读日志**：`tee` 之后的 `echo $?` 拿的是 `tee` 的码，这一格要判红必须让脚本自己 `process.exit`，或改用 `node ... 2>&1 | tee tmp/p8-contract.log; exit ${PIPESTATUS[0]}`（`set -o pipefail` 已在 shell 里开着，两种写法任选其一，但**必须**有一种——否则"驱动红了但流水线绿了"这条最像成功的失败会被读成通过）。
+
+- [ ] **Step 11: 红格归因，然后才谈修**
+
+每条红按三选一走（技术要点 8）：回 8b 改代码 → 改判据（写明判别力为什么还在）→ 降级成日志。任何"改判据"都要在本节末尾追加一行记录，不许只留在会话里。
+
+- [ ] **Step 12: 文档同步 + 提交**
+
+- 本计划 §A.1：契约腿那一行从"未跑"改成"实测：`tmp/p8-contract.log` 全绿（尾行分母 = 脚本里的 `check(` 数，推定 48）/ 退出码 0 / 清理后 `residual chat_group=0`"。
+- spec §15：②③ 那两格各追加一句本次读数（**只记读数，不改口径**——这两条要真机 `getAllGroups()` / `getParticipants()` 的数据才能收口，本地 HTTP 夹具证明不了它们）。
+- 提交只含 `docs/`：`tmp/` 下的驱动与日志永不进 git（Global Constraints）。
+
+```bash
+cd /d/SmartSCRM && git status --short
+git add docs/superpowers/plans/2026-09-30-group-member-analysis.md docs/superpowers/specs/2026-09-30-group-member-analysis-design.md
+git commit -m "$(cat <<'EOF'
+update(P8/B6): 契约腿按 as-built 校正并补八条语义的真库证腿
+
+12 条校正（N1-N12）：退出码档、版本闸、清理腿；coverage 落库、phone 归一、
+NULL 沉底、LIKE 转义、40016 与去重、sort=stale 各一条真 MySQL 断言。
+EOF
+)"
+```
+
+提交前确认 `git status --short` 里没有 `tmp/`、没有 `apps/desktop/tsconfig.node.tsbuildinfo`、没有 `docs/notes/2026-09-22-legacy-feature-gap.md`。
+
+---
+
+---
+
+## Task 15: 渲染层数据层 `api/groupMembers.ts` + `components/ui/tabs.tsx` + §8 文案纯函数
+
+> **判档**：`pnpm run typecheck`（四路）+ `test:unit`（本任务给 `groupDisplay` 补 7 条 test / 21 个断言）+ `pnpm run build`。**本任务不声称界面可用**——hooks 与真后端对不上、tab 切换不渲染，都是 Task 16 装配完 + Task 17 的 CDP 腿才结的事。
+>
+> 本任务不碰页、不碰主进程，只动渲染层与一个 `ui` 原子件。
+
+**Files:**
+- Create: `apps/desktop/src/renderer/src/api/groupMembers.ts`
+- Create: `apps/desktop/src/renderer/src/components/ui/tabs.tsx`
+- Create: `apps/desktop/src/renderer/src/lib/groupDisplay.ts`
+- Create: `apps/desktop/src/renderer/src/lib/groupDisplay.test.ts`
+- Modify: `apps/desktop/src/renderer/src/api/messages.ts:149`（`const qs` → `export const qs`，只加一个词）
+- Modify: `apps/desktop/tsconfig.unit.json`（`include` 补 `groupDisplay.ts` / `groupDisplay.test.ts` 两行）
+- Modify: `docs/superpowers/specs/2026-09-30-group-member-analysis-design.md` §9 的 `group:state` 那一句（改口，见技术要点 7）
+
+**Interfaces:**
+- Consumes：`http`（`lib/http.ts`：`code !== 0 ⇒ ApiError`，401 自动刷一次）、`PageResult` 的四键（`records/total/page/pageSize`）、§A.2 六跳的线形 + Task 8b Produces 的四处变化（`coverage: number | null`、`customerGroups` 必填 `accountId`、`GroupVO` 末尾两键、`sort` 界面**不传**）、shared 的 `CoverageReason` / `GroupMemberRole` / `GroupEventType` / `GroupEventSource` / `GroupBuildOutcome` / `GroupStateEvent` / `GroupExportResult` / `groupRoleLabel` / `exitMethodLabel` / `MAX_EXPORT_GROUPS`（全部 `import type` 或值导入皆来自 `@shared/groupMembers`，Task 2/9/12/13 已交付）、`window.scrm?.group.{build,onState,export}`（Task 12/13 的 preload 面）、`useAccounts()` / `useSelectionStore()`（`stores/accounts.ts`）。
+- Produces（Task 16 的两个组件只认这一份名字表）：
+
+```ts
+// api/groupMembers.ts
+export interface GroupRowVO {
+  chatKey: string; title: string | null; platform: string
+  participantCount: number; snapshotCount: number; inGroupCount: number
+  lastSnapshotAt: string | null; lastEventAt: string | null; isFinal: boolean
+  lastCoverage: number | null; lastReconcileReason: string | null
+}
+export interface GroupMemberRowVO {
+  chatKey: string; memberKey: string; phone: string | null; displayName: string | null
+  roleType: GroupMemberRole; isInGroup: boolean; joinCount: number
+  latestJoinAt: string | null; latestLeaveAt: string | null; exitMethod: string | null
+  firstSeenAt: string | null; lastEventAt: string | null; snapshotSeenCount: number
+  customerId: number | null; lastMsgAt: string | null; dayMsgCount: number | null; msgCount: number | null
+}
+export interface GroupEventRowVO {
+  id: number; chatKey: string; groupTitle: string | null; memberKey: string | null
+  actorKey: string | null; actorName: string | null; eventType: GroupEventType
+  occurredAt: string; source: GroupEventSource; rawType: string | null
+  rawSubtype: string | null; bodySnapshot: string | null
+}
+export interface MemberPageVO { members: PageResult<GroupMemberRowVO>; coverage: number | null; reason: CoverageReason }
+export interface MemberFilters { isInGroup?: boolean; role?: GroupMemberRole | ''; q?: string; page?: number }
+export const GROUP_MEMBER_PAGE_SIZE = 50
+export const GROUP_EVENT_PAGE_SIZE = 30
+export const groupKeys = {
+  root: ['group'] as const,
+  members: (accountId: number | null, chatKey: string, f: MemberFilters) => ['group', 'members', accountId, chatKey, f] as const,
+  events: (accountId: number | null, chatKey: string, eventType: string | '', page: number) => ['group', 'events', accountId, chatKey, eventType, page] as const,
+  customerGroups: (accountId: number | null, customerId: number | null) => ['group', 'customer-groups', accountId, customerId] as const
+}
+export function useGroupMembers(accountId: number | null, chatKey: string, filters: MemberFilters)
+export function useGroupEvents(accountId: number | null, chatKey: string, eventType: string | '', page = 1)
+export function useCustomerGroups(accountId: number | null, customerId: number | null)
+export function useGroupBuild(): { build: (req: { accountId: number; chatKey?: string }) => void; pending: boolean; outcome: GroupBuildOutcome | null }
+export function useGroupExport(): { exportRows: (req: { accountId: number; chatKeys: string[] }) => void; pending: boolean; result: GroupExportResult | null }
+export function useGroupStateInvalidation(): void   // 挂在 AppLayout：settled ⇒ invalidate(['group'])
+// lib/groupDisplay.ts
+export function shortfallPercent(coverage: number): number
+export function gateNote(reason: string | null, coverage: number | null): string | null
+export function memberAreaState(row: { platform: string; snapshotCount: number }): 'unavailable' | 'never_built' | 'built'
+export function joinTimeCopy(row: { latestJoinAt: string | null }): string
+export function exitCell(row: { isInGroup: boolean; exitMethod: string | null; latestLeaveAt: string | null }): { time: string; method: string }
+export function firstSeenCopy(firstSeenAt: string | null): string
+// components/ui/tabs.tsx
+export { Tabs, TabsList, TabsTrigger, TabsContent, TabsIndicator }
+```
+
+> **`GET /groups` 这一支在本期不导出 hook**：它的读者是建档泵（Task 9 的 `api.ts`）与 Task 14 的契约腿，
+> 渲染层没有"选群去操作"的面（spec §14 明列「群运营阶段的选群界面」不做），所以数据层里不放一个
+> 没有消费者的 `useGroups`。将来 B9/B10 要选群面时再补，那时候它会有真实的调用方。
+
+- `api/groupMembers.ts` 之外**不许有第二个取数出口**：Task 16 的两个组件只调上面这些 hook，不许在组件里裸 `http.get('/api/group-members/…')`。理由与消息面同一条：查询键散到组件里，就会出现"两处形状不同 → 两份永不刷新的缓存"（`messages.ts:159-175` 那段注释买来的教训）。
+
+**技术要点**
+
+1. **`qs` 从 `messages.ts` 导出，不在本节再写一份**：这是"逐字复制一个逻辑块"那一类缺陷，评审会点。改动只有 `export` 一个词，无行为变化，提交正文里点名它动了 P6 已交付文件。
+2. **`isInGroup=false` 必须留在查询串里**（读码 `messages.ts:151-153`：`qs` 丢的是 `undefined`/`null`/`''`，`false` 留下）。所以"只看已退群的人"传 `isInGroup: false` 是对的；**"全部"档必须传 `undefined`，不许传 `''`**——`''` 会被丢掉（看起来一样），但 `false` 与 `''` 在类型上是两件事，混用会让人以为空串是"全部"的编码。`MemberFilters.isInGroup` 的类型就是 `boolean | undefined`，没有第三种。
+3. **查询键把 `size` 算进去**：本层的 `size` 不从 `filters` 里取，而是钉成常量（`GROUP_MEMBER_PAGE_SIZE = 50`）并作为 `groupKeys.members` 的隐含维度（`f` 里带 `page`，`size` 由 hook 自己拼 URL）。为什么钉死：`messages.ts:159-163` 那条注释写得很清楚——两处数字一旦不同，订阅的就是另一份永不刷新的缓存，而表现是一行报错都没有。弹层只有一个调用方，钉死比开放更便宜。
+4. **`coverage` 在本层只透传 `number | null`，格式化归 `groupDisplay`**：`Double` 列会带浮点尾巴（0.9333333333333333，Task 8b 技术要点里已经写明），把 `.toFixed(1)` 写在 hook 里就等于"读数被取数层改过"，下游再格式化一次就成了二次近似。文案计算是纯函数，所以它进 `lib/`，所以它能进 unit 闸门——这是本节唯一可自动验证的显示面。
+5. **不发明"新鲜度阈值"**：spec §11 第 3 条要求读 `state` 前先判 `last_snapshot_at` 的新鲜度，但没有任何一份文档给过"N 小时算旧"。所以 `memberAreaState` 只分三档（非 WhatsApp / `snapshotCount===0` / 其余），弹层顶部**显示时间戳本身**而不是"过期/未过期"的判断词，§14 又明令不做定时重拉——重拉的入口只有顶栏那颗「刷新成员」。代价：用户要自己看时间判断新旧；换来的是界面上没有一个我编的数字。
+6. **`useGroupBuild` 的 `pending` 来自本地 mutation，不来自广播**：`window.scrm.group.build()` 的 promise 在整轮跑完才回（Task 12 的 `invoke`），而广播 `running`/`settled` 是扇出的第二个信号。两个都用会导致"按钮点了没反应"与"按钮一直灰"两种相反的错法。**这里选 mutation 作按钮态**（它是这一次点击的回执，归因清楚），广播只用作**缓存失效**与"别的入口也在跑"的灰态提示（`phase==='running'` 那一格，Task 12 技术要点里就是为它准备的）。
+7. **`group:state` 不携带"某个群来了新事件"这一层信息**，所以 spec §9 那句「`group_event` 入库后主进程广播一条 `group:state`，成员面开着就刷」在本期**做不到**：Task 12 的 `GroupStateEvent` 是**每轮建档**的 `running`/`settled`（`shared/groupMembers.ts`，已定形状），攒批器每 2s 冲一趟（Task 10 的 `EVENT_BATCH_INTERVAL_MS`），把每一次冲趟都广播一遍会变成"每 2 秒全片失效一次"的轮询风暴。**改口径而不是改代码**：本任务把 spec §9 那一句改成「建档结清时广播 `group:state`，成员面据此失效缓存；实时事件只落库，界面靠顶栏「刷新成员」按需重读」，并记进 §13 的验收档。**这是本任务里唯一一处改 spec，动的是数据到达时的可见性承诺，必须在提交正文里写清。**
+8. **`tabs.tsx` 用 Radix 而不是两个按钮**：spec §9 已经取了前者（后续报表阶段同样要 tab）。形制照 `dialog.tsx`：`import { Tabs as TabsPrimitive } from "radix-ui"`（聚合包，成员是 `.Root/.List/.Trigger/.Content/.Indicator`，读码 `dialog.tsx:4,11-18`）、每个件带 `data-slot`、props 类型用 `React.ComponentProps<typeof TabsPrimitive.X>`。**没有 `tabs.tsx` 的现在**是实测的（`components/ui/` 下 12 个文件里没有它）。
+9. **`DialogContent` 已经把浮层计数挂好了**（读码 `dialog.tsx:49-70` 的 `beginOverlay/endOverlay`）：Task 16 的弹层**不许**再调 `beginOverlay`，否则内嵌平台视图会让位两次、归位时留下一个永不移除的 `pointer-events:none`——那是 CDP 腿里 exit 4 那一档污染的来源。
+10. **`groupDisplay.ts` 里凡是运行时要用（不是只用类型）的 shared 值，一律走相对路径 + `.ts` 后缀**：`import { exitMethodLabel, formatExportTime } from '../../../shared/groupMembers.ts'`。原因是这个文件同时活在两个世界——`pnpm run typecheck` 认 `@shared/*` 别名，`node --test`（本任务的 7 条单测靠它）**不认**别名。现成的先例是 `lib/chatDays.ts:4`（`from '../../../shared/chatTime.ts'`），`tsconfig.web.json:15` 与 `tsconfig.unit.json` 都开了 `allowImportingTsExtensions`，所以这一条路径两边都走得通。**只用类型的** import 可以留别名（编译后被擦除，运行时不需要解析）。
+11. **中文词与时间文本各只有一处作者（R46）**：退群方式「快照中已不在 / 自行退群 / 被移出」由 shared 的 `exitMethodLabel` 给（Task 13 交付），`'T'` 换空格截到秒由 shared 的 `formatExportTime` 给（Task 13 交付，Task 15 引它）。`groupDisplay.ts` 只做"这一格该不该出话、出的是时间还是 `—`"，**不许**再写第二张 `EXIT_METHOD` 表、也不许自己 `.replace('T',' ')`。理由：导出文件与弹层是同一份读数的两个出口，两处各写一遍就会在"文件到秒、界面到毫秒"这种 nobody-looks-here 的缝里错开（Task 13 技术要点第 9 条同一条顾虑的下游）。
+
+- [ ] **Step 1: 导出 `qs`**
+
+`apps/desktop/src/renderer/src/api/messages.ts:149`：
+
+```ts
+/** 查询串组装。渲染层只有一份：`groupMembers.ts` 也用它（键的形状要与这里一致，两份各写就会各漏一个空值判断）。 */
+export const qs = (input: Record<string, unknown>): string => {
+```
+
+- [ ] **Step 2: `tabs.tsx`**
+
+```tsx
+import * as React from "react"
+import { cn } from "cn"
+import { Tabs as TabsPrimitive } from "radix-ui"
+
+// 形状与 dialog.tsx 同一家族：data-slot 给样式与 CDP 腿当锚点，props 类型从 primitive 反推，不自己写一遍。
+// 群成员弹层的两个 tab（名单 / 流水）用它；报表阶段（B8）同样要 tab，所以这是第一个 ui 原子件而不是内联按钮组。
+function Tabs({ ...props }: React.ComponentProps<typeof TabsPrimitive.Root>) {
+  return <TabsPrimitive.Root data-slot="tabs" {...props} />
+}
+function TabsList({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.List>) {
+  return (
+    <TabsPrimitive.List
+      data-slot="tabs-list"
+      className={cn("inline-flex h-9 items-center justify-center rounded-lg bg-muted p-1 text-muted-foreground", className)}
+      {...props}
+    />
+  )
+}
+function TabsTrigger({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Trigger>) {
+  return (
+    <TabsPrimitive.Trigger
+      data-slot="tabs-trigger"
+      className={cn(
+        "inline-flex flex-1 items-center justify-center gap-1.5 whitespace-nowrap rounded-md border border-transparent px-3 py-1 text-xs font-medium transition-colors focus-visible:outline-2 focus-visible:outline-offset-2 data-[state=active]:bg-background data-[state=active]:text-foreground data-[state=active]:shadow",
+        className
+      )}
+      {...props}
+    />
+  )
+}
+function TabsContent({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Content>) {
+  return <TabsPrimitive.Content data-slot="tabs-content" className={cn("outline-none", className)} {...props} />
+}
+function TabsIndicator({ className, ...props }: React.ComponentProps<typeof TabsPrimitive.Indicator>) {
+  return <TabsPrimitive.Indicator data-slot="tabs-indicator" className={cn(className)} {...props} />
+}
+export { Tabs, TabsList, TabsTrigger, TabsContent, TabsIndicator }
+```
+
+- [ ] **Step 3: 先写 `groupDisplay` 的失败单测（TDD）**
+
+`apps/desktop/src/renderer/src/lib/groupDisplay.test.ts`（`node --test` 不解析 `@shared/*`，用相对路径 + `.ts` 后缀；`erasableSyntaxOnly` 下禁 `enum`/参数属性）：
+
+```ts
+import test from 'node:test'
+import assert from 'node:assert/strict'
+import {
+  shortfallPercent, gateNote, memberAreaState, joinTimeCopy, exitCell, firstSeenCopy
+} from './groupDisplay.ts'
+
+test('shortfallPercent：覆盖率换成「少 x%」，一位小数', () => {
+  assert.equal(shortfallPercent(0.4), 60)
+  assert.equal(shortfallPercent(0.9333), 6.7)   // 四舍五入到一位，浮点尾巴不外泄
+  assert.equal(shortfallPercent(1), 0)
+})
+
+test('gateNote 只在 coverage_too_low 出文案', () => {
+  assert.equal(gateNote('coverage_too_low', 0.4), '本次快照人数较上次少 60%，未做退群判定')
+  assert.equal(gateNote('ok', 1), null)
+  assert.equal(gateNote('first_build', null), null)      // §8：首次建档正常显示
+  assert.equal(gateNote('no_snapshot', null), null)      // 这一格是"没带快照"，不是"少人了"
+  assert.equal(gateNote(null, null), null)
+})
+
+test('gateNote：coverage 缺失时不许编一个百分比出来', () => {
+  // 判据：reason 说低覆盖但读数没落库（列可空）——宁可不显示标注，也不显示"少 NaN%"
+  assert.equal(gateNote('coverage_too_low', null), '本次快照人数低于上次，未做退群判定')
+})
+
+test('memberAreaState：非 WhatsApp 与从没快照过的群分开', () => {
+  assert.equal(memberAreaState({ platform: 'telegram', snapshotCount: 5 }), 'unavailable')
+  assert.equal(memberAreaState({ platform: 'whatsapp', snapshotCount: 0 }), 'never_built')
+  assert.equal(memberAreaState({ platform: 'whatsapp', snapshotCount: 3 }), 'built')
+})
+
+test('joinTimeCopy：进群时间只取 latestJoinAt，空就空（§11 第 2 条）', () => {
+  assert.equal(joinTimeCopy({ latestJoinAt: '2026-09-30T12:00:00' }), '2026-09-30 12:00:00')
+  assert.equal(joinTimeCopy({ latestJoinAt: null }), '—')
+})
+
+test('exitCell：推定退群没有时间，退出方式给"快照中已不在"（§8 第四行）', () => {
+  // 中文词从 shared 的 `exitMethodLabel` 来（R46：那一份表在 Task 13 的 shared 里，
+  // 这里断言的是"接线接对了"，不是"这里再写一遍词"）。
+  assert.deepEqual(exitCell({ isInGroup: false, exitMethod: 'snapshot_absent', latestLeaveAt: null }),
+    { time: '—', method: '快照中已不在' })
+  assert.deepEqual(exitCell({ isInGroup: false, exitMethod: 'left', latestLeaveAt: '2026-09-30T12:00:00' }),
+    { time: '2026-09-30 12:00:00', method: '自行退群' })
+  assert.deepEqual(exitCell({ isInGroup: false, exitMethod: 'removed', latestLeaveAt: null }),
+    { time: '—', method: '被移出' })   // 事件证据在，时间戳缺——仍是"—"，不许拿 first_seen 补
+  // 判别力：exitMethod 为 null 时**不许**把 `exitMethodLabel(null)` 的 '—' 当成"有退出方式"显示出来，
+  // 否则每一行在群成员都会多出一格"—"，读起来像"退群方式未知"。
+  assert.deepEqual(exitCell({ isInGroup: false, exitMethod: null, latestLeaveAt: null }), { time: '', method: '' })
+  // 在群的人这两格一律空着：`exit_method` 是历史值（上次退群留下的），不能显示成"现在退群了"。
+  assert.deepEqual(exitCell({ isInGroup: true, exitMethod: 'left', latestLeaveAt: '2026-09-30T12:00:00' }),
+    { time: '', method: '' })
+})
+
+test('firstSeenCopy 的措辞是"首次见到"，不是"进群时间"', () => {
+  assert.equal(firstSeenCopy('2026-09-30T12:00:00'), '2026-09-30 12:00:00')
+  assert.equal(firstSeenCopy(null), '—')
+})
+```
+
+Run:
+
+```bash
+cd /d/SmartSCRM/apps/desktop && set -o pipefail
+pnpm run test:unit 2>&1 | tee /d/SmartSCRM/tmp/p8e-unit-red.log | tail -20
+```
+
+期望：`Cannot find module './groupDisplay.ts'` 一类的红（模块不存在）。**这一步的意义是"测试先于实现"**，红的内容不重要，重要的是它红了。
+
+- [ ] **Step 4: 实现 `groupDisplay.ts`**
+
+```ts
+// 运行时值走相对路径 + `.ts`（技术要点 10：`node --test` 不解析 `@shared/*`）。
+import { exitMethodLabel, formatExportTime } from '../../../shared/groupMembers.ts'
+import type { CoverageReason } from '@shared/groupMembers'
+
+/**
+ * 覆盖率 → 「少 x%」。一位小数：`DOUBLE` 列会带浮点尾巴（Task 8b 技术要点），原样上界面就是 60.000000000000006%。
+ */
+export function shortfallPercent(coverage: number): number {
+  return Math.round((1 - coverage) * 1000) / 10
+}
+
+/**
+ * 弹层右上角那一行（spec §8 第三行）。只有 `coverage_too_low` 出文案；
+ * `first_build` 是正常显示，`ok` 什么都没发生，`no_snapshot` 说的是"这批没带快照"，
+ * 拿它当"少人了"会给用户一个凭空出现的百分比。
+ */
+export function gateNote(reason: string | null, coverage: number | null): string | null {
+  if (reason !== 'coverage_too_low') return null
+  if (coverage === null) return '本次快照人数低于上次，未做退群判定'
+  return `本次快照人数较上次少 ${shortfallPercent(coverage)}%，未做退群判定`
+}
+
+/** 成员区的三档（spec §8 第六行）。`unavailable` 与 `never_built` 是两句话，不许合成"暂无数据"。 */
+export function memberAreaState(row: { platform: string; snapshotCount: number }): 'unavailable' | 'never_built' | 'built' {
+  if (row.platform !== 'whatsapp') return 'unavailable'
+  return row.snapshotCount === 0 ? 'never_built' : 'built'
+}
+
+/** 进群时间**只**取 `latestJoinAt`（§11 第 2 条：`first_seen_at` 不是进群时间，空就是"我们没看见他进来"）。 */
+export function joinTimeCopy(row: { latestJoinAt: string | null }): string {
+  return row.latestJoinAt ? formatExportTime(row.latestJoinAt) : '—'
+}
+
+/**
+ * 退群时间列与退出方式列一起算（§8 第四行）。三件事在这一格里分得开：
+ * 在群的人两格空着；有 `exitMethod` 没 `latestLeaveAt` 是"有证据说人没了、没证据说时间"，给 `—`；
+ * `exitMethod` 本身为空就一字不出——`exitMethodLabel(null)` 给的是 `—`，
+ * 直接拿它当"退出方式"显示会让每个在群的人都被读成"退群方式未知"。
+ */
+export function exitCell(row: {
+  isInGroup: boolean
+  exitMethod: string | null
+  latestLeaveAt: string | null
+}): { time: string; method: string } {
+  if (row.isInGroup) return { time: '', method: '' }
+  if (!row.exitMethod) return { time: '', method: '' }
+  return {
+    time: row.latestLeaveAt ? formatExportTime(row.latestLeaveAt) : '—',
+    method: exitMethodLabel(row.exitMethod)
+  }
+}
+
+export function firstSeenCopy(firstSeenAt: string | null): string {
+  return firstSeenAt ? formatExportTime(firstSeenAt) : '—'
+}
+
+export type { CoverageReason }
+```
+
+（时刻文本的口径在 shared 的 `formatExportTime` 里：只做「`T` 换空格、截到秒」，**不解析、不换算时区**。`LocalDateTime` 没有 `Z`，`new Date()` 会按本地时区重读它，于是同一行在两台机器上显示两个时刻。渲染层与导出文件读的是同一个函数，所以两边不会长得不一样。）
+
+Run: `pnpm run test:unit` → 期望 7 条 test 全绿（21 个断言）、总数比上一档多 7。
+
+- [ ] **Step 5: `api/groupMembers.ts` 的取数层**
+
+```ts
+import { useEffect, useState } from 'react'
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
+import { http } from '@/lib/http'
+import { qs } from '@/api/messages'
+import type { PageResult } from '@/api/customers'
+import type { CoverageReason, GroupBuildOutcome, GroupEventSource, GroupEventType,
+  GroupExportResult, GroupMemberRole, GroupStateEvent } from '@shared/groupMembers'
+
+export const GROUP_MEMBER_PAGE_SIZE = 50
+export const GROUP_EVENT_PAGE_SIZE = 30
+const BASE = '/api/group-members'
+
+// 类型逐字抄 §A.2 + Task 8b Produces；`isFinal`/`isInGroup` 是 boolean（不是 0/1），
+// `lastCoverage`/`coverage` 是 number | null（8b 之后才不是空串）。
+// …（GroupRowVO / GroupMemberRowVO / GroupEventRowVO / MemberPageVO 照 Interfaces 那一段落进来）
+
+export const groupKeys = {
+  root: ['group'] as const,
+  members: (accountId: number | null, chatKey: string, f: MemberFilters) =>
+    ['group', 'members', accountId, chatKey, f] as const,
+  events: (accountId: number | null, chatKey: string, eventType: string | '', page: number) =>
+    ['group', 'events', accountId, chatKey, eventType, page] as const,
+  customerGroups: (accountId: number | null, customerId: number | null) =>
+    ['group', 'customer-groups', accountId, customerId] as const
+}
+
+export function useGroupMembers(accountId: number | null, chatKey: string, filters: MemberFilters) {
+  const page = filters.page ?? 1
+  return useQuery({
+    queryKey: groupKeys.members(accountId, chatKey, { ...filters, page }),
+    // 「全部」档传 undefined 而不是空串：`qs` 两种都会丢掉，但那只是巧合（技术要点 2）。
+    queryFn: () => http.get<MemberPageVO>(
+      `${BASE}/group/members${qs({
+        accountId, chatKey, isInGroup: filters.isInGroup, role: filters.role || undefined,
+        q: filters.q, page, size: GROUP_MEMBER_PAGE_SIZE
+      })}`
+    ),
+    enabled: accountId != null && chatKey !== ''
+  })
+}
+
+export function useGroupEvents(accountId: number | null, chatKey: string, eventType: string | '', page = 1) {
+  return useQuery({
+    queryKey: groupKeys.events(accountId, chatKey, eventType, page),
+    queryFn: () => http.get<PageResult<GroupEventRowVO>>(
+      `${BASE}/group/events${qs({ accountId, chatKey, eventType: eventType || undefined, page, size: GROUP_EVENT_PAGE_SIZE })}`
+    ),
+    enabled: accountId != null && chatKey !== ''
+  })
+}
+
+export function useCustomerGroups(accountId: number | null, customerId: number | null) {
+  return useQuery({
+    queryKey: groupKeys.customerGroups(accountId, customerId),
+    // 8b ④：accountId 必填。少一个都不查——宁可不显示，也不跨账号混读（R16/R40）。
+    queryFn: () => http.get<GroupRowVO[]>(`${BASE}/customer/${customerId}/groups${qs({ accountId })}`),
+    enabled: accountId != null && customerId != null
+  })
+}
+```
+
+（`PageResult<T>` 从 `api/customers.ts:41` 取，不另写一份：它的四键形状与后端 `PageResult` 逐字对应，
+消息面另写的那份是游标形状（`nextCursor/hasMore`），两者不是一件事——R45。）
+
+- [ ] **Step 6: 宿主那三跳 + 广播失效**
+
+```ts
+export function useGroupBuild() {
+  const [outcome, setOutcome] = useState<GroupBuildOutcome | null>(null)
+  // 单数键（R49）：`group:build` 的契约是 `{ accountId, chatKey? }`，"只补这一群"就传一个键。
+  // IPC 是 JSON，多余或拼错的键会被静默忽略——渲染层与主进程两处各一种拼法不会编译报错，
+  // 症状是"刷新成员"按下去没有任何反应。所以这一形状在三处（Task 11/12/15）必须逐字一致。
+  const m = useMutation({
+    mutationFn: (req: { accountId: number; chatKey?: string }) => window.scrm?.group.build(req),
+    onSuccess: (r) => setOutcome(r ?? null)
+  })
+  return { build: (req: { accountId: number; chatKey?: string }) => void m.mutate(req), pending: m.isPending, outcome }
+}
+
+export function useGroupExport() {
+  const [result, setResult] = useState<GroupExportResult | null>(null)
+  const m = useMutation({
+    mutationFn: (req: { accountId: number; chatKeys: string[] }) => window.scrm?.group.export(req),
+    onSuccess: (r) => setResult(r ?? null)
+  })
+  // null = 宿主没给答案（preload 没挂上 / IPC 那侧 catch 了）。它和 result.reason==='failed' 是两种失败，
+  // 前者要说"这个构建里宿主没接上"，后者才说"取数/写文件没成"（Task 13 技术要点第 6 条同一口径）。
+  return { exportRows: (req: { accountId: number; chatKeys: string[] }) => void m.mutate(req), pending: m.isPending, result }
+}
+
+export function useGroupStateInvalidation(): void {
+  const qc = useQueryClient()
+  useEffect(() => {
+    return window.scrm?.group.onState((e: GroupStateEvent) => {
+      if (e.phase === 'settled') void qc.invalidateQueries({ queryKey: groupKeys.root })
+    })
+  }, [qc])
+}
+```
+
+- [ ] **Step 7: 四路 typecheck + unit + lint + 构建**
+
+```bash
+cd /d/SmartSCRM/apps/desktop && set -o pipefail
+pnpm run typecheck 2>&1 | tee /d/SmartSCRM/tmp/p8e-typecheck.log | tail -20
+pnpm run test:unit 2>&1 | tee -a /d/SmartSCRM/tmp/p8e-unit.log | tail -10
+pnpm exec eslint src/renderer/src/api/groupMembers.ts src/renderer/src/components/ui/tabs.tsx \
+  src/renderer/src/lib/groupDisplay.ts src/renderer/src/lib/groupDisplay.test.ts \
+  src/renderer/src/api/messages.ts --quiet 2>&1 | tail -20
+pnpm run build 2>&1 | tee /d/SmartSCRM/tmp/p8e-build.log | tail -20
+```
+
+期望：四路 `tsc` 全 0；`test:unit` 通过数 = 上一档 + 7；`eslint --quiet` 对这五个文件 0 error（**全仓 lint 不是绿门**，只看改动文件）；`build` 成功。`typecheck:web` 会替本任务证住一件不容易注意到的事：`MemberPageVO.coverage` 若被写成 `number`，Task 16 里任何 `coverage === null` 的分支都会被 TS 判成死代码——`number | null` 是 8b ③ 的下游锁。
+
+- [ ] **Step 8: spec §9 那句改口 + 提交**
+
+把 `docs/superpowers/specs/2026-09-30-group-member-analysis-design.md` §9 的「群与成员的实时尾巴走既有广播面：`group_event` 入库后主进程广播一条 `group:state`，成员面开着就刷，没开着不刷」改成：「`group:state` 报的是**一轮建档**的在跑 / 结了，渲染层据此失效群与成员的缓存；实时事件只落库，名单要新读数就点顶栏「刷新成员」（本期不做定时重拉，§14）。」其余行不动，**不与旧版比较**。
+
+```bash
+cd /d/SmartSCRM && git status --short
+git add apps/desktop/src/renderer/src/api/groupMembers.ts apps/desktop/src/renderer/src/api/messages.ts \
+  apps/desktop/src/renderer/src/components/ui/tabs.tsx apps/desktop/src/renderer/src/lib/groupDisplay.ts \
+  apps/desktop/src/renderer/src/lib/groupDisplay.test.ts apps/desktop/tsconfig.unit.json \
+  docs/superpowers/specs/2026-09-30-group-member-analysis-design.md \
+  docs/superpowers/plans/2026-09-30-group-member-analysis.md
+git commit -m "$(cat <<'EOF'
+feat(P8/B6): 渲染层群成员数据层与 tabs 原子件
+
+六跳的 VO + hooks 一份、§8 文案收成纯函数（7 条 test / 21 个断言）、components/ui 补 tabs。
+spec §9 的 group:state 那句改口：它报的是每轮建档的在跑/结了，不是每批事件——
+按事件广播会把缓存失效变成 2 秒一次的轮询风暴。
+EOF
+)"
+```
+
+---
+
+## Task 16: 界面装配——抽屉「所在群」+ 群成员弹层（两个 tab、三档筛选、两处导出入口）
+
+> **判档**：`pnpm run typecheck`（四路）+ `test:unit`（本任务给 `groupDisplay` 补 11 条 test / 49 个断言）+ `pnpm exec eslint <改动文件> --quiet` + `pnpm run build`。
+> **本任务不声称界面可用。** 两个组件都是"装配 + 接线"：`host.ts` / `preload` / 泵 没跑通时，这里渲染得出来但读不到数；弹层点开看到真名单是 **Task 17 的 CDP 腿**（§13 的界面那一档）。
+> 本任务唯一可自动验证的显示面是 `lib/groupDisplay.ts` 那 11 条纯函数——**这也是把全部文案判断挪进 lib 的理由**：组件里剩下的只有 JSX。
+
+**Files:**
+- Modify: `apps/desktop/src/renderer/src/lib/groupDisplay.ts`（补 8 件纯函数：`timeCopy` / `memberAreaCopy` / `memberAreaShort` / `eventTypeCopy` / `sourceCopy` / `inGroupCopy` / `actorCopy` / `firstSeenNote` / `exportOutcomeCopy` / `tooManyCopy` / `buildFailureNotes` + `LIVE_EVENT_TIME_NOTE`；把 `joinTimeCopy` / `firstSeenCopy` 改成走 `timeCopy`）
+- Modify: `apps/desktop/src/renderer/src/lib/groupDisplay.test.ts`（补 11 条 test）
+- Create: `apps/desktop/src/renderer/src/components/customers/CustomerGroupsSection.tsx`
+- Create: `apps/desktop/src/renderer/src/components/customers/GroupMembersDialog.tsx`
+- Modify: `apps/desktop/src/renderer/src/components/customers/CustomerDrawer.tsx:227`（`最近消息` 那一节之后挂 `<CustomerGroupsSection customerId={customer.id} />`）
+- Modify: `apps/desktop/src/renderer/src/layouts/AppLayout.tsx`（挂 `useGroupStateInvalidation()`）
+- Modify: `docs/superpowers/specs/2026-09-30-group-member-analysis-design.md` §9（R48 改口）+ §8 第一行（R50 改口）
+
+**Interfaces:**
+- Consumes（全部来自 Task 15 的 Produces 名表，逐字）：`useCustomerGroups` / `useGroupMembers` / `useGroupEvents` / `useGroupBuild` / `useGroupExport` / `MemberFilters` / `MemberPageVO` / `GroupRowVO` / `GroupMemberRowVO` / `GroupEventRowVO` / `GROUP_MEMBER_PAGE_SIZE` / `GROUP_EVENT_PAGE_SIZE`；`lib/groupDisplay` 的 `gateNote` / `memberAreaState` / `joinTimeCopy` / `exitCell` / `firstSeenCopy`（Task 15）+ 本任务新补的那几件；`components/ui/{tabs,dialog,select,input,button,badge,separator}`；`stores/accounts` 的 `useAccounts` / `useSelectionStore`（读码 `accounts.ts:32,69`）、`lib/platform` 的 `PlatformType`（`platform.ts:13-20`，`WhatsApp = 1`）；shared 的 `MAX_EXPORT_GROUPS` / `MAX_GROUPS_PER_BUILD` / `groupRoleLabel` / 类型 `GroupMemberRole` / `GroupBuildOutcome` / `GroupExportResult` / `GroupEventType` / `GroupEventSource`。
+- Produces：**没有源码接口**（渲染层到此为止），只产出 **Task 17 的 CDP 腿按这张表点**——锚点全集：
+
+| 锚点 | 在哪 | 读什么 |
+|---|---|---|
+| `[data-p8g-section]` | 抽屉那一节根 | 节存在（不在线时也在，内容是那句说明） |
+| `[data-p8g-no-account]` | 节的说明行 | `accountId===null` 那一档，且**没有**发出 `/customer/*/groups` 请求 |
+| `[data-p8g-empty]` `[data-p8g-error]` | 节的空态行 / 错误行 | Task 16 那段 `CustomerGroupsSection` 里的两行 `<p data-p8g-error>`（「读不到所在群：确认后端已启动。」）与 `<p data-p8g-empty>`（Task 17 的 L18 要分辨这两档，故补进本表；行号随文档编辑会漂，认文案不认行号）|
+| `[data-p8g-account]` | 节头下拉（≥2 档在线账号才有） | 当前账号 id；切档后勾选清空 |
+| `[data-p8g-group-row="<chatKey>"]` | 每一群行 | 群名 / 两个数 / 快照时间 |
+| `[data-p8g-final]` `[data-p8g-area="<state>"]` | 群行徽标 | `is_final` 与三档短标签 |
+| `[data-p8g-check="<chatKey>"]` | 群行复选框 | 勾选集合 |
+| `[data-p8g-export-selected]` | 节顶栏按钮 | 文案带勾选数；`picked.size===0` 时 disabled |
+| `[data-p8g-open="<chatKey>"]` | 「查看群成员」 | 打开弹层 |
+| `[data-p8g-dialog]` / `[data-p8g-close]` | 弹层根 / 关闭 | 弹层在不在 |
+| `[data-p8g-refresh]` `[data-p8g-export-one]` | 弹层顶栏两颗 | 各自的 disabled 条件 |
+| `[data-p8g-area="<state>"]` | 弹层成员区横幅 | §8 第六行那句 |
+| `[data-p8g-build-msg]` `[data-p8g-build-pending]` | 弹层提示行 | `buildFailureNotes` 的每一行 / 「建档中…」 |
+| `[data-p8g-export-msg]` | 弹层与抽屉各一条 | `exportOutcomeCopy` 的文案 |
+| `[data-p8g-blocked]` | 抽屉「前拦」那一行 | 超过 `MAX_EXPORT_GROUPS` 时不发 IPC |
+| `[data-p8g-tab-members]` `[data-p8g-tab-events]` | 两个 tab 触发器 | 切换 |
+| `[data-p8g-f-in-group]` `[data-p8g-f-role]` `[data-p8g-f-q]` `[data-p8g-f-event]` | 四个筛选件 | 值 |
+| `[data-p8g-member-row="<memberKey>"]` `[data-p8g-event-row="<id>"]` | 两张表的行 | 十列 / 五列的格子文本 |
+| `[data-p8g-coverage-note]` | 名单右上角 | `gateNote` 的文案（`coverage_too_low` 才有） |
+| `[data-p8g-member-page]` `[data-p8g-event-page]` | 两个页脚 | 「第 x / y 页 · 共 n」 |
+
+有三类锚点**故意**不被界面腿点/读，评审时不要当成漏项：`[data-p8g-refresh]` 与 `[data-p8g-export-one]` 属 Task 17「技术要点」第 4 条那三条安全线（点了会打到真实 WhatsApp 页面或真落盘），界面腿只在 L11 读它们的 `disabled`，绝不点击；`[data-p8g-build-msg]` `[data-p8g-build-pending]` 要等一发真建档才有现场，本期归真实登录档；`[data-p8g-event-page]` 在本轮夹具里恒是「第 1 / 1 页」——流水的表头、行值与筛选由 L13/L15 用 `[data-p8g-event-row]` 读，事件翻页要证就得先批量造事件，而事件行的真实性归 §13 的契约腿与真实登录档管，界面腿不替它编现场。
+
+**技术要点**
+
+1. **账号上下文按 R43，优先级是 `节内下拉 > 工作台 selectedId > candidates[0]`**：`candidates = accounts.filter(a => a.platformType === PlatformType.WhatsApp && a.status === 1 && a.viewId !== '')`（读码先例 `BatchWizard.tsx:105` 同一条过滤，只是它没有 `viewId` 那一半）。下拉排在最前是对 R43 的一处补：那一行写的是"优先 selectedId"，而**节内下拉是用户刚刚在这节里点的那一下**，比工作台上一次选择更近；不这么排的话，用户在这个窄抽屉里换了账号，读数却还是工作台那一份，看上去像下拉坏了。代价：与工作台不同步，节头必须把当前账号名显出来（已显）。
+2. **`accountId === null` 时必须早于 `isPending` 判**：react-query v5 里 `enabled: false` 的查询**永远停在 `status:'pending'`**（读码 `api/groupMembers.ts` 的 `useGroupMembers/useCustomerGroups` 都带 `enabled`）。所以"没有在线账号"那一档如果放在 loading 之后判，界面会永远显示"读取中…"——那是"什么都没做"被显示成"正在做"，是 memory 里那条判据的界面版。
+3. **只认 `PlatformType.WhatsApp`（1），不认 `WhatsAppProtocol`（7）**：`ChatKeys.platformOfAccountType` 只给 1→`whatsapp` / 4→`telegram`，其余给 `null`，而 `GroupMemberService.java:103-107` 在 `platform == null` 时直接拒收（读码）。所以协议号账号点「刷新成员」只会得到一条"没建成"，不如一开始就不进候选。同理 **Telegram（4）不进候选**：§14 明文本期不做 TG 成员采集，但 `memberAreaState` 仍要判 `platform !== 'whatsapp'`——那是给"库里已经有 TG 群行"这种以后的情况留的读侧口径，不是现在的入口。
+4. **未激活的 tab 不取数**：Radix `Tabs.Content` 默认在 value 不匹配时**卸载**，所以 `useGroupMembers` / `useGroupEvents` 必须各自待在 `MemberTable` / `EventTable` 组件里，不许提到 Dialog 顶层。判别：提到顶层 = 打开弹层就打两次 GET，而第二个 tab 还没被人看过；这一格 Task 17 的 CDP 腿用网络计数读，不靠读码。
+5. **`filters` 每次 render 新建对象是安全的**：`groupKeys.members(accountId, chatKey, f)` 把整个 `f` 塞进查询键，react-query v5 按键**结构化哈希**比较，不按引用。反过来说，正因为键是按值的，`page` 与三个筛选条件才必须全部进 `f`——漏掉 `page` 的那一份缓存会永远停在第 1 页的数据上（`messages.ts:159-163` 那条注释讲的同一个坑的另一个方向）。
+6. **筛选变化就 `setPage(1)` 并清勾选**：沿用 `BatchTaskDetail.tsx:357-362` 那两行的理由——换筛选后当前页的行全变了，看不见的勾选会继续被算进导出集合。抽屉那一份勾选按 `chatKey` 存，切账号也一起清（技术要点 7）。
+7. **一次只读一个账号，切账号即作废全部现场**：`useEffect(() => { setPicked(new Set()); setDialogRow(null); setBlocked('') }, [accountId])`。R16/R40 说 `chat_key` 在两个账号下是两行，所以"A 账号勾的键在 B 账号下导出"不是不方便，是**错的**；`export-rows` 带 `accountId`，后端只会返回另一个账号那份名单（或者空），而 `seq` 与"导出所选（n）"的数字会双双对不上。
+8. **导出上限提前拦，但拦下时不许发 IPC，也不许另写一句话**：`picked.size > MAX_EXPORT_GROUPS` → `setBlocked(tooManyCopy(picked.size))` 并 return。界面前拦（省一次 IPC + 一次落盘）、主进程再判（Task 13）、后端 40016（8b ⑤）三处判的不是同一件事；**渲染层能看见的那两句**（前拦带计数、宿主回 `too_many` 不带）只有 `tooManyCopy` 一个作者。后端那句在 Java 侧另写，跨语言共不了作者，也不需要共：它永远进不了界面（前拦与主进程都在它前面），Task 14 的 12.1 因此只断 `code === 40016`，不断那句文案。
+9. **「导出所选」在抽屉、「导出本群」在弹层（R48）**：`group:export` 的入参是群键数组，契约里没有"勾选若干成员"，所以弹层里那个"所选"无所指。spec §9 那句随本任务改口。
+10. **`buildRequested` 那一位是给"点了没反应"准备的**：`useGroupBuild().outcome` 在**没点过**与**点了但宿主返回 `undefined`**（preload 没挂上 / IPC 那侧 catch）两种情况下都是 `null`。少了这个本地位，第二种情况会被渲染成"什么都没发生"——而那恰好是本期唯一能看见"宿主没接上"的现场（`window.scrm?.group` 是可选面，读码 `preload/index.d.ts:7`）。
+11. **§8 第一行的 `<原因>` 本期给不出（R50）**：`GroupBuildOutcome` 里没有逐群 error 字段，快照失败的原因只在主进程日志（`oneLine()` 收过一行，C3）。所以弹层那一格是"这一轮没建成（详情看主进程日志）"，spec §8 的措辞随本任务改口。**不许**为了填这一格去扩展 IPC 载荷——那是改契约，属 Task 11/12 那一层。
+12. **两个数分开写，不合并（§A.2 的 `GroupVO` 类注释）**：`在群 {inGroupCount} · 上次快照 {participantCount}`。两者不等恰恰是"这次快照被闸拦下、没记账"的读数（R20 的可见面），写成"人数"一个词就把信号抹掉了。计数列全部是 `NOT NULL DEFAULT 0`（读码 `V12__group_member_analysis.sql:20,22,44,45,53`），所以只有 `lastMsgAt/dayMsgCount/msgCount` 三格要判空——它们是聚合出来的（Task 8b 的 VO 类型已如此）。
+13. **时刻文本与中文词只有一个作者（R46/R51）**：组件里不许出现 `.replace('T',' ')`、`.slice(0,19)`、也不许就地写"自行退群/被移出"。角色列直接调 shared 的 `groupRoleLabel`（它就是那张表的作者）；「是/否」那一格走 `inGroupCopy`——Java 侧 `GroupExportRowVO` 已经把同一对词格式化过了（§A.2 ⑥），跨语言没法共一份，所以这里用一条 unit 断言把两侧钉住（R51 的锁）。
+14. **不再调 `beginOverlay`**（Task 15 技术要点 9）：`DialogContent` 内部已经挂好计数，重复调会让内嵌视图归位时留下 `pointer-events:none`，症状是 CDP 腿之后整个窗口点不动（exit 4 那一档）。
+15. **`Th`/`Td` 在新文件里写一份、两个表共用**，不去 import `CustomersPage.tsx:265-271` 那两个私有件（它们没导出），也不抽进 `components/ui/table.tsx`——抽出来要同时改 `CustomersPage` 与 `BatchTaskDetail` 两个已验收文件，那是另一期的一步，本期记为已知重复（第 2 份 → 第 3 份，不再增长）。
+16. **本期不做的界面**（§14，逐条落地）：没有选群面（只有客户反查到的群）、没有到点重拉（只有手动「刷新成员」）、没有陌生成员建客户/打标（名单里那格 `customerId` 只用于"这个人已经是客户"的暗示，本期连暗示都不给——列里没有它）、没有虚拟列表（一页 50，超大群靠翻页）、没有成员头像。
+17. **`buildFailureNotes` 是本任务唯一可能随 Task 11 现场取证（§A.1 的 Step 0）改动的代码**：它读的是 Task 12 定稿的那份 `GroupBuildOutcome`（十格）。若取证判读成 ③ 并认工作区那台泵的 `BuildResult{built,failed,deferred,abandoned?}` 为契约，那就连 shared 的类型定义一起换，本函数改成判 `abandoned` / `failed>0` / `deferred>0` 三格，**其余 JSX 一行不动**（这就是把易变点收进纯函数的理由）。同一次取证若换成 `BuildResult`，`group:build` 的返回类型与 §8 那三格文案的口径都要跟着改，改的范围仍以这一支函数 + shared 类型两处为限。
+
+- [ ] **Step 1: 先写失败文案单测**
+
+`apps/desktop/src/renderer/src/lib/groupDisplay.test.ts` 末尾追加（import 补上本任务新加的那几件，类型仍走别名）：
+
+```ts
+// 下面三段是**并入文件既有 import 区**的新行（Task 15 已写好 `import test from 'node:test'` 与
+// `import assert`，本任务不许重复声明，否则 typecheck:unit 报 Duplicate identifier）。
+// shared 的运行时值走相对路径 + `.ts`（R46 / Task 15 技术要点 10，同一文件里两种写法混用会一边编译过、一边跑不动）；
+// 只用类型的走 @shared 别名。
+import type { GroupBuildOutcome, GroupExportResult } from '@shared/groupMembers'
+import { MAX_GROUPS_PER_BUILD, exitMethodLabel } from '../../../shared/groupMembers.ts'
+import {
+  actorCopy, buildFailureNotes, exportOutcomeCopy, firstSeenNote, inGroupCopy, memberAreaCopy,
+  memberAreaShort, sourceCopy, timeCopy, tooManyCopy, eventTypeCopy
+} from './groupDisplay.ts'
+
+test('timeCopy：空给 —，有值只换形不换算', () => {
+  assert.equal(timeCopy(null), '—')
+  assert.equal(timeCopy(''), '—')
+  assert.equal(timeCopy('2026-09-30T12:00:00.123'), '2026-09-30 12:00:00')
+})
+
+test('memberAreaCopy 与 memberAreaShort：同一档两句长短，built 一字不出', () => {
+  assert.equal(memberAreaCopy('unavailable'), '该平台的成员采集尚未开通')
+  assert.equal(memberAreaCopy('never_built'), '这个群还没建过档——名单为空不等于群里没人')
+  assert.equal(memberAreaCopy('built'), '')
+  assert.equal(memberAreaShort('unavailable'), '未开通')
+  assert.equal(memberAreaShort('never_built'), '未建档')
+  assert.equal(memberAreaShort('built'), '')
+})
+
+test('eventTypeCopy：六个码全有词，未知值回落原词', () => {
+  assert.equal(eventTypeCopy('added'), '被加入')
+  assert.equal(eventTypeCopy('joined'), '主动加入')
+  assert.equal(eventTypeCopy('left'), '自行退群')
+  assert.equal(eventTypeCopy('removed'), '被移出')
+  assert.equal(eventTypeCopy('promoted'), '升为管理员')
+  assert.equal(eventTypeCopy('demoted'), '降为成员')
+  assert.equal(eventTypeCopy('invited_join'), 'invited_join')  // 平台以后给新值时不许显示空白
+})
+
+test('eventTypeCopy 与 shared 的退出方式词不许分家（R51 的锁）', () => {
+  // 同一个人"被移出"，流水里叫一个词、名单里叫另一个词，是同一事实两个作者的结果。
+  // 这两行断言就是那条漂移的守门人：改任一侧都会红。
+  assert.equal(eventTypeCopy('left'), exitMethodLabel('left'))
+  assert.equal(eventTypeCopy('removed'), exitMethodLabel('removed'))
+  assert.equal(eventTypeCopy('added'), exitMethodLabel('added'))
+})
+
+test('sourceCopy：两种来源 + 未知回落', () => {
+  assert.equal(sourceCopy('system_message'), '系统消息')
+  assert.equal(sourceCopy('live_event'), '实时事件')
+  assert.equal(sourceCopy('whatever'), 'whatever')
+})
+
+test('inGroupCopy：钉的是 Java 导出侧已经用过的那一对（R46 的跨语言版）', () => {
+  assert.equal(inGroupCopy(true), '是')
+  assert.equal(inGroupCopy(false), '否')
+})
+
+test('actorCopy：名字优先，其次键，两个都没有才给 —', () => {
+  assert.equal(actorCopy({ actorName: '张三', actorKey: '86138@c.us' }), '张三')
+  assert.equal(actorCopy({ actorName: null, actorKey: '86138@c.us' }), '86138@c.us')
+  assert.equal(actorCopy({ actorName: null, actorKey: null }), '—')
+})
+
+test('firstSeenNote：只在"没有进群时间、但有首次见到"时出话（§8 第三行、§11 第 2 条）', () => {
+  assert.equal(firstSeenNote({ latestJoinAt: null, firstSeenAt: '2026-09-30T12:00:00' }), '首次见到 2026-09-30 12:00:00')
+  assert.equal(firstSeenNote({ latestJoinAt: '2026-09-01T00:00:00', firstSeenAt: '2026-09-30T12:00:00' }), '')
+  assert.equal(firstSeenNote({ latestJoinAt: null, firstSeenAt: null }), '')
+})
+
+test('exportOutcomeCopy：六种结论 + 宿主没答，七种来路七句话', () => {
+  const r = (over: Partial<GroupExportResult>): GroupExportResult =>
+    ({ reason: 'saved', path: 'D:/x.xlsx', rows: 12, bytes: 3456, ...over })
+  assert.match(exportOutcomeCopy(r({})), /^已导出 12 行/)
+  assert.equal(exportOutcomeCopy(r({ reason: 'cancel', path: null, rows: 0 })), '已取消保存，什么都没写')
+  assert.equal(exportOutcomeCopy(r({ reason: 'empty_keys', path: null, rows: 0 })), '没有可导出的群：先勾选至少一个')
+  assert.equal(exportOutcomeCopy(r({ reason: 'too_many', path: null, rows: 0 })), tooManyCopy())
+  assert.equal(exportOutcomeCopy(r({ reason: 'no_rows', path: null, rows: 0 })), '这些群还没有成员名单，先建一次档再导')
+  assert.match(exportOutcomeCopy(r({ reason: 'failed', path: null, rows: 0 })), /导出没成/)
+  // 判别力：宿主没答与后端报失败是两句话。塌成一句就会把"这个构建没接 IPC"读成"重试一下就好"。
+  assert.notEqual(exportOutcomeCopy(null), exportOutcomeCopy(r({ reason: 'failed', path: null, rows: 0 })))
+  assert.match(exportOutcomeCopy(null), /宿主/)
+})
+
+test('tooManyCopy：不传 count 时只有干句（宿主那一路），传了才带「当前勾了 n 个」（前拦那一路）', () => {
+  assert.match(tooManyCopy(), /一次最多导出 50 个群/)
+  assert.equal(tooManyCopy(53), `一次最多导出 50 个群，当前勾了 53 个`)
+})
+
+const outcome = (over: Partial<GroupBuildOutcome> = {}): GroupBuildOutcome => ({
+  accountId: 1, skipped: null, list: 'ok', registered: 3, attempted: 3, snapshotted: 3,
+  postedFailed: 0, failed: 0, skippedFinal: 0, truncated: false, aborted: false, ...over
+})
+
+test('buildFailureNotes：skipped 只出一句；计数各占一行；成功出空数组', () => {
+  // 早退那一格是判据：不早退的实现会对"上一轮还在跑"同时吐出 skipped + list:'silent' 两行，
+  // 而那一轮根本没去读群名单，"页内没答"是假话。
+  assert.deepEqual(buildFailureNotes(outcome({ skipped: 'busy', list: 'silent', registered: 0, attempted: 0, snapshotted: 0 })),
+    ['这个账号已有一轮建档在跑，这一轮没开'])
+  assert.deepEqual(buildFailureNotes(outcome({ skipped: 'no_view', list: 'silent', registered: 0, attempted: 0, snapshotted: 0 })),
+    ['这个账号的窗口没挂着，采集下不去'])
+  assert.deepEqual(buildFailureNotes(outcome({ list: 'silent' })), ['页内没回答群名单（桥没就绪或 wa-js 没答），这一轮没建档'])
+  assert.deepEqual(buildFailureNotes(outcome({ list: 'error' })), ['群名单没读到（页内报错了）'])
+  assert.deepEqual(buildFailureNotes(outcome({ aborted: true, failed: 2, postedFailed: 1, truncated: true })), [
+    '这一轮被中止（账号掉线或退出），已经入库的那部分仍算数',
+    `这一轮只跑了 ${MAX_GROUPS_PER_BUILD} 个群，剩下的等下一次触发`,
+    '2 个群的快照没成',
+    '1 个群入库没成（后端没答或报错）'
+  ])
+  assert.deepEqual(buildFailureNotes(outcome()), [])
+  assert.deepEqual(buildFailureNotes(outcome({ skippedFinal: 2 })), [])   // 泵跳过已解散群不是失败
+  assert.equal(buildFailureNotes(null).length, 1)
+  assert.match(buildFailureNotes(null)[0] ?? '', /宿主/)
+})
+```
+
+Run:
+
+```bash
+cd /d/SmartSCRM/apps/desktop && set -o pipefail
+pnpm run test:unit 2>&1 | tee /d/SmartSCRM/tmp/p8f-unit-red.log | tail -30
+```
+
+期望：新增的 11 条全红（`timeCopy is not a function` 一类的引用错），Task 15 那 7 条仍绿。**红必须是新函数缺实现，不许是 import 路径写错**——后者会让整文件连旧用例一起红，掩盖真实判据。
+
+- [ ] **Step 2: `groupDisplay.ts` 补实现**
+
+在文件末尾追加（`joinTimeCopy` / `firstSeenCopy` 改成走 `timeCopy`，签名与既有 7 条测试都不变）。**import 区不新开**：Task 15 那一份已经有 `import { exitMethodLabel, formatExportTime } from '../../../shared/groupMembers.ts'` 与 `import type { CoverageReason } from '@shared/groupMembers'` 两行，本任务只往这两行里**加名字**（`MAX_EXPORT_GROUPS`、`MAX_GROUPS_PER_BUILD` 进前者；`GroupBuildOutcome`、`GroupEventSource`、`GroupEventType`、`GroupExportResult` 进后者的 type import）。重复声明一份 import 会让 `typecheck:unit` 报 Duplicate identifier，而报错位置在文件头，看不出是本任务加的：
+
+```ts
+// ↓ 这两行是「改既有 import」的成品形状，不是新增行
+// import { MAX_EXPORT_GROUPS, MAX_GROUPS_PER_BUILD, exitMethodLabel, formatExportTime } from '../../../shared/groupMembers.ts'
+// import type { CoverageReason, GroupBuildOutcome, GroupEventSource, GroupEventType, GroupExportResult } from '@shared/groupMembers'
+
+/** 空给 `—`，有值只换形不换算。§8 那几格里"没有这个时刻"永远是 `—`，不是空格、不是 0。 */
+export function timeCopy(value: string | null | undefined): string {
+  return value ? formatExportTime(value) : '—'
+}
+
+/** 成员区三档的两句长短：横幅用长的，徽标用短的。`built` 那一档没有话要说。 */
+export function memberAreaCopy(state: 'unavailable' | 'never_built' | 'built'): string {
+  if (state === 'unavailable') return '该平台的成员采集尚未开通'
+  if (state === 'never_built') return '这个群还没建过档——名单为空不等于群里没人'
+  return ''
+}
+export function memberAreaShort(state: 'unavailable' | 'never_built' | 'built'): string {
+  if (state === 'unavailable') return '未开通'
+  if (state === 'never_built') return '未建档'
+  return ''
+}
+
+/**
+ * 事件类型与来源的中文词（R51）：只有界面读它们，所以作者在这里而不是 shared。
+ * 形状照 shared 那两张表（`Partial<Record<…>>` + 未知回落原词），未知值留空白是最坏的回落。
+ */
+const EVENT_TYPE_LABEL: Partial<Record<GroupEventType, string>> = {
+  added: '被加入', joined: '主动加入', left: '自行退群',
+  removed: '被移出', promoted: '升为管理员', demoted: '降为成员'
+}
+const EVENT_SOURCE_LABEL: Partial<Record<GroupEventSource, string>> = {
+  system_message: '系统消息', live_event: '实时事件'
+}
+export function eventTypeCopy(eventType: string): string {
+  return EVENT_TYPE_LABEL[eventType as GroupEventType] ?? eventType
+}
+export function sourceCopy(source: string): string {
+  return EVENT_SOURCE_LABEL[source as GroupEventSource] ?? source
+}
+
+/**
+ * 「是 / 否」这一对在 Java 侧已经格式化过一次（§A.2 ⑥ 的 `inGroup`）。跨语言共不了同一份表，
+ * 所以这里用 `groupDisplay.test.ts` 那条断言把两侧钉住：改成"在群/已退群"会红，改 Java 也会红。
+ */
+export function inGroupCopy(isInGroup: boolean): string {
+  return isInGroup ? '是' : '否'
+}
+
+/** 操作人：有名字用名字，没名字用键，两个都没有才是 `—`（系统消息那一路常常没有 actorName）。 */
+export function actorCopy(row: { actorName: string | null; actorKey: string | null }): string {
+  if (row.actorName) return row.actorName
+  if (row.actorKey) return row.actorKey
+  return '—'
+}
+
+/** 「首次见到」只在"没有进群时间"时补一句——两行并排会把人引向"到底哪个是进群时间"。 */
+export function firstSeenNote(row: { latestJoinAt: string | null; firstSeenAt: string | null }): string {
+  if (row.latestJoinAt || !row.firstSeenAt) return ''
+  return `首次见到 ${firstSeenCopy(row.firstSeenAt)}`
+}
+
+/** 导出上限那一句话在**渲染层**的唯一作者：界面前拦带 `count`（「当前勾了 51 个」），主进程回 `too_many` 时不带（「一次最多导出 50 个群」）。后端 40016 那句在 Java 侧另写（Task 8b ⑤：`"一次最多导出 " + MAX_EXPORT_GROUPS + " 个群，当前 " + keys.size()`，没有"勾了"），跨语言不可能共用一个作者——它也不进界面：前拦与主进程都在它前面，Task 14 的 12.1 只断 `code === 40016` 而**不断那句文案**。 */
+export function tooManyCopy(count?: number): string {
+  return `一次最多导出 ${MAX_EXPORT_GROUPS} 个群${count == null ? '' : `，当前勾了 ${count} 个`}`
+}
+
+/**
+ * 导出结论 → 界面文案（spec §10 的六格 + preload 没接上那一格）。
+ * `null` 与 `failed` 必须分开：前者是"这个构建里宿主没接上"，后者是"接上了但取数/写文件没成"，
+ * 塌成一句会让人去重试一个根本不存在的通道（Task 13 技术要点第 6 条同一口径的另一侧）。
+ */
+export function exportOutcomeCopy(result: GroupExportResult | null): string {
+  if (!result) return '宿主没有给出导出结果（这个构建里 `group:export` 没接上）'
+  switch (result.reason) {
+    case 'saved': return `已导出 ${result.rows} 行：${result.path ?? ''}`
+    case 'cancel': return '已取消保存，什么都没写'
+    case 'empty_keys': return '没有可导出的群：先勾选至少一个'
+    case 'too_many': return tooManyCopy()
+    case 'no_rows': return '这些群还没有成员名单，先建一次档再导'
+    case 'failed': return '导出没成：后端取数或本地写文件失败，详情看主进程日志'
+    default: return `导出结果：${result.reason}`   // 以后加新 reason 时至少能看见码，不给空白
+  }
+}
+
+/**
+ * 一轮建档的结论 → 若干行提示（§8 第一行的本期形状，R50：逐群原因不在 IPC 载荷里）。
+ * 返回数组是因为一轮里"截断 + 两群快照没成"可以同时成立，合成一行就会只剩第一个；
+ * 但 `skipped` 那一档要早退——那意味着这一轮**根本没去读**，此时再报"页内没答"是假话。
+ */
+export function buildFailureNotes(outcome: GroupBuildOutcome | null): string[] {
+  if (!outcome) return ['宿主没有给出建档结果（这个构建里 `group:build` 没接上）']
+  if (outcome.skipped === 'busy') return ['这个账号已有一轮建档在跑，这一轮没开']
+  if (outcome.skipped === 'no_view') return ['这个账号的窗口没挂着，采集下不去']
+  const notes: string[] = []
+  if (outcome.list === 'silent') notes.push('页内没回答群名单（桥没就绪或 wa-js 没答），这一轮没建档')
+  if (outcome.list === 'error') notes.push('群名单没读到（页内报错了）')
+  if (outcome.aborted) notes.push('这一轮被中止（账号掉线或退出），已经入库的那部分仍算数')
+  if (outcome.truncated) notes.push(`这一轮只跑了 ${MAX_GROUPS_PER_BUILD} 个群，剩下的等下一次触发`)
+  if (outcome.failed > 0) notes.push(`${outcome.failed} 个群的快照没成`)
+  if (outcome.postedFailed > 0) notes.push(`${outcome.postedFailed} 个群入库没成（后端没答或报错）`)
+  return notes
+}
+
+/** 流水页脚那句（§15#5）：说的是这一列的读数含义，不预报偏差量级——那条还没实测。 */
+export const LIVE_EVENT_TIME_NOTE = '来源为「实时事件」的行，时间是主进程收到它的时刻；平台本身没给出发生时刻。'
+```
+
+（`joinTimeCopy` / `firstSeenCopy` 内部改成 `return timeCopy(row.latestJoinAt)` / `return timeCopy(firstSeenAt)`：「空 → `—`」这条规则从此只有一处。既有那 7 条测试一个字都不用改。）
+
+Run: `pnpm run test:unit` → 期望 18 条 test 全绿（本任务 +11 条 / +49 个断言，总数比 Task 15 收尾时多 11）。
+
+- [ ] **Step 3: `CustomerGroupsSection.tsx`**
+
+```tsx
+import { useEffect, useMemo, useState } from 'react'
+import { Download, Users } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Separator } from '@/components/ui/separator'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { PlatformType } from '@/lib/platform'
+import { useAccounts, useSelectionStore } from '@/stores/accounts'
+import { useCustomerGroups, useGroupExport, type GroupRowVO } from '@/api/groupMembers'
+import { exportOutcomeCopy, memberAreaShort, memberAreaState, timeCopy, tooManyCopy } from '@/lib/groupDisplay'
+import GroupMembersDialog from '@/components/customers/GroupMembersDialog'
+// 运行时值走相对路径 + `.ts`（Task 15 技术要点 10）。只用类型时留 `@shared/*` 别名（编译后被擦除）。
+import { MAX_EXPORT_GROUPS } from '../../../shared/groupMembers.ts'
+
+interface Props {
+  customerId: number
+}
+
+/**
+ * 抽屉里的「所在群」（spec §9）。这一节同时是**导出所选**的家（R48）：
+ * `group:export` 收的是群键数组，能"选出若干群"的地方只有这份列表，不是单个群的弹层。
+ */
+export default function CustomerGroupsSection({ customerId }: Props): React.JSX.Element {
+  const { data: accounts = [] } = useAccounts()
+  const selectedId = useSelectionStore((s) => s.selectedId)
+  // 只认「在线的 WhatsApp 且视图挂着」那一档（技术要点 1/3）：`status===1` 是在线，`viewId` 空 = 没有可下命令的视图。
+  const candidates = useMemo(
+    () => accounts.filter((a) => a.platformType === PlatformType.WhatsApp && a.status === 1 && a.viewId !== ''),
+    [accounts]
+  )
+  const [manualId, setManualId] = useState<number | null>(null)
+  const accountId = useMemo<number | null>(() => {
+    const hit = (id: number | null): number | null =>
+      id != null && candidates.some((a) => a.id === id) ? id : null
+    return hit(manualId) ?? hit(selectedId) ?? candidates[0]?.id ?? null
+  }, [manualId, selectedId, candidates])
+
+  const { data: rows = [], isPending, isError } = useCustomerGroups(accountId, customerId)
+  const [picked, setPicked] = useState<Set<string>>(() => new Set())
+  const [dialog, setDialog] = useState<{ accountId: number; row: GroupRowVO } | null>(null)
+  const [blocked, setBlocked] = useState('')
+  const groupExport = useGroupExport()
+
+  // 切账号作废全部现场：勾的群键属于上一个账号（技术要点 7），弹层与提示词一起收。
+  useEffect(() => {
+    setPicked(new Set())
+    setDialog(null)
+    setBlocked('')
+  }, [accountId])
+
+  const toggle = (chatKey: string): void => {
+    setPicked((prev) => {
+      const next = new Set(prev)
+      if (next.has(chatKey)) next.delete(chatKey)
+      else next.add(chatKey)
+      return next
+    })
+  }
+
+  const exportPicked = (): void => {
+    if (accountId === null || picked.size === 0) return
+    if (picked.size > MAX_EXPORT_GROUPS) {
+      setBlocked(tooManyCopy(picked.size))   // 前拦：一次 IPC 都不发（技术要点 8）
+      return
+    }
+    setBlocked('')
+    groupExport.exportRows({ accountId, chatKeys: [...picked] })
+  }
+
+  // 弹层那一行的读数要跟着失效后的列表走：「刷新成员」建完档，顶栏那个时间戳必须变，
+  // 否则"生效了"与"什么都没做"在界面上长得一样。找不到（列表被换账号重读空了）就退回手里那份。
+  const liveRow = dialog ? rows.find((r) => r.chatKey === dialog.row.chatKey) ?? dialog.row : null
+  const accountName = candidates.find((a) => a.id === accountId)?.name ?? ''
+  const exportMsg = blocked || (groupExport.result ? exportOutcomeCopy(groupExport.result) : '')
+
+  return (
+    <section data-p8g-section="">
+      <Separator className="my-5" />
+      <div className="mb-2 flex items-center gap-2">
+        <h3 className="min-w-0 flex-1 truncate text-sm font-semibold">
+          所在群{accountName && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{accountName}</span>}
+        </h3>
+        {candidates.length > 1 && (
+          <Select value={String(accountId ?? '')} onValueChange={(v) => setManualId(Number(v))}>
+            <SelectTrigger size="sm" className="w-32" data-p8g-account="">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {candidates.map((a) => (
+                <SelectItem key={a.id} value={String(a.id)}>{a.name}</SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        )}
+        <Button
+          size="sm"
+          variant="secondary"
+          data-p8g-export-selected=""
+          disabled={accountId === null || picked.size === 0 || groupExport.pending}
+          onClick={exportPicked}
+        >
+          <Download className="size-3.5" />
+          {groupExport.pending ? '导出中…' : `导出所选（${picked.size}）`}
+        </Button>
+      </div>
+
+      {/* 顺序即判据：`enabled:false` 的查询在 v5 里永远停在 pending，所以"没有在线账号"必须排在 loading 前（技术要点 2）。 */}
+      {accountId === null ? (
+        <p className="text-xs text-muted-foreground" data-p8g-no-account="">
+          没有在线的 WhatsApp 账号。群成员只在账号上线时采集，连上之后这里会自动出内容。
+        </p>
+      ) : isPending ? (
+        <p className="text-xs text-muted-foreground">读取中…</p>
+      ) : isError ? (
+        <p className="text-xs text-destructive" data-p8g-error="">读不到所在群：确认后端已启动。</p>
+      ) : rows.length === 0 ? (
+        <p className="text-xs text-muted-foreground" data-p8g-empty="">
+          这位客户还没有匹配到的群成员行。匹配是按手机号做的，所以没存进通讯录的陌生号群不会出现在这里。
+        </p>
+      ) : (
+        <ul className="space-y-1.5">
+          {rows.map((row) => {
+            const area = memberAreaState(row)
+            return (
+              <li
+                key={row.chatKey}
+                data-p8g-group-row={row.chatKey}
+                className="flex items-center gap-2 rounded-lg border border-border/50 px-2.5 py-2"
+              >
+                <input
+                  type="checkbox"
+                  data-p8g-check={row.chatKey}
+                  checked={picked.has(row.chatKey)}
+                  onChange={() => toggle(row.chatKey)}
+                  aria-label={`选择 ${row.title ?? row.chatKey}`}
+                />
+                <div className="min-w-0 flex-1">
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                    <Users className="size-3.5 shrink-0 text-muted-foreground" />
+                    <span className="truncate">{row.title ?? row.chatKey}</span>
+                    {row.isFinal && <Badge variant="outline" data-p8g-final="">已解散/已退出</Badge>}
+                    {area !== 'built' && (
+                      <Badge variant="outline" data-p8g-area={area}>{memberAreaShort(area)}</Badge>
+                    )}
+                  </p>
+                  {/* 两个数分开写：不等 = 这一轮的快照被覆盖率闸拦下、没记账（GroupVO 的类注释、R20）。 */}
+                  <p className="truncate text-[11px] text-muted-foreground">
+                    在群 {row.inGroupCount} · 上次快照 {row.participantCount} · 快照于 {timeCopy(row.lastSnapshotAt)}
+                  </p>
+                </div>
+                <Button size="sm" variant="ghost" data-p8g-open={row.chatKey} onClick={() => setDialog({ accountId, row })}>
+                  查看群成员
+                </Button>
+              </li>
+            )
+          })}
+        </ul>
+      )}
+
+      {exportMsg && (
+        <p
+          className="mt-2 text-xs text-muted-foreground"
+          data-p8g-export-msg=""
+          data-p8g-blocked={blocked ? '1' : undefined}
+        >
+          {exportMsg}
+        </p>
+      )}
+
+      {dialog && liveRow && (
+        <GroupMembersDialog accountId={dialog.accountId} row={liveRow} onClose={() => setDialog(null)} />
+      )}
+    </section>
+  )
+}
+```
+
+（`data-p8g-blocked` 与 `data-p8g-export-msg` 挂在**同一个可见节点**上：前拦那句本来就是给用户看的，再补一枚 `hidden` 锚会让"界面上有没有这句话"与"驱动读不读得到"分家，也会让 CDP 腿读到一个看不见的内容。判据是 `getAttribute('data-p8g-blocked') === '1'`——前拦与"真导过一次"共用一条文案位置，不分开的腿就没法区分「IPC 没发」与「IPC 发了但失败」，那是 memory 里「断言必须区分生效了与什么都没做」的界面版。）
+
+- [ ] **Step 4: `GroupMembersDialog.tsx`（顶栏 + 两个 tab）**
+
+```tsx
+import { useState } from 'react'
+import { Download, RefreshCw, X } from 'lucide-react'
+import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import {
+  Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle
+} from '@/components/ui/dialog'
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select'
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
+import { useDebouncedValue } from '@/hooks/useDebouncedValue'
+import { cn } from '@/lib/utils'
+import {
+  GROUP_EVENT_PAGE_SIZE, GROUP_MEMBER_PAGE_SIZE, useGroupBuild, useGroupEvents, useGroupExport,
+  useGroupMembers, type GroupRowVO, type MemberFilters
+} from '@/api/groupMembers'
+import {
+  actorCopy, buildFailureNotes, exportOutcomeCopy, exitCell, firstSeenNote, gateNote, inGroupCopy,
+  joinTimeCopy, LIVE_EVENT_TIME_NOTE, memberAreaCopy, memberAreaState, sourceCopy, timeCopy
+} from '@/lib/groupDisplay'
+import type { GroupMemberRole } from '@shared/groupMembers'
+// 运行时值走相对路径（Task 15 技术要点 10）：角色列的中文词只有 shared 那一份作者（R46）。
+import { groupRoleLabel } from '../../../shared/groupMembers.ts'
+
+const ALL = 'all'
+const ROLES: GroupMemberRole[] = ['member', 'admin', 'super']
+const EVENT_TYPES = ['added', 'joined', 'left', 'removed', 'promoted', 'demoted']
+
+interface Props {
+  accountId: number
+  row: GroupRowVO
+  onClose: () => void
+}
+
+export default function GroupMembersDialog({ accountId, row, onClose }: Props): React.JSX.Element {
+  const [tab, setTab] = useState('members')
+  const build = useGroupBuild()
+  const groupExport = useGroupExport()
+  // 「点了没反应」与「还没点」的唯一分界（技术要点 10）：`outcome===null` 两种来路都成立。
+  const [buildRequested, setBuildRequested] = useState(false)
+
+  const area = memberAreaState(row)
+  const areaNote = memberAreaCopy(area)
+  const notes = buildRequested ? buildFailureNotes(build.outcome) : []
+  const exportMsg = groupExport.result ? exportOutcomeCopy(groupExport.result) : ''
+
+  const refresh = (): void => {
+    setBuildRequested(true)
+    build.build({ accountId, chatKey: row.chatKey })   // 单数键（R49）：三处契约逐字一致
+  }
+
+  return (
+    <Dialog open onOpenChange={(open) => { if (!open) onClose() }}>
+      {/* 不再调 beginOverlay：DialogContent 内部已挂浮层计数（Task 15 技术要点 9）。 */}
+      <DialogContent className="max-w-5xl" data-p8g-dialog="">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2 text-base">
+            <span className="truncate">{row.title ?? row.chatKey}</span>
+            {row.isFinal && <Badge variant="outline">已解散/已退出</Badge>}
+          </DialogTitle>
+          <DialogDescription>
+            在群 {row.inGroupCount} 人 · 上次快照 {row.participantCount} 人 · 快照于 {timeCopy(row.lastSnapshotAt)} ·
+            已成功快照 {row.snapshotCount} 次。名单是**建档那一刻**为真，要新读数就点「刷新成员」。
+          </DialogDescription>
+        </DialogHeader>
+
+        <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm" variant="outline" data-p8g-refresh=""
+            disabled={build.pending || row.isFinal}
+            title={row.isFinal ? '泵会跳过已解散/已退出的群（spec §8）' : '只给这个群重新拉一次成员快照'}
+            onClick={refresh}
+          >
+            <RefreshCw className={cn('size-3.5', build.pending && 'animate-spin')} />
+            {build.pending ? '建档中…' : '刷新成员'}
+          </Button>
+          <Button
+            size="sm" variant="outline" data-p8g-export-one=""
+            disabled={groupExport.pending || row.snapshotCount === 0}
+            title={row.snapshotCount === 0 ? '还没建过档，导出会得到一份空文件（spec §10 的 no_rows）' : undefined}
+            onClick={() => groupExport.exportRows({ accountId, chatKeys: [row.chatKey] })}
+          >
+            <Download className="size-3.5" />
+            {groupExport.pending ? '导出中…' : '导出本群'}
+          </Button>
+          <Button size="sm" variant="ghost" data-p8g-close="" className="ml-auto" onClick={onClose}>
+            <X className="size-4" />
+            关闭
+          </Button>
+        </div>
+
+        {build.pending && <p className="text-xs text-muted-foreground" data-p8g-build-pending="">建档中：这一轮跑完会自动刷新这里的读数。</p>}
+        {areaNote && <p className="rounded-md border border-border/60 px-3 py-2 text-xs text-muted-foreground" data-p8g-area={area}>{areaNote}</p>}
+        {notes.map((line) => (
+          <p key={line} className="text-xs text-destructive" data-p8g-build-msg="">{line}</p>
+        ))}
+        {exportMsg && <p className="text-xs text-muted-foreground" data-p8g-export-msg="">{exportMsg}</p>}
+
+        {/* 非 WhatsApp 与从没快照过的群不显示空名单冒充结果（spec §8 第六行）：两句话各自出，tab 都不给。 */}
+        {area === 'built' ? (
+          <Tabs value={tab} onValueChange={setTab}>
+            <TabsList>
+              <TabsTrigger value="members" data-p8g-tab-members="">成员名单</TabsTrigger>
+              <TabsTrigger value="events" data-p8g-tab-events="">进退流水</TabsTrigger>
+            </TabsList>
+            <TabsContent value="members"><MemberTable accountId={accountId} chatKey={row.chatKey} /></TabsContent>
+            <TabsContent value="events"><EventTable accountId={accountId} chatKey={row.chatKey} /></TabsContent>
+          </Tabs>
+        ) : null}
+      </DialogContent>
+    </Dialog>
+  )
+}
+
+/** 名单与流水各一张表。两个 hook 都待在组件内部：未激活的 tab 被 Radix 卸载，才不会一开弹层就打两次 GET（技术要点 4）。 */
+function MemberTable({ accountId, chatKey }: { accountId: number; chatKey: string }): React.JSX.Element {
+  const [inGroup, setInGroup] = useState(ALL)
+  const [role, setRole] = useState(ALL)
+  const [q, setQ] = useState('')
+  const [page, setPage] = useState(1)
+  const debouncedQ = useDebouncedValue(q, 300)
+
+  const filters: MemberFilters = {
+    // 「全部」传 undefined，"只看已退群"传 false（Task 15 技术要点 2：`qs` 丢 undefined 但保留 false）。
+    isInGroup: inGroup === 'in' ? true : inGroup === 'out' ? false : undefined,
+    role: role === ALL ? '' : (role as GroupMemberRole),
+    q: debouncedQ.trim(),
+    page
+  }
+  const { data, isPending, isError } = useGroupMembers(accountId, chatKey, filters)
+  const records = data?.members.records ?? []
+  const total = data?.members.total ?? 0
+  const pageCount = Math.max(1, Math.ceil(total / GROUP_MEMBER_PAGE_SIZE))
+  const gate = gateNote(data?.reason ?? null, data?.coverage ?? null)
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={inGroup} onValueChange={(v) => { setInGroup(v); setPage(1) }}>
+          <SelectTrigger size="sm" className="w-28" data-p8g-f-in-group=""><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>全部成员</SelectItem>
+            <SelectItem value="in">在群</SelectItem>
+            <SelectItem value="out">已退群</SelectItem>
+          </SelectContent>
+        </Select>
+        <Select value={role} onValueChange={(v) => { setRole(v); setPage(1) }}>
+          <SelectTrigger size="sm" className="w-28" data-p8g-f-role=""><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>全部角色</SelectItem>
+            {ROLES.map((r) => <SelectItem key={r} value={r}>{groupRoleLabel(r)}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <Input
+          className="w-44" data-p8g-f-q="" placeholder="名称或手机号"
+          value={q} onChange={(e) => { setQ(e.target.value); setPage(1) }}
+        />
+        {gate && <span className="ml-auto text-xs text-amber-600" data-p8g-coverage-note="">{gate}</span>}
+      </div>
+
+      {isPending ? <p className="py-8 text-center text-xs text-muted-foreground">读取中…</p>
+        : isError ? <p className="py-8 text-center text-xs text-destructive">读不到成员名单。</p>
+        : records.length === 0 ? <p className="py-8 text-center text-xs text-muted-foreground">这个筛选条件下没有人。</p>
+        : (
+          <div className="max-h-[52vh] overflow-auto rounded-lg border border-border/50">
+            <table className="w-full border-collapse text-xs">
+              <thead className="sticky top-0 z-10 bg-muted/70 text-left text-[11px] text-muted-foreground backdrop-blur">
+                <tr>
+                  {['名称', '手机号', '角色', '是否在群', '进群时间', '进群数', '退群时间', '退出方式', '最近发言', '发言数']
+                    .map((h) => <Th key={h}>{h}</Th>)}
+                </tr>
+              </thead>
+              <tbody>
+                {records.map((m) => {
+                  const exit = exitCell(m)
+                  const seen = firstSeenNote(m)
+                  return (
+                    <tr key={m.memberKey} data-p8g-member-row={m.memberKey} className="border-b border-border/40">
+                      <Td><span className="block max-w-[12rem] truncate">{m.displayName ?? '—'}</span></Td>
+                      <Td>{m.phone ?? '—'}</Td>
+                      <Td>{groupRoleLabel(m.roleType)}</Td>
+                      <Td>{inGroupCopy(m.isInGroup)}</Td>
+                      <Td>
+                        {joinTimeCopy(m)}
+                        {/* §8 第三行 + §11 第 2 条：没有进群证据时补一句"首次见到"，且绝不叫进群时间。 */}
+                        {seen && <span className="block text-[11px] text-muted-foreground">{seen}</span>}
+                      </Td>
+                      <Td>{m.joinCount}</Td>
+                      <Td>{exit.time}</Td>
+                      <Td>{exit.method}</Td>
+                      <Td>{timeCopy(m.lastMsgAt)}</Td>
+                      {/* 聚合列可空：null 是"没查过"，0 是"查了、那天没说话"。把 null 印成 0 就是替后端编一个读数。 */}
+                      <Td>{m.msgCount == null ? '—' : m.msgCount}{m.dayMsgCount == null ? '' : ` / ${m.dayMsgCount}`}</Td>
+                    </tr>
+                  )
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+      <Pager anchor="member" page={page} pageCount={pageCount} total={total} unit="人" onPage={setPage} />
+    </div>
+  )
+}
+
+function EventTable({ accountId, chatKey }: { accountId: number; chatKey: string }): React.JSX.Element {
+  const [eventType, setEventType] = useState(ALL)
+  const [page, setPage] = useState(1)
+  const { data, isPending, isError } = useGroupEvents(accountId, chatKey, eventType === ALL ? '' : eventType, page)
+  const records = data?.records ?? []
+  const total = data?.total ?? 0
+  const pageCount = Math.max(1, Math.ceil(total / GROUP_EVENT_PAGE_SIZE))
+
+  return (
+    <div className="flex flex-col gap-2">
+      <div className="flex flex-wrap items-center gap-2">
+        <Select value={eventType} onValueChange={(v) => { setEventType(v); setPage(1) }}>
+          <SelectTrigger size="sm" className="w-32" data-p8g-f-event=""><SelectValue /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>全部事件</SelectItem>
+            {EVENT_TYPES.map((t) => <SelectItem key={t} value={t}>{eventTypeText(t)}</SelectItem>)}
+          </SelectContent>
+        </Select>
+        <span className="text-[11px] text-muted-foreground">{LIVE_EVENT_TIME_NOTE}</span>
+      </div>
+
+      {isPending ? <p className="py-8 text-center text-xs text-muted-foreground">读取中…</p>
+        : isError ? <p className="py-8 text-center text-xs text-destructive">读不到进退流水。</p>
+        : records.length === 0 ? <p className="py-8 text-center text-xs text-muted-foreground">还没有加减人的流水。事件只在账号上线且桥就绪时采集。</p>
+        : (
+          <div className="max-h-[52vh] overflow-auto rounded-lg border border-border/50">
+            <table className="w-full border-collapse text-xs">
+              <thead className="sticky top-0 z-10 bg-muted/70 text-left text-[11px] text-muted-foreground backdrop-blur">
+                <tr>{['时间', '事件', '目标人', '操作人', '来源'].map((h) => <Th key={h}>{h}</Th>)}</tr>
+              </thead>
+              <tbody>
+                {records.map((e) => (
+                  <tr key={e.id} data-p8g-event-row={e.id} className="border-b border-border/40">
+                    <Td>{timeCopy(e.occurredAt)}</Td>
+                    <Td>{eventTypeText(e.eventType)}</Td>
+                    {/* 本期流水只有键没有名（§A.2 ④ 的 `GroupEventVO` 不含 displayName），目标人那一格给键。 */}
+                    <Td><span className="block max-w-[14rem] truncate font-mono text-[11px]" title={e.memberKey ?? ''}>{e.memberKey ?? '—'}</span></Td>
+                    <Td><span className="block max-w-[10rem] truncate" title={actorCopy(e)}>{actorCopy(e)}</span></Td>
+                    <Td>{sourceCopy(e.source)}</Td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+      <Pager anchor="event" page={page} pageCount={pageCount} total={total} unit="条" onPage={setPage} />
+    </div>
+  )
+}
+
+/** 事件类型的中文词走 `groupDisplay` 那一份（R51）；单独一个薄函数只为让两个调用点读起来同形。 */
+function eventTypeText(t: string): string {
+  return eventTypeCopy(t)
+}
+
+function Th({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return <th className="px-3 py-2 font-medium">{children}</th>
+}
+
+function Td({ children }: { children: React.ReactNode }): React.JSX.Element {
+  return <td className="px-3 py-2 align-middle">{children}</td>
+}
+
+function Pager({ anchor, page, pageCount, total, unit, onPage }: {
+  anchor: 'member' | 'event'
+  page: number
+  pageCount: number
+  total: number
+  unit: string
+  onPage: (next: number) => void
+}): React.JSX.Element {
+  return (
+    <div className="flex items-center justify-between text-xs text-muted-foreground">
+      <span data-p8g-event-page={anchor === 'event' ? '' : undefined} data-p8g-member-page={anchor === 'member' ? '' : undefined}>
+        第 {page} / {pageCount} 页 · 共 {total} {unit}
+      </span>
+      <div className="flex gap-2">
+        <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => onPage(page - 1)}>上一页</Button>
+        <Button size="sm" variant="outline" disabled={page >= pageCount} onClick={() => onPage(page + 1)}>下一页</Button>
+      </div>
+    </div>
+  )
+}
+```
+
+（**两处要在跑 typecheck 时回头改**：① `useGroupEvents` 的回参是 `PageResult<GroupEventRowVO>`，Task 15 的 hook 直接返回它，所以这里读 `data?.records`——若 Task 15 落地时包了一层 `{events}`，以那份 Produces 为准改这里，不改 hook。② 名单表就是 spec §9 的那十列（`最近发言` 与 `发言数` 各一列，没有合并），但第十列的单元格里写成 `msgCount / dayMsgCount` 两数并列（`dayMsgCount` 为 null 时只出 `msgCount`，不出 `NaN`、不出 `undefined`）——**「当日发言数」在界面上占的是这一格的后半，不是第十一列**。为什么不单列：§9 数到十，多一列就是把表撑出弹层宽度，而这两数天然属于同一件事（这个人说了多少 / 那天说了多少）。判别：这一格的斜杠是**读数并列**，不是"发言数的两种口径"——`dayMsgCount` 的口径由后端 `GroupMemberQueryService` 的聚合 SQL 定，界面不参与换算；这一格在真实登录档之前必然是空读数（Task 14 技术要点第 6 条：自动化腿造不出真消息），所以 §15 与本任务的提交正文都要写明它停在待验证。）
+
+- [ ] **Step 5: 抽屉挂节 + 布局层挂失效**
+
+`CustomerDrawer.tsx`：`import CustomerGroupsSection from '@/components/customers/CustomerGroupsSection'`，并在 `最近消息` 那一节的 `</div>` 之后（`:227`）加一行：
+
+```tsx
+          <CustomerGroupsSection customerId={customer.id} />
+```
+
+`AppLayout.tsx`：`import { useGroupStateInvalidation } from '@/api/groupMembers'`，与 `useUnreadBadge()` 同段调用：
+
+```tsx
+  // 群与成员的缓存失效也挂布局层：`group:state` 是广播，切走客户页时那一轮建档照样会结。
+  // 挂在这里还有一层意义——没登录时不跑，`window.scrm.group.onState` 不需要 token，但读数要。
+  useGroupStateInvalidation()
+```
+
+- [ ] **Step 6: spec 两句改口**
+
+- §9 第三条的顶栏那句改成：「`GroupMembersDialog`：顶栏（刷新成员、导出本群）+ 两个 tab（成员名单 / 进退流水）+ 筛选（在群、角色、关键词）。**导出所选在客户抽屉「所在群」那一节的顶栏**，导的是勾选的若干群（`group:export` 的入参就是群键数组，本期没有"勾选若干成员"这回事）。」
+- §8 第一行的界面口径改成：「群行不显示"已建档"，弹层顶栏给"这一轮没建成"；**逐群失败的原因本期不进 IPC**，只在主进程日志里一行（R50）。」
+- 两处都只改句子，不删表行，**不与旧版比较**（口径来自本项目）。
+
+- [ ] **Step 7: 四路 typecheck + unit + lint + 构建**
+
+```bash
+cd /d/SmartSCRM/apps/desktop && set -o pipefail
+pnpm run typecheck 2>&1 | tee /d/SmartSCRM/tmp/p8f-typecheck.log | tail -30
+pnpm run test:unit 2>&1 | tee /d/SmartSCRM/tmp/p8f-unit.log | tail -10
+pnpm exec eslint src/renderer/src/lib/groupDisplay.ts src/renderer/src/lib/groupDisplay.test.ts \
+  src/renderer/src/components/customers/CustomerGroupsSection.tsx \
+  src/renderer/src/components/customers/GroupMembersDialog.tsx \
+  src/renderer/src/components/customers/CustomerDrawer.tsx src/renderer/src/layouts/AppLayout.tsx \
+  --quiet 2>&1 | tail -30
+pnpm run build 2>&1 | tee /d/SmartSCRM/tmp/p8f-build.log | tail -20
+```
+
+期望：四路 `tsc` 全 0；`test:unit` = 上一档 + 11；这六个文件 `eslint --quiet` 0 error（**全仓 lint 不是绿门**）；`build` 成功。`typecheck:web` 在本任务额外证住两件事：`enabled:false` 的查询返回类型仍是 `UseQueryResult`（早退顺序写错不会编译失败，所以那条只能靠技术要点 2 的判读与 Task 17 的 CDP 读数）；`GroupEventRowVO.id` 是 `number`，`key={e.id}` 才成立——若后端把它给成字符串，`React.Key` 那里不会红，但 `dedup` 行为会变，所以流水行的 `data-p8g-event-row` 读数是 CDP 腿的一格判据。
+
+- [ ] **Step 8: 提交**
+
+```bash
+cd /d/SmartSCRM && git status --short
+git add apps/desktop/src/renderer/src/lib/groupDisplay.ts apps/desktop/src/renderer/src/lib/groupDisplay.test.ts \
+  apps/desktop/src/renderer/src/components/customers/CustomerGroupsSection.tsx \
+  apps/desktop/src/renderer/src/components/customers/GroupMembersDialog.tsx \
+  apps/desktop/src/renderer/src/components/customers/CustomerDrawer.tsx \
+  apps/desktop/src/renderer/src/layouts/AppLayout.tsx \
+  docs/superpowers/specs/2026-09-30-group-member-analysis-design.md \
+  docs/superpowers/plans/2026-09-30-group-member-analysis.md
+git commit -m "$(cat <<'EOF'
+feat(P8/B6): 客户抽屉「所在群」+ 群成员弹层
+
+两个组件 + §8 全部口径收成纯函数（+11 条 test / 49 个断言）。导出所选按 R48
+落在抽屉那一节，弹层只留刷新成员 / 导出本群；spec §9 与 §8 第一行随之改口
+（逐群失败原因本期不进 IPC，见 R50）。
+
+界面尚未声称可用：本任务的判档只到四路 typecheck + unit + build。
+EOF
+)"
+```
+
+---
+
+<!-- APPEND-SENTINEL: Task 18 起接在这里（Task 17 已落档于本行上方） -->
+
+---
+
+## Task 17: CDP 界面腿 20 条 + 验收文档（B6 的交付闸）
+
+> **判档**：`node tmp/p8c-ui.mjs 2>&1 | tee tmp/p8c-ui.log` 的日志**最后一行必须是「通过 20 / 失败 0」且进程以 0 退出**；同一轮里 Task 14 的 HTTP 契约腿（全绿，分母 = 脚本里的 `check(` 数，推定 48）、Java 单测、四路 typecheck、`test:unit`、`pnpm run build` 要同时是绿的。四条退出码各有归属：`0` 全绿 / `1` 断言红（产品）/ `2` 后端与布景前置（服务没起、登录没过、jar 不含 8b、布景写库失败）/ `4` 窗口与渲染层前置（CDP 连不上、窗口不可见、`window.scrm.group` 没挂上、锚点结构对不上）。
+> **这是 B6 第一次声称"界面可用"。** Task 16 的判档明写着它只到编译；§13 那五档里，只有本任务这一档能证明渲染层真读到了后端、真画出了那十列、真把被闸拦下的那一批显示成"没做退群判定"。
+> **本任务不改产品代码。** 任何一条红的去向写死在下面那张判据表的最后一列：回 8b / 回 11–13 / 回 15 / 回 16，不在这里就地改判据。唯一允许在本任务里改的是**驱动自己的锚点**，改了要在提交正文写明"判别力为什么还在"。
+
+**Files:**
+- Create: `tmp/p8c-ui.mjs`（CDP 驱动，20 条；文件名由 §0 文件地图第 219 行定死，不许另起一名）
+- Create: `docs/notes/2026-10-01-group-members-verification.md`（§13 五档台账 + 不可自动化档 + 前置三行读数；**这份要提交**，与差距表那条"永不提交"不同）
+- Modify: `tmp/P8Purge.java`（加 `--prefix` 模式：本轮 54 个群键删不完两键版本；Task 14 Step 9 的位置参数用法一字不动）
+- Modify: `docs/superpowers/plans/2026-09-30-group-member-analysis.md`（§A.1 的「未开工」一行 + 交付状态表补一行 + 本任务的三行前置读数）
+- Modify: `docs/superpowers/specs/2026-09-30-group-member-analysis-design.md` §13（五档各自的实测状态）、§15（证不掉的三格逐条写明由谁续证）
+
+（`tmp/` 在 `.gitignore` 里（Global Constraints）：**驱动、日志、截图都不进提交**，本任务的提交只含 `docs/` 那三支。这不削弱判档——判的是"这一跑有没有绿"，而 `tmp/p8c-ui.log` 与 `tmp/p8c-drawer.png` / `tmp/p8c-dialog.png` 留在仓库工作区里可读、可引用。）
+
+**Interfaces:**
+- Consumes（全部是已交付的实名，逐字照抄，不在本任务里新造）：
+  - Task 16 Produces 那张**锚点全集表**（本计划 6452–6472 行）：所有选择器只从那张表里取，表里没有的一律先用 `Grep` 回源码确认再写。
+  - Task 15 的六跳 URL 形状：`/api/group-members/customer/{id}/groups?accountId=`、`/group/members?accountId&chatKey&isInGroup&role&q&page&size`、`/group/events?accountId&chatKey&eventType&page&size`（网络腿按 **URL 去重计数**，见技术要点 4）。
+  - Task 12/13 的 preload 面：`window.scrm.group.build` / `window.scrm.group.export`（L11 只读类型，**不调用**）。
+  - §A.2 的 ①（布景写入）③④⑤（读数），加上客户域与账号域的 `POST/DELETE /api/customers(/{id})`、`POST /api/platform-accounts`、`PATCH /api/platform-accounts/{id}/status`、`DELETE /api/platform-accounts/{id}`（读码 `CustomerController.java:55-87`、`PlatformAccountController.java:63-75`、`stores/accounts.ts:32-67`）——布景全靠这几跳，**不碰 mysql CLI**（表内容走 HTTP 是 Global Constraints）。
+  - `tmp/cdp.mjs`：`openPage(9223, 'localhost:5173') → { url, ev, send, close }`。
+- Produces：`docs/notes/2026-10-01-group-members-verification.md`；spec §13/§15 的实测回填；§A.1 的状态行更新。**没有源码接口**（本任务不动 `apps/`）。
+
+### §17.1 布景数据表（全部由驱动经 `:8180` 造，跑完自己收走）
+
+| 夹具 | 形状 | 为谁而造 |
+|---|---|---|
+| 测试账号 `ACCT_NAME = P8C界面腿${RUN}` | `platformType:1`、`viewId:'p8c-'+RUN`、建完 `PATCH status:1` | 让 `candidates` 里**必定**有一个在线 WhatsApp（渲染层那三条件读码 `CustomerGroupsSection.tsx` 的 filter）。本轮所有数据只挂在这个账号上，收尾整条删掉，不碰用户真实账号行。**但候选不止一个是常态**：用户真机那条 WhatsApp 只要在线，`candidates` 就有两档，抽屉那节会挂出账号下拉，默认落在哪一档不由布景决定（读码 Task 16 技术要点 1 的三级优先）。所以 `openDrawer` 先读触发器当前那一档：已经是 `ACCT_NAME` 就不动，否则切过去并等"本轮账号多出一枪 + 那一节两拍定稳"再继续——不处理的话 L1 数到空集，那条红看着像 8b ④ 的跨账号混读，其实是驱动没对齐上下文（技术要点 13 ④） |
+| 客户 A `openId=mk(101)`、**无 phone** | 靠 `member_key` 那一路命中 | L1–L16（抽屉三行、名单表、流水、闸标注） |
+| 客户 B `openId=mk(500)` | 命中 51 个单人群 | L19（勾满 51 → 前拦） |
+| 客户 C `openId='p8cuiC'+RUN+'@c.us'`、`phone:'861380000907'` | **必须晚于 K2 的快照建档** | L17（手机号那一路） |
+| 客户 D `openId='p8cuiD'+RUN+'@c.us'`、无 phone | 谁都命中不上 | L18（空态那句） |
+| `K1 = ${PREFIX}1001@g.us` | 51 人快照 `mk(101..151)`，其中 `mk(105)=super`、`mk(106)=admin` | L6 L7 L8 L9 L10 L11 L12 |
+| `K2 = ${PREFIX}1002@g.us` | 快照 10 人 = `mk(101)`、`mk(907)`、`mk(203)`、`mk(204)`、`mk(210..215)`；**第二批**再报两条事件：`left`（`mk(203)`，source `system_message`）+ `promoted`（`mk(204)`，source `live_event`，带 `actorName`） | L13 L14 L15 + L2 的两个数 + L17 |
+| `KG = ${PREFIX}1003@g.us` | 先 10 人快照（`mk(101)`、`mk(302..310)`），再来一发 4 人快照（`mk(101)`、`mk(302..304)`）⇒ 4/10=0.4 ⇒ `coverage_too_low` | L16 + L2 的 GATE 那半 |
+| `B_i = ${PREFIX}20${pad2(i)}@g.us`（i=1..51；代码里那颗叫 `BK(i)`，见 Step 3 的常量块） | 每群一发快照，名单只有 `mk(500)` | L19 |
+
+`RUN = String(Date.now()).slice(-9)`、`PREFIX = '12036' + RUN`、`gk(tag) = PREFIX + tag + '@g.us'`、`mk(n) = '86138000' + String(n).padStart(4, '0') + '@c.us'`。形状解释：`ChatKeys.isGroup` 只认 `@g.us` 后缀（读码 `msg/ChatKeys.java:59-64`），所以纯数字尾标既像真群键又不会撞真数据；`chat_key` 列宽 128，本轮最长 23 字（§A.2 V12 那行）。
+
+**三处顺序是设计，写反了腿就没证人**：
+① **客户 A/B/D 早于批次**——`matchCustomer` 只在写侧那一刻匹配（读码 `GroupMemberService.java:352-374`），晚了 `customer_id` 就是 NULL，抽屉一行都出不来。
+② **客户 C 晚于 K2 的快照**——C 的 openId 不等于任何 memberKey，若建在快照之前，写侧的手机号那一路会提前把 `customer_id` 填上，L17 就变成"今天也过"的假绿。把 C 放在 K2 之后，`customer_id=NULL`、openId 不命中，抽屉里那唯一一行只能来自**读侧**的手机号那一路（8b ⑧）。
+③ **K2 的事件单独一批**——一个批里顺序是「群登记 → 事件投影 → 快照收口」（读码 `GroupMemberService.java:84-86` 与类注释），快照最后跑会把同一批里 `left` 投影掉的在场性**盖回 1**。分两批：第一批纯快照，第二批纯事件。
+
+### §17.2 二十条判据
+
+| # | 在哪读 | 判据（逐字） | 红的时候归谁 |
+|---|---|---|---|
+| L1 | A 抽屉的 `[data-p8g-group-row]` | 键集**逐字等于** `{K1,K2,KG}`（不多不少、不重） | 16（键集/渲染）或 8b ④（跨账号混读） |
+| L2 | 同一份 `innerText` | K2 行含 `在群 9 · 上次快照 10 · 快照于 <日期时间>`；KG 行含 `在群 10 · 上次快照 10` | 16 技术要点 12（两个数不许合并）／8b ③（R20 三列被坏快照推进） |
+| L3 | `[data-p8g-check]` ×2 + `[data-p8g-export-selected]` | 勾 K1、KG ⇒ 文案 `导出所选（2）`；再点同两颗取消 ⇒ `导出所选（0）` 且 `disabled===true` | 16（勾选集合与 disabled 条件） |
+| L4 | 页内 fetch 探针（`resetSpy` 之后到 L4 为止这一窗） | **本轮 `accountId` 的去重 URL 数 === 1**，且那条 URL 里含 `accountId=${accountId}`；**其他账号**的去重 URL ≤ 1（切下拉那一枪，见 §17.1 的账号对齐） | 16（同一入参重复取数）；URL 缺 accountId 才归 15 |
+| L5 | 三行各自的徽标 | `data-p8g-final` 计数 0 **且** `data-p8g-area` 计数 0 **且** group-row 计数 3（三件同时成立才算过） | 16（凭空出徽标）；单看"没有徽标"会被"三行根本没画"顶替，所以并读 |
+| L6 | K2/K1 弹层 `[data-p8g-member-row]` 所在表 | 表头文本数组**逐字**等于 `['名称','手机号','角色','是否在群','进群时间','进群数','退群时间','退出方式','最近发言','发言数']`；第一行 `data-p8g-member-row` ∈ 本轮夹具键集 | 16（列序/列名） |
+| L7 | fetch 探针（开弹层后立刻读） | `/group/members` 去重 URL 数 === 1；`/group/events` **原始次数 === 0** | 16 技术要点 4（hook 被提到 Dialog 顶层） |
+| L8 | `[data-p8g-f-role]` **按选项文本**选「群主」（`pickOrStop`，见技术要点 10） | 恰好 1 行，且键 === `mk(105)` | 选不到「群主」⇒ `pickOrStop` 按前置 4 收手（清单少一档）；选到了却 ≠1 行或键不对 ⇒ 15（role 参数没传）／16（键集） |
+| L9 | `[data-p8g-f-q]` 真键盘打 `861380000107` | 1 行且键 === `mk(107)`；接着再补打 `99` ⇒ 空态文案 `这个筛选条件下没有人。` | 8b ①（`q` 转义/`SearchPattern`）／16（`qs` 丢值） |
+| L10 | 下一页前后各读一次键集 | 第 1 页 50 键、第 2 页 1 键、**两页不相交**、并集 === 51；页脚文案 `第 2 / 2 页 · 共 51 人` | 15（分页参数）；**不比行序**（后端按 `latest_join_at ASC, first_seen_at ASC`，51 人同一次快照 ⇒ 行序由 MySQL 定，不可赌） |
+| L11 | 弹层顶栏 + `window.scrm` | `typeof window.scrm?.group?.build === 'function'` 且 `.export === 'function'`；`[data-p8g-refresh]` 的 `disabled === false`（**读了就走，绝不点**） | `undefined` ⇒ 本任务自己 `blocked(4)`（宿主没接上不算产品缺陷）；`disabled` 真 ⇒ 16（`build.pending`/`isFinal` 判反） |
+| L12 | `[data-p8g-close]` 点完 | `[data-p8g-dialog]` 不在 DOM，**且** `getComputedStyle(document.body).pointerEvents !== 'none'` | 16 技术要点 14（浮层计数漏还，症状是整窗点不动） |
+| L13 | K2 弹层·流水 tab | 表头逐字 `['时间','事件','目标人','操作人','来源']`；两行事件分别是 `自行退群`/`mk(203)`/`系统消息` 与 `升为管理员`/`mk(204)`/`实时事件`；`LIVE_EVENT_TIME_NOTE` 那句在筛选行里 | 16 技术要点 13（中文词作者）／15（`eventType` 传值） |
+| L14 | K2 弹层·名单 + `[data-p8g-f-in-group]` 选 `已退群` | 恰好 1 行且键 === `mk(203)`；退群时间格不是 `—`；退出方式格逐字 `自行退群` | 8b（快照收口误判退群）／16（`exitCell`） |
+| L15 | K2 弹层·流水 + `[data-p8g-f-event]` 选两次 | 选 `自行退群` ⇒ 1 行且目标人 `mk(203)`；选 `降为成员` ⇒ 空态 `还没有加减人的流水。事件只在账号上线且桥就绪时采集。` | 15／16 |
+| L16 | KG 弹层 `[data-p8g-coverage-note]` | 文案**逐字** `本次快照人数较上次少 60%，未做退群判定`；名单 10 行、`是否在群` 列 10 个 `是` | **8b ③ 的界面证人**（V13 两列没落地 / `Map.of` 把 null 压成 `""` / 读侧仍当场重算 ⇒ 这条必然红）——红就在这里点名，**不许放宽判据** |
+| L17 | C 抽屉 | 恰好 1 行且键 === `K2` | **8b ⑧ 的界面证人**：C 建在 K2 快照**之后**（约束②），`customer_id` 必为 NULL、openId 又不等于任何 memberKey，所以这一行只可能来自**读侧**手机号那一路。两种坏法分开归因：0 行 ⇒ 那一路比不中——写侧若仍存原样 `'+86 138-0000-0907'`（8b ⑧ 的 `normalizePhone` 没落地）就必然红，否则查 `customerGroups` 的 phone 分支；≥2 行或键集里冒出 K1 ⇒ 写侧提前把 `customer_id` 回填了，约束② 被破坏，这一格的证人身份当场失效。**不许放宽** |
+| L18 | D 抽屉 | `[data-p8g-empty]` 在，文案含「还没有匹配到的群成员行」；且 `[data-p8g-error]` 不在 | 16（空与错两档混掉） |
+| L19 | B 抽屉 `[data-p8g-check]` ×51 | 全勾完文案 `导出所选（51）`；点 `[data-p8g-export-selected]` ⇒ `data-p8g-blocked === '1'` 且文案 `一次最多导出 50 个群，当前勾了 51 个` 且按钮**没**出现过 `导出中…` | 16 技术要点 8（前拦没生效） |
+| L20 | 收摊之后，四个读数取自**不同时刻**：`residual` 由 P8Purge 自己复查、`groupsLeftAfterPurge` 在 `runPurge()` 之后**且删账号之前**读 `/groups`、`40404×4` 与账号消失在那之后读 | 三表 `residual=0`、`/groups` 里没有 `PREFIX` 开头的键、四位客户全 `40404`、测试账号已从 `/api/platform-accounts` 消失 | 驱动自己的清理（R44）；残留要写进验收文档 §4 点名。顺序写反（先删账号再读 `/groups`）这一格会**假绿**，见技术要点 13 ② |
+
+**这张表与代码的分歧以代码为准**——Step 4–8 每落一条腿都要回来对齐本表的措辞，两处不一致就是自审的活（见 Step 10）。
+
+### §17.3 界面证不了的那些（逐条写明由谁续证，不许混进 20 条）
+
+| 项 | 为什么这一档证不了 | 由谁证 |
+|---|---|---|
+| `never_built` / `unavailable` 两枚徽标 | **本期入口不可达**（读码四条：① 抽屉里的一行必然来自一条 `group_member_state` 行；② 事件投影建的行 `phone/customer_id` 均为 NULL（`applyJoin/applyLeave/applyRole` 的列清单里根本没有 `customer_id`），反查不到客户；③ 只登记不快照的群没有任何 state 行；④ 能给 state 行填上客户的只有快照那一路，而快照被闸放行过 ⇒ `snapshotCount ≥ 1`、`platform==='whatsapp'`，`memberAreaState` 只剩 `built`） | Task 16 的 `groupDisplay.test.ts` 那两条 unit 断言（**文案与档位判定已由 unit 证过**）；真入口要等 B27 的选群面 |
+| `is_final` 徽标（L5 只断"没有"） | 本期没有写入点：V12 有 `is_final` 列，但 §A.2 六跳没有任何一跳会写它 | spec §15 第 2 条，等解散/退出事件那期 |
+| 账号下拉与切账号作废现场 | 要**两个**同时满足 `platformType===1 && status===1 && viewId!==''` 的账号；布景只造一个，第二个是用户真登的那条，不在自动化腿里 | 真实登录档（用户在场的两棒） |
+| `[data-p8g-no-account]` 那一档 | 要把在线账号全部下线才能造现场，而"下线"是用户的手 | 同上；文案与判档顺序由 Task 16 的 unit + 读码钉住 |
+| `dayMsgCount` / `msgCount` 的真读数 | 自动化腿不许碰页面发送链（Global Constraints），库里造不出真消息 | **抄 Task 14 技术要点 6 那句**：日志里显式打印两列实际值并标注"待真实登录档核对"，停在待验证，不用假数据冒充通过 |
+| 真发 1 条 / 真撤回 1 次 / 真实进退群 / 真实导出落盘 | 用户在场并明确放行才做，不进自动化腿 | 真实登录档 |
+| 超大群 `getParticipants` 截断 | 需要真实大群现场（P8 记的那颗雷） | 真实登录档；页内那一腿由 Task 4 的单测证 |
+
+### 技术要点
+
+1. **两条腿是 8b 的下游界面证人，红就回 8b，不在这里放宽**（L16 的 `data-p8g-coverage-note`、L17 的手机号那一路）。判别办法写死：L16 今天必然红——`GroupMemberQueryService.pageMembers` 是在**读的时候重算**覆盖率（10/10=1.0 ⇒ `ok` ⇒ 一句标注都不出），要它变绿只有 8b ③ 那两列进库、读侧改取存储值这一条路。这条判据**不许**改成"读到标注就算过"或"读到空也算过"。
+2. **`never_built` 不许伪造**：为了"把四档都跑一遍"而发一发 `groups:[K2]` 且不带快照的批次是**徒劳**的——那样只会多一条没有 `customer_id`、`phone` 为 NULL 的 state 行，反查仍回不到客户（上表④）。想证这一档得先有选群面，本期没有，就记在 §17.3，不硬造。
+3. **状态位可以布景，但只能挂在自己的账号上**：`PATCH status:1` 改的是库里一个整数；主进程不知道（它从注入页学在线，不从 DB 学），所以这一发**不会**唤起泵，也就不会去碰真页面。安全线（下面第 4 条）与这一条是同一件事的两面。
+4. **安全线：三条不许碰**。**「刷新成员」**（一发 `group_snapshot` 会打到真实 WhatsApp 页面上）、「**导出本群**」、**≤50 群的「导出所选」**（三者都会走到 `dialog.showSaveDialog` + 真落盘）。L19 唯一允许点导出那颗，前提是勾选 51 个——**残余风险**：如果 16 的前拦与 Task 13 主进程那道 50 群上限**同时**坏掉，屏幕中央会弹出一个原生保存框，需要人在场按 Esc。红的时候先按下述顺序归因：`data-p8g-blocked` 缺 → 前拦坏；出现 `导出中…` 但无保存框 → IPC 发了、主进程或后端拦下（`tooManyCopy()` 无计数那半句会露出来）；有保存框 → 两道都坏，属最贵的一种，立刻写进验收文档 §5。
+5. **取数判据一律用去重 URL，不用次数**：`main.tsx` 的 QueryClient 只关了 `refetchOnWindowFocus`、`retry:1`，`staleTime` 留默认 0，且 StrictMode 开着（dev 双挂载）。所以"tab 切回不重取"在这一档根本不可证，而原始次数天然是 2——写死成 `=== 1` 会红得不明不白。L4/L7 的写法：`去重 URL 数 === 1` 是判据，原始次数进日志当读数。L7 的 `/group/events` 用**原始次数 === 0**（零不受精确缓存影响）。
+6. **探针为什么必须装在页内**：`lib/http.ts:60` 是在调用时才取全局 `fetch`，而 `Runtime.evaluate` 跑在主 world ⇒ 页面包一层就能看见渲染层全部请求；`tmp/cdp.mjs` 没订 CDP 事件，网络域拿不到。**顺序硬约束**：探针要装在 `location.reload()` **之后**（reload 会连它一起冲掉），且早于第一次点导航。
+7. **点击一律走真实鼠标事件**：`Input.dispatchMouseEvent` 的 moved/press(`buttons:1`)/release(`buttons:0`)，定位先 `scrollIntoView({block:'center'})` 再 `elementFromPoint` 认定中心点落在目标身上。**读不到点**（gone / 零尺寸 / `elementFromPoint` 返回 null）按前置 `blocked(4)` 收——分不清"被吃掉"还是"根本没进视口"时报缺陷就是替应用撒谎；**读到了却被别的节点接走**按断言红收（应用侧命中测试缺陷）。抽屉体是 `overflow-y-auto`（读码 `CustomerDrawer.tsx` 恢复文件），所以那一节每次点之前都要滚。
+8. **下拉照抄 `tmp/p7a-d12probe.mjs:215-300` 那一段**，三条不许改的纪律都来自实测：① 只认 `[data-state="open"]` 的 content（radix 的 `animate-out` 期间旧节点仍挂 DOM 且仍吃命中）；② 要连续两拍停在同一坐标才点（radix 挂载后会自己再对齐一次，实测挪走 24px）；③ **绝不用 Escape 收尾**——`Input.dispatchKeyEvent` 的 Escape 关不掉 radix 的 Select，却会关掉外面那颗 Dialog（P6 实测过两次，一次连锁红三条）。本任务把它从"按第 idx 颗"改成"按 trigger 的选择器"，因为 Task 16 给四颗下拉都挂了 `data-p8g-f-*` 锚点。
+9. **输入框用真键盘，不给 `value` 赋值**：ASCII 逐字符 `keyDown(带 text)+keyUp`（`tmp/p16-page.mjs:175-188` 的 `typeAscii`），清空走"全选 + 退格"（同文件 `clearFocused`）。直接改 `input.value` 会绕过 React 的 onChange，症状是"筛选没生效"被误报成后端坏了。L9 打完要等 debounce 300ms + 一次网络往返，判据用条件轮询而不是固定 sleep。
+10. **行序与坐标都不可赌**：L10 用键集代数（两页不相交、并集 51）而不是"第 51 个人在第二页第一行"；L8 的下拉**按选项文本**选「群主」而不是"第 idx 颗"（`pickIn` 本来就是按 `textContent` 找项，`tmp/p7a-d12probe.mjs` 那一段的实测形状），清单顺序变了它照样选到对的档，而 `ROLES` 少了一档会由 `pickOrStop` 的 `notfound` 按前置 4 报出来——两种坏法分开归因，比"按最后一颗"更准。任何按 nth 定位的读表式都带 `[data-p8g-*]` 前缀选择器，不带 nth-child。
+11. **退出码分档，且清理挂在每一条退出路径上**（R44 / Task 14 技术要点 7、8 的界面版）：`blocked(2)`=后端/布景，`blocked(4)`=窗口/渲染层，断言红=1，驱动自己抛错=1。`cleanup()` 幂等（`cleanedUp` 位），五件事按固定顺序做完：`P8Purge --prefix` → **读一次 `/groups` 存进 `groupsLeftAfterPurge`** → 删四位客户 → 删测试账号 → `page.close()`（`Promise.resolve` 包一层，见技术要点 13）。清理失败**不改主退出码**，只在日志里点名——产品失败不能被清理噪声盖掉。
+12. **跑之前先断可见性**：`document.visibilityState === 'visible'`，不是就 `blocked(4, '先跑 tmp/p6f-raise.ps1')`（C9）。hidden 不等于点不动，真正的判据永远是"点完读得到"；但看不见时连"读得到"都归不了因，所以还是先抬起窗口。
+13. **四处"读数的时刻"是设计，写反了会拿到必然的假绿/假红**：
+    ① **版本闸排在 K1 落库之后**（Step 4 的 4.4）。`GET /groups` 的 `accountId` 是必填参数（读码 `GroupMemberController.java:48-54`），而判 `GroupVO` 有没有 8b 那两列又必须有**一行群**才读得出键名。刚建好的测试账号名下是空的：`records[0]` 为 `undefined`，判据塌成 false，于是"旧 jar"和"还没写库"会混成同一个红——那种红归因不了，只能整跑重来。K1 落库之后再判，读的才是 jar 的形状。
+    ② **L20 的 `/groups` 残读排在删账号之前**（就在 `runPurge()` 后面，Step 9）。账号一删，`accountId` 在 `resolveAccount` 那一关就解析不出来，接口回的是错误码而不是空名单，`rec()` 塌成 `[]` ⇒ `groupsLeft === 0` **永远成立**。那是 L20 里唯一一条会假绿的格子，所以它只能在账号还活着的时候读，读完把数存下来。
+    ③ **`page.close()` 要包一层**。`tmp/cdp.mjs` 的 `close` 是 `() => ws.close()`，返回 `undefined`；`await page.close().catch(...)` 会在 `.catch` 上抛 TypeError，把一次正常收摊变成"驱动自身抛错（按 1 收）"。写成 `await Promise.resolve(page.close()).catch(() => {})`。
+    ④ **账号下拉只在候选 ≥2 时才挂**（读码锚点表 `[data-p8g-account]` 那行），而候选里有没有第二档取决于用户真机那条 WhatsApp 在不在线——这是**现场**，不是布景能控制的。所以 `openDrawer` 先读触发器当前那一档（`<SelectValue/>` 渲染的就是选中的 `a.name`，在 Task 16 那段 `candidates.length > 1 && (<Select …><SelectTrigger data-p8g-account>` 里）：不是本轮账号就切过去，并等"本轮账号多出一枪 + 那一节两拍定稳"；本来就停在本轮账号就不动（切档那一枪算进 L4 的 `others ≤ 1`，不切就没这一枪）。"多出一枪"是**切档作废现场重取**的客观证人，比 `countSel(...) >= 0` 那种恒真条件强：后者什么都不等，会把"正在换数据"读成"数据就这样"。不处理下拉的话 L1 会数到空集，那条红看着像 8b ④ 的跨账号混读，其实是驱动没对齐账号上下文。顺带一条同源的读码事实：布景造的那条账号行**开不出内嵌视图**（`viewId` 只是库里的字符串，创建视图是渲染层经 `preload/index.ts:97` 调 `wcv-create` 的产物，读码 `main/webContentsView/ipc.ts:54`），所以泵不会因此碰到真页面——技术要点 3 的安全线在这一条上同样成立。
+
+- [ ] **Step 1: 全量回归先行（把 8b 之后的一切钉成绿的）**
+
+```bash
+cd /d/SmartSCRM/apps/desktop
+pnpm run test:unit 2>&1 | tail -6
+pnpm run typecheck:node && pnpm run typecheck:web && pnpm run typecheck:inject && pnpm run typecheck:unit
+pnpm run build 2>&1 | tail -4
+cd /d/SmartSCRM
+powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p7b-kill8180.ps1
+cd apps/server && export JAVA_HOME="C:/Program Files/Java/jdk-17.0.18"
+set -o pipefail
+./mvnw -Dtest='GroupMember*Test' test 2>&1 | tail -12
+./mvnw -DskipTests package 2>&1 | tail -5
+cd /d/SmartSCRM && (java -jar apps/server/target/*.jar > tmp/p8-server.log 2>&1 &)
+for i in $(seq 1 60); do curl -sf http://localhost:8180/api/health >/dev/null && break; sleep 1; done
+SCRM_USER=admin SCRM_PASS=admin123 node tmp/p8-group-members-contract.mjs 2>&1 | tee tmp/p8-contract.log
+```
+
+期望：`test:unit` 尾部 `pass` 数不小于 Task 16 落地时的那一份且 `fail 0`；四路 typecheck 无输出即过；`build` 出 `dist`；`mvnw test` 是 `BUILD SUCCESS` 且 `Tests run:` 行里 `Failures: 0, Errors: 0`；契约腿日志尾行 `失败 0`、`echo "exit=$?"` 打 0。**这一步任何一格红都不要往下走**：CDP 腿是在"编译 + 契约都绿"的前提上再证一层，前提坏了它只会给一堆同源的红。
+
+后端起来是助手的活，Electron 主进程重启是用户的手——本任务要的 dev 应用（`:9223` 可连、窗口可见、渲染层在 `localhost:5173`）由用户起，Step 3 的前置自检负责判新旧（看 `:9223` 那个进程的实际启动时刻，不看文件 mtime）。
+
+- [ ] **Step 2: 驱动骨架（退出码、`check()`、`blocked()`、探针、点击、打字、下拉）**
+
+`tmp/p8c-ui.mjs` 第一块。**每条腿都以 `await check(...)` 记账**：跑完整一轮时「通过 x / 失败 y」的 `x+y` 必须等于 20，少一条就是有一条腿没被记账（要么写漏了，要么中途抛错）。唯一允许的例外是**前置收手**——那种情况下尾行之前一定有一行「前置不满足（exit 2/4）」，读日志时先看那一行再看 `x+y`，**不许**把"只跑到第 6 条"读成"另外 14 条没问题"。
+
+```js
+// tmp/p8c-ui.mjs —— P8/B6 群成员分析：CDP 界面腿 20 条（spec §13 的第四档）
+// 退出码：0=通过 20 / 失败 0；1=断言红（产品）；2=后端与布景前置；4=窗口与渲染层前置。
+// 用法：SCRM_USER=admin SCRM_PASS=admin123 node tmp/p8c-ui.mjs 2>&1 | tee tmp/p8c-ui.log
+//       （要在仓库根跑：P8Purge 与截图路径都按 cwd 相对；dev 应用已由用户起好、窗口可见）
+// 全程不改产品代码；三条安全线见上面「技术要点」第 4 条：不点刷新成员、不点导出本群、导出所选只在勾满 51 时点。
+import { openPage } from './cdp.mjs'
+import { spawnSync } from 'node:child_process'
+import { writeFileSync } from 'node:fs'
+
+const BASE = 'http://127.0.0.1:8180'
+const PORT = 9223
+const USER = process.env.SCRM_USER ?? 'admin'
+const PASS = process.env.SCRM_PASS ?? 'admin123'   // 本地种子口令，读码 DataSeeder.java:29；不落新秘密
+
+const RUN = String(Date.now()).slice(-9)
+const PREFIX = `12036${RUN}`
+const gk = (tag) => `${PREFIX}${tag}@g.us`
+const K1 = gk('1001')
+const K2 = gk('1002')
+const KG = gk('1003')
+const BK = (i) => gk(`20${String(i).padStart(2, '0')}`)
+const mk = (n) => `86138000${String(n).padStart(4, '0')}@c.us`
+const ACCT_NAME = `P8C界面腿${RUN}`
+const NICK = (tag) => `P8C${tag}${RUN}`                       // 唯一昵称：客户表按 updated_at 排，靠它认行
+const SUPER_KEY = mk(105)
+const ADMIN_KEY = mk(106)
+const PHONE_MEMBER = mk(907)
+const PHONE_RAW = '+86 138-0000-0907'                          // 带 + 与分隔符：归一没生效就命中不上
+const PHONE_FLAT = '861380000907'
+const LEAVER = mk(203)
+const PROMOTED = mk(204)
+const Q_KEY = mk(107)
+const nowSec = Math.floor(Date.now() / 1000)
+
+let token = null
+let accountId = null
+let page = null
+let cleanedUp = false
+let purgeResidual = null
+let groupsLeftAfterPurge = null   // 由 cleanup 在 purge 之后、删账号之前填（L20 用，理由见技术要点 13）
+const custIds = { A: 0, B: 0, C: 0, D: 0 }
+
+let passN = 0
+const failN = () => failures.length
+const failures = []
+/** 断言：只有 PASS/FAIL 两种，全部记账。expected/actual 只为红的时候好归因。 */
+async function check(name, pass, expected, actual) {
+  const okv = !!pass
+  if (okv) { passN++; console.log(`  PASS  ${name}`) }
+  else { failures.push(name); console.log(`  FAIL  ${name}  expect=${expected}  actual=${JSON.stringify(actual)?.slice(0, 260)}`) }
+  return okv
+}
+/** 前置：抛出去由顶层按退出码收，绝不当成断言红。 */
+function blocked(code, why) { const e = new Error(why); e.__exit = code; throw e }
+
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
+async function req(method, path, { body } = {}) {
+  const headers = { 'Content-Type': 'application/json' }
+  if (token) headers.Authorization = `Bearer ${token}`
+  try {
+    const res = await fetch(BASE + path, { method, headers, body: body === undefined ? undefined : JSON.stringify(body) })
+    return await res.json()
+  } catch (e) {
+    return { code: -1, message: String(e).slice(0, 140) }   // 后端不可达塌成 -1：裸 reject 会把环境问题按 1 收
+  }
+}
+const dataOf = (env) => env?.data ?? null
+const rec = (env) => env?.data?.records ?? []
+
+// ---------- 页面原读：只返回文本/属性/坐标，判据一律写在 JS 侧 ----------
+const ev = (expr) => page.ev(expr)
+const pOf = (sel, nth = 0) =>
+  ev(`(() => { const e = document.querySelectorAll(${JSON.stringify(sel)})[${nth}]
+       ?? document.querySelector(${JSON.stringify(sel)}); return e ? { p: e.innerText ?? '' } : { gone: true } })()`)
+const atOf = (sel, attr, nth = 0) =>
+  ev(`(() => { const e = document.querySelectorAll(${JSON.stringify(sel)})[${nth}]
+       ?? document.querySelector(${JSON.stringify(sel)}); return e ? { a: e.getAttribute(${JSON.stringify(attr)}) } : { gone: true } })()`)
+const txt = async (sel, nth = 0) => { const r = await pOf(sel, nth); return r.gone ? null : oneLine(r.p) }
+/** 弹层整段的可见文本。为什么单开一件：K1/K2/KG 三只弹层共用同一个根锚点，行数列数都可能相同
+ *  （K2 与 KG 的名单都是 10 行），只有群名不会撞。开下一只之前"上一只离开了没有"也用它判。
+ *  上限给到 4000，且**判据一律在整段里 `includes`，日志只抄要的那一段**：空态与「实时事件时刻」那句都在
+ *  筛选行之后，K1 那一档 50 行的正文就有约 3000 字——用"从头切 N 字"当判据会把句子切没，症状是永远红。 */
+const dlgText = async () => oneLine(await ev(`document.querySelector('[data-p8g-dialog]')?.innerText ?? ''`).catch(() => ''), 4000)
+const boolOf = (sel, name, nth = 0) =>
+  ev(`(() => { const e = document.querySelectorAll(${JSON.stringify(sel)})[${nth}]; return e ? { v: !!e[name] } : { gone: true } })()`)
+const oneLine = (s, n = 200) => String(s ?? '').replace(/\s+/g, ' ').trim().slice(0, n)
+/** 挂键值的锚点（`[data-p8g-group-row="k"]` 这一类）统一这样读：属性名单独传，别从选择器里切——
+ *  切法既读不出 `[data-p8g-member-row]` 这种不带 `=` 的写法，也会把 `"` 的位置写死在驱动里。 */
+async function attrList(attr) {
+  const r = await ev(`(() => ({ a: [...document.querySelectorAll('[${attr}]')].map(x => x.getAttribute(${JSON.stringify(attr)})) }))()`)
+  return r.a ?? []
+}
+```
+
+点击与打字（真实输入）：
+
+```js
+/** 中心点能不能真点到：读得到且是自己 → 坐标；够不着 → {bad}；被别的节点接走 → {cov}。三种分开返回。 */
+async function spot(sel, nth = 0) {
+  return await ev(`(() => {
+    const all = [...document.querySelectorAll(${JSON.stringify(sel)})]
+    const el = all[${nth}]
+    if (!el) return { why: 'gone' }
+    el.scrollIntoView({ block: 'center' })
+    const r = el.getBoundingClientRect()
+    if (r.width === 0 || r.height === 0) return { why: 'zero' }
+    const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2)
+    const h = document.elementFromPoint(x, y)
+    if (h && (h === el || el.contains(h))) return { x, y }
+    if (!h) return { why: 'unhit' }
+    return { cov: h.tagName + '|' + (h.getAttribute('data-slot') || h.getAttribute('title') || '') }
+  })()`)
+}
+/** 点一下：轮询到"点得到"为止。gone/unhit/zero 是布景与现场（4），被接走是缺陷（断言红）。 */
+async function click(sel, label, { nth = 0, ms = 12000 } = {}) {
+  const until = Date.now() + ms
+  for (;;) {
+    const s = await spot(sel, nth)
+    if (s.x) {
+      await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: s.x, y: s.y })
+      await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: s.x, y: s.y, button: 'left', clickCount: 1, buttons: 1 })
+      await sleep(40)
+      await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: s.x, y: s.y, button: 'left', clickCount: 1, buttons: 0 })
+      return
+    }
+    if (s.cov) { await check(`${label}：中心点被别的东西接走`, false, '中心点落在目标自己身上', s.cov); return }
+    if (Date.now() > until) blocked(4, `点不到「${label}」：轮询 ${ms}ms 仍是 ${s.why}；此刻 hash=${await ev('location.hash')}，正文开头=${JSON.stringify(oneLine(await ev('document.body.innerText'), 160))}`)
+    await sleep(150)
+  }
+}
+/** 按**可见文本**找可点元素并真实点击：给没有 `data-p8g-*` 锚点的那几颗用——侧栏「客户」（Step 5）、
+ *  客户表那一行（Step 5/8）、分页的「下一页 / 上一页」（Step 6）。形状照 `tmp/p18-timeline.mjs:153-167`
+ *  那条实测过的腿：候选里取**嵌套最深**的那一个（外层容器的 innerText 也含同样的字，点它会点到整页），
+ *  其余分档同 `click`：gone/zero/unhit 是布景（4），被接走是缺陷（记红）。
+ *  `tag` 允许逗号列表（先例用 `'a,button'`）。不能直接拼成 `body a,button`——querySelectorAll 会把它
+ *  读成「body 里的 a」+「页面上任意 button」两组，于是导航之外的一颗按钮会被选中；列表里每个 tag
+ *  各自带 scope，再按节点去重。 */
+async function clickText(text, { scope = 'body', tag = 'button', label, ms = 12000 } = {}) {
+  const sels = tag.split(',').map((t) => `${scope} ${t.trim()}`)
+  const until = Date.now() + ms
+  for (;;) {
+    const s = await ev(`(() => {
+      const flat = ${JSON.stringify(sels)}.flatMap((x) => [...document.querySelectorAll(x)])
+      const cands = flat.filter((x, i) => flat.indexOf(x) === i)
+        .filter((x) => (x.innerText || '').trim().includes(${JSON.stringify(text)}))
+      const el = cands.length ? cands.reduce((a, b) => (a.contains(b) ? b : a)) : null
+      if (!el) return { why: 'gone', n: cands.length }
+      el.scrollIntoView({ block: 'center' })
+      const r = el.getBoundingClientRect()
+      if (r.width === 0 || r.height === 0) return { why: 'zero' }
+      const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2)
+      const h = document.elementFromPoint(x, y)
+      if (h && (h === el || el.contains(h))) return { x, y, n: cands.length }
+      if (!h) return { why: 'unhit' }
+      return { cov: h.tagName + '|' + (h.getAttribute('data-slot') || '') } })()`)
+    if (s.x) {
+      await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: s.x, y: s.y })
+      await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: s.x, y: s.y, button: 'left', clickCount: 1, buttons: 1 })
+      await sleep(40)
+      await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: s.x, y: s.y, button: 'left', clickCount: 1, buttons: 0 })
+      if (s.n > 1) console.log(`  [点击候选] 「${label ?? text}」有 ${s.n} 个文本候选，取最深的那一个`)
+      return
+    }
+    if (s.cov) { await check(`${label ?? text}：中心点被别的东西接走`, false, '点在自己身上', s.cov); return }
+    if (Date.now() > until) blocked(4, `找不到「${label ?? text}」那一颗（${s.why}，文本候选 ${s.n ?? 0} 个）`)
+    await sleep(150)
+  }
+}
+const keyEvents = async (key, code, vk, modifiers = 0, text) => {  const p = { type: 'keyDown', key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers }
+  if (text) Object.assign(p, { text, unmodifiedText: text })
+  await page.send('Input.dispatchKeyEvent', p)
+  await sleep(45)
+  await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key, code, windowsVirtualKeyCode: vk, nativeVirtualKeyCode: vk, modifiers })
+}
+const typeAscii = async (s) => {
+  for (const ch of s) {
+    await page.send('Input.dispatchKeyEvent', { type: 'keyDown', key: ch, text: ch, unmodifiedText: ch })
+    await sleep(20)
+    await page.send('Input.dispatchKeyEvent', { type: 'keyUp', key: ch })
+    await sleep(20)
+  }
+}
+const clearFocused = async () => {
+  for (let i = 0; i < 6; i++) {
+    if ((await ev(`(document.activeElement && document.activeElement.value) || ''`)) === '') return
+    await keyEvents('a', 'KeyA', 65, 2)
+    await sleep(60)
+    await keyEvents('Backspace', 'Backspace', 8)
+    await sleep(140)
+  }
+}
+/** 条件轮询。**到点返回 `null` 并打一行 `[等待超时]`，不抛错**：抛出会让后面所有腿都没机会记账，
+ *  日志尾行的 x+y 就不再是 20（Step 2 开头那条记账纪律）。真的前置（路由、那一节在不在）由调用处
+ *  自己 `if (!v) blocked(...)`，读数为空的现场交给那一条腿的 `check` 去记红。 */
+const poll = async (ms, fn, label) => {
+  const until = Date.now() + ms
+  for (;;) {
+    const v = await Promise.resolve(fn()).catch(() => null)
+    if (v) return v
+    if (Date.now() > until) { console.log(`  [等待超时] ${label}`); return null }
+    await sleep(200)
+  }
+}
+```
+
+页内 fetch 探针（技术要点 6）：
+
+```js
+async function installSpy() {
+  await ev(`(() => {
+    if (window.__P8C?.hooked) return
+    window.__P8C = { hooked: true, reqs: [] }
+    const orig = window.fetch
+    window.fetch = async (input, init) => {
+      const url = typeof input === 'string' ? input : input?.url ?? ''
+      const method = (init?.method ?? (typeof input === 'object' ? input?.method : undefined) ?? 'GET').toUpperCase()
+      if (url.includes('/api/')) window.__P8C.reqs.push({ method, url, t: Date.now() })
+      return orig(input, init)
+    }
+  })()`)
+}
+const spyReqs = async () => (await ev('window.__P8C?.reqs ?? []')) ?? []
+/** 每次"只打一枪"的判据之前清空计数：探针是全程累积的，不清就没法把这一腿的请求和上一腿的分开。 */
+const resetSpy = async () => { await ev('if (window.__P8C) window.__P8C.reqs = []') }
+const countUrl = async (needle) => (await spyReqs()).filter((r) => String(r.url).includes(needle)).length
+const distinctUrl = async (needle) => [...new Set((await spyReqs()).filter((r) => String(r.url).includes(needle)).map((r) => String(r.url)))].length
+```
+
+radix 下拉（照 `tmp/p7a-d12probe.mjs:215-300`，按 trigger 选择器寻址，`scope` 固定 `[data-p8g-dialog]`）：
+
+```js
+const CONTENT = '[data-slot="select-content"]'
+async function countSel(sel) { return await ev(`document.querySelectorAll(${JSON.stringify(sel)}).length`) }
+async function pickIn(triggerSel, want, scope = '[data-p8g-dialog]') {
+  const base = await countSel(CONTENT)
+  const trig = `${scope} ${triggerSel}`
+  const s = await spot(trig)
+  if (!s.x) return s.cov ? { code: 'covered', why: s.cov } : { code: s.why === 'gone' ? 'notrig' : 'unhit' }
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseMoved', x: s.x, y: s.y })
+  await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: s.x, y: s.y, button: 'left', clickCount: 1, buttons: 1 })
+  await sleep(40)
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: s.x, y: s.y, button: 'left', clickCount: 1, buttons: 0 })
+  const ITEM = `${CONTENT}[data-state="open"] [data-slot="select-item"]`
+  const read = () => ev(`(() => { const el = [...document.querySelectorAll(${JSON.stringify(ITEM)})]
+      .find(x => (x.textContent || '').includes(${JSON.stringify(want)}))
+    if (!el) return { gone: true }
+    el.scrollIntoView({ block: 'center' })
+    const r = el.getBoundingClientRect()
+    const x = Math.round(r.left + r.width / 2), y = Math.round(r.top + r.height / 2)
+    const h = document.elementFromPoint(x, y)
+    if (h && (h === el || el.contains(h))) return { x, y }
+    if (!h) return { none: true }
+    return { cov: h.tagName + '|' + (h.getAttribute('data-slot') || '') } })()`)
+  let prev = null
+  const got = await poll(4000, async () => {
+    const cur = await read()
+    const settled = !!(cur.x && prev && cur.x === prev.x && cur.y === prev.y)
+    prev = cur
+    return settled ? cur : null
+  }, `下拉「${want}」定稳`).catch(() => null)
+  if (!got) return prev?.gone ? { code: 'notfound' } : prev?.none ? { code: 'unhit' }
+    : prev?.cov ? { code: 'covered', why: prev.cov } : { code: 'stuck', why: '四秒内没有连续两拍同位置' }
+  await page.send('Input.dispatchMouseEvent', { type: 'mousePressed', x: got.x, y: got.y, button: 'left', clickCount: 1, buttons: 1 })
+  await sleep(40)
+  await page.send('Input.dispatchMouseEvent', { type: 'mouseReleased', x: got.x, y: got.y, button: 'left', clickCount: 1, buttons: 0 })
+  const back = await poll(4000, async () => ((await countSel(CONTENT)) <= base ? 1 : null), '浮层退场').catch(() => null)
+  return back ? { code: 'ok' } : { code: 'stuck', why: `选完「${want}」后浮层没退场：基线 ${base}，现在 ${await countSel(CONTENT)}` }
+}
+/** 三种"够不着"→ 前置 4（结构/清单与锚点表不符，驱动走不下去）；两种"点了没生效"→ 断言红。
+ *  `scope` 默认是弹层；抽屉里那颗账号下拉（`[data-p8g-account]`）要传 `[data-p8g-section]`。 */
+async function pickOrStop(triggerSel, want, label, scope = '[data-p8g-dialog]') {
+  const r = await pickIn(triggerSel, want, scope)
+  if (r.code === 'ok') return
+  if (r.code === 'notrig') blocked(4, `${label}：那颗下拉不存在（渲染层结构与 Task 16 锚点表不符）`)
+  if (r.code === 'notfound') blocked(4, `${label}：清单里没有「${want}」这一项（下拉内容与 Task 16 不符）`)
+  if (r.code === 'unhit') blocked(4, `${label}：那一项在 DOM 里但取不到中心点（窗口尺寸/可见性布景不行，空样本不算缺陷）`)
+  await check(`${label}`, false, '选中并退场', `${r.code}：${r.why ?? ''}`)
+}
+```
+
+截图留证：
+
+```js
+async function screenshot(file) {
+  const r = await page.send('Page.captureScreenshot', { format: 'png' })
+  if (r?.data) { writeFileSync(file, Buffer.from(r.data, 'base64')); console.log(`  [截图] ${file}`) }
+}
+```
+
+- [ ] **Step 3: 前置自检（CDP + 可见性 + 宿主面；版本闸不在这里，见技术要点 13 ①）**
+
+```js
+// ① 后端活着 + 登录（→ die 2）
+const health = await req('GET', '/api/health')
+if (health.code !== 0) blocked(2, `后端不可达（/api/health 回 ${JSON.stringify(health).slice(0, 120)}）：先跑 Step 1 那段起 jar`)
+const login = await req('POST', '/api/auth/login', {
+  body: { inviteCode: 'DEMO0001', username: USER, password: PASS, deviceId: `p8c-ui-${RUN}` }
+})
+token = login?.data?.accessToken
+if (!token) blocked(2, `登录没过：${JSON.stringify(login).slice(0, 180)}`)
+
+// ② 版本闸挪到 Step 4 的 4.4（技术要点 13）：`GET /groups` 的 `accountId` 是必填参数
+//    （读码 `GroupMemberController.java:48-54`），而且它要**库里已经有一行群**才读得出 GroupVO 的键——
+//    刚建出来的测试账号名下是空的，`records[0]` 为 undefined，那一格会把"旧 jar"和"还没写库"混成同一个红。
+//    所以这里只做窗口/宿主面，jar 的形状等 K1 落库之后再判。
+
+// ③ CDP + 可见性 + 宿主面（→ die 4）
+page = await openPage(PORT, 'localhost:5173')
+if ((await ev('document.visibilityState')) !== 'visible') blocked(4, '开发窗口不可见，点击不会被受理：先跑 tmp/p6f-raise.ps1')
+await page.send('Emulation.setFocusEmulationEnabled', { enabled: true })
+const faces = await ev(`(() => ({ b: typeof window.scrm?.group?.build, e: typeof window.scrm?.group?.export,
+  s: typeof window.scrm?.group?.onState }))()`)
+console.log(`[前置读数 1] window.scrm.group = build:${faces.b} export:${faces.e} onState:${faces.s}`)
+if (faces.b !== 'function' || faces.e !== 'function') blocked(4, 'preload 的 group 面没挂上（主进程是旧的：看 :9223 那个进程的实际启动时刻，不是文件 mtime）')
+console.log(`[前置读数 2] 渲染层地址 = ${await ev('location.href')}，hash = ${await ev('location.hash')}`)
+```
+
+那三行 `[前置读数 N]`（1 宿主面、2 渲染层地址、3 jar 是否含 V13 读数）是验收文档 §1 的来源，也是"红格归谁"的裁判依据——把它们抄进文档，别只写"跑过了"。
+
+- [ ] **Step 4: 布景（只走 HTTP，顺序按 §17.1 的三条硬约束）**
+
+```js
+// 4.1 测试账号：只在自己的行上把状态位置成在线（技术要点 3）
+const acct = await req('POST', '/api/platform-accounts', {
+  body: { platformType: 1, name: ACCT_NAME, viewId: `p8c-${RUN}`, remark: 'P8C 界面腿临时账号（跑完自删）' }
+})
+accountId = dataOf(acct)?.id
+if (!accountId) blocked(2, `建测试账号失败：${JSON.stringify(acct).slice(0, 180)}`)
+const st = await req('PATCH', `/api/platform-accounts/${accountId}/status`, { body: { status: 1 } })
+if (st.code !== 0) blocked(2, `把测试账号置为在线失败：${JSON.stringify(st).slice(0, 160)}`)
+
+// 4.2 客户 A/B/D 早于批次（约束①）
+async function newCustomer(tag, body) {
+  const r = await req('POST', '/api/customers', { body: { platformType: 1, nickname: NICK(tag), ...body } })
+  const id = dataOf(r)?.id
+  if (!id) blocked(2, `建客户 ${tag} 失败：${JSON.stringify(r).slice(0, 180)}`)
+  return id
+}
+custIds.A = await newCustomer('甲', { openId: mk(101) })                      // 只靠 member_key 命中
+custIds.B = await newCustomer('乙', { openId: mk(500) })
+custIds.D = await newCustomer('丁', { openId: `p8cuiD${RUN}@c.us` })          // 谁都命中不上
+
+// 4.3 批次写入
+async function batch(body) {
+  const r = await req('POST', '/api/group-members/batch', { body: { accountId, ...body } })
+  if (r.code !== 0) blocked(2, `布景写库没成（${JSON.stringify(r).slice(0, 200)}）`)
+  return r.data
+}
+const part = (n, over = {}) => ({
+  memberKey: mk(n), phone: `+86138000${String(n).padStart(4, '0')}`, displayName: `成员${n}`, roleType: 'member', ...over
+})
+const A1 = Array.from({ length: 51 }, (_, i) => 101 + i)                       // 101..151
+await batch({
+  groups: [{ chatKey: K1, title: 'P8C甲群' }],
+  snapshot: { chatKey: K1, participants: A1.map((n) => part(n, n === 105 ? { roleType: 'super' } : n === 106 ? { roleType: 'admin' } : {})) }
+})
+
+// 4.4 版本闸（Task 14 技术要点 1 同一条纪律）：没有 8b 的 V13 那两列就先修构建，别在界面腿里数红格。
+//     它必须排在 K1 那一发**之后**：`accountId` 是必填参数，且 `records[0]` 要有行才读得出 GroupVO 的键。
+//     K1 已经落库，所以这里判的是"jar 的形状"，不是"库有没有数据"；下面的 K2/KG/BK 与 C 都还没写，
+//     闸门坏了要靠 cleanup 的 `--prefix` 把 K1 那 51 行收走（R44），不留残。
+const probe = await req('GET', `/api/group-members/groups?accountId=${accountId}&page=1&size=1`)
+const anyGroup = rec(probe)[0]
+const hasV13 = !!anyGroup && 'lastCoverage' in anyGroup && 'lastReconcileReason' in anyGroup
+console.log(`[前置读数 3] jar 含 8b 的 V13 读数 = ${hasV13}（GroupVO 键：${anyGroup ? Object.keys(anyGroup).join(',') : `库里没有群：${JSON.stringify(probe).slice(0, 120)}`}）`)
+if (!hasV13) blocked(2, '后端不含 Task 8b 的 V13 读数：jar 是旧构建？先 ./mvnw -DskipTests package 再重启（Flyway 只在启动时跑）')
+
+// 4.5 K2 / KG / BK：K2 的快照与事件**分两批**（约束③），KG 两发把闸踩下去
+const A2 = [101, 907, 203, 204, 210, 211, 212, 213, 214, 215]                  // 10 人（§17.1）
+await batch({
+  groups: [{ chatKey: K2, title: 'P8C乙群（K2）' }],
+  snapshot: { chatKey: K2, participants: A2.map((n) => part(n, n === 907 ? { phone: PHONE_RAW } : {})) }
+})
+// 约束③：事件单独一批。同批里快照最后跑，会把 left 投影掉的在场性盖回 1。
+await batch({
+  groups: [{ chatKey: K2, title: 'P8C乙群（K2）' }],
+  events: [
+    { chatKey: K2, memberKey: LEAVER, actorKey: null, actorName: null, eventType: 'left',
+      occurredAtEpochSec: nowSec - 120, dedupKey: `p8c${RUN}l203`, source: 'system_message',
+      rawType: 'system', rawSubtype: 'revoke', bodySnapshot: '这个号码退出了群组' },
+    { chatKey: K2, memberKey: PROMOTED, actorKey: mk(101), actorName: '群主甲', eventType: 'promoted',
+      occurredAtEpochSec: nowSec - 60, dedupKey: `p8c${RUN}p204`, source: 'live_event',
+      rawType: null, rawSubtype: null, bodySnapshot: null }
+  ]
+})
+await batch({ groups: [{ chatKey: KG, title: 'P8C闸下群' }],
+  snapshot: { chatKey: KG, participants: [101, 302, 303, 304, 305, 306, 307, 308, 309, 310].map(part) } })
+const gate = await batch({ groups: [{ chatKey: KG, title: 'P8C闸下群' }],
+  snapshot: { chatKey: KG, participants: [101, 302, 303, 304].map(part) } })
+console.log(`[布景] KG 第二发：coverage=${gate.coverage} reason=${gate.reason} reconciled=${gate.reconciled}`)
+if (gate.reason !== 'coverage_too_low') blocked(2, `覆盖率闸没按预期拦下（期望 coverage_too_low，实得 ${gate.reason}）：8b 的闸先坏了，界面腿判不出什么`)
+for (let i = 1; i <= 51; i++) {
+  await batch({ groups: [{ chatKey: BK(i), title: `P8C乙群${i}` }], snapshot: { chatKey: BK(i), participants: [part(500)] } })
+}
+
+// 4.6 客户 C 晚于 K2 的快照（约束②：它是 L17 的假绿开关）
+custIds.C = await newCustomer('丙', { openId: `p8cuiC${RUN}@c.us`, phone: PHONE_FLAT })
+```
+
+`gate.reason` 那一格是**前置**不是断言：闸本身归 Task 8b/14，界面腿只负责"闸拦下之后界面上那句话有没有出来"。闸没拦就继续跑，只会得到一排同源的假红——所以在这里按 2 收手。
+
+- [ ] **Step 5: 抽屉五腿（L1–L5）**
+
+```js
+// reload 之后装探针（技术要点 6：顺序反了探针会被自己冲掉）。
+// 这一跳故意"发出去就不管"：`location.reload()` 会把当前 execution context 拆掉，
+// 所以等待写在**调用侧**、并且每次读数都 `.catch` —— reload 期间 `ev()` 抛的是
+// "Execution context was destroyed"，那不是产品缺陷也不是布景坏，是刷新本身的过程（R44 之外的第三种来路）。
+await ev(`setTimeout(() => { location.hash = '#/customers'; location.reload() }, 0)`).catch(() => {})
+const reloaded = await poll(30000, async () => {
+  const n = await ev(`document.querySelectorAll('a[href]').length`).catch(() => 0)
+  return n > 3 ? n : null
+}, 'reload 之后渲染层回来')
+if (!reloaded) {
+  const head = await ev(`document.body ? document.body.innerText : ''`).catch(() => '(上下文还没回来)')
+  blocked(4, `reload 后 30 秒没回到应用：正文开头=${JSON.stringify(oneLine(head, 160))}——若是登录页，说明 dev 应用要重新登录（用户的手），界面腿不代登`)
+}
+await installSpy()
+await resetSpy()   // 探针是全程累积的：从这一刻起只计 A 抽屉这一次开窗，L4 才有"一次"可判
+
+// 「客户所在群」那一族的取数事实：openDrawer 的切档定稳判据和 L4 用的是同一个口径，
+// 所以这两个谓词必须在 openDrawer 之前定义（函数体在 `await openDrawer('甲')` 那一线就被执行，
+// 把 `const` 留在后面会撞上 TDZ ReferenceError）。
+const custReqs = async () => (await spyReqs()).filter((r) => String(r.url).includes('/api/group-members/customer/'))
+const mineUrl = (r) => String(r.url).includes(`accountId=${accountId}`)
+
+/** 打开某位客户的抽屉。两句都不猜地址：先按可见文本点「客户」、等 hash 到位，再按唯一昵称点那一行、
+ *  等「所在群」那一节挂上。形状照 `tmp/p18-timeline.mjs:217-219` 那条实测过的腿——
+ *  `scope:'body'` 是必须的：客户行与那一节都在弹层之外，默认作用域 `[data-p8g-dialog]` 一条也找不到。
+ *  （客户表没有 data-* 锚点，读码 `CustomersPage.tsx` 未挂，所以按昵称文本认行；四位客户都按
+ *  `updated_at DESC` 排在第 1 页，`PAGE_SIZE=10`，读码 `CustomerService.java:51-52`。） */
+async function openDrawer(tag) {
+  await clickText('客户', { scope: 'body', tag: 'a,button', label: '侧栏「客户」' })
+  if (!(await poll(10000, async () => ((await ev('location.hash')).includes('/customers') ? 1 : null), '路由到客户页'))) {
+    blocked(4, `点了「客户」没到 /customers：此刻 hash=${await ev('location.hash').catch(() => '?')}`)
+  }
+  await clickText(NICK(tag), { scope: 'body', tag: 'tr', label: `客户行「${NICK(tag)}」` })
+  if (!(await poll(12000, async () => ((await countSel('[data-p8g-section]')) > 0 ? 1 : null), `${NICK(tag)} 的「所在群」那一节`))) {
+    blocked(4, `抽屉里没有「所在群」那一节（${NICK(tag)}）：Task 16 的挂载或锚点坏了，20 条腿没有一条能在这里往下走`)
+  }
+  // 账号对齐：候选 ≥2 时那一节才挂下拉（读码锚点表 `[data-p8g-account]` 那行），而默认落在哪一档由
+  // `节内下拉 > selectedId > candidates[0]` 决定（Task 16 技术要点 1）——用户真机那条 WhatsApp 只要在线，
+  // 它就可能排在前面，于是 L1 数到空集。那是**假红**，不是缺陷，所以这里不判红也不跳过，只做一件事：
+  // 把下拉切到本轮的测试账号，并把"切过"这件事写进日志（技术要点 13）。选项文本是 `a.name`
+  //（Task 16 那段 `candidates.map((a) => <SelectItem …>{a.name}</SelectItem>)`），
+  // 触发器里的 `<SelectValue/>` 渲染的是同一个值（同一块 `candidates.length > 1 && <Select>` 里），所以"现在停在哪一档"是能读的。
+  if ((await countSel('[data-p8g-account]')) > 0) {
+    const shown = await txt('[data-p8g-account]')
+    if (shown && shown.includes(ACCT_NAME)) {
+      console.log(`  [布景读数] 下拉本来就停在「${ACCT_NAME}」：不切档，也就不该多出一枪`)
+    } else {
+      const mineBefore = (await custReqs()).filter(mineUrl).length
+      await pickOrStop('[data-p8g-account]', ACCT_NAME, '切到本轮测试账号', '[data-p8g-section]')
+      console.log(`  [布景读数] 账号下拉从「${shown ?? '(读不到)'}」切到「${ACCT_NAME}」：本轮数据只挂在这一档上`)
+      // 切档会让那一节作废现场重取（读码 Task 16 技术要点 7 的那个 `useEffect`），于是"画稳"有客观证人：
+      // 本轮账号的取数必然多出一枪。原来的 `countSel(...) >= 0` 是恒真条件，它什么都不等。
+      // 12 秒多不出枪不在这里按 4 收手——那是 16 的缺陷（切档没作废现场），交给 L1 去红并归因，
+      // 界面腿不替产品判定"切档不用重取"。
+      const refetched = await poll(12000, async () =>
+        ((await custReqs()).filter(mineUrl).length > mineBefore ? 1 : null), '切档 ⇒ 本轮账号重新取数')
+      if (!refetched) {
+        console.log(`  [布景读数] 切档后 12 秒没有为「${ACCT_NAME}」重新取数：L1 若数到旧账号那三行，归因 16 的切档作废没生效`)
+      }
+    }
+    // 定稳判据：取数枪数与行数列在 450ms 里两拍都不变。只读一次会把"正在换数据"读成"数据就这样"。
+    const settled = await poll(12000, async () => {
+      const q1 = (await custReqs()).length
+      const n1 = await countSel('[data-p8g-group-row]')
+      await sleep(450)
+      return q1 === (await custReqs()).length && n1 === (await countSel('[data-p8g-group-row]'))
+        ? `${n1} 行 / ${q1} 枪` : null
+    }, '「所在群」那一节两拍定稳')
+    if (!settled) blocked(4, `「所在群」那一节 12 秒定不下来（行数列或取数枪数两拍都对不上）：界面腿没有稳定现场可读`)
+  }
+}
+await openDrawer('甲')
+const A_KEYS = (await attrList('data-p8g-group-row')).filter((k) => k && k.startsWith(PREFIX))
+await check('L1 A 的所在群键集 = {K1,K2,KG}',
+  A_KEYS.length === 3 && [K1, K2, KG].every((k) => A_KEYS.includes(k)),
+  [K1, K2, KG].join(','), A_KEYS.join(','))
+
+const copyOf = async (key) => { const r = await pOf(`[data-p8g-group-row="${key}"]`); return oneLine(r.gone ? '' : r.p, 600) }
+const c2 = await copyOf(K2)
+const cg = await copyOf(KG)
+await check('L2 两个数分开写：K2 在群 9 / 快照 10，KG 在群 10 / 快照 10',
+  c2.includes('在群 9 · 上次快照 10 · 快照于') && /\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}/.test(c2)
+  && cg.includes('在群 10 · 上次快照 10'),
+  'K2「在群 9 · 上次快照 10 · 快照于 <日期时间>」+ KG「在群 10 · 上次快照 10」', { K2: c2, KG: cg })
+
+await click(`[data-p8g-check="${K1}"]`, '勾选 K1')
+await click(`[data-p8g-check="${KG}"]`, '勾选 KG')
+const btnTxt2 = await poll(6000, async () => {
+  const t = await txt('[data-p8g-export-selected]')
+  return t?.includes('导出所选（2）') ? t : null
+}, '按钮文案跟进到（2）').catch(() => null)
+await click(`[data-p8g-check="${K1}"]`, '取消勾选 K1')
+await click(`[data-p8g-check="${KG}"]`, '取消勾选 KG')
+const back = await poll(6000, async () => {
+  const t = await txt('[data-p8g-export-selected]')
+  const d = await boolOf('[data-p8g-export-selected]', 'disabled')
+  return t?.includes('导出所选（0）') && d.v === true ? 1 : null
+}, '清空后回到（0）且 disabled').catch(() => null)
+await check('L3 勾选数进文案、清空后按钮 disabled',
+  !!btnTxt2 && !!back, '「导出所选（2）」→「导出所选（0）」且 disabled', { btnTxt2, back, disabled: await boolOf('[data-p8g-export-selected]', 'disabled') })
+
+// L4 的窗口 = 上面那次 `resetSpy()` 到此刻。判据分两半，因为这一窗里可能有**两档账号**各打一枪：
+// openDrawer 里若切过下拉，切档会作废现场并重取（读码 Task 16 技术要点 7 那个 `useEffect`），
+// 那一枪挂的是另一个 accountId，不是本轮这一档的重复取数。
+// 原始次数只打印不判：它随 StrictMode 的挂载次数浮动（技术要点 4），去重 URL 才是稳定的那一级。
+const custUrls = await custReqs()
+const mine = [...new Set(custUrls.filter(mineUrl).map((r) => String(r.url)))]
+const others = [...new Set(custUrls.filter((r) => !mineUrl(r)).map((r) => String(r.url)))]
+await check('L4 本轮账号只读一次且 URL 带 accountId（切档那一枪算别人家的）',
+  mine.length === 1 && others.length <= 1,
+  '本轮 accountId 去重 URL = 1 且含 accountId；其他账号 ≤ 1',
+  { mine: mine.map((u) => oneLine(u, 120)), others: others.map((u) => oneLine(u, 120)), raw: custUrls.length })
+
+const finals = await countSel('[data-p8g-section] [data-p8g-final]')
+const areas = await countSel('[data-p8g-section] [data-p8g-area]')
+await check('L5 界面上不出「已解散/已退出」，也不出三档短徽标（三行都在才算读到）',
+  finals === 0 && areas === 0 && A_KEYS.length === 3, '0 / 0 / 3 行', { finals, areas, rows: A_KEYS.length })
+```
+
+L5 的"三件同时成立"是有意的：只看 `finals === 0` 会被"三行根本没画出来"顶替成绿——那条纪律就是 memory 里"生效了 vs 什么都没做"的界面版。
+
+- [ ] **Step 6: K1 弹层七腿（L6–L12）**
+
+```js
+await resetSpy()   // L7 的窗口 = 开这一只弹层到读数为止。探针是全程累积的，不清就成了整场的累计（技术要点 6）
+await click(`[data-p8g-open="${K1}"]`, 'K1「查看群成员」')
+if (!(await poll(12000, async () => ((await dlgText()).includes('P8C甲群') ? 1 : null), 'K1 弹层挂上且标题是「P8C甲群」'))) {
+  blocked(4, `点了「查看群成员」12 秒，弹层里没有「P8C甲群」：Task 16 的 Dialog 没开起来（或开成了上一只），L6–L12 没有一条可判。此刻弹层文本开头=${JSON.stringify((await dlgText()).slice(0, 120))}，抽屉里仍可读 ${await countSel('[data-p8g-group-row]')} 行`)
+}
+await poll(15000, async () => ((await countSel('[data-p8g-member-row]')) > 0 ? 1 : null), '成员名单画出来了')
+
+const heads = await ev(`(() => ({ a: [...document.querySelectorAll('[data-p8g-dialog] thead th')].map(x => x.innerText.trim()) }))()`)
+const firstKey = (await attrList('data-p8g-member-row'))[0]
+await check('L6 名单十列逐字 + 首行键属于本轮夹具',
+  heads.a.join('|') === ['名称', '手机号', '角色', '是否在群', '进群时间', '进群数', '退群时间', '退出方式', '最近发言', '发言数'].join('|')
+  && String(firstKey).endsWith('@c.us') && firstKey.startsWith('86138000'),
+  '十列表头一字不差 + 首行是本轮成员键', { heads: heads.a, firstKey })
+
+await check('L7 未激活的流水 tab 不取数，名单只打一枪',
+  (await distinctUrl('/group/members')) === 1 && (await countUrl('/group/events')) === 0,
+  'members 去重 URL = 1 且 events 次数 = 0',
+  { members: await distinctUrl('/group/members'), events: await countUrl('/group/events'), raw: await countUrl('/group/members') })
+
+await pickOrStop('[data-p8g-f-role]', '群主', 'L8 角色筛到群主')
+await poll(8000, async () => ((await countSel('[data-p8g-member-row]')) === 1 ? 1 : null), '角色筛选出结果').catch(() => null)
+const roleKeys = await attrList('data-p8g-member-row')
+await check('L8 角色=群主 ⇒ 恰一行且是 SUPER_KEY',
+  roleKeys.length === 1 && roleKeys[0] === SUPER_KEY, SUPER_KEY, roleKeys)
+await pickOrStop('[data-p8g-f-role]', '全部角色', 'L8b 角色放回全部')
+await poll(8000, async () => ((await countSel('[data-p8g-member-row]')) === 50 ? 1 : null), '放回全部后回到第一页 50 行').catch(() => null)
+
+await click('[data-p8g-f-q]', '搜索框')
+await clearFocused()
+await typeAscii('861380000107')
+await poll(9000, async () => {
+  const k = await attrList('data-p8g-member-row')
+  return k.length === 1 && k[0] === Q_KEY ? 1 : null
+}, `搜「861380000107」出一行 ${Q_KEY}`).catch(() => null)
+const hit = await attrList('data-p8g-member-row')
+await typeAscii('99')
+await poll(9000, async () => ((await countSel('[data-p8g-member-row]')) === 0 ? 1 : null), '追加 99 之后空态').catch(() => null)
+const emptyDlg = await dlgText()
+await check('L9 搜索命中一行；再补两位数字出空态',
+  hit.length === 1 && hit[0] === Q_KEY && emptyDlg.includes('这个筛选条件下没有人。'),
+  `1 行 ${Q_KEY} ⇒ 空态文案`, { hit, tail: oneLine(emptyDlg.slice(-160)) })
+await clearFocused()
+
+const p1 = await poll(9000, async () => { const k = await attrList('data-p8g-member-row'); return k.length === 50 ? k : null }, '第 1 页 50 行').catch(() => [])
+const foot1 = await txt('[data-p8g-member-page]')
+```
+
+「下一页 / 上一页」没有 `data-p8g-*` 锚点（Task 16 的 `Pager` 只在挂着 `data-p8g-member-page` / `data-p8g-event-page` 的那个页脚 `<span>` 上打了锚，按钮本身没有），所以走 Step 2 里那件 `clickText`——它同时服务 Step 5 的侧栏「客户」与昵称行，**这就是为什么它定义在 Step 2 而不是这里**。
+
+L10 的键集代数与其余三腿：
+
+```js
+await clickText('下一页', { label: '下一页' })
+const p2 = await poll(9000, async () => { const k = await attrList('data-p8g-member-row'); return k.length >= 1 ? k : null }, '第 2 页出行了').catch(() => [])
+const foot2 = await txt('[data-p8g-member-page]')
+const inter = p2.filter((k) => p1.includes(k))
+const union = new Set([...p1, ...p2])
+await check('L10 51 人分两页：两页不相交、并集 51、页脚文案跟进',
+  p1.length === 50 && p2.length === 1 && inter.length === 0 && union.size === 51 && foot2 === '第 2 / 2 页 · 共 51 人',
+  '50 + 1，交集空，并集 51，「第 2 / 2 页 · 共 51 人」', { p1: p1.length, p2: p2.length, inter, foot1, foot2 })
+await clickText('上一页', { label: '上一页' })
+await poll(8000, async () => ((await txt('[data-p8g-member-page]'))?.startsWith('第 1 / 2 页') ? 1 : null), '回到第 1 页').catch(() => null)
+
+const refreshDisabled = await boolOf('[data-p8g-refresh]', 'disabled')
+const faces2 = await ev(`(() => ({ b: typeof window.scrm?.group?.build, e: typeof window.scrm?.group?.export }))()`)
+await check('L11 宿主面是函数、「刷新成员」没被禁用（只读不点：技术要点 4）',
+  faces2.b === 'function' && faces2.e === 'function' && refreshDisabled.v === false,
+  'build/export 均为 function 且 refresh.disabled=false', { faces2, refreshDisabled })
+await screenshot('tmp/p8c-dialog.png')
+
+await click('[data-p8g-close]', '弹层「关闭」')
+await poll(8000, async () => ((await countSel('[data-p8g-dialog]')) === 0 ? 1 : null), '弹层节点离开 DOM').catch(() => null)
+const pe = await ev(`getComputedStyle(document.body).pointerEvents`)
+const gone = await countSel('[data-p8g-dialog]')
+await check('L12 关掉之后节点不残留、body 的 pointer-events 也还回来',
+  gone === 0 && pe !== 'none', 'dialog 不在 + pointerEvents≠none', { gone, pe })
+```
+
+- [ ] **Step 7: K2 / KG 弹层四腿（L13–L16）**
+
+```js
+await click(`[data-p8g-open="${K2}"]`, 'K2「查看群成员」')
+if (!(await poll(12000, async () => ((await dlgText()).includes('P8C乙群（K2）') ? 1 : null), 'K2 弹层挂上且标题对得上'))) {
+  blocked(4, `K2 的弹层没开成，或开着的还是上一只没关掉的：弹层文本开头=${JSON.stringify((await dlgText()).slice(0, 120))}（L13–L15 无从判）`)
+}
+await click('[data-p8g-tab-events]', 'tab「进退流水」')
+await poll(12000, async () => ((await countSel('[data-p8g-event-row]')) >= 2 ? 1 : null), '流水出两行').catch(() => null)
+
+const eHeads = await ev(`(() => ({ a: [...document.querySelectorAll('[data-p8g-dialog] thead th')].map(x => x.innerText.trim()) }))()`)
+const eRows = await ev(`(() => ({ a: [...document.querySelectorAll('[data-p8g-event-row]')].map(tr =>
+  [...tr.querySelectorAll('td')].map(td => (td.innerText || '').trim())) }))()`)
+const oneLineNote = await dlgText()
+const leftRow = eRows.a.find((r) => r.includes(LEAVER))
+const promoRow = eRows.a.find((r) => r.includes(PROMOTED))
+await check('L13 流水五列 + 两条事件词 + 来源两词 + 那句时刻说明',
+  eHeads.a.join('|') === ['时间', '事件', '目标人', '操作人', '来源'].join('|')
+  && leftRow?.[1] === '自行退群' && leftRow?.[4] === '系统消息'
+  && promoRow?.[1] === '升为管理员' && promoRow?.[3] === '群主甲' && promoRow?.[4] === '实时事件'
+  && oneLineNote.includes('来源为「实时事件」的行，时间是主进程收到它的时刻'),
+  '五列表头 + left/promoted 两行 + LIVE_EVENT_TIME_NOTE',
+  { heads: eHeads.a, leftRow, promoRow, noteHit: oneLineNote.includes('来源为「实时事件」的行，时间是主进程收到它的时刻') })
+
+await click('[data-p8g-tab-members]', 'tab「成员名单」')
+await poll(12000, async () => ((await countSel('[data-p8g-member-row]')) > 0 ? 1 : null), '名单回来了').catch(() => null)
+await pickOrStop('[data-p8g-f-in-group]', '已退群', 'L14 只看已退群')
+await poll(9000, async () => ((await attrList('data-p8g-member-row')).length === 1 ? 1 : null), '已退群只剩一行').catch(() => null)
+const outKeys = await attrList('data-p8g-member-row')
+const outCells = await ev(`(() => { const tr = document.querySelector('[data-p8g-member-row]')
+  return { a: tr ? [...tr.querySelectorAll('td')].map(td => (td.innerText || '').trim()) : null } })()`)
+await check('L14 已退群档：恰一行且是 mk(203)，退群时间非 —，退出方式「自行退群」',
+  outKeys.length === 1 && outKeys[0] === LEAVER && outCells.a?.[6] && outCells.a[6] !== '—' && outCells.a[7] === '自行退群',
+  `1 行 ${LEAVER} + 退群时间有值 + 自行退群`, { outKeys, cells: outCells.a })
+// 事件那一腿（L15）在名单档之后回到流水：筛两次，一半有一半无
+await click('[data-p8g-tab-events]', 'tab「进退流水」（第二次）')
+await pickOrStop('[data-p8g-f-event]', '自行退群', 'L15a 事件筛 left')
+await poll(9000, async () => ((await countSel('[data-p8g-event-row]')) === 1 ? 1 : null), '事件筛选出一行').catch(() => null)
+const eOne = await ev(`(() => { const tr = document.querySelector('[data-p8g-event-row]')
+  return { k: tr?.querySelectorAll('td')?.[2]?.innerText?.trim() ?? null, n: document.querySelectorAll('[data-p8g-event-row]').length } })()`)
+await pickOrStop('[data-p8g-f-event]', '降为成员', 'L15b 事件筛 demoted（本轮没有）')
+await poll(9000, async () => ((await countSel('[data-p8g-event-row]')) === 0 ? 1 : null), '事件空态').catch(() => null)
+const eEmpty = await dlgText()
+await check('L15 事件筛选两半：left 一行且目标人是 mk(203)，demoted 出空态文案',
+  eOne.n === 1 && eOne.k === LEAVER && eEmpty.includes('还没有加减人的流水。事件只在账号上线且桥就绪时采集。'),
+  `left⇒1 行 ${LEAVER}；demoted⇒空态`, { eOne, tail: oneLine(eEmpty.slice(-160)) })
+await click('[data-p8g-close]', '弹层「关闭」（K2）')
+if (!(await poll(8000, async () => ((await countSel('[data-p8g-dialog]')) === 0 ? 1 : null), 'K2 弹层离开 DOM'))) {
+  blocked(4, '关掉 K2 的弹层 8 秒后根节点还在：Radix 的卸载坏了，且这时候再点 KG 会点在浮层上，L16 无法归因')
+}
+
+// L16：8b ③ 的界面证人。红就点名 8b，不许把判据放宽。
+await click(`[data-p8g-open="${KG}"]`, 'KG「查看群成员」')
+if (!(await poll(12000, async () => ((await dlgText()).includes('P8C闸下群') ? 1 : null), 'KG 弹层挂上且标题对得上'))) {
+  blocked(4, `KG 的弹层没开成：弹层文本开头=${JSON.stringify((await dlgText()).slice(0, 120))}（L16 是 8b ③ 的界面证人，没有替补判据）`)
+}
+await poll(15000, async () => ((await countSel('[data-p8g-member-row]')) === 10 ? 1 : null), 'KG 名单 10 行').catch(() => null)
+const note = await txt('[data-p8g-coverage-note]')
+const inCol = await ev(`(() => ({ a: [...document.querySelectorAll('[data-p8g-member-row]')]
+  .map(tr => tr.querySelectorAll('td')[3]?.innerText.trim()) }))()`)
+await check('L16 KG 出覆盖率标注且十人全「是」〔8b ③ 界面证人：红就回 8b，不许放宽〕',
+  note === '本次快照人数较上次少 60%，未做退群判定' && inCol.a.length === 10 && inCol.a.every((x) => x === '是'),
+  '「本次快照人数较上次少 60%，未做退群判定」+ 10 个「是」', { note, inCol: inCol.a })
+await screenshot('tmp/p8c-drawer.png')
+await click('[data-p8g-close]', '弹层「关闭」（KG）')
+await poll(8000, async () => ((await countSel('[data-p8g-dialog]')) === 0 ? 1 : null), 'KG 弹层关了').catch(() => null)
+```
+
+（`tmp/p8c-drawer.png` 是**在 KG 弹层开着的时候**截的——那张图要给验收文档当证人，看的就是那句标注，收摊之后再截等于一张空抽屉。Step 9 的读数表里要写明两张截图各自的现场。）
+
+- [ ] **Step 8: 另三位客户的抽屉三腿（L17–L19）**
+
+```js
+// L17：C 只可能靠读侧的手机号那一路读到 K2 —— 8b ⑧ 的界面证人
+await click('[title="关闭"]', '抽屉的关闭')
+await poll(8000, async () => ((await countSel('[data-p8g-section]')) === 0 ? 1 : null), 'A 的抽屉收掉').catch(() => null)
+await openDrawer('丙')
+const cKeys = await attrList('data-p8g-group-row')
+await check('L17 客户 C 能看到 K2〔8b ⑧ 界面证人：红就回 8b，不许放宽〕',
+  cKeys.length === 1 && cKeys[0] === K2, `1 行且 = ${K2}`, cKeys)
+await click('[title="关闭"]', '抽屉的关闭（C）')
+
+// L18：D 命中不上 —— 空态那句，且不能和"读不到"混成一档
+await openDrawer('丁')
+const emptyHit = await atOf('[data-p8g-empty]', 'data-p8g-empty')
+const errHit = await countSel('[data-p8g-error]')
+const emptyTxt = oneLine(await txt('[data-p8g-empty]'), 200)
+await check('L18 没有匹配行的客户走空态那句，而不是报错那一档',
+  !emptyHit.gone && errHit === 0 && emptyTxt.includes('还没有匹配到的群成员行'),
+  'data-p8g-empty 在 + data-p8g-error 不在 + 文案含「还没有匹配到的群成员行」', { emptyHit, errHit, emptyTxt })
+await click('[title="关闭"]', '抽屉的关闭（D）')
+
+// L19：勾满 51 → 前拦不发 IPC（技术要点 4 里唯一允许点导出的一格）
+await openDrawer('乙')
+const bKeys = await attrList('data-p8g-group-row')
+for (let i = 0; i < bKeys.length; i++) await click('[data-p8g-check]', `勾选第 ${i + 1} 个群`, { nth: i, ms: 6000 })
+const btnB = await poll(9000, async () => {
+  const t = await txt('[data-p8g-export-selected]')
+  return t?.includes('导出所选（51）') ? t : null
+}, '按钮跟进到（51）').catch(() => null)
+const halfDone = await check('L19a 51 行都画出来且勾满 ⇒「导出所选（51）」',
+  bKeys.length === 51 && !!btnB, '51 行 + 「导出所选（51）」', { rows: bKeys.length, btnB })
+if (halfDone) {
+  await click('[data-p8g-export-selected]', '「导出所选」（勾了 51 个）')
+  const blockedHit = await poll(9000, async () => {
+    const v = await atOf('[data-p8g-export-msg]', 'data-p8g-blocked')
+    return !v.gone && v.a === '1' ? 1 : null
+  }, '前拦标注挂上 data-p8g-blocked="1"').catch(() => null)
+  const msg = oneLine(await txt('[data-p8g-export-msg]'), 200)
+  const busy = await txt('[data-p8g-export-selected]')
+  await check('L19b 前拦生效：data-p8g-blocked=1 + 那句上限文案 + 没进「导出中…」',
+    !!blockedHit && msg === '一次最多导出 50 个群，当前勾了 51 个' && !String(busy).includes('导出中'),
+    'blocked=1 +「一次最多导出 50 个群，当前勾了 51 个」+ 不进导出中', { blockedHit, msg, busy })
+}
+await click('[title="关闭"]', '抽屉的关闭（B）')
+```
+
+L19 的 `msg` 与 `data-p8g-blocked` 合起来才能区分"IPC 没发"与"IPC 发了但失败"（Task 16 在 6916 行那条括号里写的就是这件事）：走通了 IPC 的那一路拿不到 `data-p8g-blocked` 属性，因为 `blocked` 那个 state 只在**前拦**时被赋值。
+
+- [ ] **Step 9: 收摊 + L20（清理挂在每一条退出路径上）**
+
+先把 `tmp/P8Purge.java` 换成"位置参数 + `--prefix`"两用的形状（Task 14 Step 9 那份**用法不变**，只是把删两键那一段抽成条件）：
+
+```java
+// tmp/P8Purge.java —— B6 三条腿的收尾清理：删本账号名下指定群键 / 指定前缀的三表行。
+// 用法一（Task 14）：java -cp <mysql-connector-j.jar> tmp/P8Purge.java <accountId> <chatKey1> <chatKey2>
+// 用法二（Task 17）：java -cp <mysql-connector-j.jar> tmp/P8Purge.java <accountId> --prefix <12036 开头的数字前缀>
+// affected rows 为 0 视为异常（本轮数据没进去 ⇒ 清理没跑成，不许报成"清理干净"）；复查非 0 直接 exit 1。
+import java.sql.*;
+import java.util.ArrayList;
+import java.util.List;
+
+public class P8Purge {
+    public static void main(String[] a) throws Exception {
+        if (a.length < 1) { fail("缺 accountId"); return; }
+        long accountId;
+        try {
+            accountId = Long.parseLong(a[0]);
+        } catch (NumberFormatException e) {
+            fail("accountId 不是数字: " + a[0]); return;
+        }
+        boolean prefixMode = a.length >= 3 && "--prefix".equals(a[1]);
+        List<String> keys = new ArrayList<>();
+        String prefix = null;
+        if (prefixMode) {
+            prefix = a[2];
+            // 前缀必须是 6 位以上纯数字：防止一个空串或 "1" 把整张表端了。
+            if (!prefix.matches("\\d{6,}")) { fail("--prefix 至少要 6 位纯数字，收到: " + prefix); return; }
+        } else {
+            for (int i = 1; i < a.length; i++) keys.add(a[i]);
+            if (keys.isEmpty()) { fail("既没给群键也没给 --prefix"); return; }
+        }
+
+        String url = "jdbc:mysql://localhost:3306/smartscrm_react?useSSL=false&allowPublicKeyRetrieval=true";
+        String[] tables = { "group_member_event", "group_member_state", "chat_group" };
+        long totalResidual = 0;
+        try (Connection c = DriverManager.getConnection(url, "root", "1234560")) {
+            for (String t : tables) {
+                String sql = prefixMode
+                    ? "DELETE FROM " + t + " WHERE account_id = ? AND chat_key LIKE ?"
+                    : "DELETE FROM " + t + " WHERE account_id = ? AND chat_key IN (" + placeholders(keys.size()) + ")";
+                try (PreparedStatement ps = c.prepareStatement(sql)) {
+                    ps.setLong(1, accountId);
+                    int p = 2;
+                    if (prefixMode) ps.setString(p, prefix + "%");
+                    else for (String k : keys) ps.setString(p++, k);
+                    int n = ps.executeUpdate();
+                    System.out.println(t + " deleted=" + n);
+                    if (n == 0) System.out.println("WARN " + t + " 本轮没有行（数据没写进去？清理没跑成 ≠ 清理干净）");
+                }
+                String q = prefixMode
+                    ? "SELECT COUNT(*) FROM " + t + " WHERE account_id = " + accountId + " AND chat_key LIKE '" + prefix + "%'"
+                    : "SELECT COUNT(*) FROM " + t + " WHERE account_id = " + accountId
+                        + " AND chat_key IN (" + keys.stream().map(k -> "'" + k + "'").reduce((x, y) -> x + "," + y).orElse("''") + ")";
+                try (Statement s = c.createStatement(); ResultSet r = s.executeQuery(q)) {
+                    r.next();
+                    int left = r.getInt(1);
+                    totalResidual += left;
+                    System.out.println("residual " + t + "=" + left);
+                }
+            }
+        }
+        System.out.println("residual=" + totalResidual);
+        if (totalResidual != 0) System.exit(1);
+    }
+
+    private static String placeholders(int n) {
+        StringBuilder sb = new StringBuilder();
+        for (int i = 0; i < n; i++) sb.append(i == 0 ? "?" : ",?");
+        return sb.toString();
+    }
+
+    private static void fail(String why) {
+        System.out.println("REFUSED " + why);
+        System.exit(2);
+    }
+}
+```
+
+驱动侧的 `cleanup()` 与 L20：
+
+```js
+function runPurge() {
+  if (!accountId) return { skipped: '没建成测试账号，本轮没东西可删' }
+  const javaBin = process.env.JAVA_HOME ? `${process.env.JAVA_HOME.replace(/\\/g, '/')}/bin/java` : 'java'
+  const jar = process.env.P8_JDBC_JAR
+    ?? `${(process.env.USERPROFILE ?? process.env.HOME ?? '').replace(/\\/g, '/')}/.m2/repository/com/mysql/mysql-connector-j/9.1.0/mysql-connector-j-9.1.0.jar`
+  const r = spawnSync(javaBin, ['-cp', jar, 'tmp/P8Purge.java', String(accountId), '--prefix', PREFIX], { encoding: 'utf8' })
+  const out = `${r.stdout ?? ''}${r.stderr ?? ''}`
+  const m = out.match(/residual=(-?\d+)/)
+  purgeResidual = m ? Number(m[1]) : null
+  console.log(`[清理] purge status=${r.status ?? 'spawn失败'}\n${oneLine(out, 600)}`)
+  if (r.status === null) console.log('[清理] java 起不来：手工跑一遍（日志要留在验收文档 §4）\n  java -cp <mysql-connector-j.jar> tmp/P8Purge.java <accountId> --prefix ' + PREFIX)
+  return r
+}
+async function cleanup() {
+  if (cleanedUp) return
+  cleanedUp = true
+  try { runPurge() } catch (e) { console.warn('[清理] purge 抛错（不改主退出码）：', String(e).slice(0, 160)) }
+  // purge 之后、删账号**之前**读 `/groups`：账号一删，`accountId` 在 resolveAccount 那一关就解析不出来，
+  // 接口给的是错误码而不是空名单，`rec()` 塌成 `[]`，那一格就成了"什么都没读到也算 0"的假绿（技术要点 13）。
+  if (accountId) {
+    const g = await req('GET', `/api/group-members/groups?accountId=${accountId}&page=1&size=50`)
+    groupsLeftAfterPurge = (rec(g) ?? []).filter((x) => String(x.chatKey).startsWith(PREFIX)).length
+    console.log(`[清理] purge 之后 /groups 仍挂着本轮键 ${groupsLeftAfterPurge} 个（接口回码 ${g?.code}）`)
+  }
+  for (const [tag, id] of Object.entries(custIds)) {
+    if (!id) continue
+    const r = await req('DELETE', `/api/customers/${id}`)
+    if (r.code !== 0) console.warn(`[清理] 客户 ${tag}(${id}) 没删掉：${JSON.stringify(r).slice(0, 120)}`)
+  }
+  if (accountId) {
+    const r = await req('DELETE', `/api/platform-accounts/${accountId}`)
+    if (r.code !== 0) console.warn(`[清理] 测试账号 ${accountId} 没删掉：${JSON.stringify(r).slice(0, 120)}`)
+  }
+  // `close()` 在 `tmp/cdp.mjs` 里是 `() => ws.close()`，返回 undefined——`.catch` 挂在 undefined 上会抛
+  // TypeError，把一次正常收摊变成"驱动自身抛错"。Promise.resolve 包一层才是真的"关了就行，失败别吵"。
+  if (page) await Promise.resolve(page.close()).catch(() => {})
+}
+
+// L20：先收摊，再复查收干净了（清理没跑成 ≠ 清理干净，两件事分开报）。
+// 四个读数各自来自不同的时刻：residual 来自 JDBC 自己复查、groupsLeftAfterPurge 来自 cleanup 里
+// purge 之后那一跳、custCodes 与 acctLeft 来自删完之后的 HTTP 读。缺一格就少一个证人。
+await cleanup()
+const custCodes = {}
+for (const [tag, id] of Object.entries(custIds)) custCodes[tag] = (await req('GET', `/api/customers/${id}`))?.code
+const acctLeft = ((await req('GET', '/api/platform-accounts'))?.data ?? []).some((x) => x.id === accountId)
+await check('L20 三表无本轮残留 + 四位客户 40404 + 测试账号已删 + /groups 无本轮键',
+  purgeResidual === 0 && Object.values(custCodes).every((c) => c === 40404) && !acctLeft && groupsLeftAfterPurge === 0,
+  'residual=0 / 40404×4 / 账号没了 / purge 后 /groups 本轮键 = 0',
+  { purgeResidual, custCodes, acctLeft, groupsLeftAfterPurge })
+
+console.log(`\n通过 ${passN} / 失败 ${failN()}`)
+if (failN() > 0) console.log('失败清单：' + failures.join('、'))
+process.exit(failN() === 0 ? 0 : 1)
+```
+
+顶层的 catch 负责把 `blocked()` 与意外抛错分流，并且**再兜一次清理**：
+
+```js
+// main() 之外包一层：任何 blocked(2|4) 与意外抛错都要先冲一遍清理再退出（R44）
+// 上面的 20 条腿写在同一个 async 函数体里；这里给最外层形状。
+try {
+  // …Step 3–Step 9 的全部代码…
+} catch (e) {
+  if (e?.__exit) console.error(`\n前置不满足（exit ${e.__exit}）：${e.message}`)
+  else { console.error('驱动自身抛错（按 1 收）：', String(e?.stack ?? e).slice(0, 400)) }
+  await cleanup().catch(() => {})
+  console.log(`\n通过 ${passN} / 失败 ${failN()}`)
+  process.exit(e?.__exit ?? 1)
+}
+```
+
+- [ ] **Step 10: 跑一遍，留日志与两张截图；把日志尾行的三件事抄进台账**
+
+```bash
+cd /d/SmartSCRM
+SCRM_USER=admin SCRM_PASS=admin123 node tmp/p8c-ui.mjs 2>&1 | tee tmp/p8c-ui.log
+echo "exit=$?"
+ls -l tmp/p8c-ui.log tmp/p8c-drawer.png tmp/p8c-dialog.png tmp/p8-purge.log
+```
+
+期望的**尾行**是 `通过 20 / 失败 0`、`exit=0`。`tmp/p8c-ui.log` 里要能数到这些行：
+
+- 三行 `[前置读数 N]`（jar 含 V13 / `window.scrm.group` 三面 / 渲染层地址）；
+- `[布景] KG 第二发：coverage=0.4 reason=coverage_too_low reconciled=false`；
+- 每次开窗最多一行 `[布景读数] 账号下拉从「…」切到「P8C界面腿…」` 或 `[布景读数] 下拉本来就停在「…」`（只有那一节挂了 `[data-p8g-account]` 才会打；用户真机不在线时整场一条都没有，属正常）；
+- `[清理] purge status=0`、同一行块里的 `residual=0`，以及 `[清理] purge 之后 /groups 仍挂着本轮键 0 个（接口回码 0）`（L20 的读数，必须在删账号**之前**打出来，见技术要点 13 ②）；
+- `  [点击候选] …` 允许出现（按文本认行/认按钮时的多候选提示，不是缺陷）。
+
+`  [等待超时] …` 这两条只可能出现在**只打印不判**的两个 poll 上：`切档 ⇒ 本轮账号重新取数`（紧接着会有一行 `[布景读数] 切档后 12 秒没有为…` 归因给 16）和 L19 的按钮文案跟进；出现在别处等于有一条腿的记账被跳过，按本步下面的「跑红了怎么办」②处理。
+
+关于 `x+y`：**只有一整跑跑到底时**「通过 x / 失败 y」的 `x+y` 才必须等于 20；中途前置收手时尾行之前一定有一行 `前置不满足（exit 2/4）`，读日志先看那一行再看 `x+y`，**不许**把"只记到第 6 条"读成"另外 14 条没问题"。
+
+**跑红了怎么办**（Task 14 技术要点 8 的界面版，三选一，写进验收文档 §5）：
+① 判据表里点名的 owning task（8b / 11–13 / 15 / 16）→ 记下来回那一格修，然后**整跑重跑**（不要只重跑那一条腿，抽屉与弹层的现场是按顺序推进的）；
+② 确认是驱动自己写错（锚点、期望文案、坐标）→ 改驱动，并在提交正文里写明"改了判据的哪一半、判别力为什么还在"；
+③ 这一格本来就不该由界面档证（例：要真实消息、要第二个在线账号）→ 降级成日志读数，**移到 §17.3**，不许静默删掉。
+
+L16 / L17 两条红**只能走 ①**：它们就是 8b ③/⑧ 的界面证人，放宽等于替应用撒谎。L19 若弹出原生保存框，说明前拦与主进程两道都坏了——立刻在文档 §5 记一条"最贵的一种"，并要求人在场按 Esc 收掉那个框。
+
+- [ ] **Step 11: 验收文档 + §A.1/spec 回填 + 只提交 `docs/`**
+
+`docs/notes/2026-10-01-group-members-verification.md` 的结构（六段，内容全部来自这一跑的日志与 `tmp/` 产物，**不与旧版比较**，只陈述本项目规则）：
+
+```markdown
+# P8 / B6 群成员分析 · 验收台账（2026-10-01）
+
+## 1. 前置三行读数
+（抄 tmp/p8c-ui.log 的三行 [前置读数 N]：jar 含 V13 / window.scrm.group 三面 / 渲染层地址）
+
+## 2. §13 五档状态
+| 档 | 载体 | 状态 | 证据 |
+|---|---|---|---|
+| Java 单测 | ./mvnw -Dtest='GroupMember*Test' test | 实测 Tests run=N, Failures=0 | tmp/p8-server.log 或 surefire 摘要 |
+| JS 单测 | pnpm run test:unit | 实测 pass=… fail=0 | 日志尾行 |
+| HTTP 契约 | tmp/p8-group-members-contract.mjs | 实测全绿（尾行「通过 N / 失败 0」，N = 脚本里 `check(` 的条数，推定 48） | tmp/p8-contract.log |
+| CDP 界面腿 | tmp/p8c-ui.mjs | 实测 通过 20 / 失败 0 | tmp/p8c-ui.log + 两张 png |
+| 真实登录档 | 用户在场的两棒 | 待验证 | 见 §4 |
+
+## 3. 界面腿 20 条逐条读数
+（每条腿一行：PASS/FAIL + actual 里那两个数。不许只写"全绿"）
+
+## 4. 不可自动化档（照 §17.3 那张表逐条落，含 dayMsgCount/msgCount 的实际值）
+（这一节要含 Task 14 技术要点 6 那句：这一格停在待验证，不用假数据冒充通过。）
+
+## 5. 本轮发现与残留
+（红格归因、清理日志里的 deleted/residual、需要人在场按掉的东西）
+
+## 6. 证据词
+（实测 / 读码 / 推断 / 待验证 四类，逐条给出处；没有出处的判断只能写"推断"）
+```
+
+§A.1 的更新（同一支文件里改两处）：第 26 行那句「**未开工**：Task 8b、9、10、12、13、14、15、16、17。」在这一跑绿之后改成——
+
+```markdown
+**未开工**：无（Task 1–17 全部落档并验收；8b 的八条逐条状态、CDP 界面腿 20 条读数与"界面证不了的那几档"记在 `docs/notes/2026-10-01-group-members-verification.md`）。
+```
+
+交付状态表补一行：
+
+```markdown
+| 本任务的提交号 | CDP 界面腿 20 条 + 验收台账 + `P8Purge --prefix` | Task 17 | 已交付（驱动与日志在 `tmp/`，不进提交） |
+```
+
+spec 的两处回填只写规则与状态，不写实现过程：§13 那张五行表的「CDP」行改成"已证（20 条，读数见台账 §3）"，"真实登录档"行保持"待用户在场"；§15 的五条里 #2（`is_final`）与 #4（exceljs 产物归属）与 #5（事件时刻形态）各补一句"本期入口不可达 / 由哪一档续证"，并新记一条：**「`never_built` 与 `unavailable` 两档在本期唯一入口（客户抽屉）不可达」**，把 §17.3 那四行理由抄过去（这一条是读码结论，词用"读码"，不是"实测"）。
+
+```bash
+cd /d/SmartSCRM && git status --short
+git add docs/notes/2026-10-01-group-members-verification.md \
+  docs/superpowers/specs/2026-09-30-group-member-analysis-design.md \
+  docs/superpowers/plans/2026-09-30-group-member-analysis.md
+git commit -m "$(cat <<'EOF'
+docs(P8/B6): 群成员分析 CDP 界面腿 20 条 + 验收台账
+
+界面腿的二十条判据、三条布景顺序硬约束（客户早于批次 / C 晚于 K2 快照 /
+K2 的事件单独一批）、以及"界面证不了的四档由谁续证"全部落档。L16 与 L17 是
+Task 8b ③⑧ 的界面证人，判据写死、红就回 8b；dayMsgCount 那格照 Task 14 的
+口径停在待验证，不用假数据冒充通过。
+
+tmp/ 里的驱动、日志与两张截图按仓库规则不进提交，判档以 tmp/p8c-ui.log 的
+「通过 20 / 失败 0」与退出码为准。
+EOF
+)"
+```
+
+（提交正文里那句"二十条判据"要对着日志尾行的实际条数写；若这一跑是 19 绿 1 红，正文就写那条红的归因和 owning task，**不要**把标题改成"19 条"来掩盖——台账 §5 是红的唯一登记处。）
+
+---
+
+## 计划自审（writing-plans 那三段，2026-10-01 收尾时逐条跑过）
+
+这不是"看起来没问题"的记录，每一段都写了**怎么查的**，下一席可以按同样方法复查。
+
+**1. spec 覆盖。** 逐节对照 `docs/superpowers/specs/2026-09-30-group-member-analysis-design.md`：§3/§4/§6 的写侧与闸 → Task 5/6 与 Task 8b ①②③⑦⑧；§5 的事件两源 → Task 3/4；§7 六跳 → Task 7/8 加上 8b ④⑥，取数层在 Task 9（主进程三跳）与 Task 15（渲染层三支）；§8 的两处界面 → Task 16；§9 的宿主面 → Task 10/11/12/13；§10 的导出 → Task 8/13；§13 五档验收腿 → Java 单测（Task 5/6/8 各自的 Step 1，加 Task 8b 的八条红测试）、JS 单测（Task 2/3/4/9/10/11/13/15/16）、HTTP 契约（Task 14）、CDP 界面腿（Task 17 §17.2 的 L1–L20）、真实登录档（Task 17 Step 11 的台账 §4）。§14「本期不做」的六条在本计划里**没有**任何一节的 Files 段越界（TG 采集、批量建客户、群设置面、媒体与头像、定时器、选群界面）。§15 五条待验证各有一处"只记读数、不改口径"的落点：#1 在 Task 4（三字段各占一格测试），#2/#3 在 Task 3 的取证行与 Task 11 的 `snapshot chatKey=… count=…` 日志（#3 的另一半在 Task 8 的 `matched={}/{}` 日志），#4 在 Task 13 Step 6 那两条 grep，#5 在 Task 16 的 `LIVE_EVENT_TIME_NOTE`（由 Task 17 的 L13 读到界面上）。
+
+**2. 占位符扫描。** `grep -n "TBD|TODO|待补|fill in|同上|类似 Task|自行实现|酌情"` 全文命中两处 `同上`，逐条判过：Task 3 Interfaces 段那一个指向前一行已写全的签名形状（不是要求实施者自己补），§17.3 表格里那一个指向同一行左侧已写全的理由。另有三处 Java 里的裸 `...`（Task 8b Step 7 的 `pageGroups`、Step 8 的 `customerGroups` 两处 + 注释那一处）——它们是**修改已提交方法**的步骤，省略号代表"这一段既有代码不动"，而改动行（新的 `order by` 块、新加的 `accountId`/`platform` 两个条件）在同一个代码块里逐字给出，Step 8 那句「按号码那一路同样加这两个条件」点名的就是那两行已给出的谓词。Task 14–17 四个未开工任务**没有一处**代码步是省略式写法。
+
+**3. 类型与文案一致性。** 三样东西按"名字—形状—字符串"对过一遍：
+
+- **线形名**：`/group/members` 的容器在 §A.4 名表（103 行）、R37、Task 8b Produces（`MemberPageVO(members, coverage, reason)`）三处已统一成**已提交的三键**；Task 7 正文那段七参构造留在「正文不改写」里，并由 Task 8b ③ 就地替换。Task 15 的 `MemberPageVO` TS 类型（`coverage: number | null`）与 Java 侧 `Double coverage` 同键同名。
+- **中文文案**：`本次快照人数较上次少 x%，未做退群判定`、`一次最多导出 50 个群（，当前勾了 n 个）`、`还没有加减人的流水。事件只在账号上线且桥就绪时采集。`、`导出所选（n）`、`第 x / y 页 · 共 n` 五句，Task 16 的作者（`groupDisplay.ts` / 组件 JSX）与 Task 17 的判据（L2/L10/L15/L16/L19 + 代码里的 `check` 实参）逐字对过，无第二作者。
+- **跨节引用**：`§17.4` 这类不存在的锚点已清除；三处"读码 6823 / 6853 / 7201"这种**按本文档行号**的引用改成按文案与选择器定位（行号随编辑漂移，本次就漂了两次）。
+- **本轮顺手修掉的四处**：① Task 17 Step 5 的 `custReqs`/`mineUrl` 提到 `openDrawer` 之前（原顺序是 TDZ：函数体在声明之前执行），并删掉 L4 里重复的 `const mineUrl`（重复声明是 SyntaxError）；② `openDrawer` 的账号对齐从恒真等待（`countSel(...) >= 0`）换成"本轮账号多出一枪 + 那一节两拍定稳"；③ §17.2 L8 与技术要点 10 的"按选项文本选「群主」"对齐（原来还写着按 nth 选）；④ Task 14 的**前置版本闸从骨架挪到 2.1 之后**——清理腿每轮删键，账号名下无行时 `records[0]` 为 `undefined`，"旧 jar"与"库还空着"会共用同一个 `die(2)`；Task 17 的技术要点 13 ① 是同一条纪律的界面版。另外 `tooManyCopy` 的"三处同一句话"改成"渲染层两句一个作者、后端那句在 Java 侧另写且不进界面"（Task 14 的 12.1 只断 `code`），R24 那行补了"形状部分已被 R31 与已提交代码取代"的指针。
+
+**已知不自洽但故意留着**：Task 1–8 各节正文是设计当时的形状（七参容器、`@Data` 可变 VO、`EXPORT_GROUP_MAX`、"空名单 40000"），与 §A/Task 8b 冲突。这是 R30 的裁定（「本节正文不改写」），冲突处以 §A 为准，且每节开头那一行「已交付」都点名了偏差别去哪节找。
 
