@@ -428,3 +428,24 @@ export function formatExportTime(value: string | null): string {
   // `2026-09-30 12:00:03.417` → 秒；长度不足（后端以后只给到分）就原样给回，不补零。
   return iso.length > 19 ? iso.slice(0, 19) : iso
 }
+
+// ---------------------------------------------------------------------------
+// 长度闸与攒批常量（Task 9 §A.3：补齐 Task 2 漏落的五个常量）
+// 数字一律照 V12 列宽——列宽才是会让 INSERT 报错的那道闸，不是设计稿里的数。
+// ---------------------------------------------------------------------------
+
+/** `chat_group.chat_key` / `group_member_state.chat_key` / `group_member_event.chat_key` 列宽。 */
+export const CHAT_KEY_MAX = 128
+/** `group_member_state.member_key` / `group_member_event.member_key` 列宽。 */
+export const MEMBER_KEY_MAX = 160
+/** `dedup_key` 与 `member_key` 今天同为 160，但分开命名：它俩约束的是不同的列。 */
+export const DEDUP_KEY_MAX = 160
+/** `group_member_event.body_snapshot` 列宽。 */
+export const GROUP_BODY_MAX = 512
+
+/** 事件攒批每批上限（与采集队列同一量级，但各自一份，R4）。 */
+export const EVENT_BATCH_SIZE = 100
+/** 攒批窗口：没攒够也按点冲。 */
+export const EVENT_BATCH_INTERVAL_MS = 2_000
+/** 事件不像消息行可以「同步历史」补底：越界即永久缺口，所以这一格必须带 dropped 计数（Task 10/12）。 */
+export const EVENT_QUEUE_MAX = 5_000

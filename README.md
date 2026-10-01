@@ -344,5 +344,8 @@ cd apps/desktop && pnpm build && pnpm build:win
 切面 5c **已通过**：CDP 复检脚本 `tmp/cdp-recheck.mjs` 强刷清缓存后开抽屉，断言 `[data-p8g-group-row]` 渲染 1 行群、
 捕获 `GET /api/group-members/customer/45/groups?accountId=7` 返回 200 且 body 含真实群数据（台账见 `docs/notes/2026-10-02-b6-5c-acceptance.md`）。
 **界面已证明真读到数**（客户 45 / P7CDP-muich5th-7 可见群「验收测试群-跨境电商交流」）。
-仍缺（非阻塞）：Task 10 `collector.ts` 事件攒批器 / 自动建档 / `group_event` 落库通道，以及 8b 校准八条
-（coverage 返回 null 而非空串、`customerGroups` 加 accountId）——这些不影响「所在群」读路径，属后续切面。
+事件攒批器已落地（Task 10）：`collector.ts` 的 `EventCollectorHub` 已建，6 条单测全过——长度闸（CHAT_KEY/MEMBER/DEDUP/BODY）、
+越界丢最旧并计 `dropped`、投失败退避重试且退回队首不丢数据、跨账号拆分（POST /batch 一次一个 accountId）均覆盖；
+`shared/groupMembers.ts` 补齐 `EVENT_BATCH_SIZE` / `EVENT_BATCH_INTERVAL_MS` / `EVENT_QUEUE_MAX` / `CHAT_KEY_MAX` / `MEMBER_KEY_MAX` / `DEDUP_KEY_MAX` / `GROUP_BODY_MAX`（数字照 V12 列宽）。
+仍缺（Task 12，非阻塞）：`host.ts` 接 `setGroupHooks` / `onReady` 自动建档 / `onViewDown` 结清，以及桥侧 `group_event` 订阅——
+不接则 collector 只是被单测覆盖的死代码、`group_event` 仍无落库通道。另 8b 校准八条（coverage 返回 null 而非空串、`customerGroups` 加 accountId）仍缺。
