@@ -118,14 +118,25 @@ B6 不是一次交付，按四个切面推进，前三个已提交，第四个�
 | 3 | 桥侧采集（名单 / 快照 / 在线事件 / 系统消息旁路） | ✅ 20 条单测 | `ade904e` |
 | 4a | 主进程建档泵（engine 通电：ingest POST / dispatch 命令→视图 / host 去重 / `group:build` IPC） | ✅ 17 条单测 | 本提交 |
 | 4b | 导出 IPC + exceljs（拉 `export-rows` → 写 14 列 XLSX，落盘经 `group:export` IPC） | ✅ 4 条单测 | 本提交 |
-| 5 | 渲染层（客户抽屉群节 + 群成员弹层 + tabs 原子件） | ⬜ 未开始 | — |
+| 5a | 渲染层数据层与原子件（`api/groupMembers.ts` 五个 hook + `lib/groupDisplay.ts` §8 文案纯函数 7 条单测 + `components/ui/tabs.tsx`） | ✅ 7 条单测 | 本提交 |
+| 5b | 界面装配（客户抽屉「所在群」节 + 群成员弹层：两个 tab、三档筛选、两处导出入口） | ⬜ 未开始 | — |
+| 5c | CDP 界面腿 20 条 + 验收台账（B6 的交付闸） | ⬜ 未开始 | — |
 
 **口径提醒**：B6 的"事件流水 + 状态快照"两块数据面在切面 1–3 已经能进库了，
 建档泵（切面 4a）也通了电——`group:build` IPC 触发后全量建档可在后台跑，不用等在线事件；
 导出（切面 4b）也已通电——`group:export` IPC 触发后主进程拉 `export-rows` 生成 14 列 XLSX 落盘，
 不占渲染内存。
-但**没有渲染面**（切面 5）之前，用户在界面上看不到任何群成员数据，导出按钮也无从点起。
-所以 B6 的"可用"以切面 5 完成为准，前四个切面只是地基。
+但**没有界面装配**（切面 5b）之前，用户在界面上看不到任何群成员数据，导出按钮也无从点起；
+而 5b 的判档只到编译，**B6 第一次声称"界面可用"要等 5c 的 CDP 腿跑绿**。
+所以 B6 的"可用"以切面 5b + 5c 完成为准，前面的切面都只是地基。
+
+**本轮顺带补齐的前置**（原本挂在 Task 12/13 名下却没落地）：`shared/groupMembers.ts` 的
+`GroupBuildOutcome` / `GroupStateEvent` / `GroupExportResult` / `groupRoleLabel` / `exitMethodLabel` /
+`formatExportTime` / `oneLine`，以及 preload 的 `window.scrm.group.{build,export,onState}`。
+同时把已提交的泵对齐计划契约：结论从 `BuildResult` 换成 `GroupBuildOutcome`（并分出
+`snapshotted` 与 `postedFailed`）、入参 `chatKeys` 复数改 `chatKey` 单数（R49）、
+`group:build` 改成等整轮跑完才 resolve、新增 `group:state` 的 running/settled 广播、
+`export.ts` 的时刻文本收敛到 shared（R46）。
 
 ## 技术选型
 - desktop: Electron 39 + React 19 + TS(strict) + electron-vite + Tailwind v4 + shadcn/ui + Zustand + TanStack Query + react-i18next

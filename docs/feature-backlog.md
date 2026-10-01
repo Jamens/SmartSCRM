@@ -20,7 +20,7 @@
 
 | # | 项 | 清单行 | 阶段 | 量级 | 状态 | 备注 |
 |---|---|---|---|---|---|---|
-| 1 | 群成员分析（事件流水 + 状态快照 + XLSX 导出） | B6 | P8 | 大 | 🟡 **交付中** | 已完成：V12 三表 + shared 纯模型 + Java 数据层（契约 34/34）+ 桥侧采集（20 条单测）。**待做**：主进程建档泵与导出 IPC（Task 4）、渲染层客户抽屉群节与成员弹层（Task 5）。spec `docs/superpowers/specs/2026-09-30-group-member-analysis-design.md` |
+| 1 | 群成员分析（事件流水 + 状态快照 + XLSX 导出） | B6 | P8 | 大 | 🟡 **交付中** | 已完成：V12 三表 + shared 纯模型 + Java 数据层（契约 34/34）+ 桥侧采集（20 条单测）+ 主进程建档泵（4a，17 条单测）+ 导出 IPC 与 14 列 XLSX（4b，4 条单测）。**待做**：切面 5 渲染层 —— Task 15 数据层与 tabs 原子件、Task 16 抽屉「所在群」+ 群成员弹层、Task 17 CDP 界面腿 20 条与验收台账（交付闸）。spec `docs/superpowers/specs/2026-09-30-group-member-analysis-design.md` |
 
 ### 穿插项：P7 缺口（B7 已交付后的补齐）
 
