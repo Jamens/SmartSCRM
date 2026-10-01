@@ -5,8 +5,9 @@ import { getSession } from '../state/session'
 import { requestTranslation } from '../services/translationBridge'
 import { handleBridgeReport, observeLoginStatus, activeChatOf } from '../services/msgBridge'
 import { accountOfView } from '../services/msgBridge/accountDirectory'
-import { requestGroupBuild } from '../services/groupCollect/host.ts'
+import { runBuild } from '../services/groupCollect/host.ts'
 import { exportGroupMembers } from '../services/groupCollect/export.ts'
+import type { GroupExportResult } from '@shared/groupMembers'
 import { activeChatKeyOf } from '@shared/chatKeys'
 import { platformMsgIdOf } from '@shared/msgIds'
 
@@ -75,32 +76,41 @@ export function registerViewIpc(): void {
     return viewManager.sendToView(viewId, channel, payload)
   })
 
-  // B6 群成员建档：渲染层「刷新成员 / 全量建档」按钮触发。后台跑、立即返回 accepted/busy，
-  // 不在 invoke 里 await 整轮（建档可能跑几分钟）。进度/完成由 Task 5 的渲染层订阅事件。
-  ipcMain.handle('group:build', (_e, accountId: number, chatKeys?: string[]) =>
-    requestGroupBuild({ accountId, chatKeys })
+  // B6 群成员建档：渲染层「刷新成员 / 全量建档」按钮触发。
+  // **整轮跑完才 resolve**（可能几分钟）——渲染层 `useGroupBuild().pending` 靠的就是这一条，
+  // 改成"立即返 accepted"会让按钮态永远不对。进度由 `group:state` 广播（running / settled）。
+  // `chatKey` 省略 = 整账号一轮；带上 = 只补这一群（R49 单数码，与 preload 面逐字一致）。
+  ipcMain.handle('group:build', (_e, req: { accountId: number; chatKey?: string }) =>
+    runBuild(Number(req?.accountId), req?.chatKey)
   )
 
   // B6 群成员导出（spec §10）：渲染层「导出所选 / 导出本群」触发。主进程拉 export-rows →
   // 生成 14 列 XLSX → showSaveDialog 落盘。渲染包不带编码库，大群不占渲染内存。
-  // 一次不超过 50 群（MAX_EXPORT_GROUPS），超了 exportGroupMembers 直接抛，界面应提前拦住。
-  ipcMain.handle('group:export', async (_e, accountId: number, chatKeys: string[]) => {
-    const defaultName = `群成员导出_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.xlsx`
-    const saveOpts = {
-      title: '导出群成员',
-      defaultPath: defaultName,
-      filters: [{ name: 'Excel', extensions: ['xlsx'] }]
+  // 六种结论都返回不抛（界面按 `reason` 给文案）；取消保存是 `cancel`，不是失败。
+  ipcMain.handle(
+    'group:export',
+    async (_e, req: { accountId: number; chatKeys: string[] }): Promise<GroupExportResult> => {
+      const defaultName = `群成员导出_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.xlsx`
+      const saveOpts = {
+        title: '导出群成员',
+        defaultPath: defaultName,
+        filters: [{ name: 'Excel', extensions: ['xlsx'] }]
+      }
+      const win = getMainWindow() ?? BrowserWindow.getFocusedWindow()
+      const { canceled, filePath } = win
+        ? await dialog.showSaveDialog(win, saveOpts)
+        : await dialog.showSaveDialog(saveOpts)
+      if (canceled || !filePath) return { reason: 'cancel', path: null, rows: 0, bytes: 0 }
+      return exportGroupMembers(
+        Number(req?.accountId),
+        Array.isArray(req?.chatKeys) ? req.chatKeys : [],
+        {
+          savePath: filePath,
+          token: () => getSession()?.accessToken ?? null
+        }
+      )
     }
-    const win = getMainWindow() ?? BrowserWindow.getFocusedWindow()
-    const { canceled, filePath } = win
-      ? await dialog.showSaveDialog(win, saveOpts)
-      : await dialog.showSaveDialog(saveOpts)
-    if (canceled || !filePath) return { cancelled: true }
-    return exportGroupMembers(accountId, chatKeys, {
-      savePath: filePath,
-      token: () => getSession()?.accessToken ?? null
-    })
-  })
+  )
 
   // Page (injected script) -> host window. `event.sender` identifies which view sent it.
   const routePageMessage = (event: IpcMainEvent, kind: 'toHost' | 'send', arg: { channel: string; data: unknown }): void => {

@@ -45,7 +45,7 @@ const sampleRows: GroupExportRow[] = [
 
 function fakeFetch(body: unknown, { ok = true, code = 0 } = {}): { calls: string[]; impl: typeof fetch } {
   const calls: string[] = []
-  const impl = (async (url: string | URL, _init?: RequestInit) => {
+  const impl = (async (url: string | URL) => {
     calls.push(String(url))
     return { ok, async json(): Promise<unknown> { return { code, data: body } } }
   }) as unknown as typeof fetch
@@ -89,27 +89,77 @@ test('fetchExportRows 拼出 accountId 与多 chatKeys 的 query', async () => {
     fetchImpl: impl,
     apiBase: 'http://h:8180/'
   })
+  assert.ok(rows, '取数成功时给回数组而不是 null')
   assert.equal(rows.length, 2)
   const url = calls[0]
   assert.ok(url.includes('accountId=7'), '带 accountId')
   assert.ok(url.includes('chatKeys=g1%40g.us') && url.includes('chatKeys=g2%40g.us'), '多 chatKeys 重复传同一 key')
 })
 
-test('exportGroupMembers 给 savePath 时落盘成可用 XLSX', async () => {
+test('fetchExportRows：这一跳没成是 null，不是空数组', async () => {
+  const rows = await fetchExportRows(7, ['g1@g.us'], {
+    token: () => 'T',
+    fetchImpl: fakeFetch(sampleRows, { ok: false }).impl
+  })
+  assert.equal(rows, null, 'null 与 [] 必须分开：界面靠它区分"取数没成"与"还没建档"')
+})
+
+test('exportGroupMembers 落盘成可用 XLSX 并报 saved', async () => {
   const tmp = join(tmpdir(), `group-export-test-${Date.now()}.xlsx`)
   const out = await exportGroupMembers(7, ['g1@g.us'], {
     savePath: tmp,
     token: () => 'T',
     fetchImpl: fakeFetch(sampleRows).impl
   })
+  assert.equal(out.reason, 'saved')
   assert.equal(out.path, tmp)
-  assert.equal(out.rowCount, 2)
+  assert.equal(out.rows, 2)
+  assert.ok(out.bytes > 0, '体积量一次（R23）')
   const onDisk = await readFile(tmp)
   const wb = await reopenXlsx(onDisk)
   assert.equal(wb.getWorksheet('群成员')?.rowCount, 3)
 })
 
-test('exportGroupMembers 超 50 群直接抛', async () => {
+test('exportGroupMembers：超 50 群报 too_many，不发请求', async () => {
   const many = Array.from({ length: 51 }, (_, i) => `g${i}@g.us`)
-  await assert.rejects(() => exportGroupMembers(7, many, { token: () => 'T' }), /不超过 50/)
+  const { calls, impl } = fakeFetch(sampleRows)
+  const out = await exportGroupMembers(7, many, {
+    savePath: join(tmpdir(), 'never-written.xlsx'),
+    token: () => 'T',
+    fetchImpl: impl
+  })
+  assert.equal(out.reason, 'too_many')
+  assert.equal(out.path, null)
+  assert.equal(calls.length, 0, '主进程这一判是为了不把"选了 51 个群"报成"取数没成"')
+})
+
+test('exportGroupMembers：0 行不落盘，报 no_rows', async () => {
+  const tmp = join(tmpdir(), `group-export-empty-${Date.now()}.xlsx`)
+  const out = await exportGroupMembers(7, ['g1@g.us'], {
+    savePath: tmp,
+    token: () => 'T',
+    fetchImpl: fakeFetch([]).impl
+  })
+  assert.equal(out.reason, 'no_rows', '写一份只有表头的文件会让人读成"群里没人"')
+  assert.equal(out.path, null)
+  await assert.rejects(() => readFile(tmp), /ENOENT|no such file/, '确实没落盘')
+})
+
+test('exportGroupMembers：取数没成报 failed', async () => {
+  const out = await exportGroupMembers(7, ['g1@g.us'], {
+    savePath: join(tmpdir(), 'never-written.xlsx'),
+    token: () => 'T',
+    fetchImpl: fakeFetch(sampleRows, { ok: false }).impl
+  })
+  assert.equal(out.reason, 'failed')
+})
+
+test('exportGroupMembers：非法群键被剔掉，全非法时报 empty_keys', async () => {
+  // 含逗号的键会被后端拆成两个键，静默导出两份不相干的数据——必须在这一层剔掉
+  const out = await exportGroupMembers(7, ['a,b@g.us', 'not-a-key', ''], {
+    savePath: join(tmpdir(), 'never-written.xlsx'),
+    token: () => 'T',
+    fetchImpl: fakeFetch(sampleRows).impl
+  })
+  assert.equal(out.reason, 'empty_keys')
 })

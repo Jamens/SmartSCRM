@@ -325,3 +325,106 @@ function isSameKey(a: string | null | undefined, b: string | null | undefined): 
   if (!a || !b) return false
   return a === b
 }
+
+// ---------------------------------------------------------------------------
+// 建档结论与广播（主进程 → 渲染层；经 preload，所以必须活在 shared）
+// ---------------------------------------------------------------------------
+
+/**
+ * 一轮建档的结论。放在 shared 而不是 `engine.ts`：`window.scrm.group.build` 的返回类型
+ * 要经 preload，而 preload 不许 import `main/services/**`（与 `batchSend.ts` 的
+ * `BatchProgress` 同一条边界理由）。
+ * `skipped` 与 `list` 是两种「什么都没做」：前者这一账号不该做（在跑 / 没绑视图），
+ * 后者做了但页内没给答案。渲染层的文案必须分开，混成一句就看不出该重试还是该等。
+ *
+ * `skippedFinal` 是"因 `is_final` 跳过的群数"。桥的 `group_list_result` 目前不带 `is_final`
+ * （`bridge/whatsapp/groups.ts` 注明是后续），所以当下它恒为 0——这是"因这个原因跳过了 0 个"
+ * 的真值，不是占位。
+ */
+export interface GroupBuildOutcome {
+  accountId: number
+  skipped: 'busy' | 'no_view' | null
+  list: 'ok' | 'error' | 'silent'
+  registered: number
+  attempted: number
+  snapshotted: number
+  postedFailed: number
+  failed: number
+  skippedFinal: number
+  truncated: boolean
+  aborted: boolean
+}
+
+/** `group:state` 的唯一载荷：只说"这一轮在跑 / 结了"，进度另有真值。 */
+export interface GroupStateEvent {
+  accountId: number
+  phase: 'running' | 'settled'
+  outcome: GroupBuildOutcome | null
+}
+
+/**
+ * 页内来的文本进主进程日志前收成一行：留着换行等于允许伪造日志行，长度也不该无界。
+ * 与 msgBridge 那份同口径，唯一区别是它在这里是共享的：engine 与 host 都要用，
+ * 两处各写一份就是两份要各自改的规矩。
+ */
+export function oneLine(text: string | undefined, max = 200): string {
+  // \v \f 之类也算换行（Chrome 的 console 会把它们断行），所以按 C0 控制字符整体收。
+  // eslint-disable-next-line no-control-regex
+  return (text ?? '').replace(/[\x00-\x1f]+/g, ' ').slice(0, max)
+}
+
+// ---------------------------------------------------------------------------
+// 导出结论
+// ---------------------------------------------------------------------------
+
+/** 导出结论六选一，界面按它给文案。`saved` 之外 `path` 一定是 null。 */
+export type GroupExportReason = 'cancel' | 'empty_keys' | 'too_many' | 'no_rows' | 'failed' | 'saved'
+
+export interface GroupExportResult {
+  reason: GroupExportReason
+  path: string | null
+  rows: number
+  bytes: number
+}
+
+// ---------------------------------------------------------------------------
+// 中文标签与时刻文本（R46：这两张表与"去 T 截秒"各只有一份作者）
+// ---------------------------------------------------------------------------
+
+/**
+ * 角色与退出方式的中文词只在这里有一份：表格里叫「群主」而界面上叫「超管」
+ * 是同一事实写了两个词的结果。未知取值回落原词（平台以后加新角色时导出不许留空白）。
+ */
+const GROUP_ROLE_LABEL: Record<string, string> = { member: '成员', admin: '管理员', super: '群主' }
+const EXIT_METHOD_LABEL: Record<string, string> = {
+  removed: '被移出',
+  left: '自行退群',
+  invited_join: '受邀加入',
+  added: '被加入',
+  join: '主动加入',
+  snapshot_absent: '快照中已不在'
+}
+
+export function groupRoleLabel(role: string | null): string {
+  if (role === null) return '—'
+  return GROUP_ROLE_LABEL[role] ?? role
+}
+
+export function exitMethodLabel(method: string | null): string {
+  if (method === null) return '—'
+  return EXIT_METHOD_LABEL[method] ?? method
+}
+
+/**
+ * 群成员这一路的所有时刻都是后端 `LocalDateTime` 序列化出来的墙钟串（不带 `Z`）。
+ * 「`T` 换空格、截到秒」这一手**只有这一处作者**：导出表格（`export.ts`）与渲染层名单
+ * （`renderer/src/lib/groupDisplay.ts`）都 import 它。两处各写一遍，就会出现"文件里到秒、
+ * 界面里到毫秒"这种同一个读数两个样子的错——而它只会在这两个界面并排看时被发现的。
+ * 不用 `new Date(s)`：JS 会把不带偏移的串按本地时区读，于是同一行在两台机器上显示两个时刻。
+ */
+export function formatExportTime(value: string | null): string {
+  if (!value) return ''
+  const iso = value.replace('T', ' ')
+  // `2026-09-30 12:00:03.417` → 秒；长度不足（后端以后只给到分）就原样给回，不补零。
+  return iso.length > 19 ? iso.slice(0, 19) : iso
+}

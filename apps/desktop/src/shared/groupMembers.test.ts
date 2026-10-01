@@ -5,11 +5,16 @@ import {
   COVERAGE_MIN,
   classifyGroupSystemMessage,
   eventTypeFromAction,
+  exitMethodLabel,
+  formatExportTime,
+  groupRoleLabel,
   liveEventDedupKey,
   mergeParticipants,
+  oneLine,
   snapshotCoverage,
   snapshotIsUsable,
-  type GroupParticipantWire
+  type GroupParticipantWire,
+  type GroupSystemRaw
 } from './groupMembers.ts'
 
 const p = (memberKey: string, roleType: GroupParticipantWire['roleType'] = 'member'): GroupParticipantWire => ({
@@ -61,7 +66,11 @@ test('在线事件去重键对同一条事件稳定，且不同 action 不同键
 
 // 下面几条都带 `participantIds`：没有目标人的加减人消息按"不知道是谁"处理（见后一条），
 // 这里要验的是 event_type 的归类，所以先把目标人给足。
-const withTarget = (subtype: string) => ({ type: 'gp2', subtype, participantIds: ['8613@c.us'] })
+const withTarget = (subtype: string): GroupSystemRaw => ({
+  type: 'gp2',
+  subtype,
+  participantIds: ['8613@c.us']
+})
 
 test('加人族出 added，自己进来出 joined——两族不并成一种', () => {
   assert.equal(classifyGroupSystemMessage(withTarget('add'))?.eventType, 'added')
@@ -201,4 +210,41 @@ test('人数变多不拦：覆盖率大于 1 也是"覆盖够了"，不是异常
   assert.equal(grew.reason, 'ok')
   assert.equal(grew.reconciled, true)
   assert.equal(grew.coverage, 3)
+})
+
+// ---------------------------------------------------------------------------
+// R46：时刻文本与中文标签各只有一份作者，导出表格与渲染层名单共用
+// ---------------------------------------------------------------------------
+
+test('formatExportTime：T 换空格并截到秒，不解析、不换算时区', () => {
+  assert.equal(formatExportTime('2026-09-30T12:00:03.417'), '2026-09-30 12:00:03')
+  assert.equal(formatExportTime('2026-09-30T12:00:00'), '2026-09-30 12:00:00')
+  // 不带 Z 的墙钟串不许被 new Date 按本地时区重读，所以这里只做字符串变换
+  assert.equal(formatExportTime('2026-09-30T12:00:00Z'), '2026-09-30 12:00:00')
+  // 长度不足（后端以后只给到分）原样给回，不补零
+  assert.equal(formatExportTime('2026-09-30T12:00'), '2026-09-30 12:00')
+  assert.equal(formatExportTime(null), '')
+  assert.equal(formatExportTime(''), '')
+})
+
+test('groupRoleLabel / exitMethodLabel：未知取值回落原词，null 给破折号', () => {
+  assert.equal(groupRoleLabel('member'), '成员')
+  assert.equal(groupRoleLabel('admin'), '管理员')
+  assert.equal(groupRoleLabel('super'), '群主')
+  assert.equal(groupRoleLabel(null), '—')
+  assert.equal(groupRoleLabel('owner'), 'owner', '平台加了新角色时导出不许留空白')
+
+  assert.equal(exitMethodLabel('removed'), '被移出')
+  assert.equal(exitMethodLabel('left'), '自行退群')
+  assert.equal(exitMethodLabel('snapshot_absent'), '快照中已不在')
+  assert.equal(exitMethodLabel(null), '—')
+  assert.equal(exitMethodLabel('kicked_v2'), 'kicked_v2')
+})
+
+test('oneLine：换行与 C0 控制字符收成空格，长度有上限', () => {
+  assert.equal(oneLine('a\nb'), 'a b')
+  // \v \f 也算换行（Chrome 的 console 会断行），留着就等于允许伪造日志行
+  assert.equal(oneLine('a\x0bb\x0cc'), 'a b c')
+  assert.equal(oneLine(undefined), '')
+  assert.equal(oneLine('x'.repeat(300)).length, 200)
 })
