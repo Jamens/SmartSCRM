@@ -25,8 +25,10 @@ interface Props {
 export default function CustomerGroupsSection({ customerId }: Props): React.JSX.Element {
   const { data: accounts = [] } = useAccounts()
   const selectedId = useSelectionStore((s) => s.selectedId)
-  // 只认「在线的 WhatsApp 且视图挂着」那一档：`status===1` 是在线，`viewId` 空 = 没有可下命令的视图。
-  // 协议号（7）与 Telegram 都不进候选——后端在 platform 为 null 时直接拒收，TG 本期不做采集（§14）。
+  // 只认「在线的 WhatsApp 且视图挂着」那一档：`status===1` 是在线，`viewId` 空 = 没有可下命令的视图
+  // （群成员采集靠页内桥 push，协议号/TG 都没有这条链路）。
+  // 协议号(7) 现已能被后端识别（platform→whatsapp，B27 入站腿），但群成员采集仍依赖 WebContentsView 桥，
+  // 协议号不经网页登录、不建视图，所以本期不入候选；Telegram 本期不做采集（§14）。
   const candidates = useMemo(
     () =>
       accounts.filter(

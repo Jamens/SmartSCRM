@@ -3,12 +3,14 @@ import { test } from 'node:test'
 import assert from 'node:assert/strict'
 import { accountTypeOfPlatform, isChatPlatform, platformOfAccountType } from './chatPlatform.ts'
 
-test('platform_type 1 / 4 才是 P6 的支持面，其它一律 null', () => {
+test('platform_type 1 / 4 / 7 在支持面内，2/3/5/6 仍落 null', () => {
   assert.equal(platformOfAccountType(1), 'whatsapp')
   assert.equal(platformOfAccountType(4), 'telegram')
-  // 2/3/5/6/7 在既有 PlatformType 里是真实存在的平台：它们必须落到 null，
-  // 而不是被当成 whatsapp —— 否则内嵌一个没有桥的平台会静默丢数据。
-  for (const t of [0, 2, 3, 5, 6, 7, 1.5, Number.NaN]) assert.equal(platformOfAccountType(t), null)
+  // 协议号(7) 与 WA 同形态、走外部 protocol 服务，复用 'whatsapp' 入库面（B27 入站腿）。
+  assert.equal(platformOfAccountType(7), 'whatsapp')
+  // 2/3/5/6 在 PlatformType 里是真实平台，但本期无页内桥/无传输层，必须落 null 而非被当 whatsapp，
+  // 否则会内嵌一个没有桥的平台静默丢数据。
+  for (const t of [0, 2, 3, 5, 6, 1.5, Number.NaN]) assert.equal(platformOfAccountType(t), null)
   for (const t of [undefined, null]) assert.equal(platformOfAccountType(t), null)
 })
 
