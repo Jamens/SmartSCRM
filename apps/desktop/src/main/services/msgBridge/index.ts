@@ -22,6 +22,7 @@ import { CollectorHub } from './collectorHub'
 import { createMsgApi, isSendable } from './msgApi'
 import { RecallRegistry, SendAttribution, SendRegistry } from './sendRegistry'
 import { SendLock } from './sendLock'
+import { settleGroupReply } from '../groupCollect/registry.ts'
 
 /** spec §4 的 msgHistoryLimit：每会话补底条数。 */
 export const HISTORY_LIMIT_DEFAULT = 200
@@ -170,6 +171,14 @@ function oneLine(text: string | undefined, max = 200): string {
 export function handleBridgeReport(viewId: string, data: unknown): void {
   const report = data as BridgeReport | null
   if (!report || typeof report !== 'object' || typeof report.kind !== 'string') return
+  // ---- B6 群成员：两条只读命令的回执。只靠 reqId 路由，不依赖 account entry，
+  // 所以放在 entry 检查之前——命令是发往有账号的视图的，但回执路由不该因 entry 缺失而丢帧。
+  if (report.kind === 'group_list_result' || report.kind === 'group_snapshot_result') {
+    if (!settleGroupReply(report)) {
+      console.log(`[msgBridge] 群回执无人认领（迟到或已超时）reqId=${report.reqId} kind=${report.kind}`)
+    }
+    return
+  }
   const entry = accountOfView(viewId)
   if (!entry) return
   const mount = mounts.get(viewId)

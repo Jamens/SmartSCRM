@@ -5,7 +5,7 @@ Electron + React + TypeScript 桌面 SCRM 客户端，配 Spring Boot + MySQL �
 
 - 当前分支：`main`
 - 已交付范围：P0 骨架 → P1 登录/窗口壳 → P2 平台账号与内嵌页 → P3 客户域 → P4 素材库/快捷回复 → P5 翻译中心 → P6 聊天记录 → **P7 批量群发（B7）+ 会话级设置（B16）** → **设置页（A12 角标 / A13 主题 / A14 设备信息 / A15）**
-- **进行中**：**P8 群成员分析（B6）**——数据层与桥侧已交付，主进程建档泵与渲染层未做，见 §10
+- **进行中**：**P8 群成员分析（B6）**——数据层、桥侧、主进程建档泵已通电（ingest POST / dispatch 命令→视图 / host 去重 / `group:build` IPC），导出 exceljs 与渲染层未做，见 §10
 - 未交付：Telegram 采集/发送链、话术引擎、代理指纹、云手机、报表、i18n
 - 体检与风险清单：[docs/notes/2026-09-25-module-audit.md](./docs/notes/2026-09-25-module-audit.md)（逐条带 `文件:行`）
 
@@ -295,7 +295,7 @@ cd apps/desktop && pnpm build && pnpm build:win
 
 任务队列视角（详见 `docs/feature-checklist.md` 与 `docs/feature-backlog.md`）：
 
-- **P8 群成员分析（B6）收尾**：主进程建档泵 + 导出 IPC（exceljs）→ 渲染层客户抽屉群节与成员弹层。数据层与桥侧已交付，见 §10
+- **P8 群成员分析（B6）收尾**：主进程建档泵已通电；待补导出 IPC（exceljs）→ 渲染层客户抽屉群节与成员弹层。数据层与桥侧已交付，见 §10
 - TG 链：真机 DOM 探针 → 注入层选择器 → 采集 → 发送（卡在"本机无 TG 账号"，外部阻塞）
 - 体检文档 §12 列出的优先级修复项（删除确认、`apiBase` allowlist、采集重试停摆、`nickname` 清空、`refresh` 复查租户状态）
 
@@ -333,3 +333,8 @@ cd apps/desktop && pnpm build && pnpm build:win
 两处**待实测**（代码里已标注释，拿到真机样本前都是推断）：
 群变动系统消息的 `subtype` 与目标人字段形态（spec §15#1）；
 `getParticipants()` 对超大群是否分页截断（spec §15#3，这是最危险的一条）。
+
+**进度（截至 2026-10-01）**：切面 1–4 的"泵"已交付——
+`engine.ts`（纯编排，假时钟 10 条单测）+ `registry.ts`（reqId 未决表）+ `api.ts`（`createGroupCollectApi` POST `/api/group-members/batch`）
++ `dispatch.ts`（`createGroupDispatch` 命令→视图→回执）+ `host.ts`（`requestGroupBuild` 每账号去重、后台跑）+ `group:build` IPC 入口。
+仍缺：切面 4 的**导出 IPC + exceljs**、切面 5 渲染层。没有渲染层前界面看不到群成员数据；没有导出前只能库内查、不能落 XLSX。
