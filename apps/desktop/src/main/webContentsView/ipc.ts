@@ -1,10 +1,12 @@
-import { ipcMain, type Rectangle, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
+import { ipcMain, dialog, BrowserWindow, type Rectangle, type IpcMainEvent, type IpcMainInvokeEvent } from 'electron'
 import { viewManager } from './manager'
 import { getMainWindow } from '../window/mainWindow'
+import { getSession } from '../state/session'
 import { requestTranslation } from '../services/translationBridge'
 import { handleBridgeReport, observeLoginStatus, activeChatOf } from '../services/msgBridge'
 import { accountOfView } from '../services/msgBridge/accountDirectory'
 import { requestGroupBuild } from '../services/groupCollect/host.ts'
+import { exportGroupMembers } from '../services/groupCollect/export.ts'
 import { activeChatKeyOf } from '@shared/chatKeys'
 import { platformMsgIdOf } from '@shared/msgIds'
 
@@ -78,6 +80,27 @@ export function registerViewIpc(): void {
   ipcMain.handle('group:build', (_e, accountId: number, chatKeys?: string[]) =>
     requestGroupBuild({ accountId, chatKeys })
   )
+
+  // B6 群成员导出（spec §10）：渲染层「导出所选 / 导出本群」触发。主进程拉 export-rows →
+  // 生成 14 列 XLSX → showSaveDialog 落盘。渲染包不带编码库，大群不占渲染内存。
+  // 一次不超过 50 群（MAX_EXPORT_GROUPS），超了 exportGroupMembers 直接抛，界面应提前拦住。
+  ipcMain.handle('group:export', async (_e, accountId: number, chatKeys: string[]) => {
+    const defaultName = `群成员导出_${new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-')}.xlsx`
+    const saveOpts = {
+      title: '导出群成员',
+      defaultPath: defaultName,
+      filters: [{ name: 'Excel', extensions: ['xlsx'] }]
+    }
+    const win = getMainWindow() ?? BrowserWindow.getFocusedWindow()
+    const { canceled, filePath } = win
+      ? await dialog.showSaveDialog(win, saveOpts)
+      : await dialog.showSaveDialog(saveOpts)
+    if (canceled || !filePath) return { cancelled: true }
+    return exportGroupMembers(accountId, chatKeys, {
+      savePath: filePath,
+      token: () => getSession()?.accessToken ?? null
+    })
+  })
 
   // Page (injected script) -> host window. `event.sender` identifies which view sent it.
   const routePageMessage = (event: IpcMainEvent, kind: 'toHost' | 'send', arg: { channel: string; data: unknown }): void => {

@@ -35,6 +35,7 @@
         "clsx": "^2.1.1",
         "cn": "^0.3.0",
         "dayjs": "^1.11.23",
+        "exceljs": "4.4.0",
         "i18next": "^26.4.2",
         "lucide-react": "^1.47.0",
         "node-machine-id": "^1.1.12",
