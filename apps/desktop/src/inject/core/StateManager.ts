@@ -14,7 +14,7 @@ export interface LoginUser {
   avatar?: string
 }
 
-type Watcher = (value: any, oldValue: any) => void
+type Watcher = (value: unknown, oldValue: unknown) => void
 
 /** Central state container for an injected page. */
 export class StateManager {
