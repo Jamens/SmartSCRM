@@ -366,3 +366,12 @@ cd apps/desktop && pnpm build && pnpm build:win
    验证：桌面侧 `test:unit` 349 全过、`typecheck`（node/web/inject/unit 四路）全过、`eslint --quiet` 零输出；后端 `./mvnw -o compile` 通过。
 5. **`unmountView` 补丁（闭环收尾）**：视图彻底销毁时主动调 `groupHooks?.onViewDown(viewId)` 结清该视图未决群回执，覆盖「destroyed 视图」这一格（原先只靠引擎 dispatch 超时兜底）。
    端到端验证：对 8180 跑 `POST /api/group-members/batch`（只带 events 段，等价于 `EventCollectorHub.flush` 的载荷）→ 返回 `eventsInserted:1`、事件计数 +1、events 接口读回命中。群事件后端落库链路 OK。
+
+**桌面 lint 存量清零（2026-10-02 起）**：`apps/desktop` 全量 `eslint` 曾因 gitignore 构建产物刷爆 formatter 而崩溃，先以 `eslint.config.mjs` 的 ignores（`**/*.bundle.js`、`**/tmp/**`）根治；
+随后用 TS 编译器 API codemod 补 107 处 `explicit-function-return-type`（构建脚本目录单独关该规则）。存量 error 由 144 收敛至 37 后分两批清零：
+- 机械可修批（37→13，commit d26cb76）：`no-unused-vars` 加 `argsIgnorePattern`/`varsIgnorePattern '^_'`，忽略接口/回调里 `_` 前缀的未用参数；
+  测试文件关 `no-empty-function`（mock/stub 空方法体属正常写法）；inject 的 `any` 改 `unknown`；`badge`/`button` 组件文件不再导出 cva 变体常量（满足 react-refresh only-export-components）。
+- 剩余 13 个均为 react-hooks 规则，需逐个重构而非加注解，分两批清零：
+  - **H1（refs / immutability / static-components，13→5）**：把"渲染期给 `ref.current` 同步赋值"移入 `useEffect`（`loginStatusSync.ts` 的 `accountsRef`/`mutateRef`、`useWebContentsView.ts` 的 `boundsRef`）；
+    `CustomersPage` 在各筛选 handler 加 `setPage(1)` 并给 `CustomerDrawer` 加 `key` 触发重挂载、`CustomerDrawer` 表单改用挂载初值替代打开即铺表的 effect；
+    `MaterialsPage` 内联 `Film`/`Music`/`FileText` 取代渲染期 `const Icon = typeIcon(type)`（修复 static-components）。剩余 5 个均为 `set-state-in-effect`，进行中。

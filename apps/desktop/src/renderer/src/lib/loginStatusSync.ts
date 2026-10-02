@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react'
+import { useCallback, useEffect, useRef } from 'react'
 import { useAccounts, useUpdateAccountStatus, type PlatformAccount } from '@/stores/accounts'
 import { viewService } from '@/services/viewService'
 
@@ -31,14 +31,27 @@ export function useLoginStatusSync(): void {
   const { mutate } = useUpdateAccountStatus()
 
   const accountsRef = useRef<PlatformAccount[]>([])
-  accountsRef.current = data ?? []
   const mutateRef = useRef(mutate)
-  mutateRef.current = mutate
-
-  // 库里已经是什么，直接看查询缓存里的 account.status：写成功后 invalidate 会把它刷新，
-  // 不需要另存一份「上次写了什么」。这里只留「正在写」的闸门，避免一次写没落定时被重复触发。
   const inFlight = useRef(new Set<number>())
   const offlineStreak = useRef(new Map<number, number>())
+
+  // 渲染期不写 ref：把"最新值"同步放进 ref 交给 effect 做，规避 react-hooks/refs 在渲染期访问 ref。
+  // 两个 effect 都在订阅 effect 之前声明，挂载时先填好 ref 再订阅，消息回调读到的就是最新账号表。
+  useEffect(() => {
+    accountsRef.current = data ?? []
+  }, [data])
+  useEffect(() => {
+    mutateRef.current = mutate
+  }, [mutate])
+
+  const writeStatus = useCallback((id: number, status: number): void => {
+    if (inFlight.current.has(id)) return
+    inFlight.current.add(id)
+    mutateRef.current(
+      { id, status },
+      { onSettled: () => void inFlight.current.delete(id) }
+    )
+  }, [])
 
   useEffect(
     () =>
@@ -70,15 +83,6 @@ export function useLoginStatusSync(): void {
         offlineStreak.current.delete(account.id)
         writeStatus(account.id, 0)
       }),
-    []
+    [writeStatus]
   )
-
-  function writeStatus(id: number, status: number): void {
-    if (inFlight.current.has(id)) return
-    inFlight.current.add(id)
-    mutateRef.current(
-      { id, status },
-      { onSettled: () => void inFlight.current.delete(id) }
-    )
-  }
 }
