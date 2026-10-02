@@ -29,14 +29,14 @@ export interface AccountInput {
 
 const ACCOUNTS_KEY = ['platform-accounts'] as const
 
-export function useAccounts() {
+export function useAccounts(): import("@tanstack/react-query").UseQueryResult<PlatformAccount[], Error> {
   return useQuery({
     queryKey: ACCOUNTS_KEY,
     queryFn: () => http.get<PlatformAccount[]>('/api/platform-accounts')
   })
 }
 
-export function useCreateAccount() {
+export function useCreateAccount(): import("@tanstack/react-query").UseMutationResult<PlatformAccount, Error, AccountInput, unknown> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: AccountInput) => http.post<PlatformAccount>('/api/platform-accounts', input),
@@ -44,7 +44,7 @@ export function useCreateAccount() {
   })
 }
 
-export function useDeleteAccount() {
+export function useDeleteAccount(): import("@tanstack/react-query").UseMutationResult<void, Error, number, unknown> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => http.del<void>(`/api/platform-accounts/${id}`),
@@ -52,7 +52,7 @@ export function useDeleteAccount() {
   })
 }
 
-export function useUpdateAccountStatus() {
+export function useUpdateAccountStatus(): import("@tanstack/react-query").UseMutationResult<void, Error, { id: number; status: number; }, unknown> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: ({ id, status }: { id: number; status: number }) =>

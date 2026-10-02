@@ -18,6 +18,13 @@ export interface MsgApiOptions {
   timeoutMs?: number
 }
 
+/** 主进程 ↔ Java 的三跳桥接面：调用方只拿这个契约，不关心内部 call() 的退避与重试。 */
+export interface MsgApi {
+  postBatch(payload: BatchPayload): Promise<BatchResult | null>
+  postStatuses(input: { accountId: number; chatKey: string; updates: StatusUpdate[] }): Promise<{ updated: number } | null>
+  listAccounts(): Promise<AccountRow[]>
+}
+
 export interface StatusUpdate {
   msgKey: string
   status: MsgStatus
@@ -38,7 +45,7 @@ interface Envelope<T> {
  * 主进程 ↔ Java 的三跳。全部返回"成功与否"而不是抛错：
  * 采集链不能因为后端重启就断，交给 CollectorHub 的退避与重试。
  */
-export function createMsgApi(opts: MsgApiOptions) {
+export function createMsgApi(opts: MsgApiOptions): MsgApi {
   const base = (opts.apiBase ?? DEFAULT_API_BASE).replace(/\/$/, '')
   const doFetch = opts.fetchImpl ?? fetch
   const timeoutMs = opts.timeoutMs ?? 5_000

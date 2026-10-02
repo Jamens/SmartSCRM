@@ -178,7 +178,7 @@ export function unfilteredConversationQuery(accountId: number | null): Conversat
   return { accountId, platform: null, size: CONVERSATION_LIST_SIZE }
 }
 
-export function useConversations(p: ConversationQuery) {
+export function useConversations(p: ConversationQuery): import("@tanstack/react-query").UseInfiniteQueryResult<import("@tanstack/react-query").InfiniteData<ConversationPageVO, unknown>, Error> {
   return useInfiniteQuery({
     queryKey: queryKeys.conversations(p),
     enabled: p.accountId !== null,
@@ -190,7 +190,7 @@ export function useConversations(p: ConversationQuery) {
   })
 }
 
-export function useMessages(p: MessageQuery) {
+export function useMessages(p: MessageQuery): import("@tanstack/react-query").UseInfiniteQueryResult<import("@tanstack/react-query").InfiniteData<MessagePageVO, unknown>, Error> {
   return useInfiniteQuery({
     queryKey: queryKeys.messages(p),
     enabled: p.accountId !== null && !!p.chatKey,
@@ -212,7 +212,7 @@ export function useMessages(p: MessageQuery) {
   })
 }
 
-export function useSearchMessages(p: SearchQuery) {
+export function useSearchMessages(p: SearchQuery): import("@tanstack/react-query").UseInfiniteQueryResult<import("@tanstack/react-query").InfiniteData<MessageSearchVO, unknown>, Error> {
   return useInfiniteQuery({
     queryKey: queryKeys.search(p, null),
     enabled: p.q.trim().length >= MIN_QUERY,
@@ -223,7 +223,7 @@ export function useSearchMessages(p: SearchQuery) {
   })
 }
 
-export function useMessageStats(accountId: number | null, days: 7 | 30) {
+export function useMessageStats(accountId: number | null, days: 7 | 30): import("@tanstack/react-query").UseQueryResult<MessageStatsVO, Error> {
   return useQuery({
     queryKey: queryKeys.stats(accountId, days),
     enabled: accountId !== null,
@@ -232,7 +232,7 @@ export function useMessageStats(accountId: number | null, days: 7 | 30) {
   })
 }
 
-export function useCustomerTimeline(id: number | null, size = 20) {
+export function useCustomerTimeline(id: number | null, size = 20): import("@tanstack/react-query").UseQueryResult<CustomerTimelineVO, Error> {
   return useQuery({
     queryKey: queryKeys.timeline(id, size),
     enabled: id !== null,
@@ -253,7 +253,7 @@ export const UNREAD_TOTAL_POLL_MS = 30_000
  * 轮询本身也不可省：手机侧读掉的消息平台不会推给我们（`msg:live` 只覆盖桥连着的新消息），
  * 那些未读只能靠这一轮追平。30s 是"最小化半小时后角标还准"与"不给会话表加常驻读压力"之间的取值。
  */
-export function useUnreadTotal() {
+export function useUnreadTotal(): import("@tanstack/react-query").UseQueryResult<UnreadTotalVO, Error> {
   return useQuery({
     queryKey: queryKeys.unreadTotal,
     queryFn: () => http.get<UnreadTotalVO>('/api/messages/unread-total'),
@@ -271,7 +271,7 @@ export function invalidateUnreadTotal(qc: QueryClient): void {
   void qc.invalidateQueries({ queryKey: queryKeys.unreadTotal })
 }
 
-export function useMarkRead() {
+export function useMarkRead(): import("@tanstack/react-query").UseMutationResult<{ cleared: number; }, Error, number, unknown> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (conversationId: number) =>
@@ -309,7 +309,7 @@ export function useMarkRead() {
  * open_id 建出第二位客户；回复框那位读者更脏——它按 `conversation.customerId` 选写回层，
  * 这段时间点「先译再发」改的是**全局**行。refetch 会追上，但追上之前界面在说假话。
  */
-export function useLinkCustomer() {
+export function useLinkCustomer(): import("@tanstack/react-query").UseMutationResult<{ conversationId: number; customerId: number; messagesLinked: number; }, Error, { conversationId: number; customerId: number; }, unknown> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: { conversationId: number; customerId: number }) =>

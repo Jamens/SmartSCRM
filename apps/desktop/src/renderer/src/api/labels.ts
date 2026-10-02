@@ -27,7 +27,7 @@ function useInvalidateTree() {
   }
 }
 
-export function useCreateGroup() {
+export function useCreateGroup(): import("@tanstack/react-query").UseMutationResult<unknown, Error, LabelGroupInput, unknown> {
   const invalidate = useInvalidateTree()
   return useMutation({
     mutationFn: (input: LabelGroupInput) => http.post('/api/label-groups', input),
@@ -35,7 +35,7 @@ export function useCreateGroup() {
   })
 }
 
-export function useUpdateGroup() {
+export function useUpdateGroup(): import("@tanstack/react-query").UseMutationResult<unknown, Error, { id: number; input: LabelGroupInput; }, unknown> {
   const invalidate = useInvalidateTree()
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: LabelGroupInput }) =>
@@ -44,7 +44,7 @@ export function useUpdateGroup() {
   })
 }
 
-export function useDeleteGroup() {
+export function useDeleteGroup(): import("@tanstack/react-query").UseMutationResult<unknown, Error, number, unknown> {
   const invalidate = useInvalidateTree()
   return useMutation({
     mutationFn: (id: number) => http.del(`/api/label-groups/${id}`),
@@ -52,7 +52,7 @@ export function useDeleteGroup() {
   })
 }
 
-export function useCreateLabel() {
+export function useCreateLabel(): import("@tanstack/react-query").UseMutationResult<LabelVO, Error, { groupId: number; input: LabelInput; }, unknown> {
   const invalidate = useInvalidateTree()
   return useMutation({
     mutationFn: ({ groupId, input }: { groupId: number; input: LabelInput }) =>
@@ -61,7 +61,7 @@ export function useCreateLabel() {
   })
 }
 
-export function useUpdateLabel() {
+export function useUpdateLabel(): import("@tanstack/react-query").UseMutationResult<LabelVO, Error, { id: number; input: LabelInput; }, unknown> {
   const invalidate = useInvalidateTree()
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: LabelInput }) =>
@@ -70,7 +70,7 @@ export function useUpdateLabel() {
   })
 }
 
-export function useDeleteLabel() {
+export function useDeleteLabel(): import("@tanstack/react-query").UseMutationResult<unknown, Error, number, unknown> {
   const invalidate = useInvalidateTree()
   return useMutation({
     mutationFn: (id: number) => http.del(`/api/labels/${id}`),
