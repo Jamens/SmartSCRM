@@ -21,14 +21,14 @@ export interface AudienceInput {
 
 const AUDIENCES_KEY = ['audiences'] as const
 
-export function useAudiences() {
+export function useAudiences(): import("@tanstack/react-query").UseQueryResult<AudienceVO[], Error> {
   return useQuery({
     queryKey: AUDIENCES_KEY,
     queryFn: () => http.get<AudienceVO[]>('/api/audiences')
   })
 }
 
-export function useAudienceCustomers(id: number | null, page = 1, pageSize = 20) {
+export function useAudienceCustomers(id: number | null, page = 1, pageSize = 20): import("@tanstack/react-query").UseQueryResult<PageResult<CustomerVO>, Error> {
   return useQuery({
     queryKey: [...AUDIENCES_KEY, 'customers', id, page, pageSize],
     queryFn: () =>
@@ -44,7 +44,7 @@ function useInvalidateAudiences() {
   }
 }
 
-export function useCreateAudience() {
+export function useCreateAudience(): import("@tanstack/react-query").UseMutationResult<AudienceVO, Error, AudienceInput, unknown> {
   const invalidate = useInvalidateAudiences()
   return useMutation({
     mutationFn: (input: AudienceInput) => http.post<AudienceVO>('/api/audiences', input),
@@ -52,7 +52,7 @@ export function useCreateAudience() {
   })
 }
 
-export function useUpdateAudience() {
+export function useUpdateAudience(): import("@tanstack/react-query").UseMutationResult<AudienceVO, Error, { id: number; input: AudienceInput; }, unknown> {
   const invalidate = useInvalidateAudiences()
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: AudienceInput }) =>
@@ -61,7 +61,7 @@ export function useUpdateAudience() {
   })
 }
 
-export function useDeleteAudience() {
+export function useDeleteAudience(): import("@tanstack/react-query").UseMutationResult<unknown, Error, number, unknown> {
   const invalidate = useInvalidateAudiences()
   return useMutation({
     mutationFn: (id: number) => http.del(`/api/audiences/${id}`),

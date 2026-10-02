@@ -5,7 +5,7 @@ import { Switch as SwitchPrimitive } from "radix-ui"
 function Switch({
   className,
   ...props
-}: React.ComponentProps<typeof SwitchPrimitive.Root>) {
+}: React.ComponentProps<typeof SwitchPrimitive.Root>): React.JSX.Element {
   return (
     <SwitchPrimitive.Root
       data-slot="switch"

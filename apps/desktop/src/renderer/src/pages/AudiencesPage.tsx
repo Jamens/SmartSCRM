@@ -43,7 +43,7 @@ interface AudienceDraft {
   tagIds: number[]
 }
 
-function toInput(draft: AudienceDraft) {
+function toInput(draft: AudienceDraft): { name: string; platformType: number | null; keyword: string | null; tagIds: number[]; } {
   return {
     name: draft.name.trim(),
     platformType: draft.platformType === ALL ? null : Number(draft.platformType),

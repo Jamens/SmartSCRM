@@ -58,7 +58,7 @@ interface MaterialDraft {
   remark: string
 }
 
-function typeIcon(type: MaterialType) {
+function typeIcon(type: MaterialType): import("lucide-react").LucideIcon {
   if (type === 1) return ImageIcon
   if (type === 2) return Film
   if (type === 3) return Music

@@ -76,14 +76,14 @@ function toQuery(filters: CustomerFilters): string {
   return params.toString()
 }
 
-export function useCustomers(filters: CustomerFilters) {
+export function useCustomers(filters: CustomerFilters): import("@tanstack/react-query").UseQueryResult<PageResult<CustomerVO>, Error> {
   return useQuery({
     queryKey: [...CUSTOMERS_KEY, filters],
     queryFn: () => http.get<PageResult<CustomerVO>>(`/api/customers?${toQuery(filters)}`)
   })
 }
 
-export function useCustomer(id: number | null) {
+export function useCustomer(id: number | null): import("@tanstack/react-query").UseQueryResult<CustomerVO, Error> {
   return useQuery({
     queryKey: [...CUSTOMERS_KEY, 'detail', id],
     queryFn: () => http.get<CustomerVO>(`/api/customers/${id}`),
@@ -91,7 +91,7 @@ export function useCustomer(id: number | null) {
   })
 }
 
-export function useLabelTree() {
+export function useLabelTree(): import("@tanstack/react-query").UseQueryResult<LabelGroupVO[], Error> {
   return useQuery({
     queryKey: LABEL_TREE_KEY,
     queryFn: () => http.get<LabelGroupVO[]>('/api/label-groups')
@@ -128,11 +128,11 @@ export interface CreateCustomerInput {
  * 列表刷新由调用方在 link 成功后统一触发——在这里就 invalidate，"创建成功但没关联"时客户列表里
  * 会多出一个谁也对不上的陌生人。
  */
-export function useCreateCustomer() {
+export function useCreateCustomer(): import("@tanstack/react-query").UseMutationResult<CustomerVO, Error, CreateCustomerInput, unknown> {
   return useMutation({ mutationFn: (input: CreateCustomerInput) => http.post<CustomerVO>('/api/customers', input) })
 }
 
-export function useUpdateCustomer() {
+export function useUpdateCustomer(): import("@tanstack/react-query").UseMutationResult<CustomerVO, Error, { id: number; input: CustomerEditInput; }, unknown> {
   const invalidate = useInvalidateCustomers()
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: CustomerEditInput }) =>
@@ -141,7 +141,7 @@ export function useUpdateCustomer() {
   })
 }
 
-export function useSetCustomerLabels() {
+export function useSetCustomerLabels(): import("@tanstack/react-query").UseMutationResult<CustomerVO, Error, { id: number; labelIds: number[]; }, unknown> {
   const invalidate = useInvalidateCustomers()
   return useMutation({
     mutationFn: ({ id, labelIds }: { id: number; labelIds: number[] }) =>
@@ -150,7 +150,7 @@ export function useSetCustomerLabels() {
   })
 }
 
-export function useDeleteCustomer() {
+export function useDeleteCustomer(): import("@tanstack/react-query").UseMutationResult<void, Error, number, unknown> {
   const invalidate = useInvalidateCustomers()
   return useMutation({
     mutationFn: (id: number) => http.del<void>(`/api/customers/${id}`),

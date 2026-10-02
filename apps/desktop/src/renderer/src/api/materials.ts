@@ -50,14 +50,14 @@ function toQuery(f: MaterialFilters): string {
   return qs ? `?${qs}` : ''
 }
 
-export function useMaterialGroups() {
+export function useMaterialGroups(): import("@tanstack/react-query").UseQueryResult<MaterialGroupVO[], Error> {
   return useQuery({
     queryKey: GROUPS_KEY,
     queryFn: () => http.get<MaterialGroupVO[]>('/api/material-groups')
   })
 }
 
-export function useMaterials(filters: MaterialFilters) {
+export function useMaterials(filters: MaterialFilters): import("@tanstack/react-query").UseQueryResult<MaterialVO[], Error> {
   return useQuery({
     queryKey: [...MATERIALS_KEY, filters],
     queryFn: () => http.get<MaterialVO[]>(`/api/materials${toQuery(filters)}`)
@@ -72,7 +72,7 @@ function useInvalidate() {
   }
 }
 
-export function useCreateMaterialGroup() {
+export function useCreateMaterialGroup(): import("@tanstack/react-query").UseMutationResult<unknown, Error, { name: string; sort?: number; }, unknown> {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (input: { name: string; sort?: number }) => http.post('/api/material-groups', input),
@@ -80,7 +80,7 @@ export function useCreateMaterialGroup() {
   })
 }
 
-export function useUpdateMaterialGroup() {
+export function useUpdateMaterialGroup(): import("@tanstack/react-query").UseMutationResult<unknown, Error, { id: number; input: { name: string; sort?: number; }; }, unknown> {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: { name: string; sort?: number } }) =>
@@ -89,7 +89,7 @@ export function useUpdateMaterialGroup() {
   })
 }
 
-export function useDeleteMaterialGroup() {
+export function useDeleteMaterialGroup(): import("@tanstack/react-query").UseMutationResult<unknown, Error, number, unknown> {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (id: number) => http.del(`/api/material-groups/${id}`),
@@ -97,7 +97,7 @@ export function useDeleteMaterialGroup() {
   })
 }
 
-export function useCreateMaterial() {
+export function useCreateMaterial(): import("@tanstack/react-query").UseMutationResult<MaterialVO, Error, MaterialInput, unknown> {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (input: MaterialInput) => http.post<MaterialVO>('/api/materials', input),
@@ -105,7 +105,7 @@ export function useCreateMaterial() {
   })
 }
 
-export function useUpdateMaterial() {
+export function useUpdateMaterial(): import("@tanstack/react-query").UseMutationResult<MaterialVO, Error, { id: number; input: MaterialInput; }, unknown> {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: MaterialInput }) =>
@@ -114,7 +114,7 @@ export function useUpdateMaterial() {
   })
 }
 
-export function useDeleteMaterial() {
+export function useDeleteMaterial(): import("@tanstack/react-query").UseMutationResult<unknown, Error, number, unknown> {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (id: number) => http.del(`/api/materials/${id}`),

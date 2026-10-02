@@ -146,7 +146,7 @@ const STATS_KEY = ['translation-cache-stats'] as const
  * 少写一档就是 P6 那条 bug 类的翻版（`useTranslationSettings(null)` 会静默退化成读全局，
  * 而调用方以为拿到的是"这一位/这一条"的值）。
  */
-export function useTranslationSettings(ref: SettingsRef) {
+export function useTranslationSettings(ref: SettingsRef): import("@tanstack/react-query").UseQueryResult<TranslationSettingVO, Error> {
   const params = settingsParamsOf(ref)
   return useQuery({
     queryKey: settingsKeyOf(ref),
@@ -155,7 +155,7 @@ export function useTranslationSettings(ref: SettingsRef) {
   })
 }
 
-export function useTranslationNodes() {
+export function useTranslationNodes(): import("@tanstack/react-query").UseQueryResult<TranslationNodeVO[], Error> {
   return useQuery({
     queryKey: NODES_KEY,
     queryFn: () => http.get<TranslationNodeVO[]>('/api/translation/nodes'),
@@ -164,7 +164,7 @@ export function useTranslationNodes() {
 }
 
 /** Measuring is on-demand only (no polling): entering the page, "重新测速", after a save. */
-export function useTranslationDelays(enabled: boolean) {
+export function useTranslationDelays(enabled: boolean): import("@tanstack/react-query").UseQueryResult<ServerDelayVO[], Error> {
   return useQuery({
     queryKey: DELAYS_KEY,
     queryFn: () => http.get<ServerDelayVO[]>('/api/translation/nodes/delays'),
@@ -172,14 +172,14 @@ export function useTranslationDelays(enabled: boolean) {
   })
 }
 
-export function useTranslationCacheStats() {
+export function useTranslationCacheStats(): import("@tanstack/react-query").UseQueryResult<TranslationCacheStatsVO, Error> {
   return useQuery({
     queryKey: STATS_KEY,
     queryFn: () => http.get<TranslationCacheStatsVO>('/api/translation/cache/stats')
   })
 }
 
-export function useUpdateTranslationSettings() {
+export function useUpdateTranslationSettings(): UseMutationResult<TranslationSettingVO, Error, TranslationSettingInput, unknown> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: TranslationSettingInput) =>
@@ -200,7 +200,7 @@ export function useUpdateTranslationSettings() {
  * `cleared === 0` 也是成功（本来就没有覆盖行），不要拿它当失败提示——那只会让用户以为按钮坏了。
  * 失效走整前缀：与保存同一套理由（两层可能同时挂在屏上）。
  */
-export function useResetCustomerTranslationSettings() {
+export function useResetCustomerTranslationSettings(): UseMutationResult<{ cleared: number; }, Error, number, unknown> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (customerId: number) =>
@@ -236,7 +236,7 @@ export function useResetConversationTranslationSettings(): UseMutationResult<
   })
 }
 
-export function useTrialTranslate() {
+export function useTrialTranslate(): UseMutationResult<TranslateVO, Error, { text: string; type: TranslateType; customerId?: number | null; accountId?: number; chatKey?: string; }, unknown> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: {
@@ -284,7 +284,7 @@ export function settingsInputOf(
 
 const CREDENTIALS_KEY = ['translation-credentials'] as const
 
-export function useTranslationCredentials() {
+export function useTranslationCredentials(): import("@tanstack/react-query").UseQueryResult<TranslationCredentialVO[], Error> {
   return useQuery({
     queryKey: CREDENTIALS_KEY,
     queryFn: () => http.get<TranslationCredentialVO[]>('/api/translation/credentials')
@@ -292,7 +292,7 @@ export function useTranslationCredentials() {
 }
 
 /** 密钥只写不读：保存后返回的是掩码视图（hasSecret），secretKey 留空表示保留旧密钥。 */
-export function usePutCredential() {
+export function usePutCredential(): UseMutationResult<TranslationCredentialVO, Error, TranslationCredentialInput, unknown> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: TranslationCredentialInput) =>
@@ -302,7 +302,7 @@ export function usePutCredential() {
 }
 
 /** 「测试」按钮：真实向厂商发一条探测请求，失败也返回 200 + ok=false。 */
-export function useTestCredential() {
+export function useTestCredential(): UseMutationResult<CredentialTestVO, Error, string, unknown> {
   return useMutation({
     mutationFn: (provider: string) =>
       http.post<CredentialTestVO>('/api/translation/credentials/test', { provider })

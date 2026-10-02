@@ -61,14 +61,14 @@ function toQuery(groupId?: number | null, keyword?: string): string {
   return qs ? `?${qs}` : ''
 }
 
-export function useQuickReplyGroups() {
+export function useQuickReplyGroups(): import("@tanstack/react-query").UseQueryResult<QuickReplyGroupVO[], Error> {
   return useQuery({
     queryKey: GROUPS_KEY,
     queryFn: () => http.get<QuickReplyGroupVO[]>('/api/quick-reply-groups')
   })
 }
 
-export function useQuickReplies(groupId: number | null, keyword?: string) {
+export function useQuickReplies(groupId: number | null, keyword?: string): import("@tanstack/react-query").UseQueryResult<QuickReplyVO[], Error> {
   return useQuery({
     queryKey: [...REPLIES_KEY, { groupId, keyword }],
     queryFn: () => http.get<QuickReplyVO[]>(`/api/quick-replies${toQuery(groupId, keyword)}`)
@@ -83,7 +83,7 @@ function useInvalidate() {
   }
 }
 
-export function useCreateQuickReplyGroup() {
+export function useCreateQuickReplyGroup(): import("@tanstack/react-query").UseMutationResult<unknown, Error, { name: string; sort?: number; }, unknown> {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (input: { name: string; sort?: number }) => http.post('/api/quick-reply-groups', input),
@@ -91,7 +91,7 @@ export function useCreateQuickReplyGroup() {
   })
 }
 
-export function useUpdateQuickReplyGroup() {
+export function useUpdateQuickReplyGroup(): import("@tanstack/react-query").UseMutationResult<unknown, Error, { id: number; input: { name: string; sort?: number; }; }, unknown> {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: { name: string; sort?: number } }) =>
@@ -100,7 +100,7 @@ export function useUpdateQuickReplyGroup() {
   })
 }
 
-export function useDeleteQuickReplyGroup() {
+export function useDeleteQuickReplyGroup(): import("@tanstack/react-query").UseMutationResult<unknown, Error, number, unknown> {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (id: number) => http.del(`/api/quick-reply-groups/${id}`),
@@ -108,7 +108,7 @@ export function useDeleteQuickReplyGroup() {
   })
 }
 
-export function useCreateQuickReply() {
+export function useCreateQuickReply(): import("@tanstack/react-query").UseMutationResult<QuickReplyVO, Error, QuickReplyInput, unknown> {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (input: QuickReplyInput) => http.post<QuickReplyVO>('/api/quick-replies', input),
@@ -116,7 +116,7 @@ export function useCreateQuickReply() {
   })
 }
 
-export function useUpdateQuickReply() {
+export function useUpdateQuickReply(): import("@tanstack/react-query").UseMutationResult<QuickReplyVO, Error, { id: number; input: QuickReplyInput; }, unknown> {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: ({ id, input }: { id: number; input: QuickReplyInput }) =>
@@ -125,7 +125,7 @@ export function useUpdateQuickReply() {
   })
 }
 
-export function useDeleteQuickReply() {
+export function useDeleteQuickReply(): import("@tanstack/react-query").UseMutationResult<unknown, Error, number, unknown> {
   const invalidate = useInvalidate()
   return useMutation({
     mutationFn: (id: number) => http.del(`/api/quick-replies/${id}`),
@@ -134,7 +134,7 @@ export function useDeleteQuickReply() {
 }
 
 /** Fire-and-forget usage counter bump; returns fresh reply. */
-export function useRecordQuickReplyUse() {
+export function useRecordQuickReplyUse(): import("@tanstack/react-query").UseMutationResult<QuickReplyVO, Error, number, unknown> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (id: number) => http.post<QuickReplyVO>(`/api/quick-replies/${id}/use`, {}),
