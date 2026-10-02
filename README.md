@@ -375,3 +375,9 @@ cd apps/desktop && pnpm build && pnpm build:win
   - **H1（refs / immutability / static-components，13→5）**：把"渲染期给 `ref.current` 同步赋值"移入 `useEffect`（`loginStatusSync.ts` 的 `accountsRef`/`mutateRef`、`useWebContentsView.ts` 的 `boundsRef`）；
     `CustomersPage` 在各筛选 handler 加 `setPage(1)` 并给 `CustomerDrawer` 加 `key` 触发重挂载、`CustomerDrawer` 表单改用挂载初值替代打开即铺表的 effect；
     `MaterialsPage` 内联 `Film`/`Music`/`FileText` 取代渲染期 `const Icon = typeIcon(type)`（修复 static-components）。剩余 5 个均为 `set-state-in-effect`，进行中。
+  - **H2（set-state-in-effect，5→0）**：弹层/对话框改用"挂载初值 + `key` 重挂载"替代"打开即铺表"的 effect。
+    `CreateCustomerDialog` 表单用 `prefill` 挂载初值、外层 `ConversationActions` 用 `key={String(createOpen)}` 重挂载清空错误态；
+    `CustomerDirectionDialog`/`ConversationSettingsDialog` 拆出内层 `DirectionForm`/`ConvSettingsForm`，`data` 到达才挂载、关闭时清错误态；
+    `MessagesPage` 改用 `useChatJumpStore.subscribe` 消费一次性跳转投递（外部系统回调里 setState，规则允许）；
+    `TranslationPage` 删主 draft 回填 effect、`ProviderKeyForm` 改用 `credential?.appId ?? ''` 挂载初值并换 `key` 触发重初始化。
+    **全部清零**：`eslint --quiet` 0 error；`typecheck`（node/web/inject/unit 四路）全过；`test:unit` 371/371。
