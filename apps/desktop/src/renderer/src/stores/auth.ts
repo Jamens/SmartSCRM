@@ -15,6 +15,8 @@ interface AuthState {
   boot: () => Promise<void>
   login: (req: { username: string; password: string; inviteCode: string }) => Promise<boolean>
   logout: () => Promise<void>
+  /** 用 refreshToken 换发新 accessToken，成功写回 store；失败则登出。返回新 token 或 null。 */
+  refresh: () => Promise<string | null>
 }
 
 interface LoginResult {
@@ -24,11 +26,15 @@ interface LoginResult {
   user: UserInfo
 }
 
-async function persistSession(session: { accessToken: string; refreshToken: string; user: UserInfo | null }): Promise<void> {
+async function persistSession(session: {
+  accessToken: string
+  refreshToken: string
+  user: UserInfo | null
+}): Promise<void> {
   await window.scrm?.session.save(session)
 }
 
-const store = create<AuthState>((set) => ({
+const store = create<AuthState>((set, get) => ({
   phase: 'boot',
   user: null,
   accessToken: null,
@@ -89,27 +95,29 @@ const store = create<AuthState>((set) => ({
   logout: async () => {
     await window.scrm?.session.clear()
     set({ phase: 'anonymous', user: null, accessToken: null, refreshToken: null, error: null })
+  },
+
+  refresh: async () => {
+    const rt = get().refreshToken
+    if (!rt) return null
+    const access = await http.refreshOnce(rt)
+    if (access) {
+      set({ accessToken: access })
+      await persistSession({
+        accessToken: access,
+        refreshToken: get().refreshToken ?? rt,
+        user: get().user
+      })
+    } else {
+      await get().logout()
+    }
+    return access
   }
 }))
 
 configureHttp({
   getAccessToken: () => store.getState().accessToken,
-  refresh: async () => {
-    const refresh = store.getState().refreshToken
-    if (!refresh) return null
-    const access = await http.refreshOnce(refresh)
-    if (access) {
-      store.setState({ accessToken: access })
-      await persistSession({
-        accessToken: access,
-        refreshToken: store.getState().refreshToken ?? refresh,
-        user: store.getState().user
-      })
-    } else {
-      void store.getState().logout()
-    }
-    return access
-  }
+  refresh: () => store.getState().refresh()
 })
 
 export const useAuthStore = store

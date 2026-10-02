@@ -14,12 +14,16 @@ import TranslationPage from '@/pages/TranslationPage'
 import SettingsPage from '@/pages/SettingsPage'
 import LoginPage from '@/pages/LoginPage'
 import { DEFAULT_NAV_PATH } from '@/lib/nav'
+import { useProtocolSync } from '@/hooks/useProtocolSync'
 import { LoaderCircle } from 'lucide-react'
 
 function App(): React.JSX.Element {
   const phase = useAuthStore((s) => s.phase)
   const boot = useAuthStore((s) => s.boot)
   const logout = useAuthStore((s) => s.logout)
+
+  // 协议号（type-7）独立通道同步：登录态下为所有协议号账号建立网关 WS 推送。
+  useProtocolSync()
 
   useEffect(() => {
     void boot()
