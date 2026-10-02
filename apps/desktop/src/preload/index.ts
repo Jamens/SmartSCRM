@@ -21,6 +21,7 @@ import type {
   NotifyShowRequest,
   NotifyVerdict
 } from '@shared/notification'
+import type { GpuFatalInfo } from '@shared/gpu'
 
 export interface StoredSession {
   accessToken: string
@@ -114,6 +115,19 @@ const scrm = {
       const listener = (_event: IpcRendererEvent, maximized: boolean): void => callback(maximized)
       ipcRenderer.on('win:maximized-changed', listener)
       return () => ipcRenderer.removeListener('win:maximized-changed', listener)
+    }
+  },
+  /**
+   * 图形降级（A18）。渲染层只负责把"用户想要的模式"写进设置并请求重启，真正的带参重启在主进程。
+   * `onFatal` 是降级模式下 GPU 仍崩溃时的反向推送——那时不能再重启（会死循环），只能提示排查驱动。
+   */
+  gpu: {
+    restart: (desiredDegraded: boolean): Promise<boolean> =>
+      ipcRenderer.invoke('gpu:restart', desiredDegraded),
+    onFatal: (callback: (info: GpuFatalInfo) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, info: GpuFatalInfo): void => callback(info)
+      ipcRenderer.on('gpu:fatal', listener)
+      return () => ipcRenderer.removeListener('gpu:fatal', listener)
     }
   },
   view: {

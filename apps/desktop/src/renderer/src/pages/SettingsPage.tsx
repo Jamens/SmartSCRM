@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BellRing, HardDrive, MessageSquare, MonitorSmartphone, Moon, Palette, Sun } from 'lucide-react'
+import { BellRing, HardDrive, MessageSquare, Monitor, MonitorSmartphone, Moon, Palette, Sun } from 'lucide-react'
 import { useUnreadTotal } from '@/api/messages'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
@@ -15,6 +15,7 @@ import {
 } from '@/lib/theme'
 import { useBadgeEnabled } from '@/lib/unreadBadge'
 import { useNotifyEnabled } from '@/lib/desktopNotify'
+import { useGpuFatal, useGpuSettings } from '@/lib/gpu'
 import { cn } from '@/lib/utils'
 import type { ThemePref } from '@shared/theme'
 
@@ -30,6 +31,9 @@ export default function SettingsPage(): React.JSX.Element {
   const badge = useBadgeEnabled()
   // 桌面通知（A17）。与角标是**两个独立开关**：关掉角标不该把弹窗一起关掉。
   const notify = useNotifyEnabled()
+  // 图形降级（A18）。开关与崩溃状态都只在主进程落盘，这里只是它的一个客户端。
+  const gpu = useGpuSettings()
+  const gpuFatal = useGpuFatal()
   // 卡片上那行现状读的是角标自己那份查询（同一个缓存键，不会多打一次请求）。
   const unread = useUnreadTotal()
   const device = useDeviceInfo()
@@ -178,6 +182,65 @@ export default function SettingsPage(): React.JSX.Element {
                 checked={notify.enabled}
                 onCheckedChange={(v) => notify.setEnabled(v === true)}
               />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Monitor className="size-4 text-primary" />
+                图形
+              </CardTitle>
+              <CardDescription>
+                硬件加速用 GPU 渲染界面，更流畅；出问题时可以关掉改用软件渲染。改动需重启生效，
+                应用会自己重启一次以切换到新的渲染后端。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-6">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">硬件加速</p>
+                  <p className="text-xs text-muted-foreground">
+                    关掉后用软件渲染（CPU）跑界面，更稳但更费电。部分老显卡驱动会崩 GPU
+                    进程，那时应用会自动切到这个模式并提醒你。
+                  </p>
+                  <p className="mt-1 text-xs text-muted-foreground" data-testid="gpu-status">
+                    {gpu.host === 'browser'
+                      ? '当前宿主（浏览器预览）没有 GPU 后端可切换'
+                      : gpu.hardwareAcceleration
+                        ? '已开启（使用 GPU）'
+                        : '已关闭（软件渲染）'}
+                  </p>
+                </div>
+                <Switch
+                  aria-label="硬件加速"
+                  checked={gpu.hardwareAcceleration}
+                  disabled={gpu.host === 'browser'}
+                  onCheckedChange={(v) => gpu.setHardwareAcceleration(v === true)}
+                />
+              </div>
+
+              {gpu.host === 'browser' ? null : gpu.gpuSafeMode ? (
+                <div
+                  className="rounded-lg border border-border bg-muted p-3 text-xs"
+                  data-testid="gpu-safe-note"
+                >
+                  <p className="font-medium text-foreground">当前处于图形降级模式</p>
+                  <p className="mt-1 text-muted-foreground">
+                    {gpuFatal
+                      ? `降级模式下 GPU 仍崩溃（原因：${gpuFatal.reason}），多半是显卡驱动问题，建议更新驱动。`
+                      : '上次启动因 GPU 进程崩溃被自动切到这里。可以尝试恢复正常模式：'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => gpu.retryStandard()}
+                    className="mt-2 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90"
+                    data-testid="gpu-retry"
+                  >
+                    重试标准模式
+                  </button>
+                </div>
+              ) : null}
             </CardContent>
           </Card>
 
