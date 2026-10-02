@@ -1,7 +1,7 @@
 // tmp/mock-protocol-gateway.mjs
 // B27（WA 协议号）离线联调用的零依赖 mock 协议网关。
 // 仅用 Node 内置模块（http + crypto）实现一个最小但正确的 RFC6455 WebSocket 服务端 + REST 接口，
-// 严格按已对齐旧版 D:\electron-client 的契约模拟外部 protocol 服务：
+// 严格按 `src/shared/protocol/` 里那套网关契约模拟外部 protocol 服务（契约要点见 README §7）：
 //   - WS 帧是 { event, data } 信封（JSON）；PING/PONG 是裸 socket 文本字符串（"PING"/"PONG"），不走 JSON。
 //   - WS 鉴权：accesstoken 走 query（Bearer 前缀由 client 先剥离）。
 //   - 关闭码：'reject' token -> 4001（鉴权失败，刷新 token 后重试）；'kick' token -> 4005（硬停，不重连）。

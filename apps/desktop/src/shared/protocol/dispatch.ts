@@ -2,7 +2,7 @@
 // WS 帧分发 + 重连退避的纯逻辑。WebSocket 本身在渲染层 client.ts（浏览器 API），
 // 这里只处理「拿到一帧 JSON 后怎么分派」与「第 N 次重连隔多久」——两者都可单测。
 //
-// 旧版协议：WS 帧是 { event, data } 信封（见 ProtocolWsEnvelope）。PING/PONG 是裸 socket
+// 网关协议：WS 帧是 { event, data } 信封（见 ProtocolWsEnvelope）。PING/PONG 是裸 socket
 // 字符串，不经过这里；这里只分派 JSON 业务帧，把 envelope.data 透传给对应 handler。
 
 import {

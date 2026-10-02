@@ -1,9 +1,9 @@
 // src/renderer/src/services/protocol/client.ts
 // 协议号（B27）网关客户端：渲染进程原生 WebSocket + fetch 直连外部 protocol 服务。
-// 零 WebView / 零注入 / 零本地表（旧版 D:\electron-client 同形态）。
+// 零 WebView / 零注入 / 零本地表：协议号不走注入层，也不进本地库。
 // 纯逻辑（帧分发、退避）在 @shared/protocol，这里只负责浏览器 API 接线。
 //
-// 严格对齐旧版 views/protocol-chat/protocolChatWs.ts：
+// 网关契约（见 @shared/protocol/types.ts 与 README §7）：
 // - WS 帧是 { event, data } 信封；PING/PONG 是裸 socket 字符串（非 JSON）。
 // - accesstoken 走 query（Bearer 前缀会被剥离）；鉴权关闭码 4001–4004 刷新 token 后重试，
 //   4005/4007 硬停（被踢/被封）不重连。
@@ -49,7 +49,7 @@ export class ProtocolClient {
 
   constructor(private readonly opts: ProtocolClientOptions) {}
 
-  // ---------------- REST（对齐旧版 wpConversationApi） ----------------
+  // ---------------- REST（网关会话 / 消息 / 发送接口） ----------------
   private async rest<T>(path: string, init?: RequestInit): Promise<T> {
     const token = this.opts.getToken()
     const res = await fetch(`${this.opts.baseUrl}${path}`, {

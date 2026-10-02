@@ -132,8 +132,8 @@ SDD 的执行单元是**单任务节选**（brief 只切一个 Task），所以 
 - 四路 typecheck 必须全过：`pnpm run typecheck:node` / `:web` / `:inject` / `:unit`（从 `apps/desktop` 跑）。**全仓 lint 不是绿门**（`src` 里有 138 条既有 error + 格式化器自己会崩）：只按改动文件判 `pnpm exec eslint <file> --quiet`。
 - `BridgeReport` / `BridgeCommand` 是带 `kind` 的可辨识联合，分别骑在既有的 `msg-report`（上行）与 `msg-cmd`（下行）两条通道上：**新增 `kind` 不需要改 IPC 白名单**（白名单在 `src/main/webContentsView/ipc.ts:23`，管的是通道名不是 kind）。
 - 令牌只在主进程：`getSession()?.accessToken`，不进页、不进渲染层（C2）。页内来的一切文本进主进程日志前过 `oneLine()`（C3）。
-- `tmp/` 与 `.superpowers/` 已 gitignore：驱动脚本**永不进提交**、`docs/notes/2026-09-22-legacy-feature-gap.md` 永不提交、`apps/desktop/tsconfig.node.tsbuildinfo` 永不暂存、禁 `git clean -fdx`。
-- `D:\electron-client` 只读（Read/Grep，Bash 被封）；写进 `docs/` 的文档只陈述本项目规则，**不与旧版比较**。
+- `tmp/` 与 `.superpowers/` 已 gitignore：驱动脚本**永不进提交**、`apps/desktop/tsconfig.node.tsbuildinfo` 永不暂存、禁 `git clean -fdx`。
+- 外部参考资料只读（Read/Grep，不用 Bash 进入）；写进 `docs/` 的文档只陈述本项目规则，**不与其他实现比较**。
 - **Spring 后端的启动 / 重启 = 助手的活；Electron 主进程的重启 = 用户的手**（`pnpm dev` 的 watcher 永不重载 `src/main`，判新旧看 `:9223` 那个进程的实际启动时刻，不看文件 mtime）。出网 / 代理 / MySQL 启动 / 真实登录 / QR / 打开 WhatsApp 会话 / `git push` = 用户的手。
 - **一个已验证功能一次提交**，前缀 `feat:` / `fix:` / `refa:` / `update:`，标题与正文之间空一行，任务与提交一一对应，由验证它的那一席提交。**助手不得 push、不得 amend、不得跳 hook。**
 
@@ -3345,7 +3345,7 @@ node /d/SmartSCRM/tmp/p8b-tables.mjs   # 见下：JDBC 走 java，或直接用�
 - [ ] **Step 13: 文档同步 + 提交**
 
 - 本计划：§A.1 交付状态表加一行（8b 已交付 + commit 号）；§A.2 里那三处「当前实现是缺陷」的括注改成「已修（8b）」；Task 9 的 `lastCoverage` 可选注释与 `sort` 参数注释各加一句「8b 之后后端给这两个键」。
-- `docs/superpowers/specs/2026-09-30-group-member-analysis-design.md`：§7 的 `GET /groups` 补 `sort` 参数、`GET /customer/{id}/groups` 补 `accountId`、导出超限那句把「400」改成 40016 的口径；§3 的 `chat_group` 列清单补两列。**spec 只写规则，不与旧版比较。**
+- `docs/superpowers/specs/2026-09-30-group-member-analysis-design.md`：§7 的 `GET /groups` 补 `sort` 参数、`GET /customer/{id}/groups` 补 `accountId`、导出超限那句把「400」改成 40016 的口径；§3 的 `chat_group` 列清单补两列。**spec 只写规则。**
 
 ```bash
 cd /d/SmartSCRM
@@ -6415,7 +6415,7 @@ pnpm run build 2>&1 | tee /d/SmartSCRM/tmp/p8e-build.log | tail -20
 
 - [ ] **Step 8: spec §9 那句改口 + 提交**
 
-把 `docs/superpowers/specs/2026-09-30-group-member-analysis-design.md` §9 的「群与成员的实时尾巴走既有广播面：`group_event` 入库后主进程广播一条 `group:state`，成员面开着就刷，没开着不刷」改成：「`group:state` 报的是**一轮建档**的在跑 / 结了，渲染层据此失效群与成员的缓存；实时事件只落库，名单要新读数就点顶栏「刷新成员」（本期不做定时重拉，§14）。」其余行不动，**不与旧版比较**。
+把 `docs/superpowers/specs/2026-09-30-group-member-analysis-design.md` §9 的「群与成员的实时尾巴走既有广播面：`group_event` 入库后主进程广播一条 `group:state`，成员面开着就刷，没开着不刷」改成：「`group:state` 报的是**一轮建档**的在跑 / 结了，渲染层据此失效群与成员的缓存；实时事件只落库，名单要新读数就点顶栏「刷新成员」（本期不做定时重拉，§14）。」其余行不动。
 
 ```bash
 cd /d/SmartSCRM && git status --short
@@ -7241,7 +7241,7 @@ function Pager({ anchor, page, pageCount, total, unit, onPage }: {
 
 - §9 第三条的顶栏那句改成：「`GroupMembersDialog`：顶栏（刷新成员、导出本群）+ 两个 tab（成员名单 / 进退流水）+ 筛选（在群、角色、关键词）。**导出所选在客户抽屉「所在群」那一节的顶栏**，导的是勾选的若干群（`group:export` 的入参就是群键数组，本期没有"勾选若干成员"这回事）。」
 - §8 第一行的界面口径改成：「群行不显示"已建档"，弹层顶栏给"这一轮没建成"；**逐群失败的原因本期不进 IPC**，只在主进程日志里一行（R50）。」
-- 两处都只改句子，不删表行，**不与旧版比较**（口径来自本项目）。
+- 两处都只改句子，不删表行（口径来自本项目）。
 
 - [ ] **Step 7: 四路 typecheck + unit + lint + 构建**
 
@@ -8328,7 +8328,7 @@ L16 / L17 两条红**只能走 ①**：它们就是 8b ③/⑧ 的界面证人�
 
 - [ ] **Step 11: 验收文档 + §A.1/spec 回填 + 只提交 `docs/`**
 
-`docs/notes/2026-10-01-group-members-verification.md` 的结构（六段，内容全部来自这一跑的日志与 `tmp/` 产物，**不与旧版比较**，只陈述本项目规则）：
+`docs/notes/2026-10-01-group-members-verification.md` 的结构（六段，内容全部来自这一跑的日志与 `tmp/` 产物，只陈述本项目规则）：
 
 ```markdown
 # P8 / B6 群成员分析 · 验收台账（2026-10-01）
