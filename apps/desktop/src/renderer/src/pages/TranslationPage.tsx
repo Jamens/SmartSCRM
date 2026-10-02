@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Activity,
   Coins,
@@ -76,10 +76,9 @@ export default function TranslationPage(): React.JSX.Element {
   const delaysQuery = useTranslationDelays(measureOn)
   const [draft, setDraft] = useState<TranslationSettingVO | null>(null)
 
-  useEffect(() => {
-    if (settingsQuery.data && !draft) setDraft(settingsQuery.data)
-  }, [settingsQuery.data, draft])
-
+  // 注意：这里不再用 effect 把 settingsQuery.data 回填进 draft。未编辑时 `settings` 本身就
+  // 走 `draft ?? settingsQuery.data` 兜底，显示永远是服务端值；首次编辑由 `patch` 写入 merged，
+  // 所以一份"打开即等于 data"的 draft 纯属冗余状态，删掉能消掉 set-state-in-effect。
   const settings = draft ?? settingsQuery.data ?? null
   const delays = delaysQuery.data ?? []
   const nodes = nodesQuery.data ?? []
@@ -707,9 +706,12 @@ function KeyConfigCard({
         {loadError && (
           <p className="text-[11px] text-red-600">密钥状态读取失败，请确认后端已启动。</p>
         )}
-        {PROVIDER_FORMS.map((form) => (
-          <ProviderKeyForm key={form.provider} form={form} credential={credentialOf(form.provider)} />
-        ))}
+        {PROVIDER_FORMS.map((form) => {
+          const credential = credentialOf(form.provider)
+          // credential 从「未加载」到「已加载」换 key 触发重挂载，让 ProviderKeyForm 重新从
+          // credential 初始化 appId/region（见其 useState 初值），等价于原 effect 的一次性回填。
+          return <ProviderKeyForm key={`${form.provider}-${credential ? 'cfg' : 'empty'}`} form={form} credential={credential} />
+        })}
       </CardContent>
     </Card>
   )
@@ -724,20 +726,14 @@ function ProviderKeyForm({
 }): React.JSX.Element {
   const put = usePutCredential()
   const test = useTestCredential()
-  const [appId, setAppId] = useState('')
+  const [appId, setAppId] = useState(credential?.appId ?? '')
   const [secret, setSecret] = useState('')
-  const [region, setRegion] = useState('')
-  const [seeded, setSeeded] = useState(false)
+  const [region, setRegion] = useState(credential?.region ?? '')
   const [testResult, setTestResult] = useState<CredentialTestVO | null>(null)
 
-  // 后端加载完成后一次性回填非敏感字段（appId/region）；密钥本身永不回读。
-  useEffect(() => {
-    if (credential && !seeded) {
-      setAppId(credential.appId)
-      setRegion(credential.region ?? '')
-      setSeeded(true)
-    }
-  }, [credential, seeded])
+  // 非敏感字段（appId/region）在挂载时用 credential 初始化即可：KeyConfigCard 在 credential
+  // 从无到有时换了 key 触发整棵重挂载，state 重新从 credential 初始化；密钥本身永不回读。
+  // 无需在 effect 里同步 setState（react-hooks/set-state-in-effect）。
 
   const configured = credential?.hasSecret === true
 

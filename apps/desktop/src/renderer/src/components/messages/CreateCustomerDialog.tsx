@@ -1,5 +1,5 @@
 // src/renderer/src/components/messages/CreateCustomerDialog.tsx
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import { UserPlus } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import {
@@ -54,31 +54,15 @@ export default function CreateCustomerDialog({
   )
   const create = useCreateCustomer()
   const link = useLinkCustomer()
-  const [nickname, setNickname] = useState('')
-  const [phone, setPhone] = useState('')
+  const [nickname, setNickname] = useState(prefill?.nickname ?? '')
+  const [phone, setPhone] = useState(prefill?.phone ?? '')
   const [remark, setRemark] = useState('')
   const [phase, setPhase] = useState<Phase>('form')
   const [createdId, setCreatedId] = useState<number | null>(null)
 
-  // 只在"打开的那一瞬间"按会话快照铺一次：`prefill` 不进依赖，理由与 `CustomerDirectionDialog`
-  // 里那句是同一件事——列表 refetch（新消息到达、窗口重新聚焦）会换掉 `conversation` 的对象身份，
-  // 带着它铺表单就会把用户敲了一半的昵称抹回预填值。
-  useEffect(() => {
-    if (!open) {
-      // 与 `CustomerDirectionDialog` 同一件事：`create.isError` 跨开关残留的话，
-      // 下一次打开弹层第一眼是上一轮的「已经有客户了」。
-      create.reset()
-      link.reset()
-      return
-    }
-    if (!prefill) return
-    // 每次打开都重铺：上一轮失败留下的输入会让用户以为"我已经改过了"。
-    setNickname(prefill.nickname ?? '')
-    setPhone(prefill.phone ?? '')
-    setRemark('')
-    setPhase('form')
-    setCreatedId(null)
-  }, [open])
+  // 表单初值用 `prefill` 在挂载时铺一次即可：调用方在 `open` 切换时给本组件加了 `key`，
+  // 每次打开都整棵重挂载，state 重新从 `prefill` 初始化；`create`/`link` 也随挂载重建，
+  // 上一轮的错误态自然清空。无需在 effect 里同步 setState（react-hooks/set-state-in-effect）。
 
   const doLink = (customerId: number): void => {
     setPhase('linking')

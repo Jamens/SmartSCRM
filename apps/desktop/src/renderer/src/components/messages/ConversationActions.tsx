@@ -76,6 +76,7 @@ export default function ConversationActions({
             建为客户
           </Button>
           <CreateCustomerDialog
+            key={String(createOpen)}
             conversation={conversation}
             open={createOpen}
             onOpenChange={setCreateOpen}
