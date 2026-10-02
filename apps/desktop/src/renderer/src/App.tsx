@@ -12,6 +12,7 @@ import QuickRepliesPage from '@/pages/QuickRepliesPage'
 import MaterialsPage from '@/pages/MaterialsPage'
 import TranslationPage from '@/pages/TranslationPage'
 import SettingsPage from '@/pages/SettingsPage'
+import LogCenterPage from '@/pages/LogCenterPage'
 import LoginPage from '@/pages/LoginPage'
 import { DEFAULT_NAV_PATH } from '@/lib/nav'
 import { useProtocolSync } from '@/hooks/useProtocolSync'
@@ -59,6 +60,7 @@ function App(): React.JSX.Element {
           <Route path="/materials" element={<MaterialsPage />} />
           <Route path="/translation" element={<TranslationPage />} />
           <Route path="/settings" element={<SettingsPage />} />
+          <Route path="/logs" element={<LogCenterPage />} />
           <Route path="*" element={<Navigate to={DEFAULT_NAV_PATH} replace />} />
         </Route>
       </Routes>

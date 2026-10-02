@@ -18,6 +18,8 @@ import {
 } from './state/settings'
 import { bridgeStates, requestBackfill, sendText } from './services/msgBridge'
 import { relaunchGpu } from './gpu'
+import { clearLogs, getLogs, openLogsFolder } from './logger'
+import type { LogEntry, LogFilter } from '@shared/log'
 import {
   configureNotifyHost,
   resetNotifyState,
@@ -143,6 +145,14 @@ export function registerIpcHandlers(): void {
     relaunchGpu(desiredDegraded === true)
     return true
   })
+
+  /**
+   * 日志中心（A19）。渲染层只读内存环（最新 N 条），不读磁盘大文件；
+   * 导出/排查用「打开日志目录」走系统文件管理器，日志只落本地、不上报服务端。
+   */
+  ipcMain.handle('logs:list', (_event, filter: LogFilter | undefined): LogEntry[] => getLogs(filter ?? {}))
+  ipcMain.handle('logs:open-folder', (): void => openLogsFolder())
+  ipcMain.handle('logs:clear', (): void => clearLogs())
 }
 
 /** Push maximize-state changes to the renderer so the custom title bar stays in sync. */

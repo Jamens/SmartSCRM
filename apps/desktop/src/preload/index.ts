@@ -22,6 +22,7 @@ import type {
   NotifyVerdict
 } from '@shared/notification'
 import type { GpuFatalInfo } from '@shared/gpu'
+import type { LogEntry, LogFilter } from '@shared/log'
 
 export interface StoredSession {
   accessToken: string
@@ -129,6 +130,15 @@ const scrm = {
       ipcRenderer.on('gpu:fatal', listener)
       return () => ipcRenderer.removeListener('gpu:fatal', listener)
     }
+  },
+  /**
+   * 日志中心（A19）。渲染层只读内存环（latest N 条），不读磁盘大文件；
+   * 「打开日志目录」走系统文件管理器。所有日志只落本地、不上报服务端。
+   */
+  logs: {
+    list: (filter?: LogFilter): Promise<LogEntry[]> => ipcRenderer.invoke('logs:list', filter),
+    openFolder: (): Promise<void> => ipcRenderer.invoke('logs:open-folder'),
+    clear: (): Promise<void> => ipcRenderer.invoke('logs:clear')
   },
   view: {
     create: (viewId: string, url: string): Promise<boolean> =>
