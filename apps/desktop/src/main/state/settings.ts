@@ -16,6 +16,11 @@ export interface AppSettings {
   theme: ThemePref
   /** 任务栏未读角标的总开关（Windows 红点 / mac/Linux 数字都归它管）。 */
   badgeEnabled: boolean
+  /**
+   * 桌面消息通知（A17）的总开关。
+   * 与 `badgeEnabled` 是**两个独立开关**：角标管任务栏，通知管弹窗，关掉一个不该牵连另一个。
+   */
+  notificationEnabled: boolean
 }
 
 /** 交给渲染层的完整快照：`effective` 由主进程解析，页面只负责挂类名。 */
@@ -25,7 +30,11 @@ export interface ThemeSnapshot {
   systemDark: boolean
 }
 
-const DEFAULTS: AppSettings = { theme: 'system', badgeEnabled: true }
+const DEFAULTS: AppSettings = {
+  theme: 'system',
+  badgeEnabled: true,
+  notificationEnabled: true
+}
 
 const settingsFile = (): string => join(app.getPath('userData'), 'scrm-settings.json')
 
@@ -43,6 +52,9 @@ function mergeKnown(base: AppSettings, raw: unknown): AppSettings {
     if (isThemePref(patch.theme)) next.theme = patch.theme
     // 开关只认真布尔：`0` / `'false'` 这类"看着像假"的值不采信，否则一个布尔项会悄悄变成三态。
     if (typeof patch.badgeEnabled === 'boolean') next.badgeEnabled = patch.badgeEnabled
+    if (typeof patch.notificationEnabled === 'boolean') {
+      next.notificationEnabled = patch.notificationEnabled
+    }
   }
   return next
 }

@@ -16,6 +16,11 @@ import type {
   GroupStateEvent
 } from '@shared/groupMembers'
 import type { MachineProfile, StorageUsage } from '@shared/machine'
+import type {
+  NotifyClickTarget,
+  NotifyShowRequest,
+  NotifyVerdict
+} from '@shared/notification'
 
 export interface StoredSession {
   accessToken: string
@@ -85,6 +90,20 @@ const scrm = {
    */
   badge: {
     set: (count: number): Promise<BadgeEcho> => ipcRenderer.invoke('badge:set', count)
+  },
+  /**
+   * 桌面消息通知（A17）：一条 invoke（提请弹窗）+ 一条推送（用户点了某条通知）。
+   * 与角标同一分工——渲染层知道"这一帧该不该提请"，主进程负责跨帧合并与真的弹。
+   * 回执是"排进去了"（`queued`）而不是"弹了"：合并窗口到点才真弹，渲染层不该据此判定成败。
+   */
+  notify: {
+    show: (req: NotifyShowRequest): Promise<NotifyVerdict> =>
+      ipcRenderer.invoke('notify:show', req),
+    onClicked: (callback: (target: NotifyClickTarget) => void): (() => void) => {
+      const listener = (_event: IpcRendererEvent, target: NotifyClickTarget): void => callback(target)
+      ipcRenderer.on('notify:clicked', listener)
+      return () => ipcRenderer.removeListener('notify:clicked', listener)
+    }
   },
   win: {
     minimize: (): Promise<void> => ipcRenderer.invoke('win:minimize'),

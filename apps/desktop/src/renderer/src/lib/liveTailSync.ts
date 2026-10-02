@@ -18,6 +18,7 @@ import {
 } from '@shared/liveTail'
 import type { BridgeState, LiveFrame, SendReceipt, StatusFrame } from '@shared/chatTypes'
 import { ipcFailureText, outcomeOf, sendErrorLogText } from './sendError'
+import { useIncomingNotifier } from './desktopNotify'
 import { useAccounts } from '@/stores/accounts'
 import { PlatformType } from '@/lib/platform'
 import { sendViaProtocol } from '@/services/protocol/send'
@@ -267,8 +268,13 @@ interface P6Probe {
  */
 export function useLiveTailSync(): void {
   const qc = useQueryClient()
+  // 桌面通知（A17）的提请口挂在同一个订阅点上：这里已经拿到完整帧，另起一个订阅会重复消费。
+  const notifyIncoming = useIncomingNotifier()
   useEffect(() => {
-    const offLive = msgService.onLive((frame) => applyLiveFrame(qc, frame))
+    const offLive = msgService.onLive((frame) => {
+      applyLiveFrame(qc, frame)
+      notifyIncoming(frame)
+    })
     const offStatus = msgService.onStatus((frame) => applyLiveStatus(qc, frame))
     const offState = msgService.onState((states) =>
       qc.setQueryData<BridgeState[]>(queryKeys.bridges, states)
@@ -300,7 +306,8 @@ export function useLiveTailSync(): void {
       offState()
       if (import.meta.env.DEV) delete (window as unknown as { __p6f?: P6Probe }).__p6f
     }
-  }, [qc])
+    // `notifyIncoming` 是稳定引用（那边 useCallback 的 deps 为空），加进来不会导致反复重订阅。
+  }, [qc, notifyIncoming])
 }
 
 /** 回复框与离线提示的数据源：桥不在 ready 就别让人敲字。写入方只有 useLiveTailSync 一处。 */
