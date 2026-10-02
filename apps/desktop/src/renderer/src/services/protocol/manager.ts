@@ -12,13 +12,14 @@
 // 而入库面 /api/messages/status 需要 chatKey。因此本 manager 必须在收到入站消息时，
 // 把 conversationId -> peerJid(=chatKey) 记下来，状态推送到达时反查 chatKey 再转发。
 
-import { inboundMessageToBatch, statusPushToStatus } from '@shared/protocol/map.ts'
+import { inboundMessageToBatch, runProtocolSend, statusPushToStatus } from '@shared/protocol/map.ts'
 import type {
   IngestBatch,
   IngestStatus,
   ProtocolInboundMessage,
   ProtocolStatusPush
 } from '@shared/protocol/types.ts'
+import type { SendReceipt } from '@shared/chatTypes.ts'
 import { ProtocolClient, type ProtocolClientOptions } from './client.ts'
 
 export interface ProtocolSyncDeps {
@@ -34,7 +35,22 @@ export interface ProtocolSyncDeps {
   /** 测试接缝：不传则用真实 ProtocolClient。 */
   clientFactory?: (
     opts: ProtocolClientOptions
-  ) => Pick<ProtocolClient, 'connect' | 'disconnect' | 'isStopped'>
+  ) => Pick<ProtocolClient, 'connect' | 'disconnect' | 'isStopped' | 'sendMessage'>
+}
+
+/**
+ * 活跃 manager 单例：useProtocolSync 在登录态建立 manager 后登记，卸载时清空；
+ * 渲染层发送分流（sendViaProtocol）从这里取同一实例，复用其按账号维护的 client。
+ * 用模块级单例而非 React context，是因为 useSendText 与 useProtocolSync 不在同一组件树层级。
+ */
+let activeManager: ProtocolSyncManager | null = null
+
+export function setActiveProtocolManager(m: ProtocolSyncManager | null): void {
+  activeManager = m
+}
+
+export function getActiveProtocolManager(): ProtocolSyncManager | null {
+  return activeManager
 }
 
 export class ProtocolSyncManager {
@@ -64,16 +80,41 @@ export class ProtocolSyncManager {
     }
   }
 
-  private attach(accountId: number): void {
+  private attach(accountId: number): ProtocolClient | null {
     const client = this.makeClient(accountId)
     this.clients.set(accountId, client as ProtocolClient)
     client.connect()
+    return client as ProtocolClient
+  }
+
+  /** 取某账号的 client：已存在且未停则复用，否则惰性建连。出站发送走这条。 */
+  private clientFor(accountId: number): ProtocolClient | null {
+    const existing = this.clients.get(accountId)
+    if (existing && !existing.isStopped()) return existing
+    return this.attach(accountId)
   }
 
   private detach(accountId: number): void {
     this.clients.get(accountId)?.disconnect()
     this.clients.delete(accountId)
     this.chatKeyByConversation.delete(accountId)
+  }
+
+  /**
+   * 出站发送（B27 出站腿）：type-7 账号不走主进程 WebContentsView 桥（无 viewId），
+   * 直接复用本 manager 已建连的网关 client 发 REST。toJid 即 chatKey（peerJid）。
+   * 只负责把 msgKey 交回上层（useSendText 的乐观气泡换键 + 网关回声补全），不在此 ingest——
+   * 与网页 WA 桥的乐观气泡路径同构，故 SendReceipt 形状一致。
+   */
+  async send(accountId: number, chatKey: string, text: string): Promise<SendReceipt> {
+    const client = this.clientFor(accountId)
+    if (!client) {
+      return { localId: '', ok: false, error: 'BRIDGE_OFFLINE', detail: '协议号实例未就绪' }
+    }
+    const clientMsgId = `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`
+    return runProtocolSend({ accountId, chatKey, text, clientMsgId }, (a, jid, t, cid) =>
+      client.sendMessage(a, jid, t, cid)
+    )
   }
 
   private makeClient(accountId: number): ProtocolClient {
