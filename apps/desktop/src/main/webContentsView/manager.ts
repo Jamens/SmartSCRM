@@ -92,6 +92,8 @@ export class WebContentsViewManager {
 
     this.views.set(viewId, { view, url, host: safeHost(url), visible: false })
     view.webContents.loadURL(url)
+    // 新视图的缩放要立刻对齐主窗口，否则第一帧会按默认 1.0 渲染，和已开着的视图比例不一致。
+    this.syncZoomToWindow()
     this.emit(viewId, 'created', url)
     return true
   }
@@ -125,6 +127,26 @@ export class WebContentsViewManager {
 
   reload(viewId: string): void {
     this.views.get(viewId)?.view.webContents.reload()
+  }
+
+  /**
+   * 把所有内嵌视图的缩放比对齐到主窗口。内嵌页（WhatsApp Web 等）默认各走各的缩放，
+   * 主窗口因为系统 DPI / 用户缩放变了之后，视图不跟着变就会比主界面要么偏大要么偏小。
+   * 主窗口自身的 `getZoomFactor` 已经把系统缩放折算进去了，直接复用它即可。
+   *
+   * 由主进程统一推：渲染层每个组件各自设会窜值，且视图在路由切换 / 热更新时可能被重建。
+   */
+  syncZoomToWindow(): void {
+    const win = this.hostWindow()
+    if (!win || win.isDestroyed()) return
+    const factor = win.webContents.getZoomFactor()
+    for (const managed of this.views.values()) {
+      try {
+        managed.view.webContents.setZoomFactor(factor)
+      } catch {
+        // 视图可能正在卸载（webContents 已失效），忽略即可——它的缩放下个生命周期会重新对齐。
+      }
+    }
   }
 
   navigate(viewId: string, url: string): void {

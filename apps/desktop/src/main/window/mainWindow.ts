@@ -12,6 +12,10 @@ export function setQuitting(value: boolean): void {
   quitting = value
 }
 
+export function getQuitting(): boolean {
+  return quitting
+}
+
 export function getMainWindow(): BrowserWindow | null {
   return mainWindow
 }

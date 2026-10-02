@@ -17,6 +17,7 @@ import {
   type AppSettings
 } from './state/settings'
 import { bridgeStates, requestBackfill, sendText } from './services/msgBridge'
+import { relaunchGpu } from './gpu'
 import {
   configureNotifyHost,
   resetNotifyState,
@@ -132,6 +133,16 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('win:close', () => focused()?.close())
   ipcMain.handle('win:is-maximized', () => focused()?.isMaximized() ?? false)
   ipcMain.handle('win:show', () => showMainWindow())
+
+  /**
+   * 图形降级重启（A18）。渲染层先把用户想要的模式存进设置（settings:set），再请主进程统一重启——
+   * 真正杀进程、带 `--gpu-safe-mode` 参数的活只在主进程做，渲染层不直接碰 app。
+   * `desiredDegraded=true` 进软件渲染降级模式，`false` 回标准模式。
+   */
+  ipcMain.handle('gpu:restart', (_event, desiredDegraded: boolean): boolean => {
+    relaunchGpu(desiredDegraded === true)
+    return true
+  })
 }
 
 /** Push maximize-state changes to the renderer so the custom title bar stays in sync. */

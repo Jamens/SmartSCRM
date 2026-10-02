@@ -21,6 +21,18 @@ export interface AppSettings {
    * 与 `badgeEnabled` 是**两个独立开关**：角标管任务栏，通知管弹窗，关掉一个不该牵连另一个。
    */
   notificationEnabled: boolean
+  /**
+   * 硬件加速总开关。默认开（用 GPU 渲染）。
+   * 关掉 = 软件渲染降级模式；这个改动**必须重启才生效**，主进程会带 `--gpu-safe-mode` 重启一次。
+   * 不是「关掉就立刻变卡」——它改的是下一次启动的渲染后端。
+   */
+  hardwareAcceleration: boolean
+  /**
+   * 是否处于「GPU 进程崩溃后自动降级」状态。默认关。
+   * true 表示上次启动因 GPU 进程崩溃而被自动降级，下次启动默认进降级。
+   * 设置页「重试标准模式」会把它清回 false，并尝试回到标准渲染。
+   */
+  gpuSafeMode: boolean
 }
 
 /** 交给渲染层的完整快照：`effective` 由主进程解析，页面只负责挂类名。 */
@@ -33,7 +45,9 @@ export interface ThemeSnapshot {
 const DEFAULTS: AppSettings = {
   theme: 'system',
   badgeEnabled: true,
-  notificationEnabled: true
+  notificationEnabled: true,
+  hardwareAcceleration: true,
+  gpuSafeMode: false
 }
 
 const settingsFile = (): string => join(app.getPath('userData'), 'scrm-settings.json')
@@ -54,6 +68,13 @@ function mergeKnown(base: AppSettings, raw: unknown): AppSettings {
     if (typeof patch.badgeEnabled === 'boolean') next.badgeEnabled = patch.badgeEnabled
     if (typeof patch.notificationEnabled === 'boolean') {
       next.notificationEnabled = patch.notificationEnabled
+    }
+    // 两个图形开关同口径：只认真布尔，不采信 `0` / `'false'` 这类"看着像假"的值。
+    if (typeof patch.hardwareAcceleration === 'boolean') {
+      next.hardwareAcceleration = patch.hardwareAcceleration
+    }
+    if (typeof patch.gpuSafeMode === 'boolean') {
+      next.gpuSafeMode = patch.gpuSafeMode
     }
   }
   return next
