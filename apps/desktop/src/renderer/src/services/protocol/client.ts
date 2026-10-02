@@ -90,10 +90,15 @@ export class ProtocolClient {
     })
   }
 
-  sendMessage(accountId: number, toJid: string, text: string): Promise<unknown> {
+  sendMessage(
+    accountId: number,
+    toJid: string,
+    text: string,
+    clientMsgId?: string
+  ): Promise<unknown> {
     const body = {
       accountId,
-      clientMsgId: `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
+      clientMsgId: clientMsgId ?? `c-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`,
       content: { text },
       msgType: 1,
       toJid

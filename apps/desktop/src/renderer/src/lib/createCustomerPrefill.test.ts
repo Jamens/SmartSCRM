@@ -37,6 +37,11 @@ test('Telegram 单聊：没有电话号码形态，phone 留 null 而不是硬�
   assert.deepEqual(p, { platformType: 4, openId: '421933', nickname: 'Alice', phone: null })
 })
 
+test('WA 协议号(7)：platformType 优先透传，不被 accountTypeOfPlatform 错标成 1', () => {
+  const p = prefillOfConversation(src({ chatKey: '8613800001001@c.us', platform: 'whatsapp', platformType: 7 }))
+  assert.deepEqual(p, { platformType: 7, openId: '8613800001001@c.us', nickname: 'Alice', phone: '8613800001001' })
+})
+
 test('标题只有空白也不写空串：昵称留 null，列表页不会出现一个没有名字的客户', () => {
   assert.equal(prefillOfConversation(src({ title: '   ' }))?.nickname, null)
   assert.equal(prefillOfConversation(src({ title: null }))?.nickname, null)

@@ -7,7 +7,7 @@ import { useQuery } from '@tanstack/react-query'
 import { useAuthStore } from '@/stores/auth'
 import { http } from '@/lib/http'
 import type { PlatformAccount } from '@/stores/accounts'
-import { ProtocolSyncManager } from '@/services/protocol/manager'
+import { ProtocolSyncManager, setActiveProtocolManager } from '@/services/protocol/manager'
 import { PROTOCOL_URL, PROTOCOL_WS_URL } from '@/services/protocol/config'
 import type { IngestBatch, IngestStatus } from '@shared/protocol/types.ts'
 
@@ -42,6 +42,8 @@ export function useProtocolSync(): void {
         // WS 鉴权失败（4001–4004）时由 auth store 刷新 accessToken 后续连
         onAuthFailure: () => useAuthStore.getState().refresh()
       })
+      // 登记活跃实例，供渲染层出站发送分流（sendViaProtocol）复用同一 manager。
+      setActiveProtocolManager(mgrRef.current)
     }
     const mgr = mgrRef.current
     if (phase !== 'authenticated' || !accounts) {
@@ -52,6 +54,9 @@ export function useProtocolSync(): void {
   }, [phase, accounts])
 
   useEffect(() => {
-    return () => mgrRef.current?.stop()
+    return () => {
+      setActiveProtocolManager(null)
+      mgrRef.current?.stop()
+    }
   }, [])
 }

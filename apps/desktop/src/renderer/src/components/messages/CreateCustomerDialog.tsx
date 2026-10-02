@@ -16,6 +16,8 @@ import { ApiError } from '@/lib/http'
 import { useCreateCustomer } from '@/api/customers'
 import { useLinkCustomer, type ConversationVO } from '@/api/messages'
 import { prefillOfConversation } from '@/lib/createCustomerPrefill'
+import { useAccounts } from '@/stores/accounts'
+import { accountTypeOfPlatform } from '@shared/chatPlatform'
 
 type Phase = 'form' | 'linking' | 'link-failed'
 
@@ -33,7 +35,23 @@ export default function CreateCustomerDialog({
   onOpenChange,
   onLinked
 }: Props): React.JSX.Element {
-  const prefill = useMemo(() => prefillOfConversation(conversation), [conversation])
+  // 取账号真实 platformType（尤其 type-7 协议号），避免建客户时被错标成 1（B27 出站腿）。
+  const { data: accounts } = useAccounts()
+  const platformType =
+    accounts?.find((a) => a.id === conversation.accountId)?.platformType ??
+    accountTypeOfPlatform(conversation.platform)
+  const prefill = useMemo(
+    () =>
+      prefillOfConversation({
+        chatKey: conversation.chatKey,
+        title: conversation.title,
+        platform: conversation.platform,
+        isGroup: conversation.isGroup,
+        customerId: conversation.customerId,
+        platformType
+      }),
+    [conversation, platformType]
+  )
   const create = useCreateCustomer()
   const link = useLinkCustomer()
   const [nickname, setNickname] = useState('')
@@ -188,7 +206,7 @@ export default function CreateCustomerDialog({
               </p>
             )}
             <p className="text-[11px] text-muted-foreground">
-              重试只会补"关联"这一步，不会再建一位重复客户——重复的 open_id 会被后端挡在 40901。
+              重试只会补「关联」这一步，不会再建一位重复客户——重复的 open_id 会被后端挡在 40901。
             </p>
           </div>
         )}

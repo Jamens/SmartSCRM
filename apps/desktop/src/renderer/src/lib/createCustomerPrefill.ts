@@ -23,6 +23,12 @@ export interface PrefillSource {
   platform: ChatPlatform
   isGroup: boolean
   customerId: number | null
+  /**
+   * 原始账号类型（1/7/...）。B27 出站腿修复点：type-7（WA 协议号）账号在这里优先透传，
+   * 避免被 `accountTypeOfPlatform('whatsapp')` 错标回 1（那样会话回写客户会被路由到
+   * WebContentsView 桥，而非协议服务）。缺省时退回 platform 推导，保持旧行为兼容。
+   */
+  platformType?: number
 }
 
 /**
@@ -38,8 +44,10 @@ export function canCreateCustomer(c: PrefillSource): boolean {
 export function prefillOfConversation(c: PrefillSource): Prefill | null {
   if (!canCreateCustomer(c)) return null
   const nickname = c.title?.trim() ?? ''
+  // type-7 优先用原始 platformType 写回，避免被 accountTypeOfPlatform 错标成 1（B27 出站腿）。
+  const platformType = c.platformType ?? accountTypeOfPlatform(c.platform)
   return {
-    platformType: accountTypeOfPlatform(c.platform),
+    platformType,
     openId: c.chatKey,
     nickname: nickname || null,
     phone: peerPhoneOfChatKey(c.chatKey)

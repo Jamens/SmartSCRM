@@ -1,7 +1,13 @@
 // src/shared/protocol/map.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { inboundMessageToBatch, statusPushToStatus } from './map.ts'
+import {
+  inboundMessageToBatch,
+  statusPushToStatus,
+  protocolSendMsgKey,
+  runProtocolSend,
+  type ProtocolSendResponse
+} from './map.ts'
 import type { ProtocolInboundMessage, ProtocolStatusPush } from './types.ts'
 
 const msg: ProtocolInboundMessage = {
@@ -43,4 +49,53 @@ test('statusPushToStatus：正常 payload 映射为状态批量（msgKey 取 mes
 test('statusPushToStatus：缺 messageId 或无 chatKey 时返回 null', () => {
   assert.equal(statusPushToStatus(7, CHAT_KEY, { conversationId: 555 }), null)
   assert.equal(statusPushToStatus(7, '', { conversationId: 555, messageId: 1 }), null)
+})
+
+// ---------------------------------------------------------------------------
+// 出站发送（B27 出站腿）
+// ---------------------------------------------------------------------------
+
+test('protocolSendMsgKey：优先 messageId，与入站 normalizeInbound 同优先级', () => {
+  assert.equal(protocolSendMsgKey({ messageId: 777 }, 'fallback-cid'), '777')
+})
+
+test('protocolSendMsgKey：messageId 缺失时退回 wpMsgId', () => {
+  assert.equal(protocolSendMsgKey({ wpMsgId: 'wa-abc' }, 'fallback-cid'), 'wa-abc')
+})
+
+test('protocolSendMsgKey：两者皆无时退回 clientMsgId 兜底', () => {
+  assert.equal(protocolSendMsgKey({}, 'fallback-cid'), 'fallback-cid')
+  assert.equal(protocolSendMsgKey(null, 'fallback-cid'), 'fallback-cid')
+})
+
+test('runProtocolSend：成功路径返回 ok + 与入站同键的 msgKey', async () => {
+  const sendFn = async (): Promise<ProtocolSendResponse> => ({ messageId: 777 })
+  const r = await runProtocolSend(
+    { accountId: 7, chatKey: CHAT_KEY, text: 'hi', clientMsgId: 'cid-1' },
+    sendFn
+  )
+  assert.deepEqual(r, { localId: '', ok: true, msgKey: '777' })
+})
+
+test('runProtocolSend：网关未返回结果按 SEND_FAILED 结清', async () => {
+  const sendFn = async (): Promise<null> => null
+  const r = await runProtocolSend(
+    { accountId: 7, chatKey: CHAT_KEY, text: 'hi', clientMsgId: 'cid-1' },
+    sendFn
+  )
+  assert.equal(r.ok, false)
+  assert.equal(r.error, 'SEND_FAILED')
+})
+
+test('runProtocolSend：sendFn 抛错被捕获为 SEND_FAILED（不泄露 reject）', async () => {
+  const sendFn = async (): Promise<never> => {
+    throw new Error('network down')
+  }
+  const r = await runProtocolSend(
+    { accountId: 7, chatKey: CHAT_KEY, text: 'hi', clientMsgId: 'cid-1' },
+    sendFn
+  )
+  assert.equal(r.ok, false)
+  assert.equal(r.error, 'SEND_FAILED')
+  assert.equal(r.detail, 'network down')
 })
