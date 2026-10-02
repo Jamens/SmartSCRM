@@ -1,4 +1,5 @@
 import {
+  FileText,
   FolderOpen,
   History,
   Languages,
@@ -31,6 +32,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/quick-replies', label: '快捷回复', icon: MessagesSquare },
   { path: '/materials', label: '素材库', icon: FolderOpen },
   { path: '/translation', label: '翻译中心', icon: Languages },
+  // 日志中心（A19）：排查用的宿主能力，排在业务模块之后、设置之前。
+  { path: '/logs', label: '日志中心', icon: FileText },
   // 设置排在最后：它是宿主能力，不是业务模块。
   { path: '/settings', label: '设置', icon: Settings }
 ]

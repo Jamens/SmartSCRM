@@ -23,7 +23,7 @@
 | A16 | 角色 RBAC + 菜单权限树（角色 CRUD / 启停 / 排序 + 菜单树勾选与父子半选回传；**与 B22 同支，排在 B22 之后**——先有部门与子账号，角色才有分配对象） | P13 |
 | A17 | 桌面系统通知（OS 通知弹窗 + 同会话合并去抖 + 点击直达会话；**不是** A10 的站内通知列表） | ✅ 已交付（2026-10-03，commit `27062f2`） |
 | A18 | GPU 崩溃降级与图形开关（`--gpu-safe-mode` 自动重启降级 + 持久化 + 一键重试标准模式；硬件加速开关；DPI 缩放到全部 WebContentsView） | ✅ 已交付（2026-10-03） |
-| A19 | 分类日志落盘 + 日志中心（主进程四类日志 + 未处理 Promise 拒绝 + 批量刷盘；**只落本地，不上报服务端**） | P14（可提前） |
+| A19 | 分类日志落盘 + 日志中心（主进程四类日志 + 未处理 Promise 拒绝 + 批量刷盘；**只落本地，不上报服务端**） | ✅ 已交付（2026-10-03） |
 
 ## B. 业务模块
 | # | 功能 | 阶段 |
@@ -155,6 +155,7 @@ B6 不是一次交付，按四个切面推进，前三个已提交，第四个�
   A19 的日志中心是内容页，与 A10/A11 同样各自成页。
 - **A17 已交付**（commit `27062f2`）：共享规则层 `shared/notification` + 主进程 `desktopNotify` + IPC `notify:show`/`notify:clicked` + 渲染层 `liveTailSync` 提请与 `AppLayout` 跳转。
 - **A18 已交付**：GPU 后端在 `app.ready` 之前定（启动参数 `--gpu-safe-mode` 关 GPU）；崩溃走 `child-process-gone`（`type==='gpu'`）→ 记 `gpuSafeMode` 并带参重启；设置页「图形」卡含硬件加速开关与「重试标准模式」；`WebContentsViewManager.syncZoomToWindow` 把缩放对齐到主窗口并在 DPI 变化时同步。设计见 `docs/superpowers/specs/2026-10-03-gpu-fallback-design.md`。
+- **A19 已交付**：主进程日志中心——`console.*` 接管按 `[tag]` 归四类（app/ipc/bridge/error）、捕获 `uncaughtException`/`unhandledRejection`、内存环 5000 条 + 按天批量落盘 + 退出前 flush；`installIpcLogging` 包 `ipcMain.handle` 记每次调用；日志中心页 `/logs` 可筛选/刷新/清空/打开目录，只落本地不上报。设计见 `docs/superpowers/specs/2026-10-03-log-center-design.md`。
 - **A19 只落本地。** 本项目的定位是外部服务一律自托管或不接，遥测外传那一档不做。
 - **「每日养号计划 runner」本轮不入册**：「服务端编排 → 客户端执行」这一形态要不要保留属裁定问题，
   不是实现问题——裁定前不占阶段、不给编号。
