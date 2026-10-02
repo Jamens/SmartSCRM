@@ -68,8 +68,10 @@ export function useBadgeEnabled(): {
  * 窗口此刻在前台吗。`document.hasFocus()` 单独不够：窗口最小化时它确实是 false，
  * 但"被别的窗口盖住"和"系统层面失焦"之间还差一次 `visibilitychange`，
  * 而这两个状态要的角标行为相同（都不该报 0），所以两条一起读、任一为假即失焦。
+ *
+ * 导出是因为 A17 的桌面通知要同一个口径（前台不弹），两处各写一份一定会漂移。
  */
-function useWindowFocused(): boolean {
+export function useWindowFocused(): boolean {
   const [focused, setFocused] = useState(
     () => document.visibilityState === 'visible' && document.hasFocus()
   )

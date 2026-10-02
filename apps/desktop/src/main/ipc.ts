@@ -1,6 +1,7 @@
-import { BrowserWindow, ipcMain, nativeTheme } from 'electron'
+import { BrowserWindow, ipcMain, nativeTheme, Notification } from 'electron'
 import { windowBackgroundOf } from '@shared/theme'
 import type { BadgeEcho } from '@shared/badge'
+import type { NotifyShowRequest, NotifyVerdict } from '@shared/notification'
 import {
   clearSession,
   getDeviceId,
@@ -16,6 +17,12 @@ import {
   type AppSettings
 } from './state/settings'
 import { bridgeStates, requestBackfill, sendText } from './services/msgBridge'
+import {
+  configureNotifyHost,
+  resetNotifyState,
+  setNotifyClickHandler,
+  showIncoming
+} from './services/desktopNotify'
 import { readMachineProfile, readStorageUsage } from './services/machineProfile'
 import { getMainWindow, showMainWindow } from './window/mainWindow'
 import { setUnreadBadge } from './window/badge'
@@ -69,6 +76,28 @@ export function registerIpcHandlers(): void {
     setUnreadBadge(getMainWindow(), count)
   )
 
+  /**
+   * 桌面消息通知（A17）的平台那一层在这里装配：`desktopNotify.ts` 自己不 import electron
+   * （要单测的模块不碰平台），排队与合并在那边，这里只管"真弹"与"点了之后唤起窗口"。
+   */
+  configureNotifyHost({
+    isSupported: () => Notification.isSupported(),
+    present: (shown, onActivate) => {
+      const notification = new Notification({ title: shown.title, body: shown.body })
+      notification.on('click', onActivate)
+      notification.show()
+    }
+  })
+  setNotifyClickHandler(({ accountId, chatKey }) => {
+    showMainWindow()
+    const win = getMainWindow()
+    // 点击只做两件事：唤起窗口、把定位信息推给渲染层。不标已读、不自己导航。
+    if (win && !win.isDestroyed()) win.webContents.send('notify:clicked', { accountId, chatKey })
+  })
+  ipcMain.handle('notify:show', (_event, req: NotifyShowRequest): NotifyVerdict =>
+    showIncoming(req)
+  )
+
   // system 档下操作系统的深浅偏好会在运行中翻转，主进程是唯一的真值来源，所以由它推。
   // 事件名是 `updated`（不是 `update`）——写错的话 typecheck 会拦，运行时不会有任何提示。
   nativeTheme.on('updated', () => broadcastTheme())
@@ -80,6 +109,8 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('session:get', () => getSession())
   ipcMain.handle('session:clear', () => {
     clearSession()
+    // 退出登录不该再弹出上一个账号的待发通知：清掉批次，且**不**顺手弹出来。
+    resetNotifyState()
     return true
   })
 

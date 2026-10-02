@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { BellRing, HardDrive, MonitorSmartphone, Moon, Palette, Sun } from 'lucide-react'
+import { BellRing, HardDrive, MessageSquare, MonitorSmartphone, Moon, Palette, Sun } from 'lucide-react'
 import { useUnreadTotal } from '@/api/messages'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Switch } from '@/components/ui/switch'
@@ -14,6 +14,7 @@ import {
   type ThemeUiState
 } from '@/lib/theme'
 import { useBadgeEnabled } from '@/lib/unreadBadge'
+import { useNotifyEnabled } from '@/lib/desktopNotify'
 import { cn } from '@/lib/utils'
 import type { ThemePref } from '@shared/theme'
 
@@ -27,6 +28,8 @@ export default function SettingsPage(): React.JSX.Element {
   const [state, setState] = useState<ThemeUiState | null>(null)
   const [busy, setBusy] = useState<ThemePref | null>(null)
   const badge = useBadgeEnabled()
+  // 桌面通知（A17）。与角标是**两个独立开关**：关掉角标不该把弹窗一起关掉。
+  const notify = useNotifyEnabled()
   // 卡片上那行现状读的是角标自己那份查询（同一个缓存键，不会多打一次请求）。
   const unread = useUnreadTotal()
   const device = useDeviceInfo()
@@ -140,6 +143,40 @@ export default function SettingsPage(): React.JSX.Element {
                 aria-label="任务栏未读角标"
                 checked={badge.enabled}
                 onCheckedChange={(v) => badge.setEnabled(v === true)}
+              />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <MessageSquare className="size-4 text-primary" />
+                桌面消息通知
+              </CardTitle>
+              <CardDescription>
+                与任务栏角标是两个独立的开关：关掉一个不会牵连另一个。
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="flex items-start justify-between gap-6">
+              <div className="min-w-0">
+                <p className="text-sm font-medium text-foreground">收到消息时弹系统通知</p>
+                <p className="text-xs text-muted-foreground">
+                  窗口不在前台时，收到的消息会弹一条系统通知；点它会回到这个应用并打开对应会话。
+                  同一个会话连着来好几条会并成一条（标题上带条数），不会刷屏。
+                  正在用这个应用时不弹——那时你已经在看了。
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground" data-testid="notify-status">
+                  {notify.host === 'browser'
+                    ? '当前宿主弹不出系统通知（浏览器预览）'
+                    : notify.enabled
+                      ? '已开启'
+                      : '已关闭'}
+                </p>
+              </div>
+              <Switch
+                aria-label="桌面消息通知"
+                checked={notify.enabled}
+                onCheckedChange={(v) => notify.setEnabled(v === true)}
               />
             </CardContent>
           </Card>

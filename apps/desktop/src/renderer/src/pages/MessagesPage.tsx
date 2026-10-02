@@ -71,6 +71,28 @@ export default function MessagesPage(): React.JSX.Element {
   const { data: headPages } = useConversations(unfilteredConversationQuery(selectedId))
 
   /**
+   * 桌面通知（A17）点击带来的定位目标。
+   *
+   * 用**派生**而不是"在 effect 里 setState"：通知通常在别的页面被点（那时 `headPages` 还没加载），
+   * 一次性消费必然扑空，而等列表到货再 setState 会被 `react-hooks/set-state-in-effect` 判成级联渲染。
+   * 派生的好处是列表每次到货都自动重算，不用自己记"到了没有"。
+   *
+   * 定位是尽力而为：主进程只广播 `{ accountId, chatKey }`，没有整条会话。首屏里找到了就选中；
+   * 找不到（不在当前筛选、掉在首屏那一页之外）就是 null，停在消息页——
+   * 不报错、不伪造一条会话、不动已经选中的那个。
+   */
+  const pendingChatKey = useChatJumpStore((s) => s.chatKey)
+  const notifyTarget =
+    pendingChatKey && headPages
+      ? (flattenConversations(headPages.pages).find((c) => c.chatKey === pendingChatKey) ?? null)
+      : null
+
+  // 找到了就撤掉待定位标记（一次性投递）。没找到就留着：列表还可能继续翻页把它带出来。
+  useEffect(() => {
+    if (notifyTarget) useChatJumpStore.getState().clearKey()
+  }, [notifyTarget])
+
+  /**
    * 账号就是工作台选中的那个：发送要靠该账号的内嵌视图与桥，记录页另选一个"发送时才知道
    * 没登录"的账号没有意义。所以这里不建本地账号 state，读写都走同一个 store。
    *
@@ -78,8 +100,11 @@ export default function MessagesPage(): React.JSX.Element {
    * 按"归属"派生而不是在 effect 里 setPicked(null)：一是 `react-hooks` 把 effect 内同步 setState
    * 判成错误（级联渲染），二是判"selectedId 变了"会误伤搜索跳转——它一次同时改账号与
    * 选中会话（跨账号命中），无条件清会把刚跳进来的会话立刻抹掉，用户只看到右列闪一下就空了。
+   *
+   * `notifyTarget` 排在前面：它来自当前账号的会话列表，天然归属，不需要再判 `accountId`。
    */
-  const owned = picked !== null && picked.accountId === selectedId ? picked : null
+  const owned =
+    notifyTarget ?? (picked !== null && picked.accountId === selectedId ? picked : null)
   /**
    * 右列用**列表里那一条的现值**而不是点选时的快照：会话头与未读会随新消息走，快照停在点进来的
    * 那一瞬——`MessageThread` 里"未读涨了就把这一笔再清一次"那条路于是走不到，正在看的会话角标会
