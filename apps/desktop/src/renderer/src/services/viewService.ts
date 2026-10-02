@@ -25,13 +25,11 @@ const fallback: ViewApi = {
   setBounds: noop,
   reload: noop,
   navigate: noop,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   executeJS: <T>(_viewId: string, _code: string): Promise<T> => Promise.resolve(undefined as T),
   getOpenIds: noVal<string[]>([]),
   getActiveId: noVal<string | null>(null),
   inject: noop,
   uninject: noop,
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   sendToView: (_viewId: string, _channel: string, _payload: unknown): Promise<boolean> =>
     Promise.resolve(false),
   onState: () => () => {},

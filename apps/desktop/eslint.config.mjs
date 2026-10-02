@@ -6,7 +6,7 @@ import eslintPluginReactHooks from 'eslint-plugin-react-hooks'
 import eslintPluginReactRefresh from 'eslint-plugin-react-refresh'
 
 export default defineConfig(
-  { ignores: ['**/node_modules', '**/dist', '**/out', '**/*.bundle.js', '**/tmp/**'] },
+  { ignores: ['**/node_modules', '**/dist', '**/out', '**/*.bundle.js', '**/*.bundle.mjs', '**/tmp/**'] },
   tseslint.configs.recommended,
   eslintPluginReact.configs.flat.recommended,
   eslintPluginReact.configs.flat['jsx-runtime'],
@@ -32,8 +32,8 @@ export default defineConfig(
     }
   },
   {
-    // 构建脚本是 JS（.mjs），无法写 TS 返回类型注解，且该规则对其无意义
-    files: ['scripts/**/*.mjs'],
+    // 构建脚本 / 集成测试脚本是 JS（.mjs），无法写 TS 返回类型注解，且该规则对其无意义
+    files: ['scripts/**/*.mjs', 'test/**/*.mjs', '**/*.bundle.mjs'],
     rules: {
       '@typescript-eslint/explicit-function-return-type': 'off'
     }
