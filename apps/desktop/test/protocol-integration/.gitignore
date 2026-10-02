@@ -1,0 +1,2 @@
+# 由 run.mjs 用 esbuild 临时打包生成，不入库（可随时重建）
+_b27_manager.bundle.mjs

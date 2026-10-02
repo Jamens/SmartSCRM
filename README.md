@@ -268,6 +268,9 @@ cd apps/desktop && pnpm typecheck
 
 # 打包（含 inject/bridge 产物）
 cd apps/desktop && pnpm build && pnpm build:win
+
+# B27 协议号通道离线联调（不依赖真实网关，纯 Node 跑通协议接线）
+cd apps/desktop && pnpm test:b27
 ```
 
 约定：
@@ -275,6 +278,7 @@ cd apps/desktop && pnpm build && pnpm build:win
 - **`mvn package` 之前先释放 `:8180`**，否则测试期端口占用会给出误导性结果。
 - 需要 surefire 输出时不要加 `-q`；建议 `set -o pipefail`。
 - 后端 HTTP 契约验证以脚本形式放在 gitignore 的 `tmp/`（约 409 个 `.mjs`），它们是"接口真的按 spec 行为"的实际覆盖面；中文请求体走 UTF-8 文件而非命令行内联。
+- **B27 协议号通道离线联调**（`apps/desktop/test/protocol-integration/`）：`pnpm test:b27` 先用 esbuild 把真实的 `services/protocol/manager.ts`（含 `client.ts`）打成 Node 可跑的 ESM，再对接零依赖的 mock 协议网关（`mock-protocol-gateway.mjs`，纯 `node:http`+`crypto` 实现 RFC6455 WS + REST，按旧版契约模拟 `accesstoken` 鉴权、PING/PONG、4001–4004/4005/4007 关闭码），由 `b27-offline-integration.mjs` 跑通 6 条路径：入站 `WA_MSG_IN_PUSH`→`/api/messages/batch` 入库形状、状态 `WA_MSG_STATUS_PUSH` 用 `conversationId→peerJid` 反查 `chatKey`→`/api/messages/status`、`mgr.send`→`/messages/send` 回执 `msgKey` 与入站同键、PING/PONG 心跳、4001 鉴权失败 `onAuthFailure` 刷 token 后重连、4005 被踢硬停不重连。换真实网关只需把 manager 的 `baseUrl/wsUrl` 指向自托管 `VITE_PROTOCOL_URL`/`VITE_PROTOCOL_WS_URL`，并把 `ingest/applyStatus/getToken/onAuthFailure` 接到真实后端与 auth store。
 - 渲染层交互验证通过 CDP，且**窗口必须抬起、`visibilityState==='visible'`**，事件用真实 `Input.dispatchMouseEvent` / `dispatchKeyEvent` / `insertText`，不用 `element.click()`。
 - 已交付结论：`docs/notes/2026-09-20-p6-chat-history-verification.md`（P6 端到端验收）、`docs/superpowers/specs/2026-09-19-translation-center-design.md` §6.3（翻译页内链路）。
 
@@ -299,7 +303,7 @@ cd apps/desktop && pnpm build && pnpm build:win
 
 - **P8 群成员分析（B6）收尾**：主进程建档泵（4a）与导出（4b，exceljs 14 列 XLSX + `group:export` IPC）已通电；切面 5 渲染层已装到界面——客户抽屉「所在群」节（`CustomerGroupsSection`，含账号下拉、勾选与「导出所选」）与群成员弹层（`GroupMembersDialog`，两个 tab、三档筛选、「刷新成员」/「导出本群」）。**尚未声称界面可用**：判档只到编译，真读出数要等 CDP 界面腿 20 条（5c）。见 §10
 - TG 链：真机 DOM 探针 → 注入层选择器 → 采集 → 发送（卡在"本机无 TG 账号"，外部阻塞）
-- **B27 WhatsApp 协议号通道（入站 + 出站链路已通电）**：`chatPlatform.ts` + `ChatKeys.java` 先把 `platform_type=7` 映射成 `whatsapp` 形态（B27 入站识别层，commit `84cca2d`）；渲染层 `services/protocol`（`client.ts`/`manager.ts`/`send.ts`）+ `hooks/useProtocolSync.ts` 已按旧版"渲染进程直连协议网关"形态接到本项目——登录态下为每个 type-7 账号起一个原生 `WebSocket` 直连**部署方自托管的协议网关**（`VITE_PROTOCOL_WS_URL` 注入，开源版不内置商业云端点；`?accesstoken=` 鉴权、30s PING/PONG、4001–4004 关闭码刷 token 重试、4005/4007 硬停、指数退避重连），`WA_MSG_IN_PUSH` 经 `shared/protocol/map.ts` 归一化后 `POST /api/messages/batch`、`WA_MSG_STATUS_PUSH` 走 `/api/messages/status`，复用网页 WA 入库面。**出站腿已通电**：type-7 账号的发送在渲染层 `useSendText` 按 `platformType===7` 分流到协议网关 REST（不经 WebContentsView 桥——协议号无 `viewId`，旧 `msgBridge.sendText` 会因 `viewId` 空返 `BRIDGE_OFFLINE`），`manager.send` 经 `send.ts` 调网关 `/messages/send`，回执 `msgKey` 与入站同键去重，复用乐观气泡 + 网关回声落库流程，UI 成败靠 `sendError.outcomeOf` 同构处理。走廊台仍依赖部署方自托管 protocol 服务（P16 外部阻塞），未联调真实网关；`createCustomerPrefill` 已修复 type-7 客户回写被 `accountTypeOfPlatform` 错标成 1 的坑（现透传原始 `platformType`）。网关鉴权/字段 schema 已对齐旧版真实契约（见 §7 第 12 条）。
+- **B27 WhatsApp 协议号通道（入站 + 出站链路已通电）**：`chatPlatform.ts` + `ChatKeys.java` 先把 `platform_type=7` 映射成 `whatsapp` 形态（B27 入站识别层，commit `84cca2d`）；渲染层 `services/protocol`（`client.ts`/`manager.ts`/`send.ts`）+ `hooks/useProtocolSync.ts` 已按旧版"渲染进程直连协议网关"形态接到本项目——登录态下为每个 type-7 账号起一个原生 `WebSocket` 直连**部署方自托管的协议网关**（`VITE_PROTOCOL_WS_URL` 注入，开源版不内置商业云端点；`?accesstoken=` 鉴权、30s PING/PONG、4001–4004 关闭码刷 token 重试、4005/4007 硬停、指数退避重连），`WA_MSG_IN_PUSH` 经 `shared/protocol/map.ts` 归一化后 `POST /api/messages/batch`、`WA_MSG_STATUS_PUSH` 走 `/api/messages/status`，复用网页 WA 入库面。**出站腿已通电**：type-7 账号的发送在渲染层 `useSendText` 按 `platformType===7` 分流到协议网关 REST（不经 WebContentsView 桥——协议号无 `viewId`，旧 `msgBridge.sendText` 会因 `viewId` 空返 `BRIDGE_OFFLINE`），`manager.send` 经 `send.ts` 调网关 `/messages/send`，回执 `msgKey` 与入站同键去重，复用乐观气泡 + 网关回声落库流程，UI 成败靠 `sendError.outcomeOf` 同构处理。走廊台仍依赖部署方自托管 protocol 服务（P16 外部阻塞），真机联调待自托管网关 + 测试号；但协议接线已用离线联调 harness 验证（`pnpm test:b27`，6/6 通过：入站入库、状态反查、出站同键回执、PING/PONG、4001 重连、4005 硬停）。`createCustomerPrefill` 已修复 type-7 客户回写被 `accountTypeOfPlatform` 错标成 1 的坑（现透传原始 `platformType`）。网关鉴权/字段 schema 已对齐旧版真实契约（见 §7 第 12 条）。
 - 体检文档 §12 列出的优先级修复项（删除确认、`apiBase` allowlist、采集重试停摆、`nickname` 清空、`refresh` 复查租户状态）
 
 ## 九、提交约定
