@@ -35,7 +35,11 @@ export function useWebContentsView(
     })
   }, [containerRef, active])
 
-  boundsRef.current = syncBounds
+  // 渲染期不写 ref：把最新 syncBounds 同步进 ref 交给 effect 做，规避 react-hooks/refs 在渲染期访问 ref。
+  // 声明在下方订阅 effect 之前，挂载时先填好 boundsRef.current 再订阅，回调读到的就是最新函数。
+  useEffect(() => {
+    boundsRef.current = syncBounds
+  }, [syncBounds])
 
   useEffect(() => {
     if (!active) {

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useMemo, useState } from 'react'
 import dayjs from 'dayjs'
 import { ChevronLeft, ChevronRight, RefreshCw, Search, Users2, X } from 'lucide-react'
 import { PLATFORMS, platformOf } from '@/lib/platform'
@@ -42,10 +42,6 @@ export default function CustomersPage(): React.JSX.Element {
   })
   const { data: tree = [] } = useLabelTree()
 
-  useEffect(() => {
-    setPage(1)
-  }, [debouncedKeyword, platformType, debouncedCountry, labelIds])
-
   const records = data?.records ?? []
   const total = data?.total ?? 0
   const pageCount = Math.max(1, Math.ceil(total / PAGE_SIZE))
@@ -56,6 +52,7 @@ export default function CustomersPage(): React.JSX.Element {
 
   const toggleLabel = (id: number): void => {
     setLabelIds((prev) => (prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id]))
+    setPage(1)
   }
 
   const hasActiveFilter = Boolean(keyword || country) || platformType !== ALL || labelIds.length > 0
@@ -64,6 +61,7 @@ export default function CustomersPage(): React.JSX.Element {
     setCountry('')
     setPlatformType(ALL)
     setLabelIds([])
+    setPage(1)
   }
 
   return (
@@ -89,10 +87,19 @@ export default function CustomersPage(): React.JSX.Element {
             className="pl-8"
             placeholder="搜索昵称 / 手机 / 邮箱"
             value={keyword}
-            onChange={(e) => setKeyword(e.target.value)}
+            onChange={(e) => {
+              setKeyword(e.target.value)
+              setPage(1)
+            }}
           />
         </div>
-        <Select value={platformType} onValueChange={setPlatformType}>
+        <Select
+          value={platformType}
+          onValueChange={(v) => {
+            setPlatformType(v)
+            setPage(1)
+          }}
+        >
           <SelectTrigger className="w-36">
             <SelectValue placeholder="全部平台" />
           </SelectTrigger>
@@ -109,7 +116,10 @@ export default function CustomersPage(): React.JSX.Element {
           className="w-32"
           placeholder="国家/地区"
           value={country}
-          onChange={(e) => setCountry(e.target.value)}
+          onChange={(e) => {
+            setCountry(e.target.value)
+            setPage(1)
+          }}
         />
         {hasActiveFilter && (
           <Button variant="ghost" size="sm" onClick={resetFilters}>
@@ -197,7 +207,9 @@ export default function CustomersPage(): React.JSX.Element {
         </div>
       </footer>
 
-      {selected && <CustomerDrawer customer={selected} tree={tree} onClose={() => setSelectedId(null)} />}
+      {selected && (
+        <CustomerDrawer key={selected.id} customer={selected} tree={tree} onClose={() => setSelectedId(null)} />
+      )}
     </div>
   )
 }

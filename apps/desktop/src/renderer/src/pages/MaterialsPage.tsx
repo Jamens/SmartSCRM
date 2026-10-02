@@ -3,7 +3,6 @@ import {
   FileText,
   Film,
   FolderOpen,
-  Image as ImageIcon,
   Link2,
   Music,
   Pencil,
@@ -56,13 +55,6 @@ interface MaterialDraft {
   url: string
   groupId: number | null
   remark: string
-}
-
-function typeIcon(type: MaterialType): import("lucide-react").LucideIcon {
-  if (type === 1) return ImageIcon
-  if (type === 2) return Film
-  if (type === 3) return Music
-  return FileText
 }
 
 export default function MaterialsPage(): React.JSX.Element {
@@ -305,7 +297,6 @@ function MaterialCard({
   onEdit: () => void
   onDelete: () => void
 }): React.JSX.Element {
-  const Icon = typeIcon(material.type)
   const isImage = material.type === 1 && material.url.startsWith('data:')
   return (
     <div className="group overflow-hidden rounded-xl border border-border/60 bg-card">
@@ -317,7 +308,15 @@ function MaterialCard({
             {material.type === 1 ? (
               <img src={material.url} alt={material.name} className="size-full object-cover" onError={(e) => (e.currentTarget.style.display = 'none')} />
             ) : (
-              <Icon className="size-10" />
+              // 直接引用已导入的稳定 lucide 组件，避免在渲染期把 typeIcon 返回的组件赋给变量再当 JSX 用
+              // （react-hooks/static-components：渲染期创建组件会让其 state 每帧重置）。
+              material.type === 2 ? (
+                <Film className="size-10" />
+              ) : material.type === 3 ? (
+                <Music className="size-10" />
+              ) : (
+                <FileText className="size-10" />
+              )
             )}
           </div>
         )}

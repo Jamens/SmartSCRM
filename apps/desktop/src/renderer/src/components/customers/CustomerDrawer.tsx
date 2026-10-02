@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useState } from 'react'
 import dayjs from 'dayjs'
 import { Trash2, X } from 'lucide-react'
 import { platformOf } from '@/lib/platform'
@@ -47,15 +47,6 @@ export default function CustomerDrawer({ customer, tree, onClose }: Props): Reac
   const [sex, setSex] = useState(customer.sex)
   const [remark, setRemark] = useState(customer.remark ?? '')
   const [labelIds, setLabelIds] = useState<number[]>(customer.labels.map((l) => l.id))
-
-  useEffect(() => {
-    setNickname(customer.nickname ?? '')
-    setEmail(customer.email ?? '')
-    setCountry(customer.country ?? '')
-    setSex(customer.sex)
-    setRemark(customer.remark ?? '')
-    setLabelIds(customer.labels.map((l) => l.id))
-  }, [customer])
 
   const dirty =
     nickname !== (customer.nickname ?? '') ||
