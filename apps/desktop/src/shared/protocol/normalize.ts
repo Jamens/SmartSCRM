@@ -1,7 +1,7 @@
 // src/shared/protocol/normalize.ts
 // 网关消息 -> 后端 ingest DTO 的纯归一化。无副作用、可单测。
 //
-// 字段映射严格对齐旧版 D:\electron-client（WaMsgInPushMessage / WpMessageVO / WpMessageStatus）：
+// 字段映射按网关契约（见 @shared/protocol/types.ts 与 README §7）：
 // - chat_key 取 peerJid（对端/会话 JID，形如 1xx@g.us / 1xx@c.us）
 // - msg_key 取 messageId（与状态推送同键，保证 WA_MSG_STATUS_PUSH 能对上）
 // - direction 由 from（0收/1发）决定

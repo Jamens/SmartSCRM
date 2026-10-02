@@ -52,7 +52,7 @@ function fakeFetch(body: unknown, { ok = true, code = 0 } = {}): { calls: string
   return { calls, impl }
 }
 
-// exceljs 的 .d.ts 把 xlsx.load 首个参数钉成旧版 Buffer，而当前 @types/node 的 Buffer 已是泛型
+// exceljs 的 .d.ts 把 xlsx.load 首个参数钉成老式 Buffer，而当前 @types/node 的 Buffer 已是泛型
 // Buffer<ArrayBufferLike>，直接传会触发 TS2345。用 Parameters 取出它真实期望的类型做桥接，避免 any。
 async function reopenXlsx(data: Buffer): Promise<ExcelJS.Workbook> {
   const wb = new ExcelJS.Workbook()

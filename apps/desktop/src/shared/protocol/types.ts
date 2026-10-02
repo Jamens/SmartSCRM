@@ -1,13 +1,12 @@
 // src/shared/protocol/types.ts
 // WA 协议号（B27）通道：渲染进程直连外部 protocol 网关（REST + WS）。
-// 类型严格对齐旧版 D:\electron-client 的 @renderer/api/wpConversation.ts 与
-// views/protocol-chat/protocolChatWs.ts（已读码核到行级，2026-10-02）。
+// 类型与网关契约一一对应（2026-10-02 核定，契约要点见 README §7）。
 // 本文件只放纯类型与常量，不依赖任何浏览器 API，便于 node --test 覆盖。
 
 import type { MediaType, MsgSource, MsgStatus } from '../chatTypes.ts'
 
 // ---------------------------------------------------------------------------
-// WS 信封与网关 payload（对齐旧版 ProtocolWsEnvelope / Wa*PushMessage）
+// WS 信封与网关 payload
 // ---------------------------------------------------------------------------
 
 /** WS 下一帧的包络：事件名在 event，载荷在 data。PING/PONG 走裸 socket 字符串，不进这个结构。 */
@@ -90,7 +89,7 @@ export interface ProtocolAccountStatusPush {
   changedAt?: string
 }
 
-/** WS 事件名（旧版 ProtocolWsEvent 的子集，我们只需 WA_* 四个）。 */
+/** WS 事件名。网关还会推别的事件，这条通道只消费 WA_* 四个。 */
 export const PROTOCOL_WS_TYPES = {
   MSG_IN: 'WA_MSG_IN_PUSH',
   MSG_STATUS: 'WA_MSG_STATUS_PUSH',
@@ -98,14 +97,14 @@ export const PROTOCOL_WS_TYPES = {
   KICK_OUT: 'KICK_OUT'
 } as const
 
-/** 鉴权失败：刷新 token 后重试（旧版 4001–4004）。 */
+/** 鉴权失败：刷新 token 后重试（关闭码 4001–4004）。 */
 export const AUTH_CLOSE_CODES = new Set([4001, 4002, 4003, 4004])
-/** 硬停：被踢/被封，不重连（旧版 4005/4007）。 */
+/** 硬停：被踢/被封，不重连（关闭码 4005/4007）。 */
 export const STOP_RECONNECT_CODES = new Set([4005, 4007])
 
-/** 心跳间隔（ms），旧版 30s。 */
+/** 心跳间隔（ms）。 */
 export const WS_PING_INTERVAL_MS = 30_000
-/** 心跳是裸 socket 字符串（非 JSON），与旧版一致。 */
+/** 心跳是裸 socket 字符串（非 JSON），不是 `{event,data}` 帧。 */
 export const WS_PING_FRAME = 'PING'
 export const WS_PONG_FRAME = 'PONG'
 export const WS_ECHO_REPLY_FRAME = 'ECHO_REPLY'

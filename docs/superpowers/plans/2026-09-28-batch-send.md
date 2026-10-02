@@ -29,7 +29,7 @@
 - **CDP 验证（C9）**：渲染层/页内验证只走 CDP。任何点击之前先跑 `powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p5c-top.ps1` 并断言 `document.visibilityState === 'visible'`；驱动脚本收尾固定 `process.exitCode = N; await sleep(1500); process.exit(N)`。窗口隐藏 ≠ 点不动，判据是「点完读得到」。
 - **真发与真撤回是不可回收动作**：**任何任务都不得按下 WhatsApp 页面的发送/回车**，不得对真实会话执行撤回。真发 1 条、真撤回 1 次只在用户在场并明确放行时做（Task 16 的两格）。所有自动化腿只跑 `dryRun=1`。
 - **证据词只有四个**：实测 / 读码 / 推断 / 待验证。没跑完那一档就不写「已验证」。断言要能区分「生效了」与「什么都没做」。等待用条件轮询不用固定 sleep。清理状态覆盖**每一条退出路径**与**每一个档位**。
-- **本项目文档只写本项目的规则**，不与任何其他实现比较。`D:\electron-client` 只读（Read/Grep/Glob），Bash 进去是禁的。
+- **本项目文档只写本项目的规则**，不与其他任何实现比较。外部参考资料只读（Read/Grep/Glob），不用 Bash 进入。
 - **Electron 主进程重启是用户的手**；Spring 后端重启是坐席的活。
 
 ## 决策记录（spec 未定或两处矛盾之处，本计划在此一次性裁定）

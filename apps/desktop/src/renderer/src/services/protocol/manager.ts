@@ -1,13 +1,14 @@
 // src/renderer/src/services/protocol/manager.ts
 // 每个 type-7（WA 协议号）账号起一个 ProtocolClient，把网关 WS 实时推送的
 // 入站消息 / 状态帧，归一化后转发到现有后端入库面（/api/messages/batch、/api/messages/status）。
-// 旧版 D:\electron-client 即此形态：渲染进程直连网关 -> 落库到统一入库面，不经 WebView。
+// 形态是「渲染进程直连网关 -> 落库到统一入库面，不经 WebView」：协议引擎不在客户端，
+// 所以这一条链没有 IPC、没有注入层、没有本地表。
 //
 // 设计要点：
 // - 纯映射（payload -> DTO）放在 @shared/protocol/map.ts，本文件只做"接线 + 生命周期"。
 // - ingest / applyStatus / getToken / onAuthFailure 全部注入，便于测试；client 创建也走 clientFactory 接缝。
 //
-// 关键约束（对齐旧版真实网关契约，2026-10-02 读码核到行级）：
+// 关键约束（网关契约，2026-10-02 核定）：
 // 状态推送 WA_MSG_STATUS_PUSH 只带 conversationId + messageId，**没有 chatKey**；
 // 而入库面 /api/messages/status 需要 chatKey。因此本 manager 必须在收到入站消息时，
 // 把 conversationId -> peerJid(=chatKey) 记下来，状态推送到达时反查 chatKey 再转发。

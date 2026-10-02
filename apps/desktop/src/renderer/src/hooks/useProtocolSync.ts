@@ -1,6 +1,6 @@
 // src/renderer/src/hooks/useProtocolSync.ts
 // 登录态下，为所有 type-7（WA 协议号）账号建立网关同步；登出或卸载时清理。
-// 与网页 WA 的"注入 + WebView 桥"完全独立——协议号走独立的 REST/WS 通道（旧版直连形态）。
+// 与网页 WA 的「注入 + WebView 桥」完全独立——协议号走自己的 REST/WS 通道，渲染进程直连。
 
 import { useEffect, useRef } from 'react'
 import { useQuery } from '@tanstack/react-query'

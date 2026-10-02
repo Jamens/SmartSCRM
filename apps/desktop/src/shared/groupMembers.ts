@@ -154,12 +154,12 @@ const SETTING_SUBTYPE_RE =
 /**
  * 判定一条系统消息是不是"加减人"，是则返回事件类型与目标人，否则返回 null。
  *
- * 判定取自旧版已跑通过的那套正则族（`gp2` / `group_notification` + subtype 正则），
- * 不是新写的猜测；`promoted`/`demoted` 两族旧版没有（它只有 join/leave/remove 三态），
- * 这里按同一思路补上。
+ * 判定来自已在真机跑通过的那套正则族（`gp2` / `group_notification` + subtype 正则），
+ * 不是新写的猜测；`promoted`/`demoted` 两族是按同一思路补的：subtype 里出现
+ * promote/demote 就各自成族，否则一律落在 join/leave/remove 三态上。
  *
- * `added` 与 `joined` 的区分是**本次的判断**，不是旧版行为：subtype 里出现 add/invite 说明有加人动作，
- * 出现 join 说明是自己进来。旧版把两族一律记成 join，是因为它只有三态。
+ * `added` 与 `joined` 的区分是**语义判断**，不是照搬谁的行为：subtype 里出现 add/invite 说明有加人动作，
+ * 出现 join 说明是自己进来。只看三态的写法会把这两族一律记成 join。
  * 真机样本到手后要回来核（spec §15#1），不一致就改这里与单测夹具，不要改调用方去迁就。
  */
 export function classifyGroupSystemMessage(raw: GroupSystemRaw): GroupSystemClassification | null {
@@ -186,7 +186,7 @@ export function classifyGroupSystemMessage(raw: GroupSystemRaw): GroupSystemClas
   const actorKey = pickFirstWid([raw.author, raw.sender, raw.participant])
   const targets = collectTargets(raw)
 
-  // "退群"没有目标人字段时，退的那个人就是操作人自己——这一条旧版也是这么兜的。
+  // "退群"没有目标人字段时，退的那个人就是操作人自己——没有目标人就没有第二个人可指。
   if (targets.length === 0) {
     if ((eventType === 'left' || eventType === 'removed') && actorKey && !isSameKey(actorKey, raw.chatKey)) {
       return { eventType, targets: [actorKey], actorKey }

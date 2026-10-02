@@ -47,7 +47,7 @@ export interface WaMsgModel {
   /**
    * 群变动系统消息的判定字段（spec §4）。
    *
-   * 这些字段**确实存在**——旧版已在真机跑通过这套解析（`gp2` + subtype 正则，目标人取
+   * 这些字段**确实存在**——这套解析已在真机跑通过（`gp2` + subtype 正则，目标人取
    * `recipients` / `recipientIds` / `participantIds` / `participants`）。但**取值形态待实测**
    * （spec §15#1）：subtype 的真实字面量、目标人是 Wid 对象还是裸字符串，都要一条真实加减人行本。
    * 所以这里声明成宽松的 unknown，由 shared 的分类器自己去掏，不假装已经知道形状。

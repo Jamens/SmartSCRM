@@ -6473,7 +6473,7 @@ fixture 不进构建产物（`build-bridge.mjs` 的 entryPoints 只有 `src/brid
 
 - [ ] **Step 8: 后端那侧的形态收敛（条件产物）**
 
-**仅当** `TG_DOM.chatIdSource !== 'none'`（会话 id 是真数字串）时才写 `V9__tg_openid_shape.sql`，把 V3 里 `platform_type=4` 那两条种子的 `open_id` 改成 `chat_key` 同形的纯数字串（群含负号），并同步改 `ChatKeys.java` 的类注释。判据、SQL 与"改完前后各查一次"的口径沿用旧版正文，一字未增：
+**仅当** `TG_DOM.chatIdSource !== 'none'`（会话 id 是真数字串）时才写 `V9__tg_openid_shape.sql`，把 V3 里 `platform_type=4` 那两条种子的 `open_id` 改成 `chat_key` 同形的纯数字串（群含负号），并同步改 `ChatKeys.java` 的类注释。判据、SQL 与"改完前后各查一次"的口径如下，一字未增：
 
 ```bash
 # 改前：过 :8180 查两条 TG 客户的 open_id（C7：不走 mysql CLI）
@@ -6503,7 +6503,7 @@ git commit -m "feat(P6): Telegram 采集链按官方 K 版 DOM 契约落地"
 **Goal：** 让记录页的应用内回复在 TG 账号上真发出去，并把"发出去"这件事结清成 `sent`。DOM 路线没有 `localId`，结清靠认领（spec §11.3），这一步的全部难点都在认领上。
 
 **Files:**
-- Move: `classify()` 从 `apps/desktop/src/bridge/whatsapp/send.ts` 移到 `apps/desktop/src/bridge/sharedSend.ts`（两平台共用，WhatsApp 调用点改 import；旧版 Task 12d Step 1 的同一条安排沿用）
+- Move: `classify()` 从 `apps/desktop/src/bridge/whatsapp/send.ts` 移到 `apps/desktop/src/bridge/sharedSend.ts`（两平台共用，WhatsApp 调用点改 import；该安排沿用既定方案）
 - Create: `apps/desktop/src/bridge/telegram/claim.ts` + `claim.test.ts`（6 条，纯函数）
 - Create: `apps/desktop/src/bridge/telegram/send.ts`
 - Modify: `apps/desktop/src/bridge/index.ts`（`SEND` 表加 telegram 一项）

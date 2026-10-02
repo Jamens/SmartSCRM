@@ -28,7 +28,7 @@
 - **R7** `from == to` 时直接返回原文，且不写缓存。
 - **R8** 任何情况下不返回空白译文；无法处理时返回原文并标 `partial`。
 - **R9** 测速不拖慢接口：接口绝不 `sleep` 模拟网络延迟。
-- 文档 / 注释只描述本项目方案，不写与旧版对比的内容，不引用旧版文件与行号。
+- 文档 / 注释只描述本项目方案，不写与其他实现的对比，不引用外部文件与行号。
 - 每个切片测试通过后 `git commit` 一次，前缀 `feat:` / `fix:` / `refa:` / `update:`；**push 由用户手动执行，助手不得 push**。
 - 后端验证只走 `http://localhost:8180` 的 HTTP API（本机没有 mysql CLI、Docker 守护进程未运行）。中文 payload 必须先用 Write 工具写成 UTF-8 文件再 `curl --data-binary @file`；Git Bash 内联中文会静默变成服务端 `50000`。
 - 本项目桌面端**没有 JS 测试运行器**（无 vitest / jest）。P5b / P5c 的自动化闸门只有 `pnpm typecheck`（node / web / inject 三份 tsconfig）与 `pnpm build`；DOM 与 IPC 的行为验证是 spec §6.3 的手工清单，需用户真实登录 WhatsApp Web 才能勾。**不得在没有手工验证的情况下声称渲染已验证**。
