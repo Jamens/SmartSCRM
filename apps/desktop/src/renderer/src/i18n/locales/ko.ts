@@ -116,7 +116,9 @@ export const ko: DeepString<typeof zhCN> = {
     deviceLogin: '로그인: {{who}} · 서비스 주소 {{api}}',
     language: '언어',
     languageDesc: '인터페이스 표시 언어입니다. 변경은 즉시 적용되며 로컬 설정에 기록됩니다.',
-    languageLabel: '인터페이스 언어'
+    languageLabel: '인터페이스 언어',
+    identityLine: '{{name}}（{{role}}）· 테넌트 {{tenant}} · 초대 코드 {{code}}',
+    notSignedIn: '로그인 안 됨',
   },
   log: {
     browserNote: '현재 브라우저 미리보기입니다. 로그는 메인 프로세스가 생성하며 데스크톱 앱에서 열면 보거나 내보낼 수 있습니다.',

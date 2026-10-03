@@ -116,7 +116,9 @@ export const th: DeepString<typeof zhCN> = {
     deviceLogin: 'เข้าสู่ระบบปัจจุบัน: {{who}} · ที่อยู่บริการ {{api}}',
     language: 'ภาษา',
     languageDesc: 'ภาษาแสดงผลของอินเทอร์เฟซ การเปลี่ยนมีผลทันที และบันทึกลงในการตั้งค่าในเครื่อง',
-    languageLabel: 'ภาษาอินเทอร์เฟซ'
+    languageLabel: 'ภาษาอินเทอร์เฟซ',
+    identityLine: '{{name}} ({{role}}) · เทนันต์ {{tenant}} · รหัสเชิญ {{code}}',
+    notSignedIn: 'ยังไม่ได้เข้าสู่ระบบ',
   },
   log: {
     browserNote: 'นี่คือตัวอย่างเบราว์เซอร์ บันทึกถูกสร้างโดยโปรเซสหลัก เปิดแอปเดสก์ท็อปเพื่อดูและส่งออก',

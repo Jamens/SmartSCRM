@@ -68,8 +68,13 @@ export default function SettingsPage(): React.JSX.Element {
   const user = useAuthStore((s) => s.user)
   // 当前身份直接读 store：这台机器上"登的是谁"只有一个来源，多一条查询就多一次说不一致的机会。
   const who = user
-    ? `${user.nickname || user.username}（${user.role}）· 租户 ${user.tenantName} · 邀请码 ${user.inviteCode}`
-    : '未登录'
+    ? t('settings.identityLine', {
+        name: user.nickname || user.username,
+        role: user.role,
+        tenant: user.tenantName,
+        code: user.inviteCode
+      })
+    : t('settings.notSignedIn')
 
   // 修改密码（A9）。改密成功后清掉本机会话，App 在 phase==='anonymous' 时自动渲染登录页。
   const [oldPwd, setOldPwd] = useState('')
@@ -175,7 +180,7 @@ export default function SettingsPage(): React.JSX.Element {
 
           <Card>
             <CardHeader>
-              <CardTitle>外观</CardTitle>
+              <CardTitle>{t('settings.appearance')}</CardTitle>
               <CardDescription>{t('settings.appearanceDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">

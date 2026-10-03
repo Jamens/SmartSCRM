@@ -119,7 +119,9 @@ export const en: DeepString<typeof zhCN> = {
     deviceLogin: 'Signed in: {{who}} · Service at {{api}}',
     language: 'Language',
     languageDesc: 'Interface display language. Changes apply immediately and are saved to local settings.',
-    languageLabel: 'Interface language'
+    languageLabel: 'Interface language',
+    identityLine: '{{name}} ({{role}}) · Tenant {{tenant}} · Invite code {{code}}',
+    notSignedIn: 'Not signed in',
   },
   log: {
     browserNote: 'You are in browser preview; logs are produced by the main process and require the desktop app to view or export.',

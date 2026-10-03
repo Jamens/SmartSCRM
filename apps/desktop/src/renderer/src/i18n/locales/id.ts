@@ -116,7 +116,9 @@ export const id: DeepString<typeof zhCN> = {
     deviceLogin: 'Login saat ini: {{who}} · Alamat layanan {{api}}',
     language: 'Bahasa',
     languageDesc: 'Bahasa tampilan antarmuka. Perubahan berlaku segera dan dicatat di pengaturan lokal.',
-    languageLabel: 'Bahasa antarmuka'
+    languageLabel: 'Bahasa antarmuka',
+    identityLine: '{{name}} ({{role}}) · Tenant {{tenant}} · Kode undangan {{code}}',
+    notSignedIn: 'Belum masuk',
   },
   log: {
     browserNote: 'Ini adalah pratinjau browser, log dihasilkan oleh proses utama, buka aplikasi desktop untuk melihat dan mengekspor.',

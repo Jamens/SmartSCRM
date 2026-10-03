@@ -116,7 +116,9 @@ export const zhTW: DeepString<typeof zhCN> = {
     deviceLogin: '當前登錄：{{who}} · 服務地址 {{api}}',
     language: '語言',
     languageDesc: '介面顯示語言。改動立即生效，並記到本機設定裡。',
-    languageLabel: '介面語言'
+    languageLabel: '介面語言',
+    identityLine: '{{name}}（{{role}}）· 租戶 {{tenant}} · 邀請碼 {{code}}',
+    notSignedIn: '未登入',
   },
   log: {
     browserNote: '當前是瀏覽器預覽，日誌由主程序產生，桌面端開啟才能檢視與匯出。',

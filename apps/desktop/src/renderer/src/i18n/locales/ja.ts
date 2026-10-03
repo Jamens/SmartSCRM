@@ -116,7 +116,9 @@ export const ja: DeepString<typeof zhCN> = {
     deviceLogin: 'ログイン中：{{who}} · サービスアドレス {{api}}',
     language: '言語',
     languageDesc: 'インターフェースの表示言語です。変更は直ちに反映され、ローカル設定に記録されます。',
-    languageLabel: 'インターフェースの言語'
+    languageLabel: 'インターフェースの言語',
+    identityLine: '{{name}}（{{role}}）· テナント {{tenant}} · 招待コード {{code}}',
+    notSignedIn: '未ログイン',
   },
   log: {
     browserNote: '現在はブラウザプレビューです。ログはメインプロセスが生成し、デスクトップアプリで開くと閲覧・エクスポートできます。',
