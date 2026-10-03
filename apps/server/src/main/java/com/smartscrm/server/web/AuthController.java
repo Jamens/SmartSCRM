@@ -3,6 +3,7 @@ package com.smartscrm.server.web;
 import com.smartscrm.server.common.ApiResponse;
 import com.smartscrm.server.security.AuthPrincipal;
 import com.smartscrm.server.service.AuthService;
+import com.smartscrm.server.web.dto.ChangePasswordRequest;
 import com.smartscrm.server.web.dto.LoginRequest;
 import com.smartscrm.server.web.dto.LoginResponse;
 import com.smartscrm.server.web.dto.RefreshRequest;
@@ -37,5 +38,14 @@ public class AuthController {
     @GetMapping("/me")
     public ApiResponse<LoginResponse.UserInfo> me(@AuthenticationPrincipal AuthPrincipal principal) {
         return ApiResponse.ok(authService.me(principal.userId()));
+    }
+
+    @PostMapping("/change-password")
+    public ApiResponse<Void> changePassword(
+        @AuthenticationPrincipal AuthPrincipal principal,
+        @Valid @RequestBody ChangePasswordRequest req
+    ) {
+        authService.changePassword(principal.userId(), req.oldPassword(), req.newPassword());
+        return ApiResponse.ok(null);
     }
 }

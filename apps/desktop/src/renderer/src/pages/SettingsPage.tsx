@@ -1,10 +1,12 @@
-import { useEffect, useState } from 'react'
-import { BellRing, HardDrive, MessageSquare, Monitor, MonitorSmartphone, Moon, Palette, Sun } from 'lucide-react'
+import { useEffect, useState, type FormEvent } from 'react'
+import { BellRing, Eye, EyeOff, HardDrive, KeyRound, LoaderCircle, MessageSquare, Monitor, MonitorSmartphone, Moon, Palette, Sun } from 'lucide-react'
 import { useUnreadTotal } from '@/api/messages'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
+import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
 import { Switch } from '@/components/ui/switch'
 import { useDeviceInfo } from '@/lib/deviceInfo'
-import { API_BASE } from '@/lib/http'
 import { useAuthStore } from '@/stores/auth'
 import {
   applyThemeClass,
@@ -16,6 +18,8 @@ import {
 import { useBadgeEnabled } from '@/lib/unreadBadge'
 import { useNotifyEnabled } from '@/lib/desktopNotify'
 import { useGpuFatal, useGpuSettings } from '@/lib/gpu'
+import { changePassword } from '@/api/auth'
+import { API_BASE, ApiError } from '@/lib/http'
 import { cn } from '@/lib/utils'
 import type { ThemePref } from '@shared/theme'
 
@@ -42,6 +46,40 @@ export default function SettingsPage(): React.JSX.Element {
   const who = user
     ? `${user.nickname || user.username}（${user.role}）· 租户 ${user.tenantName} · 邀请码 ${user.inviteCode}`
     : '未登录'
+
+  // 修改密码（A9）。改密成功后清掉本机会话，App 在 phase==='anonymous' 时自动渲染登录页。
+  const [oldPwd, setOldPwd] = useState('')
+  const [newPwd, setNewPwd] = useState('')
+  const [confirmPwd, setConfirmPwd] = useState('')
+  const [showPwd, setShowPwd] = useState(false)
+  const [pwBusy, setPwBusy] = useState(false)
+  const [pwErr, setPwErr] = useState<string | null>(null)
+  const [pwOk, setPwOk] = useState(false)
+
+  const submitPassword = async (e: FormEvent): Promise<void> => {
+    e.preventDefault()
+    setPwErr(null)
+    setPwOk(false)
+    if (newPwd.length < 8) {
+      setPwErr('新密码至少 8 位')
+      return
+    }
+    if (newPwd !== confirmPwd) {
+      setPwErr('两次输入的新密码不一致')
+      return
+    }
+    setPwBusy(true)
+    try {
+      await changePassword({ oldPassword: oldPwd, newPassword: newPwd })
+      setPwOk(true)
+      // 清掉本机会话强制重登：App 在 phase==='anonymous' 时自动渲染登录页，无需手动导航。
+      void useAuthStore.getState().logout()
+    } catch (err) {
+      setPwErr(err instanceof ApiError ? err.message : '修改失败，请重试')
+    } finally {
+      setPwBusy(false)
+    }
+  }
 
   useEffect(() => {
     void loadThemeState().then(setState)
@@ -182,6 +220,99 @@ export default function SettingsPage(): React.JSX.Element {
                 checked={notify.enabled}
                 onCheckedChange={(v) => notify.setEnabled(v === true)}
               />
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <KeyRound className="size-4 text-primary" />
+                账户安全
+              </CardTitle>
+              <CardDescription>
+                修改登录密码。改密成功后当前登录会立即失效，需要用新密码重新登录。
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <form onSubmit={submitPassword} className="flex max-w-sm flex-col gap-3">
+                <div className="space-y-1.5">
+                  <Label htmlFor="old-pwd">原密码</Label>
+                  <Input
+                    id="old-pwd"
+                    type={showPwd ? 'text' : 'password'}
+                    value={oldPwd}
+                    onChange={(e) => setOldPwd(e.target.value)}
+                    autoComplete="current-password"
+                    className="h-10"
+                    required
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="new-pwd">新密码</Label>
+                  <div className="relative">
+                    <Input
+                      id="new-pwd"
+                      type={showPwd ? 'text' : 'password'}
+                      value={newPwd}
+                      onChange={(e) => setNewPwd(e.target.value)}
+                      autoComplete="new-password"
+                      className="h-10 pr-10"
+                      required
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setShowPwd((v) => !v)}
+                      className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      aria-label="切换密码可见"
+                    >
+                      {showPwd ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                    </button>
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="confirm-pwd">确认新密码</Label>
+                  <Input
+                    id="confirm-pwd"
+                    type={showPwd ? 'text' : 'password'}
+                    value={confirmPwd}
+                    onChange={(e) => setConfirmPwd(e.target.value)}
+                    autoComplete="new-password"
+                    className="h-10"
+                    required
+                  />
+                </div>
+
+                {pwErr && (
+                  <p
+                    className="rounded-lg border border-destructive/30 bg-destructive/5 px-3 py-2 text-sm text-destructive"
+                    data-testid="pw-error"
+                  >
+                    {pwErr}
+                  </p>
+                )}
+                {pwOk && (
+                  <p
+                    className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-600"
+                    data-testid="pw-ok"
+                  >
+                    密码已修改，正在退出登录…
+                  </p>
+                )}
+
+                <Button
+                  type="submit"
+                  disabled={pwBusy}
+                  className="h-10 w-fit bg-gradient-to-r from-primary to-[#2f5fe0] font-semibold shadow-lg shadow-primary/30 hover:ring-2 hover:ring-gold/60"
+                >
+                  {pwBusy ? (
+                    <>
+                      <LoaderCircle className="mr-2 size-4 animate-spin" /> 提交中…
+                    </>
+                  ) : (
+                    '修改密码'
+                  )}
+                </Button>
+              </form>
             </CardContent>
           </Card>
 
