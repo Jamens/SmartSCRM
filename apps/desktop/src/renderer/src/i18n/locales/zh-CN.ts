@@ -618,6 +618,36 @@ export const zhCN = {
       submitting: '添加中…',
       confirm: '确认添加'
     }
+  },
+  labels: {
+    title: '标签管理',
+    groupCount: '{{count}} 个分组',
+    newGroup: '新建标签组',
+    loading: '加载标签中…',
+    empty: '还没有标签组，点击右上角新建。',
+    singleSelect: '单选',
+    multiSelect: '多选',
+    editGroupTitle: '编辑分组',
+    deleteGroupTitle: '删除分组',
+    renameLabel: '重命名',
+    deleteLabelTitle: '删除标签',
+    addLabel: '标签',
+    editGroup: '编辑标签组',
+    groupDesc: '分组用于归类客户标签。',
+    nameLabel: '名称',
+    groupNamePlaceholder: '例如：客户生命周期',
+    selectTypeLabel: '选择方式',
+    newLabel: '新建标签',
+    editLabel: '编辑标签',
+    labelDesc: '标签会展示在客户档案与筛选中。',
+    labelNamePlaceholder: '例如：高价值',
+    colorLabel: '颜色',
+    customColorTitle: '自定义颜色',
+    saving: '保存中…',
+    save: '保存',
+    confirmDeleteGroup: '确认删除标签组「{{name}}」{{extra}}？',
+    deleteGroupExtra: '，同时删除其下 {{count}} 个标签',
+    confirmDeleteLabel: '确认删除标签「{{name}}」？'
   }
 } as const
 

@@ -614,5 +614,35 @@ export const en: DeepString<typeof zhCN> = {
       submitting: 'Adding…',
       confirm: 'Confirm add'
     }
+  },
+  labels: {
+    title: 'Label management',
+    groupCount: '{{count}} groups',
+    newGroup: 'New label group',
+    loading: 'Loading labels…',
+    empty: 'No label groups yet. Click New in the top right.',
+    singleSelect: 'Single',
+    multiSelect: 'Multiple',
+    editGroupTitle: 'Edit group',
+    deleteGroupTitle: 'Delete group',
+    renameLabel: 'Rename',
+    deleteLabelTitle: 'Delete label',
+    addLabel: 'Label',
+    editGroup: 'Edit label group',
+    groupDesc: 'Groups are used to categorize customer labels.',
+    nameLabel: 'Name',
+    groupNamePlaceholder: 'e.g. Customer lifecycle',
+    selectTypeLabel: 'Selection mode',
+    newLabel: 'New label',
+    editLabel: 'Edit label',
+    labelDesc: 'Labels appear on customer profiles and in filters.',
+    labelNamePlaceholder: 'e.g. High value',
+    colorLabel: 'Color',
+    customColorTitle: 'Custom color',
+    saving: 'Saving…',
+    save: 'Save',
+    confirmDeleteGroup: 'Delete label group "{{name}}"{{extra}}?',
+    deleteGroupExtra: ', also deleting its {{count}} labels',
+    confirmDeleteLabel: 'Delete label "{{name}}"?'
   }
 }

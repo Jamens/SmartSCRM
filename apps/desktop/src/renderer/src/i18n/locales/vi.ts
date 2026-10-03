@@ -608,5 +608,35 @@ export const vi: DeepString<typeof zhCN> = {
       submitting: 'Đang thêm…',
       confirm: 'Xác nhận thêm'
     }
+  },
+  labels: {
+    title: 'Quản lý nhãn',
+    groupCount: '{{count}} nhóm',
+    newGroup: 'Tạo nhóm nhãn',
+    loading: 'Đang tải nhãn…',
+    empty: 'Chưa có nhóm nhãn nào. Nhấn Tạo ở góc trên bên phải.',
+    singleSelect: 'Chọn một',
+    multiSelect: 'Chọn nhiều',
+    editGroupTitle: 'Sửa nhóm',
+    deleteGroupTitle: 'Xóa nhóm',
+    renameLabel: 'Đổi tên',
+    deleteLabelTitle: 'Xóa nhãn',
+    addLabel: 'Nhãn',
+    editGroup: 'Sửa nhóm nhãn',
+    groupDesc: 'Nhóm dùng để phân loại nhãn khách hàng.',
+    nameLabel: 'Tên',
+    groupNamePlaceholder: 'Ví dụ: Vòng đời khách hàng',
+    selectTypeLabel: 'Cách chọn',
+    newLabel: 'Tạo nhãn',
+    editLabel: 'Sửa nhãn',
+    labelDesc: 'Nhãn hiển thị trên hồ sơ khách hàng và bộ lọc.',
+    labelNamePlaceholder: 'Ví dụ: Giá trị cao',
+    colorLabel: 'Màu',
+    customColorTitle: 'Màu tùy chỉnh',
+    saving: 'Đang lưu…',
+    save: 'Lưu',
+    confirmDeleteGroup: 'Xóa nhóm nhãn "{{name}}"{{extra}}?',
+    deleteGroupExtra: ', đồng thời xóa {{count}} nhãn bên dưới',
+    confirmDeleteLabel: 'Xóa nhãn "{{name}}"?'
   }
 }
