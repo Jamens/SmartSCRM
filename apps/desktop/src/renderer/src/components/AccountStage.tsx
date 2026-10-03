@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Languages, LoaderCircle, MonitorOff, RotateCw, SlidersHorizontal } from 'lucide-react'
 import { platformOf } from '@/lib/platform'
 import { useBridgeOf } from '@/lib/liveTailSync'
@@ -19,6 +20,7 @@ interface Props {
 type SettingsTarget = { accountId: number; chatKey: string }
 
 export default function AccountStage({ account }: Props): React.JSX.Element {
+  const { t } = useTranslation()
   const containerRef = useRef<HTMLDivElement>(null)
   const [injectOn, setInjectOn] = useState(true)
   const inviteCode = useAuthStore((s) => s.user?.inviteCode) ?? ''
@@ -63,8 +65,8 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
   if (!account) {
     return (
       <StageEmpty
-        title="尚未选择账号"
-        description="从左侧列表选择一个平台账号，即可在此内嵌登录并管理会话。"
+        title={t('account.stage.emptyTitle')}
+        description={t('account.stage.emptyDesc')}
       />
     )
   }
@@ -88,7 +90,7 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
           <span
             className={`size-1.5 rounded-full ${account.status === 1 ? 'bg-emerald-500' : 'bg-muted-foreground/50'}`}
           />
-          {account.status === 1 ? '在线' : '离线'}
+          {account.status === 1 ? t('account.stage.online') : t('account.stage.offline')}
         </Badge>
         <Button
           variant="outline"
@@ -96,7 +98,7 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
           className="h-8 gap-1.5 px-2 text-xs"
           data-p7-stage-settings=""
           disabled={activeChatKey === null}
-          title={activeChatKey === null ? '会话未在线' : '为当前会话设置语向与线路'}
+          title={activeChatKey === null ? t('account.stage.sessionOffline') : t('account.stage.sessionSettingsTitle')}
           onClick={() => {
             // 禁用态已经挡掉了"没有活动会话"，这一句是为了让类型上也拿不到 null：
             // 写进 `settingsTarget` 的那一条，必须是点开这一刻真实存在的会话。
@@ -105,7 +107,7 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
           }}
         >
           <SlidersHorizontal className="size-4" />
-          会话设置
+          {t('account.stage.sessionSettings')}
         </Button>
         <Button
           variant={injectOn ? 'secondary' : 'ghost'}
@@ -113,17 +115,17 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
           className="gap-1.5"
           onClick={() => setInjectOn((v) => !v)}
           disabled={!isElectron || !embedUrl}
-          title="注入增强脚本（悬浮标识 / 后续翻译能力）"
+          title={t('account.stage.injectTitle')}
         >
           <Languages className="size-4" />
-          注入{injectOn ? '开' : '关'}
+          {t('account.stage.inject', { state: t(injectOn ? 'account.stage.injectOn' : 'account.stage.injectOff') })}
         </Button>
         <Button
           variant="ghost"
           size="icon"
           onClick={reload}
           disabled={!isElectron || !embedUrl}
-          title="刷新页面"
+          title={t('account.stage.reloadTitle')}
         >
           <RotateCw className="size-4" />
         </Button>
@@ -139,15 +141,15 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
             </div>
             <p className="max-w-sm text-sm text-muted-foreground">
               {!isElectron
-                ? '当前在浏览器预览，内嵌视图仅在桌面端可用。'
-                : `${meta?.label} 暂不支持网页内嵌登录。`}
+                ? t('account.stage.browserPreviewOnly')
+                : t('account.stage.embedNotSupported', { label: meta?.label ?? '' })}
             </p>
           </div>
         )}
         {loading && (
           <div className="pointer-events-none absolute left-1/2 top-6 flex -translate-x-1/2 items-center gap-2 rounded-full bg-foreground/90 px-3 py-1.5 text-xs text-background shadow-lg">
             <LoaderCircle className="size-3.5 animate-spin" />
-            页面加载中…
+            {t('account.stage.loading')}
           </div>
         )}
       </div>

@@ -8,7 +8,8 @@ export const ko: DeepString<typeof zhCN> = {
     loading: '로드 중…',
     reading: '설정 로드 중…',
     close: '닫기',
-    unknownError: '알 수 없는 오류'
+    unknownError: '알 수 없는 오류',
+    cancel: '취소'
   },
   nav: {
     workspace: '작업 공간',
@@ -564,6 +565,48 @@ export const ko: DeepString<typeof zhCN> = {
       rejectedNote: '건너뛴 수신자는 작업에 나타나지 않습니다. 작업을 열기 전에 이 목록을 확인하세요.',
       contentEmpty: '{{n}}번째 항목이 비어 있음',
       contentTooLong: '{{n}}번째 항목이 {{max}}자를 초과함'
+    }
+  },
+  account: {
+    stage: {
+      emptyTitle: '선택된 계정 없음',
+      emptyDesc: '왼쪽 목록에서 플랫폼 계정을 선택하면 여기에 임베드 로그인하여 대화를 관리할 수 있습니다.',
+      online: '온라인',
+      offline: '오프라인',
+      sessionOffline: '세션이 온라인이 아님',
+      sessionSettingsTitle: '현재 대화의 언어 방향과 경로 설정',
+      sessionSettings: '세션 설정',
+      injectTitle: '향상 스크립트 주입(플로팅 배지 / 향후 번역 기능)',
+      inject: '주입{{state}}',
+      injectOn: '켜짐',
+      injectOff: '꺼짐',
+      reloadTitle: '페이지 새로고침',
+      browserPreviewOnly: '현재 브라우저 미리보기입니다. 임베드 보기는 데스크톱에서만 사용할 수 있습니다.',
+      embedNotSupported: '{{label}}은(는) 웹 임베드 로그인을 아직 지원하지 않습니다.',
+      loading: '페이지 로딩 중…'
+    },
+    sidebar: {
+      title: '플랫폼 계정',
+      channelCount: '{{count}}개 채널',
+      addTitle: '계정 추가',
+      loading: '로딩 중…',
+      loadError: '계정을 불러올 수 없습니다. 백엔드가 실행 중인지 확인하세요.',
+      empty: '아직 계정이 없습니다. 오른쪽 위 + 를 클릭해 추가하세요.',
+      deleteTitle: '계정 삭제'
+    },
+    add: {
+      title: '플랫폼 계정 추가',
+      desc: '현재 팀에 임베드 로그인 가능한 채널 계정을 추가합니다.',
+      platformType: '플랫폼 유형',
+      platformPlaceholder: '플랫폼 선택',
+      nameLabel: '표시 이름',
+      namePlaceholder: '예: 상담원 1호',
+      phoneLabel: '연동 번호(선택)',
+      phonePlaceholder: '+86 138 0000 0000',
+      remarkLabel: '메모(선택)',
+      remarkPlaceholder: '용도 설명',
+      submitting: '추가 중…',
+      confirm: '추가 확인'
     }
   }
 }

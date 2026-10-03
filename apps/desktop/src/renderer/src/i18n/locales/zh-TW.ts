@@ -8,7 +8,8 @@ export const zhTW: DeepString<typeof zhCN> = {
     loading: '讀取中…',
     reading: '讀取設定中…',
     close: '關閉',
-    unknownError: '未知錯誤'
+    unknownError: '未知錯誤',
+    cancel: '取消'
   },
   nav: {
     workspace: '工作台',
@@ -564,6 +565,48 @@ export const zhTW: DeepString<typeof zhCN> = {
       rejectedNote: '被跳過的收件人不會出現在任務裡；先核對這份清單，再進任務。',
       contentEmpty: '第 {{n}} 條為空',
       contentTooLong: '第 {{n}} 條超過 {{max}} 字'
+    }
+  },
+  account: {
+    stage: {
+      emptyTitle: '尚未選擇帳號',
+      emptyDesc: '從左側列表選擇一個平台帳號，即可在此內嵌登入並管理會話。',
+      online: '在線',
+      offline: '離線',
+      sessionOffline: '會話未在線',
+      sessionSettingsTitle: '為目前會話設定語向與線路',
+      sessionSettings: '會話設定',
+      injectTitle: '注入增強腳本（懸浮標識 / 後續翻譯能力）',
+      inject: '注入{{state}}',
+      injectOn: '開',
+      injectOff: '關',
+      reloadTitle: '重新整理頁面',
+      browserPreviewOnly: '目前為瀏覽器預覽，內嵌視圖僬在桌面端可用。',
+      embedNotSupported: '{{label}} 暫不支援網頁內嵌登入。',
+      loading: '頁面載入中…'
+    },
+    sidebar: {
+      title: '平台帳號',
+      channelCount: '{{count}} 個渠道',
+      addTitle: '新增帳號',
+      loading: '載入中…',
+      loadError: '無法載入帳號，請確認後端已啟動',
+      empty: '還沒有帳號，點擊右上角 + 新增',
+      deleteTitle: '刪除帳號'
+    },
+    add: {
+      title: '新增平台帳號',
+      desc: '為目前團隊新增一個可內嵌登入的渠道帳號。',
+      platformType: '平台類型',
+      platformPlaceholder: '選擇平台',
+      nameLabel: '顯示名稱',
+      namePlaceholder: '例如：客服一號',
+      phoneLabel: '綁定號碼（選填）',
+      phonePlaceholder: '+86 138 0000 0000',
+      remarkLabel: '備註（選填）',
+      remarkPlaceholder: '用途說明',
+      submitting: '新增中…',
+      confirm: '確認新增'
     }
   }
 }

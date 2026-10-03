@@ -11,7 +11,8 @@ export const zhCN = {
     loading: '读取中…',
     reading: '读取设置中…',
     close: '关闭',
-    unknownError: '未知错误'
+    unknownError: '未知错误',
+    cancel: '取消'
   },
   nav: {
     workspace: '工作台',
@@ -574,6 +575,48 @@ export const zhCN = {
       rejectedNote: '被跳过的收件人不会出现在任务里；先核对这份清单，再进任务。',
       contentEmpty: '第 {{n}} 条为空',
       contentTooLong: '第 {{n}} 条超过 {{max}} 字'
+    }
+  },
+  account: {
+    stage: {
+      emptyTitle: '尚未选择账号',
+      emptyDesc: '从左侧列表选择一个平台账号，即可在此内嵌登录并管理会话。',
+      online: '在线',
+      offline: '离线',
+      sessionOffline: '会话未在线',
+      sessionSettingsTitle: '为当前会话设置语向与线路',
+      sessionSettings: '会话设置',
+      injectTitle: '注入增强脚本（悬浮标识 / 后续翻译能力）',
+      inject: '注入{{state}}',
+      injectOn: '开',
+      injectOff: '关',
+      reloadTitle: '刷新页面',
+      browserPreviewOnly: '当前在浏览器预览，内嵌视图仅在桌面端可用。',
+      embedNotSupported: '{{label}} 暂不支持网页内嵌登录。',
+      loading: '页面加载中…'
+    },
+    sidebar: {
+      title: '平台账号',
+      channelCount: '{{count}} 个渠道',
+      addTitle: '新增账号',
+      loading: '加载中…',
+      loadError: '无法加载账号，请确认后端已启动',
+      empty: '还没有账号，点击右上角 + 添加',
+      deleteTitle: '删除账号'
+    },
+    add: {
+      title: '新增平台账号',
+      desc: '为当前团队添加一个可内嵌登录的渠道账号。',
+      platformType: '平台类型',
+      platformPlaceholder: '选择平台',
+      nameLabel: '显示名称',
+      namePlaceholder: '例如：客服一号',
+      phoneLabel: '绑定号码（可选）',
+      phonePlaceholder: '+86 138 0000 0000',
+      remarkLabel: '备注（可选）',
+      remarkPlaceholder: '用途说明',
+      submitting: '添加中…',
+      confirm: '确认添加'
     }
   }
 } as const

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Plus, Trash2 } from 'lucide-react'
 import { platformOf } from '@/lib/platform'
 import { isElectron } from '@/services/viewService'
@@ -13,6 +14,7 @@ import {
 } from '@/stores/accounts'
 
 export default function AccountSidebar(): React.JSX.Element {
+  const { t } = useTranslation()
   const { data, isPending, isError } = useAccounts()
   const selectedId = useSelectionStore((s) => s.selectedId)
   const select = useSelectionStore((s) => s.select)
@@ -38,24 +40,24 @@ export default function AccountSidebar(): React.JSX.Element {
     <aside className="flex h-full w-64 shrink-0 flex-col border-r border-border/60 bg-muted/30">
       <div className="flex items-center justify-between px-4 py-3">
         <div>
-          <h2 className="text-sm font-semibold text-foreground">平台账号</h2>
-          <p className="text-xs text-muted-foreground">{accounts.length} 个渠道</p>
+          <h2 className="text-sm font-semibold text-foreground">{t('account.sidebar.title')}</h2>
+          <p className="text-xs text-muted-foreground">{t('account.sidebar.channelCount', { count: accounts.length })}</p>
         </div>
-        <Button size="icon" variant="ghost" onClick={() => setDialogOpen(true)} title="新增账号">
+        <Button size="icon" variant="ghost" onClick={() => setDialogOpen(true)} title={t('account.sidebar.addTitle')}>
           <Plus className="size-4" />
         </Button>
       </div>
 
       <ScrollArea className="flex-1 px-2">
-        {isPending && <p className="px-2 py-4 text-center text-xs text-muted-foreground">加载中…</p>}
+        {isPending && <p className="px-2 py-4 text-center text-xs text-muted-foreground">{t('account.sidebar.loading')}</p>}
         {isError && (
           <p className="px-2 py-4 text-center text-xs text-destructive">
-            无法加载账号，请确认后端已启动
+            {t('account.sidebar.loadError')}
           </p>
         )}
         {!isPending && accounts.length === 0 && (
           <p className="px-2 py-6 text-center text-xs text-muted-foreground">
-            还没有账号，点击右上角 + 添加
+            {t('account.sidebar.empty')}
           </p>
         )}
 
@@ -102,7 +104,7 @@ export default function AccountSidebar(): React.JSX.Element {
                     e.stopPropagation()
                     handleDelete(account)
                   }}
-                  title="删除账号"
+                  title={t('account.sidebar.deleteTitle')}
                 >
                   <Trash2 className="size-3.5" />
                 </button>

@@ -8,7 +8,8 @@ export const vi: DeepString<typeof zhCN> = {
     loading: 'Đang tải…',
     reading: 'Đang tải cài đặt…',
     close: 'Đóng',
-    unknownError: 'Lỗi không xác định'
+    unknownError: 'Lỗi không xác định',
+    cancel: 'Hủy'
   },
   nav: {
     workspace: 'Không gian làm việc',
@@ -564,6 +565,48 @@ export const vi: DeepString<typeof zhCN> = {
       rejectedNote: 'Người nhận bị bỏ qua sẽ không xuất hiện trong tác vụ; hãy kiểm tra danh sách này trước khi mở tác vụ.',
       contentEmpty: 'Mục {{n}} trống',
       contentTooLong: 'Mục {{n}} vượt quá {{max}} ký tự'
+    }
+  },
+  account: {
+    stage: {
+      emptyTitle: 'Chưa chọn tài khoản',
+      emptyDesc: 'Chọn một tài khoản nền tảng từ danh sách bên trái để đăng nhập nhúng và quản lý hội thoại tại đây.',
+      online: 'Trực tuyến',
+      offline: 'Ngoại tuyến',
+      sessionOffline: 'Phiên chưa trực tuyến',
+      sessionSettingsTitle: 'Thiết lập hướng ngôn ngữ và tuyến đường cho phiên hiện tại',
+      sessionSettings: 'Cài đặt phiên',
+      injectTitle: 'Tiêm script tăng cường (huy hiệu nổi / khả năng dịch sau này)',
+      inject: 'Tiêm {{state}}',
+      injectOn: 'bật',
+      injectOff: 'tắt',
+      reloadTitle: 'Tải lại trang',
+      browserPreviewOnly: 'Đang ở bản xem trước trình duyệt; khung nhúng chỉ khả dụng trên bản desktop.',
+      embedNotSupported: '{{label}} chưa hỗ trợ đăng nhập nhúng trên web.',
+      loading: 'Đang tải trang…'
+    },
+    sidebar: {
+      title: 'Tài khoản nền tảng',
+      channelCount: '{{count}} kênh',
+      addTitle: 'Thêm tài khoản',
+      loading: 'Đang tải…',
+      loadError: 'Không thể tải tài khoản. Vui lòng xác nhận backend đã khởi động.',
+      empty: 'Chưa có tài khoản nào. Nhấn + ở góc trên bên phải để thêm.',
+      deleteTitle: 'Xóa tài khoản'
+    },
+    add: {
+      title: 'Thêm tài khoản nền tảng',
+      desc: 'Thêm một tài khoản kênh có thể đăng nhập nhúng cho nhóm hiện tại.',
+      platformType: 'Loại nền tảng',
+      platformPlaceholder: 'Chọn nền tảng',
+      nameLabel: 'Tên hiển thị',
+      namePlaceholder: 'Ví dụ: Hỗ trợ 1',
+      phoneLabel: 'Số liên kết (tùy chọn)',
+      phonePlaceholder: '+86 138 0000 0000',
+      remarkLabel: 'Ghi chú (tùy chọn)',
+      remarkPlaceholder: 'Mô tả mục đích',
+      submitting: 'Đang thêm…',
+      confirm: 'Xác nhận thêm'
     }
   }
 }

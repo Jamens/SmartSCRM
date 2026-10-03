@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   Dialog,
   DialogContent,
@@ -42,6 +43,7 @@ function newViewId(): string {
 }
 
 export default function AddAccountDialog({ open, onOpenChange, onCreated }: Props): React.JSX.Element {
+  const { t } = useTranslation()
   const create = useCreateAccount()
   const [platformType, setPlatformType] = useState<PlatformType>(PlatformType.WhatsApp)
   const [name, setName] = useState('')
@@ -74,16 +76,16 @@ export default function AddAccountDialog({ open, onOpenChange, onCreated }: Prop
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
-          <DialogTitle>新增平台账号</DialogTitle>
-          <DialogDescription>为当前团队添加一个可内嵌登录的渠道账号。</DialogDescription>
+          <DialogTitle>{t('account.add.title')}</DialogTitle>
+          <DialogDescription>{t('account.add.desc')}</DialogDescription>
         </DialogHeader>
 
         <div className="space-y-4">
           <div className="space-y-1.5">
-            <Label>平台类型</Label>
+            <Label>{t('account.add.platformType')}</Label>
             <Select value={String(platformType)} onValueChange={(v) => setPlatformType(Number(v) as PlatformType)}>
               <SelectTrigger>
-                <SelectValue placeholder="选择平台" />
+                <SelectValue placeholder={t('account.add.platformPlaceholder')} />
               </SelectTrigger>
               <SelectContent>
                 {PLATFORM_ORDER.map((type) => (
@@ -97,42 +99,42 @@ export default function AddAccountDialog({ open, onOpenChange, onCreated }: Prop
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="acct-name">显示名称</Label>
+            <Label htmlFor="acct-name">{t('account.add.nameLabel')}</Label>
             <Input
               id="acct-name"
               value={name}
               onChange={(e) => setName(e.target.value)}
-              placeholder="例如：客服一号"
+              placeholder={t('account.add.namePlaceholder')}
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="acct-phone">绑定号码（可选）</Label>
+            <Label htmlFor="acct-phone">{t('account.add.phoneLabel')}</Label>
             <Input
               id="acct-phone"
               value={phone}
               onChange={(e) => setPhone(e.target.value)}
-              placeholder="+86 138 0000 0000"
+              placeholder={t('account.add.phonePlaceholder')}
             />
           </div>
 
           <div className="space-y-1.5">
-            <Label htmlFor="acct-remark">备注（可选）</Label>
+            <Label htmlFor="acct-remark">{t('account.add.remarkLabel')}</Label>
             <Input
               id="acct-remark"
               value={remark}
               onChange={(e) => setRemark(e.target.value)}
-              placeholder="用途说明"
+              placeholder={t('account.add.remarkPlaceholder')}
             />
           </div>
         </div>
 
         <DialogFooter>
           <Button variant="outline" onClick={() => onOpenChange(false)}>
-            取消
+            {t('common.cancel')}
           </Button>
           <Button onClick={submit} disabled={!name.trim() || create.isPending}>
-            {create.isPending ? '添加中…' : '确认添加'}
+            {create.isPending ? t('account.add.submitting') : t('account.add.confirm')}
           </Button>
         </DialogFooter>
       </DialogContent>

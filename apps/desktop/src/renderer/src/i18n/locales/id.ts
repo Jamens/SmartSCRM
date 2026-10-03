@@ -8,7 +8,8 @@ export const id: DeepString<typeof zhCN> = {
     loading: 'Memuat…',
     reading: 'Membaca pengaturan…',
     close: 'Tutup',
-    unknownError: 'Kesalahan tidak dikenal'
+    unknownError: 'Kesalahan tidak dikenal',
+    cancel: 'Batal'
   },
   nav: {
     workspace: 'Ruang Kerja',
@@ -564,6 +565,48 @@ export const id: DeepString<typeof zhCN> = {
       rejectedNote: 'Penerima yang dilewati tidak akan muncul di tugas; periksa daftar ini sebelum membuka tugas.',
       contentEmpty: 'Entri {{n}} kosong',
       contentTooLong: 'Entri {{n}} melebihi {{max}} karakter'
+    }
+  },
+  account: {
+    stage: {
+      emptyTitle: 'Belum ada akun dipilih',
+      emptyDesc: 'Pilih akun platform dari daftar di kiri untuk login tertanam dan kelola percakapan di sini.',
+      online: 'Online',
+      offline: 'Offline',
+      sessionOffline: 'Sesi tidak online',
+      sessionSettingsTitle: 'Atur arah bahasa dan rute untuk sesi saat ini',
+      sessionSettings: 'Pengaturan sesi',
+      injectTitle: 'Suntikkan skrip peningkat (lencana melayang / kemampuan terjemahan berikutnya)',
+      inject: 'Suntik {{state}}',
+      injectOn: 'nyala',
+      injectOff: 'mati',
+      reloadTitle: 'Muat ulang halaman',
+      browserPreviewOnly: 'Sedang dalam pratinjau browser; tampilan tertanam hanya tersedia di desktop.',
+      embedNotSupported: '{{label}} belum mendukung login tertanam web.',
+      loading: 'Memuat halaman…'
+    },
+    sidebar: {
+      title: 'Akun platform',
+      channelCount: '{{count}} saluran',
+      addTitle: 'Tambah akun',
+      loading: 'Memuat…',
+      loadError: 'Tidak dapat memuat akun. Pastikan backend sudah berjalan.',
+      empty: 'Belum ada akun. Klik + di kanan atas untuk menambah.',
+      deleteTitle: 'Hapus akun'
+    },
+    add: {
+      title: 'Tambah akun platform',
+      desc: 'Tambahkan akun saluran yang dapat login tertanam untuk tim saat ini.',
+      platformType: 'Jenis platform',
+      platformPlaceholder: 'Pilih platform',
+      nameLabel: 'Nama tampilan',
+      namePlaceholder: 'Misal: Agen 1',
+      phoneLabel: 'Nomor terikat (opsional)',
+      phonePlaceholder: '+86 138 0000 0000',
+      remarkLabel: 'Catatan (opsional)',
+      remarkPlaceholder: 'Keterangan kegunaan',
+      submitting: 'Menambahkan…',
+      confirm: 'Konfirmasi tambah'
     }
   }
 }
