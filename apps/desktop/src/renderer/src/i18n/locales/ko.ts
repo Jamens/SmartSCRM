@@ -608,5 +608,35 @@ export const ko: DeepString<typeof zhCN> = {
       submitting: '추가 중…',
       confirm: '추가 확인'
     }
+  },
+  labels: {
+    title: '라벨 관리',
+    groupCount: '{{count}}개 그룹',
+    newGroup: '라벨 그룹 새로 만들기',
+    loading: '라벨 불러오는 중…',
+    empty: '라벨 그룹이 아직 없습니다. 오른쪽 위의 새로 만들기를 클릭하세요.',
+    singleSelect: '단일 선택',
+    multiSelect: '다중 선택',
+    editGroupTitle: '그룹 편집',
+    deleteGroupTitle: '그룹 삭제',
+    renameLabel: '이름 변경',
+    deleteLabelTitle: '라벨 삭제',
+    addLabel: '라벨',
+    editGroup: '라벨 그룹 편집',
+    groupDesc: '그룹은 고객 라벨을 분류하는 데 사용됩니다.',
+    nameLabel: '이름',
+    groupNamePlaceholder: '예: 고객 생애 주기',
+    selectTypeLabel: '선택 방식',
+    newLabel: '라벨 새로 만들기',
+    editLabel: '라벨 편집',
+    labelDesc: '라벨은 고객 프로필과 필터에 표시됩니다.',
+    labelNamePlaceholder: '예: 고가치',
+    colorLabel: '색상',
+    customColorTitle: '사용자 지정 색상',
+    saving: '저장 중…',
+    save: '저장',
+    confirmDeleteGroup: '라벨 그룹 "{{name}}"을(를) 삭제할까요{{extra}}?',
+    deleteGroupExtra: ', 하위 라벨 {{count}}개도 함께 삭제됨',
+    confirmDeleteLabel: '라벨 "{{name}}"을(를) 삭제할까요?'
   }
 }

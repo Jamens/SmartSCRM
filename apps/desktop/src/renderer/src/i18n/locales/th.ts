@@ -608,5 +608,35 @@ export const th: DeepString<typeof zhCN> = {
       submitting: 'กำลังเพิ่ม…',
       confirm: 'ยืนยันการเพิ่ม'
     }
+  },
+  labels: {
+    title: 'จัดการป้ายกำกับ',
+    groupCount: '{{count}} กลุ่ม',
+    newGroup: 'สร้างกลุ่มป้ายกำกับ',
+    loading: 'กำลังโหลดป้ายกำกับ…',
+    empty: 'ยังไม่มีกลุ่มป้ายกำกับ แตะสร้างที่มุมขวาบน',
+    singleSelect: 'เลือกเดียว',
+    multiSelect: 'เลือกหลาย',
+    editGroupTitle: 'แก้ไขกลุ่ม',
+    deleteGroupTitle: 'ลบกลุ่ม',
+    renameLabel: 'เปลี่ยนชื่อ',
+    deleteLabelTitle: 'ลบป้ายกำกับ',
+    addLabel: 'ป้ายกำกับ',
+    editGroup: 'แก้ไขกลุ่มป้ายกำกับ',
+    groupDesc: 'กลุ่มใช้จัดหมวดหมู่ป้ายกำกับลูกค้า',
+    nameLabel: 'ชื่อ',
+    groupNamePlaceholder: 'เช่น วงจรชีวิตลูกค้า',
+    selectTypeLabel: 'วิธีเลือก',
+    newLabel: 'สร้างป้ายกำกับ',
+    editLabel: 'แก้ไขป้ายกำกับ',
+    labelDesc: 'ป้ายกำกับแสดงในโปรไฟล์ลูกค้าและตัวกรอง',
+    labelNamePlaceholder: 'เช่น มูลค่าสูง',
+    colorLabel: 'สี',
+    customColorTitle: 'สีที่กำหนดเอง',
+    saving: 'กำลังบันทึก…',
+    save: 'บันทึก',
+    confirmDeleteGroup: 'ลบกลุ่มป้ายกำกับ "{{name}}"{{extra}}?',
+    deleteGroupExtra: ' พร้อมลบป้ายกำกับ {{count}} รายการด้านล่าง',
+    confirmDeleteLabel: 'ลบป้ายกำกับ "{{name}}"?'
   }
 }

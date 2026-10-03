@@ -608,5 +608,35 @@ export const ja: DeepString<typeof zhCN> = {
       submitting: '追加中…',
       confirm: '追加を確定'
     }
+  },
+  labels: {
+    title: 'ラベル管理',
+    groupCount: '{{count}} グループ',
+    newGroup: 'ラベルグループを新規作成',
+    loading: 'ラベルを読み込み中…',
+    empty: 'ラベルグループはまだありません。右上の新規作成をクリックしてください。',
+    singleSelect: '単一選択',
+    multiSelect: '複数選択',
+    editGroupTitle: 'グループを編集',
+    deleteGroupTitle: 'グループを削除',
+    renameLabel: '名前を変更',
+    deleteLabelTitle: 'ラベルを削除',
+    addLabel: 'ラベル',
+    editGroup: 'ラベルグループを編集',
+    groupDesc: 'グループは顧客ラベルを分類するために使います。',
+    nameLabel: '名前',
+    groupNamePlaceholder: '例：顧客ライフサイクル',
+    selectTypeLabel: '選択方式',
+    newLabel: 'ラベルを新規作成',
+    editLabel: 'ラベルを編集',
+    labelDesc: 'ラベルは顧客プロフィールとフィルターに表示されます。',
+    labelNamePlaceholder: '例：高価値',
+    colorLabel: '色',
+    customColorTitle: 'カスタム色',
+    saving: '保存中…',
+    save: '保存',
+    confirmDeleteGroup: 'ラベルグループ「{{name}}」を削除しますか{{extra}}？',
+    deleteGroupExtra: '、配下の {{count}} 件のラベルも削除されます',
+    confirmDeleteLabel: 'ラベル「{{name}}」を削除しますか？'
   }
 }

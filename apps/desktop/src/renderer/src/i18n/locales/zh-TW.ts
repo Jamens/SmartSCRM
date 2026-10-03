@@ -608,5 +608,35 @@ export const zhTW: DeepString<typeof zhCN> = {
       submitting: '新增中…',
       confirm: '確認新增'
     }
+  },
+  labels: {
+    title: '標籤管理',
+    groupCount: '{{count}} 個分組',
+    newGroup: '新增標籤組',
+    loading: '載入標籤中…',
+    empty: '還沒有標籤組，點擊右上角新增。',
+    singleSelect: '單選',
+    multiSelect: '多選',
+    editGroupTitle: '編輯分組',
+    deleteGroupTitle: '刪除分組',
+    renameLabel: '重新命名',
+    deleteLabelTitle: '刪除標籤',
+    addLabel: '標籤',
+    editGroup: '編輯標籤組',
+    groupDesc: '分組用於歸類客戶標籤。',
+    nameLabel: '名稱',
+    groupNamePlaceholder: '例如：客戶生命週期',
+    selectTypeLabel: '選擇方式',
+    newLabel: '新增標籤',
+    editLabel: '編輯標籤',
+    labelDesc: '標籤會顯示在客戶檔案與篩選中。',
+    labelNamePlaceholder: '例如：高價值',
+    colorLabel: '顏色',
+    customColorTitle: '自訂顏色',
+    saving: '儲存中…',
+    save: '儲存',
+    confirmDeleteGroup: '確認刪除標籤組「{{name}}」{{extra}}？',
+    deleteGroupExtra: '，同時刪除其下 {{count}} 個標籤',
+    confirmDeleteLabel: '確認刪除標籤「{{name}}」？'
   }
 }

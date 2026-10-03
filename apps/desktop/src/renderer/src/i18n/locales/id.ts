@@ -608,5 +608,35 @@ export const id: DeepString<typeof zhCN> = {
       submitting: 'Menambahkan…',
       confirm: 'Konfirmasi tambah'
     }
+  },
+  labels: {
+    title: 'Manajemen label',
+    groupCount: '{{count}} grup',
+    newGroup: 'Buat grup label',
+    loading: 'Memuat label…',
+    empty: 'Belum ada grup label. Klik Buat di kanan atas.',
+    singleSelect: 'Pilih satu',
+    multiSelect: 'Pilih banyak',
+    editGroupTitle: 'Edit grup',
+    deleteGroupTitle: 'Hapus grup',
+    renameLabel: 'Ganti nama',
+    deleteLabelTitle: 'Hapus label',
+    addLabel: 'Label',
+    editGroup: 'Edit grup label',
+    groupDesc: 'Grup digunakan untuk mengkategorikan label pelanggan.',
+    nameLabel: 'Nama',
+    groupNamePlaceholder: 'Misal: Siklus hidup pelanggan',
+    selectTypeLabel: 'Cara memilih',
+    newLabel: 'Buat label',
+    editLabel: 'Edit label',
+    labelDesc: 'Label muncul di profil pelanggan dan filter.',
+    labelNamePlaceholder: 'Misal: Bernilai tinggi',
+    colorLabel: 'Warna',
+    customColorTitle: 'Warna kustom',
+    saving: 'Menyimpan…',
+    save: 'Simpan',
+    confirmDeleteGroup: 'Hapus grup label "{{name}}"{{extra}}?',
+    deleteGroupExtra: ', juga menghapus {{count}} label di bawahnya',
+    confirmDeleteLabel: 'Hapus label "{{name}}"?'
   }
 }
