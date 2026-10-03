@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react'
 import { Minus, Square, Copy, X, Sparkles } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { cn } from '@/lib/utils'
 
 interface TitleBarProps {
@@ -9,6 +10,7 @@ interface TitleBarProps {
 export default function TitleBar({ onLogout }: TitleBarProps): React.JSX.Element | null {
   const [maximized, setMaximized] = useState(false)
   const inElectron = Boolean(window.scrm)
+  const { t } = useTranslation()
 
   useEffect(() => {
     if (!inElectron) return
@@ -32,7 +34,7 @@ export default function TitleBar({ onLogout }: TitleBarProps): React.JSX.Element
             onClick={onLogout}
             className="px-3 text-xs text-primary-foreground/80 transition-colors hover:bg-white/10 hover:text-white"
           >
-            退出登录
+            {t('titleBar.logout')}
           </button>
         )}
         <button
