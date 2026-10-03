@@ -272,6 +272,8 @@ upsert 每个到场成员：命中 → is_in_group=1、role/name/phone 刷新、
 
 1. `gp2` 系统消息的 `subtype` 真实取值名与目标人字段形态（`participantIds` / `recipients` / `participantIdObj`），要真机一条真实加减人行本。当前分类器实现按读码所得写，实测后如不符回来改 §4 与单测夹具。
 2. `WPP.group.getAllGroups()` 的返回是否包含已退出群、归档群、社群（community）下的子群；决定 `is_final` 要不要在建档时就打标。
+   **契约腿读数（2026-10-03，`tmp/p8-contract.log`，只记读数不改口径）**：本轮 HTTP 夹具登记的 2 个群键在 `GET /groups` 都读得到（已建档的那行 `isFinal=false`、只登记未快照的那行也在册），这只证明**后端登记面**不收形态之外的约束；桥侧 `getAllGroups()` 到底返回哪些群，本地夹具证明不了——**仍未收口，要真机页内数据**。
 3. `getParticipants()` 对超大群（>1024 人）是否分页截断。**这条最危险**：截断 + 覆盖率闸会一致地误判退群（§6 陷阱 ②）。若确认会截断，泵必须对超大群放弃判退（`reconciled:false`），届时这是改口径，不是调参数。
+   **契约腿读数（同上，只记读数不改口径）**：闸在"名单被截断"这一形状上的行为已在真库证到——10 人的分母回 4 人得到 `coverage=0.4 / reason=coverage_too_low / reconciled=false`，且 `participant_count`、`last_snapshot_at`、`snapshot_count` 三列一并被挡住不动（格 `3.1`–`3.7`，`tmp/p8-contract.log`）。但本轮最大快照只有 12 人，**没有触到 1024 那条线**，`getParticipants()` 是否真的截断仍**未收口**，要真机大群数据。
 4. `exceljs` 只进主进程产物、不进渲染包（构建产物实测）。
 5. 事件时间戳的形态：`participant_changed` 不带时间，`occurred_at` 取到达时刻——离线重放或多台设备下可能与真实时间偏差，需实测偏差量级后决定是否在界面标注"时间为观测时刻"。
