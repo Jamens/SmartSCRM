@@ -5,8 +5,9 @@
  * 之所以放 `@shared`：主进程的 `AppSettings.language` 需要校验「是不是受支持的语种」，
  * 渲染层的语言切换器需要同一份清单。两侧共用一份真值，才不会一个认、一个不认。
  *
- * 只提供 zh-CN / en 两份完整译文；其余 6 种先列在框架里（切换器能选），
- * 未译的会回退到 `fallbackLng`（zh-CN）。补齐译文即可，不动任何调用方。
+ * 8 语种框架：zh-CN / en 为最早的两份完整译文，zh-TW / ja / ko / vi / id / th 后续补齐，
+ * 全部在 `i18n/locales/*` 提供同构译文（由 `DeepString<typeof zhCN>` 在编译期保证不漏键），
+ * 切换器选中即生效，未命中键仍回退到 `fallbackLng`（zh-CN）。
  */
 
 export interface LocaleDef {
