@@ -123,8 +123,8 @@ export function useDeleteMaterial(): import("@tanstack/react-query").UseMutation
 }
 
 export const MATERIAL_TYPE_LABELS: Record<MaterialType, string> = {
-  1: '图片',
-  2: '视频',
-  3: '音频',
-  4: '文件'
+  1: 'materials.type.image',
+  2: 'materials.type.video',
+  3: 'materials.type.audio',
+  4: 'materials.type.file'
 }

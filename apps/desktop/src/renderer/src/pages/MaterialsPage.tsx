@@ -1,4 +1,5 @@
 import { useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   FileText,
   Film,
@@ -58,6 +59,7 @@ interface MaterialDraft {
 }
 
 export default function MaterialsPage(): React.JSX.Element {
+  const { t } = useTranslation()
   const { data: groups = [] } = useMaterialGroups()
   const [groupId, setGroupId] = useState<string>(ALL)
   const [type, setType] = useState<string>(ALL)
@@ -121,8 +123,8 @@ export default function MaterialsPage(): React.JSX.Element {
   }
 
   const deleteGroup = (group: MaterialGroupVO): void => {
-    const warning = group.materialCount > 0 ? `（其下 ${group.materialCount} 个素材将变为未分组）` : ''
-    if (!window.confirm(`确认删除分组「${group.name}」${warning}？`)) return
+    const warning = group.materialCount > 0 ? t('materials.deleteGroupWarning', { count: group.materialCount }) : ''
+    if (!window.confirm(t('materials.deleteGroupConfirm', { name: group.name, warning }))) return
     removeGroup.mutate(group.id)
   }
 
@@ -134,18 +136,18 @@ export default function MaterialsPage(): React.JSX.Element {
         <div>
           <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
             <FolderOpen className="size-5 text-primary" />
-            素材库
+            {t('materials.title')}
           </h1>
-          <p className="text-xs text-muted-foreground">可复用的图片 / 视频 / 文件素材，供快捷回复与群发引用</p>
+          <p className="text-xs text-muted-foreground">{t('materials.subtitle')}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setGroupDraft({ name: '' })}>
             <Plus className="size-4" />
-            新建分组
+            {t('materials.newGroup')}
           </Button>
           <Button size="sm" onClick={openCreate}>
             <Plus className="size-4" />
-            新建素材
+            {t('materials.newMaterial')}
           </Button>
         </div>
       </header>
@@ -153,13 +155,13 @@ export default function MaterialsPage(): React.JSX.Element {
       <div className="flex flex-wrap items-center gap-3 border-b border-border/60 px-6 py-3">
         <Input
           className="w-56 max-w-full"
-          placeholder="搜索素材名称 / 备注"
+          placeholder={t('materials.searchPlaceholder')}
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
         />
         <div className="flex flex-wrap items-center gap-1.5">
           <FilterChip active={groupId === ALL} onClick={() => setGroupId(ALL)}>
-            全部分组
+            {t('materials.allGroups')}
           </FilterChip>
           {groups.map((group) => (
             <FilterChip key={group.id} active={groupId === String(group.id)} onClick={() => setGroupId(String(group.id))}>
@@ -171,7 +173,7 @@ export default function MaterialsPage(): React.JSX.Element {
             <>
               <button
                 className="ml-1 flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-foreground"
-                title="重命名分组"
+                title={t('materials.renameGroup')}
                 onClick={() =>
                   setGroupDraft({
                     id: filteredGroupId,
@@ -180,11 +182,11 @@ export default function MaterialsPage(): React.JSX.Element {
                 }
               >
                 <Pencil className="size-3" />
-                重命名
+                {t('materials.rename')}
               </button>
               <button
                 className="flex items-center gap-0.5 rounded px-1.5 py-0.5 text-xs text-muted-foreground hover:bg-muted hover:text-destructive"
-                title="删除分组"
+                title={t('materials.deleteGroup')}
                 onClick={() => {
                   const group = groups.find((g) => g.id === filteredGroupId)
                   if (!group) return
@@ -193,18 +195,18 @@ export default function MaterialsPage(): React.JSX.Element {
                 }}
               >
                 <Trash2 className="size-3" />
-                删除
+                {t('materials.delete')}
               </button>
             </>
           )}
         </div>
         <div className="ml-auto flex items-center gap-1.5">
           <FilterChip active={type === ALL} onClick={() => setType(ALL)}>
-            全部类型
+            {t('materials.allTypes')}
           </FilterChip>
-          {TYPES.map((t) => (
-            <FilterChip key={t} active={type === String(t)} onClick={() => setType(String(t))}>
-              {MATERIAL_TYPE_LABELS[t]}
+          {TYPES.map((tt) => (
+            <FilterChip key={tt} active={type === String(tt)} onClick={() => setType(String(tt))}>
+              {t(MATERIAL_TYPE_LABELS[tt])}
             </FilterChip>
           ))}
         </div>
@@ -212,9 +214,9 @@ export default function MaterialsPage(): React.JSX.Element {
 
       <div className="min-h-0 flex-1 overflow-auto p-6">
         {materials.isPending ? (
-          <p className="py-16 text-center text-sm text-muted-foreground">加载素材中…</p>
+          <p className="py-16 text-center text-sm text-muted-foreground">{t('materials.loading')}</p>
         ) : records.length === 0 ? (
-          <p className="py-16 text-center text-sm text-muted-foreground">没有符合条件的素材。</p>
+          <p className="py-16 text-center text-sm text-muted-foreground">{t('materials.empty')}</p>
         ) : (
           <div className="grid grid-cols-2 gap-4 md:grid-cols-3 xl:grid-cols-4">
             {records.map((material) => (
@@ -224,7 +226,7 @@ export default function MaterialsPage(): React.JSX.Element {
                 groupName={groups.find((g) => g.id === material.groupId)?.name}
                 onEdit={() => openEdit(material)}
                 onDelete={() => {
-                  if (window.confirm(`确认删除素材「${material.name}」？`)) removeMaterial.mutate(material.id)
+                  if (window.confirm(t('materials.deleteMaterialConfirm', { name: material.name }))) removeMaterial.mutate(material.id)
                 }}
               />
             ))}
@@ -236,21 +238,21 @@ export default function MaterialsPage(): React.JSX.Element {
       <Dialog open={draft !== null} onOpenChange={(open) => !open && setDraft(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{draft?.id != null ? '编辑素材' : '新建素材'}</DialogTitle>
-            <DialogDescription>小图片会以本地 data URI 直接保存，完全离线可预览。</DialogDescription>
+            <DialogTitle>{draft?.id != null ? t('materials.editMaterial') : t('materials.newMaterial')}</DialogTitle>
+            <DialogDescription>{t('materials.dialogDesc')}</DialogDescription>
           </DialogHeader>
           {draft && (
             <MaterialForm draft={draft} groups={groups} onChange={setDraft} />
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDraft(null)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button
               onClick={() => void saveMaterial()}
               disabled={!draft?.name.trim() || !draft?.url.trim() || createMaterial.isPending || updateMaterial.isPending}
             >
-              {createMaterial.isPending || updateMaterial.isPending ? '保存中…' : '保存'}
+              {createMaterial.isPending || updateMaterial.isPending ? t('labels.saving') : t('labels.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -260,24 +262,24 @@ export default function MaterialsPage(): React.JSX.Element {
       <Dialog open={groupDraft !== null} onOpenChange={(open) => !open && setGroupDraft(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>{groupDraft?.id != null ? '重命名分组' : '新建分组'}</DialogTitle>
+            <DialogTitle>{groupDraft?.id != null ? t('materials.renameGroup') : t('materials.newGroup')}</DialogTitle>
           </DialogHeader>
           {groupDraft && (
             <div className="space-y-1.5">
-              <Label>分组名称</Label>
+              <Label>{t('materials.groupNameLabel')}</Label>
               <Input
                 value={groupDraft.name}
                 onChange={(e) => setGroupDraft({ ...groupDraft, name: e.target.value })}
-                placeholder="例如：产品图"
+                placeholder={t('materials.groupNamePlaceholder')}
               />
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setGroupDraft(null)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button onClick={() => void saveGroup()} disabled={!groupDraft?.name.trim() || createGroup.isPending || updateGroup.isPending}>
-              保存
+              {t('labels.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -297,6 +299,7 @@ function MaterialCard({
   onEdit: () => void
   onDelete: () => void
 }): React.JSX.Element {
+  const { t } = useTranslation()
   const isImage = material.type === 1 && material.url.startsWith('data:')
   return (
     <div className="group overflow-hidden rounded-xl border border-border/60 bg-card">
@@ -325,20 +328,20 @@ function MaterialCard({
         <div className="flex items-center justify-between gap-2">
           <p className="min-w-0 flex-1 truncate text-sm font-medium text-foreground">{material.name}</p>
           <Badge variant="outline" className="shrink-0 text-[10px]">
-            {MATERIAL_TYPE_LABELS[material.type]}
+            {t(MATERIAL_TYPE_LABELS[material.type])}
           </Badge>
         </div>
-        <p className="mt-0.5 truncate text-xs text-muted-foreground">{groupName ?? '未分组'}</p>
+        <p className="mt-0.5 truncate text-xs text-muted-foreground">{groupName ?? t('materials.ungrouped')}</p>
         <div className="mt-2 flex items-center justify-between opacity-0 transition-opacity group-hover:opacity-100">
           <div className="flex gap-1">
-            <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" title="复制链接" onClick={() => void navigator.clipboard.writeText(material.url)}>
+            <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" title={t('materials.copyLink')} onClick={() => void navigator.clipboard.writeText(material.url)}>
               <Link2 className="size-3.5" />
             </button>
-            <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" title="编辑" onClick={onEdit}>
+            <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" title={t('materials.edit')} onClick={onEdit}>
               <Pencil className="size-3.5" />
             </button>
           </div>
-          <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive" title="删除" onClick={onDelete}>
+          <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive" title={t('materials.delete')} onClick={onDelete}>
             <Trash2 className="size-3.5" />
           </button>
         </div>
@@ -356,6 +359,7 @@ function MaterialForm({
   groups: MaterialGroupVO[]
   onChange: (next: MaterialDraft) => void
 }): React.JSX.Element {
+  const { t } = useTranslation()
   const fileRef = useRef<HTMLInputElement>(null)
   const [notice, setNotice] = useState('')
 
@@ -381,10 +385,10 @@ function MaterialForm({
       setNotice('')
     } else if (type === 1) {
       onChange({ ...draft, type, name })
-      setNotice('图片较大，请改用素材 URL（本地暂存限制 400KB）。')
+      setNotice(t('materials.noticeLargeImage'))
     } else {
       onChange({ ...draft, type, name })
-      setNotice('非图片素材请填写素材 URL。')
+      setNotice(t('materials.noticeNonImage'))
     }
     e.target.value = ''
   }
@@ -393,19 +397,19 @@ function MaterialForm({
     <div className="space-y-4">
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1.5">
-          <Label>名称</Label>
-          <Input value={draft.name} onChange={(e) => onChange({ ...draft, name: e.target.value })} placeholder="素材名称" />
+          <Label>{t('materials.name')}</Label>
+          <Input value={draft.name} onChange={(e) => onChange({ ...draft, name: e.target.value })} placeholder={t('materials.namePlaceholder')} />
         </div>
         <div className="space-y-1.5">
-          <Label>类型</Label>
+          <Label>{t('materials.typeLabel')}</Label>
           <Select value={String(draft.type)} onValueChange={(v) => onChange({ ...draft, type: Number(v) as MaterialType })}>
             <SelectTrigger>
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {TYPES.map((t) => (
-                <SelectItem key={t} value={String(t)}>
-                  {MATERIAL_TYPE_LABELS[t]}
+              {TYPES.map((tt) => (
+                <SelectItem key={tt} value={String(tt)}>
+                  {t(MATERIAL_TYPE_LABELS[tt])}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -415,10 +419,10 @@ function MaterialForm({
 
       <div className="space-y-1.5">
         <div className="flex items-center justify-between">
-          <Label>分组</Label>
+          <Label>{t('materials.group')}</Label>
           {draft.groupId != null && (
             <button className="text-xs text-muted-foreground hover:text-foreground" onClick={() => onChange({ ...draft, groupId: null })}>
-              取消分组
+              {t('materials.ungroup')}
             </button>
           )}
         </div>
@@ -430,7 +434,7 @@ function MaterialForm({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="none">未分组</SelectItem>
+            <SelectItem value="none">{t('materials.ungrouped')}</SelectItem>
             {groups.map((g) => (
               <SelectItem key={g.id} value={String(g.id)}>
                 {g.name}
@@ -441,28 +445,28 @@ function MaterialForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label>素材内容（图片 URL / data URI）</Label>
+        <Label>{t('materials.contentLabel')}</Label>
         <div className="flex items-start gap-2">
           {draft.type === 1 && draft.url.startsWith('data:') && (
-            <img src={draft.url} alt="预览" className="size-16 shrink-0 rounded-md border border-border object-cover" />
+            <img src={draft.url} alt={t('materials.preview')} className="size-16 shrink-0 rounded-md border border-border object-cover" />
           )}
           <textarea
             className="h-16 min-w-0 flex-1 resize-none rounded-md border border-border bg-transparent px-3 py-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            value={draft.url.startsWith('data:') ? `${draft.url.slice(0, 40)}…（内嵌图片）` : draft.url}
+            value={draft.url.startsWith('data:') ? `${draft.url.slice(0, 40)}…${t('materials.inlinePreview')}` : draft.url}
             onChange={(e) => onChange({ ...draft, url: e.target.value })}
-            placeholder="粘贴 https 图片/文件地址，或点击下方选择本地图片"
+            placeholder={t('materials.urlPlaceholder')}
           />
         </div>
         {draft.url.startsWith('data:') && (
-          <p className="text-[11px] text-muted-foreground">已内嵌本地图片，可继续选择其它图片或清空后粘贴 URL。</p>
+          <p className="text-[11px] text-muted-foreground">{t('materials.inlineNote')}</p>
         )}
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" onClick={pickImage} disabled={draft.type !== 1}>
-            选择本地图片
+            {t('materials.pickLocalImage')}
           </Button>
           {draft.url.startsWith('data:') && (
             <Button variant="ghost" size="sm" onClick={() => onChange({ ...draft, url: '' })}>
-              清空图片
+              {t('materials.clearImage')}
             </Button>
           )}
           <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
@@ -471,8 +475,8 @@ function MaterialForm({
       </div>
 
       <div className="space-y-1.5">
-        <Label>备注（可选）</Label>
-        <Input value={draft.remark} onChange={(e) => onChange({ ...draft, remark: e.target.value })} placeholder="用途说明" />
+        <Label>{t('materials.remarkLabel')}</Label>
+        <Input value={draft.remark} onChange={(e) => onChange({ ...draft, remark: e.target.value })} placeholder={t('materials.remarkPlaceholder')} />
       </div>
     </div>
   )
