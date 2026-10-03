@@ -1,6 +1,7 @@
 // src/renderer/src/components/messages/ConversationList.tsx
 import { useMemo, useState } from 'react'
 import { RefreshCw, Search } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -49,6 +50,7 @@ export default function ConversationList({
   picked,
   onPick
 }: Props): React.JSX.Element {
+  const { t } = useTranslation()
   const { data: accounts = [] } = useAccounts()
   const [keyword, setKeyword] = useState('')
   const [platform, setPlatform] = useState<string>(ALL)
@@ -78,13 +80,13 @@ export default function ConversationList({
         // 静默成功会让人以为在补底，然后对着空列表怀疑数据丢了。
         setSyncHint({
           accountId: at,
-          text: started ? '补底已开始，消息到一条刷一条' : '会话未在线，补底未启动'
+          text: started ? t('messages.list.syncStarted') : t('messages.list.syncNotOnline')
         })
       })
       // 拒绝了也要有下文：invoke 失败（桥没挂、主进程抛了）原本只剩一个未处理的 rejection，
       // 用户按了按钮什么也没发生，比"补底未启动"更难判断。
       .catch(() => {
-        setSyncHint({ accountId: at, text: '补底请求没发出去，请检查会话是否在线' })
+        setSyncHint({ accountId: at, text: t('messages.list.syncRequestFailed') })
       })
   }
 
@@ -96,7 +98,7 @@ export default function ConversationList({
           onValueChange={(v) => onAccountIdChange(Number(v))}
         >
           <SelectTrigger>
-            <SelectValue placeholder="选择账号" />
+            <SelectValue placeholder={t('messages.list.selectAccount')} />
           </SelectTrigger>
           <SelectContent>
             {accounts.map((account) => (
@@ -111,7 +113,7 @@ export default function ConversationList({
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="pl-8"
-            placeholder="搜索会话标题"
+            placeholder={t('messages.list.searchPlaceholder')}
             value={keyword}
             onChange={(e) => setKeyword(e.target.value)}
           />
@@ -120,11 +122,11 @@ export default function ConversationList({
         <div className="flex items-center gap-2">
           <Select value={platform} onValueChange={setPlatform}>
             <SelectTrigger className="h-8 w-32">
-              <SelectValue placeholder="平台" />
+              <SelectValue placeholder={t('messages.list.platform')} />
             </SelectTrigger>
             <SelectContent>
               {/* 只有这两个平台有消息桥：列全平台会出现"选了永远没结果"的筛选项 */}
-              <SelectItem value={ALL}>全部平台</SelectItem>
+              <SelectItem value={ALL}>{t('messages.list.allPlatforms')}</SelectItem>
               <SelectItem value="whatsapp">WhatsApp</SelectItem>
               <SelectItem value="telegram">Telegram</SelectItem>
             </SelectContent>
@@ -134,10 +136,10 @@ export default function ConversationList({
             size="sm"
             disabled={accountId === null || !bridge}
             onClick={syncHistory}
-            title={bridge ? '让页面把当前会话列表往回补一段' : '会话未在线，无法补底'}
+            title={bridge ? t('messages.list.syncHintOnline') : t('messages.list.syncHintOffline')}
           >
             <RefreshCw className="size-4" />
-            同步历史
+            {t('messages.list.syncHistory')}
           </Button>
         </div>
 
@@ -153,24 +155,24 @@ export default function ConversationList({
         {/* 没选账号时查询是 disabled 的，`isPending` 会一直挂着——不挡住这句就变成"永远在加载"，
             而真正的原因是没账号可查（右列那句提示在左列看不见）。 */}
         {accountId !== null && isPending && (
-          <p className="px-2 py-4 text-center text-xs text-muted-foreground">加载会话中…</p>
+          <p className="px-2 py-4 text-center text-xs text-muted-foreground">{t('messages.list.loading')}</p>
         )}
         {accountId === null && (
           <p className="px-2 py-4 text-center text-xs text-muted-foreground">
-            先在上面选择一个平台账号。
+            {t('messages.list.pickAccountFirst')}
           </p>
         )}
         {isError && (
           <p className="px-2 py-4 text-center text-xs text-destructive">
-            无法加载会话，请确认后端已启动。
+            {t('messages.list.loadError')}
           </p>
         )}
         {accountId !== null && !isPending && !isError && conversations.length === 0 && (
           <p className="px-2 py-6 text-center text-xs text-muted-foreground">
             {/* 空列表有两种原因：账号真没数据，还是被筛选条件筛空。指错原因会让人以为采集丢了。 */}
             {debouncedKeyword.trim() !== '' || platform !== ALL
-              ? '没有匹配当前筛选条件的会话，清空关键字或选回「全部平台」试试。'
-              : '这个账号还没有采集到会话。登录后会自动补底，也可以点上面的「同步历史」。'}
+              ? t('messages.list.emptyFiltered')
+              : t('messages.list.emptyNoData')}
           </p>
         )}
         {conversations.map((c) => {
@@ -196,18 +198,18 @@ export default function ConversationList({
                   </span>
                   {c.isGroup && (
                     <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[10px]">
-                      群
+                      {t('messages.list.badgeGroup')}
                     </Badge>
                   )}
                   {!c.isGroup && c.customerId === null && (
                     <Badge variant="outline" className="shrink-0 px-1.5 py-0 text-[10px]">
-                      陌生
+                      {t('messages.list.badgeStranger')}
                     </Badge>
                   )}
                 </span>
                 <span className="mt-0.5 flex items-center justify-between gap-2">
                   <span className="truncate text-xs text-muted-foreground">
-                    {summary || '（无文字内容）'}
+                    {summary || t('messages.list.noText')}
                   </span>
                   <span className="shrink-0 text-[11px] text-muted-foreground">
                     {/* 必须走 chatMs：后端给的是不带时区的东八区墙钟串，`dayjs(串)` 按浏览器时区
@@ -232,7 +234,7 @@ export default function ConversationList({
             disabled={isFetchingNextPage}
             onClick={() => void fetchNextPage()}
           >
-            {isFetchingNextPage ? '加载中…' : '加载更多会话'}
+            {isFetchingNextPage ? t('messages.list.loadingMore') : t('messages.list.loadMore')}
           </Button>
         )}
       </div>

@@ -1,6 +1,7 @@
 // src/renderer/src/components/messages/StatsCards.tsx
 import { useState } from 'react'
 import { Inbox, MessagesSquare, Send, Users } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useMessageStats } from '@/api/messages'
 import { BAR_DAYS, shareOf, toBars } from '@/lib/chatStats'
 import { cn } from '@/lib/utils'
@@ -32,6 +33,7 @@ function Metric({
  * 不引图表库——四根数字加七根柱子 div 就够，而多一个依赖就要多过一次 C2 红线审计。
  */
 export default function StatsCards({ accountId }: { accountId: number | null }): React.JSX.Element {
+  const { t } = useTranslation()
   const [days, setDays] = useState<StatsWindow>(7)
   const { data, isPending, isError } = useMessageStats(accountId, days)
   const bars = toBars(data?.perDay ?? [])
@@ -66,33 +68,41 @@ export default function StatsCards({ accountId }: { accountId: number | null }):
                 : 'border-border text-muted-foreground hover:bg-muted'
             )}
           >
-            {w} 天
+            {t('messages.stats.dayUnit', { days: w })}
           </button>
         ))}
       </div>
 
-      {accountId === null && <span className="text-xs text-muted-foreground">选一个账号看统计。</span>}
-      {accountId !== null && isPending && <span className="text-xs text-muted-foreground">统计加载中…</span>}
+      {accountId === null && (
+        <span className="text-xs text-muted-foreground">{t('messages.stats.pickAccount')}</span>
+      )}
+      {accountId !== null && isPending && (
+        <span className="text-xs text-muted-foreground">{t('messages.stats.loading')}</span>
+      )}
       {accountId !== null && isError && (
-        <span className="text-xs text-destructive">统计读取失败，请确认后端已启动。</span>
+        <span className="text-xs text-destructive">{t('messages.stats.loadError')}</span>
       )}
 
       {data && (
         <>
-          <Metric icon={<MessagesSquare className="size-3.5" />} label="消息" value={String(data.total)} />
+          <Metric
+            icon={<MessagesSquare className="size-3.5" />}
+            label={t('messages.stats.labelTotal')}
+            value={String(data.total)}
+          />
           <Metric
             icon={<Inbox className="size-3.5" />}
-            label="收到"
+            label={t('messages.stats.labelIn')}
             value={`${data.inCount} · ${shareOf(data.inCount, data.total)}`}
           />
           <Metric
             icon={<Send className="size-3.5" />}
-            label="发出"
+            label={t('messages.stats.labelOut')}
             value={`${data.outCount} · ${shareOf(data.outCount, data.total)}`}
           />
           <Metric
             icon={<Users className="size-3.5" />}
-            label="活跃会话"
+            label={t('messages.stats.labelActive')}
             value={String(data.activeConversations)}
           />
           <div className="flex items-end gap-1.5">
@@ -102,7 +112,11 @@ export default function StatsCards({ accountId }: { accountId: number | null }):
                   data-p6-bar={bar.day}
                   className="flex w-2 flex-col justify-end overflow-hidden rounded-sm bg-muted"
                   style={{ height: BAR_HEIGHT_PX }}
-                  title={`${bar.day} 收 ${bar.inCount} 发 ${bar.outCount}`}
+                  title={t('messages.search.barTitle', {
+                    day: bar.day,
+                    in: bar.inCount,
+                    out: bar.outCount
+                  })}
                 >
                   {/* 里层的百分比是"占这一根柱子"的：外层已经按 heightPct 缩过，两段加起来正好铺满。 */}
                   <div className="flex flex-col justify-end" style={{ height: `${bar.heightPct}%` }}>
@@ -114,7 +128,9 @@ export default function StatsCards({ accountId }: { accountId: number | null }):
               </div>
             ))}
           </div>
-          <span className="text-[10px] text-muted-foreground">近 {BAR_DAYS} 天：实心收到 / 浅色发出</span>
+          <span className="text-[10px] text-muted-foreground">
+            {t('messages.stats.legend', { days: BAR_DAYS })}
+          </span>
         </>
       )}
     </div>

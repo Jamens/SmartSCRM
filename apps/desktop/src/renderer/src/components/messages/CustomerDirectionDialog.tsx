@@ -1,6 +1,7 @@
 // src/renderer/src/components/messages/CustomerDirectionDialog.tsx
 import { useState } from 'react'
 import { Languages } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -34,6 +35,7 @@ export default function CustomerDirectionDialog({
   open,
   onOpenChange
 }: Props): React.JSX.Element {
+  const { t } = useTranslation()
   const { data } = useTranslationSettings(customerRefOf(customerId))
   const save = useUpdateTranslationSettings()
   const reset = useResetCustomerTranslationSettings()
@@ -60,7 +62,7 @@ export default function CustomerDirectionDialog({
             onOpenChange={handleOpenChange}
           />
         ) : (
-          <p className="py-6 text-center text-xs text-muted-foreground">读取设置中…</p>
+          <p className="py-6 text-center text-xs text-muted-foreground">{t('common.reading')}</p>
         )}
       </DialogContent>
     </Dialog>
@@ -81,6 +83,7 @@ interface FormProps {
  * 只是从 effect 同步 setState 改成了挂载初值（react-hooks/set-state-in-effect 不再触发）。
  */
 function DirectionForm({ data, save, reset, customerId, onOpenChange }: FormProps): React.JSX.Element {
+  const { t } = useTranslation()
   // 只在"打开的那一瞬间"抓一次初值：`data` 是取值来源，不是"重新铺表单"的触发器。
   // 无条件按 data 铺，一次后台 refetch（保存后的 invalidate、窗口重新聚焦）就会把用户改到一半
   // 的表单抹回服务端值——那种"我刚才选的没了"的手感最难查，所以 `draftOf(data)` 只往空 draft 里铺一次。
@@ -112,11 +115,10 @@ function DirectionForm({ data, save, reset, customerId, onOpenChange }: FormProp
       <DialogHeader>
         <DialogTitle className="flex items-center gap-2 text-base">
           <Languages className="size-4 text-primary" />
-          该客户的语向
+          {t('messages.direction.title')}
         </DialogTitle>
         <DialogDescription>
-          只改这位客户的语向。页内气泡与记录页回复框都按「会话 → 客户 → 全局」取第一条命中的档，
-          所以这一份覆盖实际作用到哪一层，看上方那枚徽标与回复框旁的「本会话专属」标注。
+          {t('messages.direction.desc')}
         </DialogDescription>
       </DialogHeader>
 
@@ -130,17 +132,17 @@ function DirectionForm({ data, save, reset, customerId, onOpenChange }: FormProp
                 : 'border-0 bg-primary/10 text-primary'
             }
           >
-            {data.inherited ? '沿用全局' : '该客户专属'}
+            {data.inherited ? t('messages.direction.inherited') : t('messages.direction.owned')}
           </Badge>
           <span className="text-[11px] text-muted-foreground">
             {data.inherited
-              ? '保存后只为这位客户建一份覆盖，全局设置不动。'
-              : `覆盖行 · 客户 #${customerId}`}
+              ? t('messages.direction.inheritedHint')
+              : t('messages.direction.ownedHint', { id: customerId })}
           </span>
         </div>
 
         <LangRow
-          title="收信"
+          title={t('messages.direction.receive')}
           enabled={draft.receiveEnabled}
           onEnabled={(v) => patch({ receiveEnabled: v })}
           from={draft.receiveFromLang}
@@ -150,7 +152,7 @@ function DirectionForm({ data, save, reset, customerId, onOpenChange }: FormProp
           channel={draft.channel}
         />
         <LangRow
-          title="发信"
+          title={t('messages.direction.send')}
           enabled={draft.sendEnabled}
           onEnabled={(v) => patch({ sendEnabled: v })}
           from={draft.sendFromLang}
@@ -168,7 +170,9 @@ function DirectionForm({ data, save, reset, customerId, onOpenChange }: FormProp
             data-p6-error-code={save.error instanceof ApiError ? String(save.error.code) : ''}
             className="text-xs text-destructive"
           >
-            保存失败：{save.error instanceof Error ? save.error.message : '后端不可用'}
+            {t('messages.direction.saveFailed', {
+              error: save.error instanceof Error ? save.error.message : t('messages.direction.saveFailedFallback')
+            })}
           </p>
         )}
         {/*
@@ -182,7 +186,9 @@ function DirectionForm({ data, save, reset, customerId, onOpenChange }: FormProp
             data-p6-error-code={reset.error instanceof ApiError ? String(reset.error.code) : ''}
             className="text-xs text-destructive"
           >
-            恢复失败：{reset.error instanceof Error ? reset.error.message : '后端不可用'}
+            {t('messages.direction.resetFailed', {
+              error: reset.error instanceof Error ? reset.error.message : t('messages.direction.resetFailedFallback')
+            })}
           </p>
         )}
       </div>
@@ -195,11 +201,13 @@ function DirectionForm({ data, save, reset, customerId, onOpenChange }: FormProp
           disabled={!data.inherited || reset.isPending}
           onClick={() => reset.mutate(customerId, { onSuccess: () => onOpenChange(false) })}
         >
-          {reset.isPending ? '恢复中…' : '恢复全局'}
+          {reset.isPending
+            ? t('messages.direction.resetPending')
+            : t('messages.direction.reset')}
         </Button>
         <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-            取消
+            {t('messages.direction.cancel')}
           </Button>
           <Button
             size="sm"
@@ -207,7 +215,11 @@ function DirectionForm({ data, save, reset, customerId, onOpenChange }: FormProp
             disabled={dirty === 0 || save.isPending}
             onClick={submit}
           >
-            {save.isPending ? '保存中…' : dirty > 0 ? `保存（${dirty} 处改动）` : '保存'}
+            {save.isPending
+              ? t('messages.direction.savePending')
+              : dirty > 0
+                ? t('messages.direction.saveDirty', { count: dirty })
+                : t('messages.direction.save')}
           </Button>
         </div>
       </DialogFooter>

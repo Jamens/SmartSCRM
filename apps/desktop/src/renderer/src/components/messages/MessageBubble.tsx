@@ -1,5 +1,6 @@
 // src/renderer/src/components/messages/MessageBubble.tsx
 import type { ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   AlertTriangle,
   Check,
@@ -69,6 +70,7 @@ export default function MessageBubble({
   failedHint,
   highlight
 }: Props): React.JSX.Element {
+  const { t } = useTranslation()
   const out = row.direction === 'out'
   // 先收到局部变量再判：TS 对 `row.mediaType` 这种属性路径的收窄不如局部 const 稳。
   const mediaType = row.mediaType
@@ -89,7 +91,7 @@ export default function MessageBubble({
     >
       {showSender && !out && (
         <span className="mb-0.5 text-[11px] text-muted-foreground">
-          {row.senderName ?? row.senderKey ?? '群成员'}
+          {row.senderName ?? row.senderKey ?? t('messages.bubble.groupMember')}
         </span>
       )}
       <div
@@ -103,7 +105,7 @@ export default function MessageBubble({
         {Media && (
           <span className="mb-1 flex items-center gap-1.5 text-xs opacity-80">
             <Media className="size-3.5" />
-            {row.mediaSummary ?? '媒体消息'}
+            {row.mediaSummary ?? t('messages.bubble.media')}
           </span>
         )}
         {row.body ? (
@@ -111,7 +113,7 @@ export default function MessageBubble({
         ) : (
           // 三种"看起来该有字却没有字"的情况要分得开：纯媒体（上面那行已经交代）、
           // 真空消息（这里补一句，否则气泡会塌成一条线，读者以为是渲染坏了）
-          !Media && <span className="opacity-60">（空消息）</span>
+          !Media && <span className="opacity-60">{t('messages.bubble.empty')}</span>
         )}
       </div>
       <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
@@ -119,7 +121,7 @@ export default function MessageBubble({
         {out && <Tick status={row.status} />}
         {out &&
           row.status === 'failed' &&
-          (failedHint ?? <Badge variant="outline">发送失败</Badge>)}
+          (failedHint ?? <Badge variant="outline">{t('messages.bubble.sendFailed')}</Badge>)}
         {out && row.source === 'native_send' && <span>· 页面内发送</span>}
       </span>
     </div>

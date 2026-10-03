@@ -1,6 +1,7 @@
 // src/renderer/src/components/messages/ReplyComposer.tsx
 import { useState } from 'react'
 import { LoaderCircle, Send } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
@@ -29,6 +30,7 @@ interface Props {
 }
 
 export default function ReplyComposer({ accountId, conversation }: Props): React.JSX.Element {
+  const { t } = useTranslation()
   const [draft, setDraft] = useState('')
   const [hint, setHint] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
@@ -106,7 +108,9 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
       // 是本地那几步）；排查时读 e.message 那半句。两处注释互指，改任何一处都要回来改另一处。
       // 留字不降级：译文拿不到就把原文留在框里。降级成"直接发中文"是最坏选择——
       // 用户以为发的是译文，实际发出去的是他刚敲的中文。
-      setHint(`译文获取失败：${e instanceof Error ? e.message : String(e)}`)
+      setHint(t('messages.composer.translateFailed', {
+        error: e instanceof Error ? e.message : String(e)
+      }))
     } finally {
       setBusy(false)
     }
@@ -121,7 +125,7 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
     // "手里能定位的那几档"里挑，任何一格都不从 `scopeKey` 反解。
     const target = refOfScope(settings.scope, { conversation: convRef, customer: custRef })
     if (!target) {
-      setHint('这一档的定位不在手里，未写入任何一行')
+      setHint(t('messages.composer.scopeNotHeld'))
       return
     }
     // catch 是必需的：`mutateAsync` 失败是 rejected promise，接不住就是一条未处理拒绝。
@@ -138,11 +142,13 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
         if (target.kind !== 'global') return
         void broadcastTranslationFlags(saved).catch(() => {
           // 库里的值已经改好了，别把它报成"保存失败"：这里只交代页内那一份没跟上来。
-          setHint('开关已保存，但没能同步到内嵌页')
+          setHint(t('messages.composer.flagsSavedNoSync'))
         })
       })
       .catch((e: unknown) => {
-        setHint(`开关保存失败：${e instanceof Error ? e.message : String(e)}`)
+        setHint(t('messages.composer.flagsSaveFailed', {
+          error: e instanceof Error ? e.message : String(e)
+        }))
       })
   }
 
@@ -158,7 +164,7 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
             disabled={!settings || saveSettings.isPending}
             onCheckedChange={toggleSendLang}
           />
-          先译再发
+          {t('messages.composer.translateFirst')}
         </label>
         {/* §4③：这一枚是"这一条会话实际按哪档生效"，与会话头那枚"这位客户一般怎么说"并列是有意的（D-07）。 */}
         <span className="flex min-w-0 items-center gap-1.5">
@@ -191,7 +197,9 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
           value={draft}
           disabled={offline}
           placeholder={
-            offline ? '会话未在线，登录后才能在这里回复' : '输入消息，Enter 发送，Shift+Enter 换行'
+            offline
+              ? t('messages.composer.offlinePlaceholder')
+              : t('messages.composer.inputPlaceholder')
           }
           onChange={(e) => setDraft(e.target.value)}
           onKeyDown={(e) => {
@@ -209,7 +217,7 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
           onClick={() => void sendNow()}
         >
           {busy ? <LoaderCircle className="size-4 animate-spin" /> : <Send className="size-4" />}
-          发送
+          {t('messages.composer.send')}
         </Button>
       </div>
       {hint && (
@@ -219,7 +227,7 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
       )}
       {sentScope && (
         <p className="pt-1.5 text-[11px] text-muted-foreground" data-p7-sent-scope={sentScope}>
-          这一条按{scopeBadgeOf(sentScope)}译出
+          {t('messages.composer.sentScope', { scope: scopeBadgeOf(sentScope) })}
         </p>
       )}
     </div>

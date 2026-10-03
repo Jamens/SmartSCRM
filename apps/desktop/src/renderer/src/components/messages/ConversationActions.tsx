@@ -1,6 +1,7 @@
 // src/renderer/src/components/messages/ConversationActions.tsx
 import { useState } from 'react'
 import { Languages, UserPlus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import CustomerDirectionDialog from '@/components/messages/CustomerDirectionDialog'
@@ -19,6 +20,7 @@ import { canCreateCustomer } from '@/lib/createCustomerPrefill'
  * 去显示"这位客户的语向"就是假信息，所以这个组件还是按 `customerId` 挂载。
  */
 function LinkedIdentity({ customerId }: { customerId: number }): React.JSX.Element {
+  const { t } = useTranslation()
   const [open, setOpen] = useState(false)
   const { data: settings } = useTranslationSettings(customerRefOf(customerId))
   const { data: customer } = useCustomer(customerId)
@@ -29,7 +31,7 @@ function LinkedIdentity({ customerId }: { customerId: number }): React.JSX.Eleme
         className="h-6 max-w-[160px] truncate border-0 bg-primary/10 px-2 text-[11px] text-primary"
         data-p6-customer-name=""
       >
-        {customer?.nickname ?? `客户 #${customerId}`}
+        {customer?.nickname ?? t('messages.actions.unknownCustomer', { id: customerId })}
       </Badge>
       <Button
         size="sm"
@@ -39,7 +41,7 @@ function LinkedIdentity({ customerId }: { customerId: number }): React.JSX.Eleme
         onClick={() => setOpen(true)}
       >
         <Languages className="size-3.5" />
-        语向
+        {t('messages.actions.direction')}
       </Button>
       <span className="shrink-0 text-[11px] tabular-nums text-muted-foreground" data-p6-direction-summary="">
         {settings ? directionSummary(settings, 'send') : '…'}
@@ -58,6 +60,7 @@ export default function ConversationActions({
   conversation,
   onLinked
 }: Props): React.JSX.Element {
+  const { t } = useTranslation()
   const [createOpen, setCreateOpen] = useState(false)
   const creatable = canCreateCustomer(conversation)
   return (
@@ -73,7 +76,7 @@ export default function ConversationActions({
             onClick={() => setCreateOpen(true)}
           >
             <UserPlus className="size-3.5" />
-            建为客户
+            {t('messages.actions.createCustomer')}
           </Button>
           <CreateCustomerDialog
             key={String(createOpen)}

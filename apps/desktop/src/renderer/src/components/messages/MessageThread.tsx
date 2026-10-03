@@ -1,5 +1,6 @@
 // src/renderer/src/components/messages/MessageThread.tsx
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import MessageBubble from '@/components/messages/MessageBubble'
@@ -36,6 +37,7 @@ export default function MessageThread({
   onClearAnchor,
   headerExtra
 }: Props): React.JSX.Element {
+  const { t } = useTranslation()
   const markRead = useMarkRead().mutate
   const around = anchor && anchor.chatKey === conversation.chatKey ? anchor.messageId : null
   const { data, isPending, isError, hasNextPage, isFetchingNextPage, fetchNextPage } = useMessages({
@@ -257,14 +259,16 @@ export default function MessageThread({
             {conversation.chatKey}
             {conversation.customerId === null && !conversation.isGroup && (
               <Badge variant="outline" className="ml-2 px-1.5 py-0 text-[10px]">
-                陌生
+                {t('messages.thread.stranger')}
               </Badge>
             )}
           </p>
         </div>
         <div className="flex shrink-0 items-center gap-2">
           {headerExtra}
-          <span className="text-xs text-muted-foreground">{rows.length} 条</span>
+          <span className="text-xs text-muted-foreground">
+            {t('messages.thread.count', { count: rows.length })}
+          </span>
         </div>
       </div>
 
@@ -275,7 +279,7 @@ export default function MessageThread({
       {anchor && around !== null && (
         <div className="flex items-center justify-between gap-3 border-b border-border/60 bg-primary/5 px-6 py-1.5">
           <span className="truncate text-[11px] text-muted-foreground">
-            已定位到 {anchor.label} 那条消息：更早的记录在下面，比它更新的消息不在这个窗口里。
+            {t('messages.thread.located', { label: anchor.label })}
           </span>
           <Button
             size="sm"
@@ -283,7 +287,7 @@ export default function MessageThread({
             className="h-6 shrink-0 px-2 text-[11px]"
             onClick={() => onClearAnchor?.()}
           >
-            回到最新
+            {t('messages.thread.backToLatest')}
           </Button>
         </div>
       )}
@@ -294,22 +298,28 @@ export default function MessageThread({
         data-p6-scroller="thread"
         className="min-h-0 flex-1 overflow-y-auto px-6 py-4"
       >
-        {isPending && <p className="py-6 text-center text-xs text-muted-foreground">加载消息中…</p>}
+        {isPending && (
+          <p className="py-6 text-center text-xs text-muted-foreground">{t('messages.thread.loading')}</p>
+        )}
         {isError && (
           <p className="py-6 text-center text-xs text-destructive">
-            无法读取历史消息，请确认后端已启动。
+            {t('messages.thread.loadError')}
           </p>
         )}
         {!isPending && !isError && rows.length === 0 && (
           <p className="py-6 text-center text-xs text-muted-foreground">
-            这个会话还没有采集到消息。
+            {t('messages.thread.empty')}
           </p>
         )}
         {isFetchingNextPage && (
-          <p className="py-2 text-center text-[11px] text-muted-foreground">正在拉更早的消息…</p>
+          <p className="py-2 text-center text-[11px] text-muted-foreground">
+            {t('messages.thread.loadingEarlier')}
+          </p>
         )}
         {!hasNextPage && rows.length > 0 && (
-          <p className="py-2 text-center text-[11px] text-muted-foreground">已经到最早的一条</p>
+          <p className="py-2 text-center text-[11px] text-muted-foreground">
+            {t('messages.thread.reachedEarliest')}
+          </p>
         )}
         {sections.map((section) => (
           <section key={section.day}>
@@ -346,7 +356,7 @@ export default function MessageThread({
                             void retryFrom(row.msgKey, body)
                           }}
                         >
-                          重试
+                          {t('messages.thread.retry')}
                         </Button>
                         {gateHint?.rowKey === row.msgKey && (
                           // 被闸门停下的一击：不另外发一条 toast，理由就写在点它的那条气泡后面。
