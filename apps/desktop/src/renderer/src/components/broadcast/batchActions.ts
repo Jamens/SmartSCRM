@@ -22,19 +22,19 @@ export const ACTIONS: Record<BatchTaskStatus, BatchAction[]> = {
  * 所以它们都不许回到 `BatchTaskList.tsx` / `BatchTaskDetail.tsx` 那种组件文件里。
  */
 export const ACTION_LABEL: Record<BatchAction, string> = {
-  start: '开始',
-  pause: '暂停',
-  resume: '继续',
-  cancel: '取消'
+  start: 'broadcast.action.start',
+  pause: 'broadcast.action.pause',
+  resume: 'broadcast.action.resume',
+  cancel: 'broadcast.action.cancel'
 }
 
 export const STATUS_LABEL: Record<BatchTaskStatus, string> = {
-  pending: '待开始',
-  running: '发送中',
-  paused: '已暂停',
-  done: '已完成',
-  error: '出错',
-  cancelled: '已取消'
+  pending: 'broadcast.status.pending',
+  running: 'broadcast.status.running',
+  paused: 'broadcast.status.paused',
+  done: 'broadcast.status.done',
+  error: 'broadcast.status.error',
+  cancelled: 'broadcast.status.cancelled'
 }
 
 export type BadgeVariant = 'default' | 'secondary' | 'outline' | 'destructive' | 'ghost'
