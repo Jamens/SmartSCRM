@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import type { BatchTaskStatus } from '@shared/batchSend'
 import {
   ACTION_LABEL,
@@ -37,6 +38,7 @@ export function BatchTaskList({ onOpen }: { onOpen: (taskId: number) => void }):
   const pauseAction = useBatchAction('pause')
   const resumeAction = useBatchAction('resume')
   const cancelAction = useBatchAction('cancel')
+  const { t } = useTranslation()
   const actionByKind: Record<BatchAction, typeof startAction> = {
     start: startAction,
     pause: pauseAction,
@@ -52,11 +54,11 @@ export function BatchTaskList({ onOpen }: { onOpen: (taskId: number) => void }):
       // 只有拿到 BatchProgress 才算成了——徽标的真值仍由 hook 里的 invalidate + GET 追平。
       onSuccess: (out) => {
         if (out === null) {
-          setNotice(`「${ACTION_LABEL[kind]}」这一跳没成：后端拒绝或宿主不可达，列表保持原状。`)
+          setNotice(t('broadcast.list.actionFailedNoReach', { action: t(ACTION_LABEL[kind]) }))
         }
       },
       onError: (err) => {
-        setNotice(`「${ACTION_LABEL[kind]}」这一跳没成：${err.message}`)
+        setNotice(t('broadcast.list.actionFailedMessage', { action: t(ACTION_LABEL[kind]), message: err.message }))
       }
     })
   }
@@ -71,36 +73,36 @@ export function BatchTaskList({ onOpen }: { onOpen: (taskId: number) => void }):
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>全部</SelectItem>
+            <SelectItem value={ALL}>{t('broadcast.list.allStatus')}</SelectItem>
             {STATUSES.map((s) => (
               <SelectItem key={s} value={s}>
-                {STATUS_LABEL[s]}
+                {t(STATUS_LABEL[s])}
               </SelectItem>
             ))}
           </SelectContent>
         </Select>
-        {data && <span className="text-xs text-muted-foreground">共 {data.total} 个任务</span>}
+        {data && <span className="text-xs text-muted-foreground">{t('broadcast.list.totalCount', { count: data.total })}</span>}
       </div>
 
       {notice && <p className="mb-2 rounded-md border border-destructive/40 px-3 py-2 text-xs text-destructive">{notice}</p>}
 
       <div className="min-h-0 flex-1 overflow-auto">
         {isPending ? (
-          <p className="py-16 text-center text-sm text-muted-foreground">加载任务列表中…</p>
+          <p className="py-16 text-center text-sm text-muted-foreground">{t('broadcast.list.loading')}</p>
         ) : isError ? (
-          <p className="py-16 text-center text-sm text-muted-foreground">任务列表加载失败：{error.message}</p>
+          <p className="py-16 text-center text-sm text-muted-foreground">{t('broadcast.list.loadError', { message: error.message })}</p>
         ) : tasks.length === 0 ? (
-          <p className="py-16 text-center text-sm text-muted-foreground">还没有群发任务，点击右上角「新建任务」。</p>
+          <p className="py-16 text-center text-sm text-muted-foreground">{t('broadcast.list.empty')}</p>
         ) : (
           <div className="space-y-2">
             <div className="grid grid-cols-[minmax(0,2fr)_72px_56px_minmax(0,1.6fr)_48px_128px_minmax(0,168px)] gap-3 px-3 text-[11px] text-muted-foreground">
-              <span>任务名</span>
-              <span>状态</span>
-              <span>模式</span>
-              <span>进度</span>
-              <span className="text-right">失败</span>
-              <span>创建时间</span>
-              <span className="text-right">操作</span>
+              <span>{t('broadcast.list.col.taskName')}</span>
+              <span>{t('broadcast.list.col.status')}</span>
+              <span>{t('broadcast.list.col.mode')}</span>
+              <span>{t('broadcast.list.col.progress')}</span>
+              <span className="text-right">{t('broadcast.list.col.failed')}</span>
+              <span>{t('broadcast.list.col.createdAt')}</span>
+              <span className="text-right">{t('broadcast.list.col.actions')}</span>
             </div>
             {tasks.map((task) => (
               <TaskRow key={task.id} task={task} onOpen={onOpen} onAction={runAction} />
@@ -121,6 +123,7 @@ function TaskRow({
   onOpen: (taskId: number) => void
   onAction: (kind: BatchAction, taskId: number) => void
 }): React.JSX.Element {
+  const { t } = useTranslation()
   const pct = task.totalCount > 0 ? Math.min(100, Math.round((task.sentCount / task.totalCount) * 100)) : 0
   return (
     <div
@@ -137,11 +140,19 @@ function TaskRow({
       <span className="min-w-0 truncate font-medium text-foreground">{task.name}</span>
       <span>
         <Badge variant={STATUS_VARIANT[task.status]} className="text-[11px]">
-          {STATUS_LABEL[task.status]}
+          {t(STATUS_LABEL[task.status])}
         </Badge>
       </span>
       {/* 演练徽标常驻：两种状态都有字，跑完的演练任务不许看起来像真发过（spec §7）。 */}
-      <span>{task.dryRun ? <Badge className="text-[11px]">演练</Badge> : <Badge variant="outline" className="text-[11px]">真发</Badge>}</span>
+      <span>
+        {task.dryRun ? (
+          <Badge className="text-[11px]">{t('broadcast.mode.dryRun')}</Badge>
+        ) : (
+          <Badge variant="outline" className="text-[11px]">
+            {t('broadcast.mode.realSend')}
+          </Badge>
+        )}
+      </span>
       <span className="flex items-center gap-2">
         <span className="h-1.5 min-w-0 flex-1 overflow-hidden rounded-full bg-muted">
           <span className="block h-full rounded-full bg-primary" style={{ width: `${pct}%` }} />
@@ -162,7 +173,7 @@ function TaskRow({
             className="h-7 px-2 text-[11px]"
             onClick={() => onAction(action, task.id)}
           >
-            {ACTION_LABEL[action]}
+            {t(ACTION_LABEL[action])}
           </Button>
         ))}
       </span>

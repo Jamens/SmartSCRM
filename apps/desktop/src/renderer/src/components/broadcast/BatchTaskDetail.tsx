@@ -1,4 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import {
   SETTLED_DETAIL_STATUS,
@@ -32,19 +33,19 @@ import {
 const ALL = 'all'
 
 const SEND_STATUS_LABEL: Record<BatchDetailStatus, string> = {
-  pending: '待发送',
-  sending: '发送中',
-  success: '成功',
-  failed: '失败',
-  unknown: '结果未知',
-  skipped: '已跳过'
+  pending: 'broadcast.sendStatus.pending',
+  sending: 'broadcast.sendStatus.sending',
+  success: 'broadcast.sendStatus.success',
+  failed: 'broadcast.sendStatus.failed',
+  unknown: 'broadcast.sendStatus.unknown',
+  skipped: 'broadcast.sendStatus.skipped'
 }
 
 const RECALL_STATUS_LABEL: Record<RecallStatus, string> = {
-  none: '未撤回',
-  recalling: '撤回中',
-  recalled: '已撤回',
-  recall_failed: '撤回失败'
+  none: 'broadcast.recallStatus.none',
+  recalling: 'broadcast.recallStatus.recalling',
+  recalled: 'broadcast.recallStatus.recalled',
+  recall_failed: 'broadcast.recallStatus.recall_failed'
 }
 
 const SEND_STATUSES = Object.keys(SEND_STATUS_LABEL) as BatchDetailStatus[]
@@ -101,6 +102,7 @@ function secondsSince(ms: number, nowMs: number = Date.now()): number {
 
 export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Element {
   const { data: task, isPending: taskPending, isError: taskLoadFailed, error: taskLoadError } = useBatchTask(taskId)
+  const { t } = useTranslation()
 
   const [sendStatus, setSendStatus] = useState<string>(ALL)
   const [recallStatus, setRecallStatus] = useState<string>(ALL)
@@ -176,10 +178,10 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
       // 徽标的真值仍由 hook 里的 invalidate + GET 追平。这里不自起泵——起泵是 batch:start/resume 处理器的活。
       onSuccess: (out) => {
         if (out === null) {
-          setFailure(`「${ACTION_LABEL[kind]}」这一跳没成：后端拒绝或宿主不可达，任务保持原状。`)
+          setFailure(t('broadcast.detail.actionFailedNoReach', { action: t(ACTION_LABEL[kind]) }))
         }
       },
-      onError: (err) => setFailure(`「${ACTION_LABEL[kind]}」这一跳没成：${err.message}`)
+      onError: (err) => setFailure(t('broadcast.detail.actionFailedMessage', { action: t(ACTION_LABEL[kind]), message: err.message }))
     })
   }
 
@@ -193,13 +195,13 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
         // `null` = 这一跳没成（后端 40902/40404 拒绝、宿主不可达、信封不对都塌成 null）：
         // 复用红色 failure 通道，绝不替用户的数据下一句「没有可重发的」——那句得真打到后端才配说。
         if (reset === null) {
-          setFailure('「重发」这一跳没成：后端拒绝或宿主不可达，任务保持原状，没有复位任何行。')
+          setFailure(t('broadcast.detail.retryFailedNoReach'))
           return
         }
         setResetResult({ count: reset, label, targeted })
       },
       // 抛出来的这一路才是确证的失败（preload 未挂载 / IPC 被拒）；后端拒绝现在塌 null 走 onSuccess，不再混进 0。
-      onError: (err) => setFailure(`「重发」这一跳没成：${err.message}`)
+      onError: (err) => setFailure(t('broadcast.detail.retryFailedMessage', { message: err.message }))
     })
   }
 
@@ -213,13 +215,13 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
         setBlocked(out.blocked)
         if (out.eligible === 0 && out.blocked.length === 0) {
           // 请求了 N 条却既没进撤回计划也没拿到一条理由＝这一跳没成（宿主把没有回来的 plan 塌成空结果）。
-          setFailure(`撤回这一跳没成：选中的 ${detailIds.length} 条既没被接受也没被挡下，后端的结果没回来。`)
+          setFailure(t('broadcast.detail.recallFailedNoResult', { count: detailIds.length }))
           return
         }
         setSelected(new Set())
-        setRecallNote(`待撤 ${out.eligible} 条，${out.blocked.length} 条不能撤`)
+        setRecallNote(t('broadcast.detail.recallNote', { eligible: out.eligible, blocked: out.blocked.length }))
       },
-      onError: (err) => setFailure(`撤回这一跳没成：${err.message}`)
+      onError: (err) => setFailure(t('broadcast.detail.recallFailedMessage', { message: err.message }))
     })
   }
 
@@ -233,12 +235,12 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
   }
 
   if (taskPending) {
-    return <p className="py-8 text-center text-sm text-muted-foreground">加载任务中…</p>
+    return <p className="py-8 text-center text-sm text-muted-foreground">{t('broadcast.detail.loadingTask')}</p>
   }
   if (taskLoadFailed || !task) {
     return (
       <p className="py-8 text-center text-sm text-destructive">
-        任务加载失败：{taskLoadError?.message ?? '后端没有回这一条任务'}
+        {t('broadcast.detail.loadTaskError', { message: taskLoadError?.message ?? t('broadcast.detail.loadTaskFallback') })}
       </p>
     )
   }
@@ -262,8 +264,8 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
   const resumeStep = acts.includes('resume')
     ? ''
     : acts.includes('start')
-      ? `（当前「${STATUS_LABEL[task.status]}」的卡片上没有「继续」，点「开始」才会重跑。）`
-      : `（当前「${STATUS_LABEL[task.status]}」的卡片上没有重跑入口：这一批要等任务回到可执行状态。）`
+      ? t('broadcast.detail.resumeViaStart', { status: t(STATUS_LABEL[task.status]) })
+      : t('broadcast.detail.resumeNoEntry', { status: t(STATUS_LABEL[task.status]) })
   // 心跳是墙钟串：解析走 toChatMs（与「发出」列同一个 chatMs 读数点），显示走 clockText（同一个 chatClock），
   // "距今"由它跟当下比。
   const heartbeatMs = toChatMs(task.heartbeatAt)
@@ -275,19 +277,18 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
         <div className="flex flex-wrap items-center gap-2 text-sm">
           <span className="font-medium text-foreground">{task.name}</span>
           <Badge variant={STATUS_VARIANT[task.status]} className="text-[11px]">
-            {STATUS_LABEL[task.status]}
+            {t(STATUS_LABEL[task.status])}
           </Badge>
           {/* 演练徽标在详情里也常驻：跑完的演练任务不许看起来像真发过（spec §7）。 */}
           {task.dryRun ? (
-            <Badge className="text-[11px]">演练</Badge>
+            <Badge className="text-[11px]">{t('broadcast.mode.dryRun')}</Badge>
           ) : (
             <Badge variant="outline" className="text-[11px]">
-              真发
+              {t('broadcast.mode.realSend')}
             </Badge>
           )}
           <span className="ml-auto text-xs tabular-nums text-muted-foreground">
-            {/* 0 也写「0」：留白会被读成"还没统计"，而它的意思是"一条没失败"。 */}
-            共 {task.totalCount} · 已发 {task.sentCount} · 失败 {task.failCount}
+            {t('broadcast.detail.summary', { total: task.totalCount, sent: task.sentCount, fail: task.failCount })}
           </span>
         </div>
 
@@ -301,9 +302,13 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
         </div>
 
         <p className="mt-2 text-xs text-muted-foreground">
-          心跳：
-          {/* null = 这一条任务从没被泵碰过，空着会被读成"页面没刷出来"。 */}
-          {heartbeatMs === null ? '还没跑过' : `${clockText(heartbeatMs, '还没跑过')} · 距今 ${heartbeatAgo} 秒`}
+          {t('broadcast.detail.heartbeatLabel')}
+          {heartbeatMs === null
+            ? t('broadcast.detail.heartbeatNever')
+            : t('broadcast.detail.heartbeatAgo', {
+                clock: clockText(heartbeatMs, t('broadcast.detail.heartbeatNever')),
+                seconds: heartbeatAgo
+              })}
         </p>
         {/* 「距今 N 秒」才是"引擎还在跑"的那张证人：15 秒一跳在 HH:mm 刻度上看不出来。
             它不进定时器：任务与列表两个 key 由 `useBatchLive` 收到 `batch:state` 就 invalidate + 重新 GET
@@ -320,28 +325,21 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
               className="h-7 px-2 text-[11px]"
               onClick={() => runAction(action)}
             >
-              {ACTION_LABEL[action]}
+              {t(ACTION_LABEL[action])}
             </Button>
           ))}
-          {acts.length === 0 && <span className="text-xs text-muted-foreground">终态任务没有可执行的动作。</span>}
+          {acts.length === 0 && <span className="text-xs text-muted-foreground">{t('broadcast.detail.noActions')}</span>}
         </div>
 
         {resetResult && (
           <p className="mt-3 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs text-foreground">
             {resetResult.count > 0
               ? task.status === 'running'
-                ? // 泵拿的是起泵那一刻拉到的明细快照（host 的 runTask 翻页取全量 → buildQueues 只在这份
-                  // 快照里挑 pending），所以跑途中复位出来的 pending 行不在它的队列里，不会被自动捡走。
-                  // 后端那条唤醒边只在 done/error 上做（retryFailed 不看 running），卡片上也就不会出现「继续」；
-                  // 唯一的重跑入口是先停掉这一趟、再重新起泵。
-                  `已复位 ${resetResult.count} 条，但正在跑的泵不会捡走它们（队列在起泵时就定了）：先「暂停」再点「继续」才会重跑这一批。`
-                : // 非 running：复位本身不投泵，要不要「点继续」看复位之后 GET 回来的状态，不是取数前那一份。
-                  `已复位 ${resetResult.count} 条，点继续重跑` + resumeStep
-              : // count=0：这一跳确实打到了、只是没有 failed 行（后端拒绝现在走上面的 failure 红通道，不再混进 0）。
-                // 单条留 brief 原文「这几条不是失败状态」；整批去掉复数指代「这几条」，同一个事实换个说法。
-                resetResult.targeted
-                ? `${resetResult.label}：这几条不是失败状态，没有可重发的。`
-                : `${resetResult.label}：没有可重发的失败条目。`}
+                ? t('broadcast.detail.resetRunning', { count: resetResult.count })
+                : t('broadcast.detail.resetGeneral', { count: resetResult.count, step: resumeStep })
+              : resetResult.targeted
+                ? t('broadcast.detail.resetTargetedEmpty', { label: resetResult.label })
+                : t('broadcast.detail.resetEmpty', { label: resetResult.label })}
           </p>
         )}
       </section>
@@ -365,10 +363,10 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL}>全部发送状态</SelectItem>
+              <SelectItem value={ALL}>{t('broadcast.detail.allSendStatus')}</SelectItem>
               {SEND_STATUSES.map((s) => (
                 <SelectItem key={s} value={s}>
-                  {SEND_STATUS_LABEL[s]}
+                  {t(SEND_STATUS_LABEL[s])}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -386,10 +384,10 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL}>全部撤回状态</SelectItem>
+              <SelectItem value={ALL}>{t('broadcast.detail.allRecallStatus')}</SelectItem>
               {RECALL_STATUSES.map((s) => (
                 <SelectItem key={s} value={s}>
-                  {RECALL_STATUS_LABEL[s]}
+                  {t(RECALL_STATUS_LABEL[s])}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -399,10 +397,10 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
             size="sm"
             variant="outline"
             className="h-7 px-2 text-[11px]"
-            onClick={() => doRetry(undefined, '整批')}
+            onClick={() => doRetry(undefined, t('broadcast.detail.batch'))}
             disabled={retry.isPending}
           >
-            {retry.isPending ? '复位中…' : '重发失败条目'}
+            {retry.isPending ? t('broadcast.detail.resetting') : t('broadcast.detail.retryFailed')}
           </Button>
 
           <Button
@@ -412,12 +410,16 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
             onClick={doRecall}
             disabled={recall.isPending || selected.size === 0 || task.dryRun}
           >
-            {recall.isPending ? '撤回中…' : `撤回已发${selected.size > 0 ? `（${selected.size}）` : ''}`}
+            {recall.isPending
+              ? t('broadcast.detail.recalling')
+              : selected.size > 0
+                ? t('broadcast.detail.recallSentCount', { count: selected.size })
+                : t('broadcast.detail.recallSent')}
           </Button>
 
           <span className="ml-auto flex items-center gap-2 text-xs tabular-nums text-muted-foreground">
             <span>
-              第 {details.data?.page ?? page} / {lastPage} 页 · 共 {total} 条
+              {t('broadcast.detail.pageInfo', { page: details.data?.page ?? page, lastPage, total })}
             </span>
             <Button
               size="sm"
@@ -426,7 +428,7 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
               onClick={() => goPage(page - 1)}
               disabled={page <= 1}
             >
-              上一页
+              {t('broadcast.detail.prevPage')}
             </Button>
             <Button
               size="sm"
@@ -435,12 +437,12 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
               onClick={() => goPage(page + 1)}
               disabled={page >= lastPage}
             >
-              下一页
+              {t('broadcast.detail.nextPage')}
             </Button>
           </span>
         </div>
 
-        {task.dryRun && <p className="pb-2 text-xs text-muted-foreground">演练任务没有真发过</p>}
+        {task.dryRun && <p className="pb-2 text-xs text-muted-foreground">{t('broadcast.detail.dryRunNote')}</p>}
         {recallNote && (
           <p className="mb-2 rounded-md border border-primary/40 bg-primary/5 px-3 py-2 text-xs text-foreground">
             {recallNote}
@@ -450,12 +452,12 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
         {blocked.length > 0 && (
           <details className="mb-2 rounded-md border border-border/60 px-3 py-2 text-xs">
             <summary className="cursor-pointer text-muted-foreground">
-              这 {blocked.length} 条不能撤（被挡下的行后端不写库，这里就是唯一出处）
+              {t('broadcast.detail.blockedSummary', { count: blocked.length })}
             </summary>
             <ul className="mt-2 space-y-1">
               {blocked.map((b) => (
                 <li key={b.detailId} className="text-muted-foreground">
-                  明细 #{b.detailId} — {b.reason}
+                  {t('broadcast.detail.blockedItem', { id: b.detailId, reason: b.reason })}
                 </li>
               ))}
             </ul>
@@ -464,28 +466,30 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
 
         <div className="min-h-0 overflow-auto">
           {details.isPending ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">加载明细中…</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">{t('broadcast.detail.loadingDetails')}</p>
           ) : details.isError ? (
-            <p className="py-8 text-center text-sm text-destructive">明细加载失败：{details.error.message}</p>
+            <p className="py-8 text-center text-sm text-destructive">
+              {t('broadcast.detail.loadDetailsError', { message: details.error.message })}
+            </p>
           ) : rows.length === 0 ? (
-            <p className="py-8 text-center text-sm text-muted-foreground">这一页没有符合筛选条件的明细。</p>
+            <p className="py-8 text-center text-sm text-muted-foreground">{t('broadcast.detail.emptyFiltered')}</p>
           ) : (
             <table className="w-full border-separate border-spacing-0 text-xs">
               <thead>
-                <tr className="text-left text-[11px] text-muted-foreground">
-                  <Th className="w-8">撤</Th>
-                  <Th className="w-12">seq</Th>
-                  <Th className="w-14">账号</Th>
-                  <Th>chatKey</Th>
-                  <Th className="w-16">内容</Th>
-                  <Th className="min-w-[16rem]">正文</Th>
-                  <Th className="w-20">发送</Th>
-                  <Th className="min-w-[12rem]">错误</Th>
-                  <Th className="min-w-[10rem]">msgKey</Th>
-                  <Th className="w-28">撤回</Th>
-                  <Th className="w-16">发出</Th>
-                  <Th className="w-28">操作</Th>
-                </tr>
+              <tr className="text-left text-[11px] text-muted-foreground">
+                <Th className="w-8">{t('broadcast.detail.col.revoke')}</Th>
+                <Th className="w-12">{t('broadcast.detail.col.seq')}</Th>
+                <Th className="w-14">{t('broadcast.detail.col.account')}</Th>
+                <Th>{t('broadcast.detail.col.chatKey')}</Th>
+                <Th className="w-16">{t('broadcast.detail.col.content')}</Th>
+                <Th className="min-w-[16rem]">{t('broadcast.detail.col.body')}</Th>
+                <Th className="w-20">{t('broadcast.detail.col.send')}</Th>
+                <Th className="min-w-[12rem]">{t('broadcast.detail.col.error')}</Th>
+                <Th className="min-w-[10rem]">{t('broadcast.detail.col.msgKey')}</Th>
+                <Th className="w-28">{t('broadcast.detail.col.recall')}</Th>
+                <Th className="w-16">{t('broadcast.detail.col.sent')}</Th>
+                <Th className="w-28">{t('broadcast.detail.col.actions')}</Th>
+              </tr>
               </thead>
               <tbody>
                 {rows.map((row) => (
@@ -495,7 +499,7 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
                     canRecall={recallEligible(task, row)}
                     checked={selected.has(row.id)}
                     onToggle={() => toggleRow(row.id)}
-                    onRetry={() => doRetry([row.id], `明细 #${row.id}`)}
+                    onRetry={() => doRetry([row.id], t('broadcast.detail.detailOf', { id: row.id }))}
                     retrying={retry.isPending}
                   />
                 ))}
@@ -524,6 +528,7 @@ function DetailRow({
   onRetry: () => void
   retrying: boolean
 }): React.JSX.Element {
+  const { t } = useTranslation()
   return (
     <tr className="align-top">
       <Td className="w-8">
@@ -537,7 +542,7 @@ function DetailRow({
           checked={canRecall && checked}
           disabled={!canRecall}
           onChange={onToggle}
-          aria-label={`撤回明细 ${row.seq}`}
+          aria-label={t('broadcast.detail.revokeAria', { seq: row.seq })}
         />
       </Td>
       <Td className="w-12 tabular-nums">{row.seq}</Td>
@@ -546,14 +551,14 @@ function DetailRow({
         {row.chatKey}
       </Td>
       <Td className="w-16" title={`contentIndex=${row.contentIndex}`}>
-        第 {row.contentIndex + 1} 条
+        {t('broadcast.detail.contentIndex', { n: row.contentIndex + 1 })}
       </Td>
       <Td className="max-w-[22rem] break-words" title={row.body}>
         {truncate(row.body, BODY_MAX)}
       </Td>
       <Td className="w-20">
         <Badge variant={detailVariant(row.sendStatus)} className="text-[11px]">
-          {SEND_STATUS_LABEL[row.sendStatus]}
+          {t(SEND_STATUS_LABEL[row.sendStatus])}
         </Badge>
       </Td>
       <Td
@@ -566,7 +571,7 @@ function DetailRow({
         {row.msgKey ? truncate(row.msgKey, KEY_MAX) : '—'}
       </Td>
       <Td className="w-28 text-muted-foreground">
-        {RECALL_STATUS_LABEL[row.recallStatus]}
+        {t(RECALL_STATUS_LABEL[row.recallStatus])}
         {row.recallDetail && (
           <span className="block truncate" title={row.recallDetail}>
             {row.recallDetail}
@@ -584,12 +589,12 @@ function DetailRow({
             onClick={onRetry}
             disabled={retrying}
           >
-            重发这一条
+            {t('broadcast.detail.retryOne')}
           </Button>
         ) : row.sendStatus === 'unknown' ? (
           // R3：V1 不给 unknown 任何复位/裁决入口——它可能已经发出去了，重发就是往客户脸上发两遍。
           <span className="text-[11px] leading-tight text-muted-foreground">
-            结果未知（可能已发出），不自动重发
+            {t('broadcast.detail.unknownNoRetry')}
           </span>
         ) : (
           <span className="text-[11px] text-muted-foreground">—</span>
