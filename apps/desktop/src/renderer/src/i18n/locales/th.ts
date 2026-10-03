@@ -8,7 +8,8 @@ export const th: DeepString<typeof zhCN> = {
     loading: 'กำลังโหลด…',
     reading: 'กำลังอ่านการตั้งค่า…',
     close: 'ปิด',
-    unknownError: 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ'
+    unknownError: 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ',
+    cancel: 'ยกเลิก'
   },
   nav: {
     workspace: 'พื้นที่ทำงาน',
@@ -564,6 +565,48 @@ export const th: DeepString<typeof zhCN> = {
       rejectedNote: 'ผู้รับที่ถูกข้ามจะไม่ปรากฏในงาน โปรดตรวจสอบรายการนี้ก่อนเปิดงาน',
       contentEmpty: 'รายการ {{n}} ว่าง',
       contentTooLong: 'รายการ {{n}} เกิน {{max}} ตัวอักษร'
+    }
+  },
+  account: {
+    stage: {
+      emptyTitle: 'ยังไม่ได้เลือกบัญชี',
+      emptyDesc: 'เลือกบัญชีแพลตฟอร์มจากรายการด้านซ้ายเพื่อเข้าสู่ระบบแบบฝังและจัดการการสนทนาได้ที่นี่',
+      online: 'ออนไลน์',
+      offline: 'ออฟไลน์',
+      sessionOffline: 'เซสชันยังไม่ออนไลน์',
+      sessionSettingsTitle: 'ตั้งค่าทิศทางภาษาและเส้นทางสำหรับเซสชันปัจจุบัน',
+      sessionSettings: 'ตั้งค่าเซสชัน',
+      injectTitle: 'ฉีดสคริปต์เสริม (แบดจ์ลอย / ความสามารถการแปลในอนาคต)',
+      inject: 'ฉีด{{state}}',
+      injectOn: 'เปิด',
+      injectOff: 'ปิด',
+      reloadTitle: 'โหลดหน้าเว็บใหม่',
+      browserPreviewOnly: 'กำลังอยู่ในโหมดตัวอย่างเบราว์เซอร์ มุมมองแบบฝังใช้ได้เฉพาะบนเดสก์ทอป',
+      embedNotSupported: '{{label}} ยังไม่รองรับการเข้าสู่ระบบแบบฝังเว็บ',
+      loading: 'กำลังโหลดหน้าเว็บ…'
+    },
+    sidebar: {
+      title: 'บัญชีแพลตฟอร์ม',
+      channelCount: '{{count}} ช่องทาง',
+      addTitle: 'เพิ่มบัญชี',
+      loading: 'กำลังโหลด…',
+      loadError: 'โหลดบัญชีไม่ได้ โปรดตรวจสอบว่าระบบหลังบ้านกำลังทำงาน',
+      empty: 'ยังไม่มีบัญชี แตะ + มุมขวาบนเพื่อเพิ่ม',
+      deleteTitle: 'ลบบัญชี'
+    },
+    add: {
+      title: 'เพิ่มบัญชีแพลตฟอร์ม',
+      desc: 'เพิ่มบัญชีช่องทางที่เข้าสู่ระบบแบบฝังได้สำหรับทีมปัจจุบัน',
+      platformType: 'ประเภทแพลตฟอร์ม',
+      platformPlaceholder: 'เลือกแพลตฟอร์ม',
+      nameLabel: 'ชื่อที่แสดง',
+      namePlaceholder: 'เช่น ฝ่ายบริการ 1',
+      phoneLabel: 'หมายเลขที่ผูก (ไม่บังคับ)',
+      phonePlaceholder: '+86 138 0000 0000',
+      remarkLabel: 'หมายเหตุ (ไม่บังคับ)',
+      remarkPlaceholder: 'อธิบายการใช้งาน',
+      submitting: 'กำลังเพิ่ม…',
+      confirm: 'ยืนยันการเพิ่ม'
     }
   }
 }

@@ -9,7 +9,8 @@ export const en: DeepString<typeof zhCN> = {
     loading: 'Loading…',
     reading: 'Reading settings…',
     close: 'Close',
-    unknownError: 'Unknown error'
+    unknownError: 'Unknown error',
+    cancel: 'Cancel'
   },
   nav: {
     workspace: 'Workspace',
@@ -570,6 +571,48 @@ export const en: DeepString<typeof zhCN> = {
       rejectedNote: 'Skipped recipients will not appear in the task; review this list before opening the task.',
       contentEmpty: 'Entry {{n}} is empty',
       contentTooLong: 'Entry {{n}} exceeds {{max}} characters'
+    }
+  },
+  account: {
+    stage: {
+      emptyTitle: 'No account selected',
+      emptyDesc: 'Pick a platform account from the left list to embed its login and manage conversations here.',
+      online: 'Online',
+      offline: 'Offline',
+      sessionOffline: 'Session not online',
+      sessionSettingsTitle: 'Set language direction and routing for the current conversation',
+      sessionSettings: 'Session settings',
+      injectTitle: 'Inject enhancement script (floating badge / future translation)',
+      inject: 'Inject {{state}}',
+      injectOn: 'on',
+      injectOff: 'off',
+      reloadTitle: 'Reload page',
+      browserPreviewOnly: 'You are in browser preview; the embedded view is only available on desktop.',
+      embedNotSupported: '{{label}} does not support in-page login yet.',
+      loading: 'Page loading…'
+    },
+    sidebar: {
+      title: 'Platform accounts',
+      channelCount: '{{count}} channels',
+      addTitle: 'Add account',
+      loading: 'Loading…',
+      loadError: 'Cannot load accounts. Please make sure the backend is running.',
+      empty: 'No accounts yet. Click + at the top right to add one.',
+      deleteTitle: 'Delete account'
+    },
+    add: {
+      title: 'Add platform account',
+      desc: 'Add an embeddable channel account for the current team.',
+      platformType: 'Platform type',
+      platformPlaceholder: 'Select a platform',
+      nameLabel: 'Display name',
+      namePlaceholder: 'e.g. Support Agent 1',
+      phoneLabel: 'Bound number (optional)',
+      phonePlaceholder: '+86 138 0000 0000',
+      remarkLabel: 'Remark (optional)',
+      remarkPlaceholder: 'Usage note',
+      submitting: 'Adding…',
+      confirm: 'Confirm add'
     }
   }
 }

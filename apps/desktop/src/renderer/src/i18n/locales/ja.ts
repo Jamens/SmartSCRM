@@ -8,7 +8,8 @@ export const ja: DeepString<typeof zhCN> = {
     loading: '読み込み中…',
     reading: '設定を読み込み中…',
     close: '閉じる',
-    unknownError: '不明なエラー'
+    unknownError: '不明なエラー',
+    cancel: 'キャンセル'
   },
   nav: {
     workspace: 'ワークスペース',
@@ -564,6 +565,48 @@ export const ja: DeepString<typeof zhCN> = {
       rejectedNote: 'スキップされた受信者はタスクに表示されません。タスクを開く前にこの一覧を確認してください。',
       contentEmpty: '{{n}} 件目が空です',
       contentTooLong: '{{n}} 件目が {{max}} 文字を超えています'
+    }
+  },
+  account: {
+    stage: {
+      emptyTitle: 'アカウントが選択されていません',
+      emptyDesc: '左のリストからプラットフォームアカウントを選ぶと、ここに埋め込みログインして会話を管理できます。',
+      online: 'オンライン',
+      offline: 'オフライン',
+      sessionOffline: 'セッションはオフラインです',
+      sessionSettingsTitle: '現在の会話の言語方向と経路を設定',
+      sessionSettings: 'セッション設定',
+      injectTitle: '拡張スクリプトを注入（フローティングバッジ / 今後の翻訳機能）',
+      inject: '注入{{state}}',
+      injectOn: 'オン',
+      injectOff: 'オフ',
+      reloadTitle: 'ページを再読み込み',
+      browserPreviewOnly: '現在はブラウザプレビューです。埋め込みビューはデスクトップ版のみ利用できます。',
+      embedNotSupported: '{{label}} はウェブ埋め込みログインに対応していません。',
+      loading: 'ページ読み込み中…'
+    },
+    sidebar: {
+      title: 'プラットフォームアカウント',
+      channelCount: '{{count}} チャンネル',
+      addTitle: 'アカウントを追加',
+      loading: '読み込み中…',
+      loadError: 'アカウントを読み込めません。バックエンドが起動しているか確認してください。',
+      empty: 'アカウントはまだありません。右上の + をクリックして追加してください。',
+      deleteTitle: 'アカウントを削除'
+    },
+    add: {
+      title: 'プラットフォームアカウントを追加',
+      desc: '現在のチームに埋め込みログイン可能なチャンネルアカウントを追加します。',
+      platformType: 'プラットフォーム種別',
+      platformPlaceholder: 'プラットフォームを選択',
+      nameLabel: '表示名',
+      namePlaceholder: '例：サポート1号',
+      phoneLabel: '紐付け番号（任意）',
+      phonePlaceholder: '+86 138 0000 0000',
+      remarkLabel: '備考（任意）',
+      remarkPlaceholder: '用途の説明',
+      submitting: '追加中…',
+      confirm: '追加を確定'
     }
   }
 }
