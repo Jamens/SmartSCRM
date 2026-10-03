@@ -686,5 +686,39 @@ export const vi: DeepString<typeof zhCN> = {
       audio: 'Âm thanh',
       file: 'Tệp'
     }
+  },
+
+  audiences: {
+    title: 'Nhóm khách hàng',
+    subtitle: 'Phân khúc khách hàng đã lưu, kết hợp theo nhãn / nền tảng / từ khóa',
+    newAudience: 'Tạo nhóm khách hàng',
+    loading: 'Đang tải nhóm khách hàng…',
+    empty: 'Chưa có nhóm khách hàng, hãy nhấn "Tạo" ở góc trên bên phải.',
+    platformPrefix: 'Nền tảng: ',
+    keywordPrefix: 'Từ khóa: ',
+    tagPrefix: 'Nhãn: ',
+    none: '—',
+    view: 'Xem',
+    edit: 'Sửa',
+    delete: 'Xóa',
+    deleteConfirm: 'Xóa nhóm khách hàng "{{name}}"?',
+    editAudience: 'Sửa nhóm khách hàng',
+    dialogDesc: 'Điều kiện là "đồng thời thỏa mãn": tất cả nhãn đã chọn phải khớp, sau đó mới chồng thêm nền tảng và từ khóa.',
+    name: 'Tên',
+    namePlaceholder: 'Ví dụ: Khách hàng giá trị cao đã chốt',
+    platform: 'Nền tảng',
+    keyword: 'Từ khóa',
+    allPlatforms: 'Tất cả nền tảng',
+    keywordPlaceholder: 'Khớp nickname / điện thoại / email',
+    tagField: 'Nhãn (phải khớp tất cả)',
+    noLabelsHint: 'Chưa có nhãn, hãy tạo trong "Nhãn" trước.',
+    previewTitle: 'Khách hàng trong nhóm',
+    previewDesc: '{{total}} khách hàng khớp điều kiện nhóm này.',
+    previewEmpty: 'Chưa có khách hàng khớp.',
+    unnamedCustomer: 'Khách hàng chưa đặt tên',
+    pageInfo: 'Trang {{page}} / {{pageCount}}',
+    prevPage: 'Trước',
+    nextPage: 'Sau',
+    all: 'Tất cả'
   }
 }

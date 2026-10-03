@@ -686,5 +686,39 @@ export const th: DeepString<typeof zhCN> = {
       audio: 'เสียง',
       file: 'ไฟล์'
     }
+  },
+
+  audiences: {
+    title: 'กลุ่มเป้าหมาย',
+    subtitle: 'เซกเมนต์ลูกค้าที่บันทึกไว้ รวมตามแท็ก / แพลตฟอร์ม / คำค้น',
+    newAudience: 'สร้างกลุ่มเป้าหมาย',
+    loading: 'กำลังโหลดกลุ่มเป้าหมาย…',
+    empty: 'ยังไม่มีกลุ่มเป้าหมาย คลิกสร้างมุมขวาบน',
+    platformPrefix: 'แพลตฟอร์ม: ',
+    keywordPrefix: 'คำค้น: ',
+    tagPrefix: 'แท็ก: ',
+    none: '—',
+    view: 'ดู',
+    edit: 'แก้ไข',
+    delete: 'ลบ',
+    deleteConfirm: 'ลบกลุ่มเป้าหมาย "{{name}}"?',
+    editAudience: 'แก้ไขกลุ่มเป้าหมาย',
+    dialogDesc: 'เงื่อนไขคือ "ต้องตรงทั้งหมด": แท็กที่เลือกทั้งหมดต้องตรง จากนั้นจึงเพิ่มแพลตฟอร์มและคำค้น',
+    name: 'ชื่อ',
+    namePlaceholder: 'เช่น ลูกค้าที่ปิดการขายมูลค่าสูง',
+    platform: 'แพลตฟอร์ม',
+    keyword: 'คำค้น',
+    allPlatforms: 'ทุกแพลตฟอร์ม',
+    keywordPlaceholder: 'จับคู่ชื่อเล่น / โทรศัพท์ / อีเมล',
+    tagField: 'แท็ก (ต้องตรงทั้งหมด)',
+    noLabelsHint: 'ยังไม่มีแท็ก กรุณาสร้างใน "แท็ก" ก่อน',
+    previewTitle: 'ลูกค้าในกลุ่มเป้าหมาย',
+    previewDesc: 'ลูกค้า {{total}} รายตรงกับเงื่อนไขกลุ่มนี้',
+    previewEmpty: 'ไม่มีลูกค้าที่ตรงเงื่อนไข',
+    unnamedCustomer: 'ลูกค้าไม่ระบุชื่อ',
+    pageInfo: 'หน้า {{page}} / {{pageCount}}',
+    prevPage: 'ก่อนหน้า',
+    nextPage: 'ถัดไป',
+    all: 'ทั้งหมด'
   }
 }

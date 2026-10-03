@@ -686,5 +686,39 @@ export const ja: DeepString<typeof zhCN> = {
       audio: '音声',
       file: 'ファイル'
     }
+  },
+
+  audiences: {
+    title: 'オーディエンス',
+    subtitle: 'タグ・プラットフォーム・キーワードで組み合わせて保存した顧客セグメント',
+    newAudience: 'オーディエンスを新規作成',
+    loading: 'オーディエンスを読み込み中…',
+    empty: 'オーディエンスはまだありません。右上から新規作成してください。',
+    platformPrefix: 'プラットフォーム：',
+    keywordPrefix: 'キーワード：',
+    tagPrefix: 'タグ：',
+    none: '—',
+    view: '表示',
+    edit: '編集',
+    delete: '削除',
+    deleteConfirm: 'オーディエンス "{{name}}" を削除しますか？',
+    editAudience: 'オーディエンスを編集',
+    dialogDesc: '条件は「すべて満たす」です。選択したタグがすべて一致し、さらにプラットフォームとキーワードが重なります。',
+    name: '名前',
+    namePlaceholder: '例：高価値成約顧客',
+    platform: 'プラットフォーム',
+    keyword: 'キーワード',
+    allPlatforms: 'すべてのプラットフォーム',
+    keywordPlaceholder: 'ニックネーム/電話/メールに一致',
+    tagField: 'タグ（すべて一致が必要）',
+    noLabelsHint: 'タグがありません。「ラベル」で先に作成してください。',
+    previewTitle: 'オーディエンスの顧客',
+    previewDesc: 'このオーディエンスの条件に {{total}} 件の顧客が一致しました。',
+    previewEmpty: '一致する顧客はいません。',
+    unnamedCustomer: '名称未設定の顧客',
+    pageInfo: '{{page}} / {{pageCount}} ページ',
+    prevPage: '前へ',
+    nextPage: '次へ',
+    all: 'すべて'
   }
 }
