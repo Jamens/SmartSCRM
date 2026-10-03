@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import {
   ArrowDown,
   ArrowUp,
@@ -52,7 +53,11 @@ import {
 
 const ALL = 'all'
 const ITEM_TYPES: ReplyItemType[] = [1, 2, 3]
-const ITEM_TYPE_LABELS: Record<ReplyItemType, string> = { 1: '文字', 2: '图片', 3: '名片' }
+const ITEM_TYPE_LABELS: Record<ReplyItemType, string> = {
+  1: 'quickReplies.type.text',
+  2: 'quickReplies.type.image',
+  3: 'quickReplies.type.card'
+}
 
 interface ItemDraft {
   type: ReplyItemType
@@ -119,6 +124,7 @@ function itemValid(draft: ItemDraft): boolean {
 }
 
 export default function QuickRepliesPage(): React.JSX.Element {
+  const { t } = useTranslation()
   const { data: groups = [] } = useQuickReplyGroups()
   const [groupId, setGroupId] = useState<string>(ALL)
   const [keyword, setKeyword] = useState('')
@@ -185,8 +191,8 @@ export default function QuickRepliesPage(): React.JSX.Element {
   }
 
   const deleteGroup = (group: QuickReplyGroupVO): void => {
-    const warning = group.replyCount > 0 ? `（其下 ${group.replyCount} 条话术将一并删除）` : ''
-    if (!window.confirm(`确认删除分组「${group.name}」${warning}？`)) return
+    const warning = group.replyCount > 0 ? t('quickReplies.deleteGroupWarning', { count: group.replyCount }) : ''
+    if (!window.confirm(t('quickReplies.deleteGroupConfirm', { name: group.name, warning }))) return
     removeGroup.mutate(group.id)
     if (groupId === String(group.id)) setGroupId(ALL)
   }
@@ -208,18 +214,18 @@ export default function QuickRepliesPage(): React.JSX.Element {
         <div>
           <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
             <MessagesSquare className="size-5 text-primary" />
-            快捷回复
+            {t('quickReplies.title')}
           </h1>
-          <p className="text-xs text-muted-foreground">文字 / 图片 / 名片多组件话术，一键复制到会话窗口</p>
+          <p className="text-xs text-muted-foreground">{t('quickReplies.subtitle')}</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" size="sm" onClick={() => setGroupDraft({ name: '' })}>
             <Plus className="size-4" />
-            新建分组
+            {t('quickReplies.newGroup')}
           </Button>
           <Button size="sm" onClick={openCreate}>
             <Plus className="size-4" />
-            新建话术
+            {t('quickReplies.newReply')}
           </Button>
         </div>
       </header>
@@ -227,13 +233,13 @@ export default function QuickRepliesPage(): React.JSX.Element {
       <div className="flex flex-wrap items-center gap-3 border-b border-border/60 px-6 py-3">
         <Input
           className="w-56 max-w-full"
-          placeholder="搜索标题 / 快捷码"
+          placeholder={t('quickReplies.searchPlaceholder')}
           value={keyword}
           onChange={(e) => setKeyword(e.target.value)}
         />
         <div className="flex flex-wrap items-center gap-1.5">
           <FilterChip active={groupId === ALL} onClick={() => setGroupId(ALL)}>
-            全部分组
+            {t('quickReplies.allGroups')}
           </FilterChip>
           {groups.map((group) => (
             <FilterChip key={group.id} active={groupId === String(group.id)} onClick={() => setGroupId(String(group.id))}>
@@ -251,7 +257,7 @@ export default function QuickRepliesPage(): React.JSX.Element {
               onClick={() => setGroupDraft({ id: filteredGroupId, name: groups.find((g) => g.id === filteredGroupId)?.name ?? '' })}
             >
               <Pencil className="size-3.5" />
-              重命名
+              {t('quickReplies.rename')}
             </Button>
             <Button
               variant="ghost"
@@ -263,7 +269,7 @@ export default function QuickRepliesPage(): React.JSX.Element {
               }}
             >
               <Trash2 className="size-3.5" />
-              删除分组
+              {t('quickReplies.deleteGroup')}
             </Button>
           </div>
         )}
@@ -271,11 +277,9 @@ export default function QuickRepliesPage(): React.JSX.Element {
 
       <div className="min-h-0 flex-1 overflow-auto p-6">
         {replies.isPending ? (
-          <p className="py-16 text-center text-sm text-muted-foreground">加载话术中…</p>
+          <p className="py-16 text-center text-sm text-muted-foreground">{t('quickReplies.loading')}</p>
         ) : records.length === 0 ? (
-          <p className="py-16 text-center text-sm text-muted-foreground">
-            没有符合条件的快捷回复，点击右上角「新建话术」开始添加。
-          </p>
+          <p className="py-16 text-center text-sm text-muted-foreground">{t('quickReplies.empty')}</p>
         ) : (
           <div className="grid gap-4 md:grid-cols-2 2xl:grid-cols-3">
             {records.map((reply) => (
@@ -287,7 +291,7 @@ export default function QuickRepliesPage(): React.JSX.Element {
                 onCopy={() => void copyReply(reply)}
                 onEdit={() => openEdit(reply)}
                 onDelete={() => {
-                  if (window.confirm(`确认删除话术「${reply.title}」？`)) removeReply.mutate(reply.id)
+                  if (window.confirm(t('quickReplies.deleteReplyConfirm', { title: reply.title }))) removeReply.mutate(reply.id)
                 }}
               />
             ))}
@@ -299,42 +303,42 @@ export default function QuickRepliesPage(): React.JSX.Element {
       <Dialog open={draft !== null} onOpenChange={(open) => !open && setDraft(null)}>
         <DialogContent className="flex max-h-[85vh] w-full flex-col gap-0 sm:max-w-2xl">
           <DialogHeader>
-            <DialogTitle>{draft?.id != null ? '编辑快捷回复' : '新建快捷回复'}</DialogTitle>
-            <DialogDescription>按顺序拼接多个组件，发送时整体复制到剪贴板。</DialogDescription>
+            <DialogTitle>{draft?.id != null ? t('quickReplies.editReply') : t('quickReplies.newReply')}</DialogTitle>
+            <DialogDescription>{t('quickReplies.dialogDesc')}</DialogDescription>
           </DialogHeader>
 
           {draft && (
             <div className="-mx-1 min-h-0 flex-1 space-y-4 overflow-y-auto px-1 py-1">
               <div className="grid grid-cols-[1fr_200px] gap-3">
                 <div className="space-y-1.5">
-                  <Label>标题</Label>
+                  <Label>{t('quickReplies.titleLabel')}</Label>
                   <Input
                     value={draft.title}
                     onChange={(e) => setDraft({ ...draft, title: e.target.value })}
-                    placeholder="例如：物流查询话术"
+                    placeholder={t('quickReplies.titlePlaceholder')}
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label>快捷码（可选）</Label>
+                  <Label>{t('quickReplies.shortcutLabel')}</Label>
                   <Input
                     value={draft.shortcut}
                     onChange={(e) => setDraft({ ...draft, shortcut: e.target.value })}
-                    placeholder="/hi"
+                    placeholder={t('quickReplies.shortcutPlaceholder')}
                   />
                 </div>
               </div>
 
               <div className="space-y-1.5">
-                <Label>分组</Label>
+                <Label>{t('quickReplies.group')}</Label>
                 <Select
                   value={draft.groupId != null ? String(draft.groupId) : 'none'}
                   onValueChange={(v) => setDraft({ ...draft, groupId: v === 'none' ? null : Number(v) })}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="选择分组" />
+                    <SelectValue placeholder={t('quickReplies.group')} />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="none">未分组</SelectItem>
+                    <SelectItem value="none">{t('quickReplies.ungrouped')}</SelectItem>
                     {groups.map((g) => (
                       <SelectItem key={g.id} value={String(g.id)}>
                         {g.name}
@@ -346,18 +350,18 @@ export default function QuickRepliesPage(): React.JSX.Element {
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between">
-                  <Label>组件（{draft.items.length}）</Label>
+                  <Label>{t('quickReplies.itemLabel', { count: draft.items.length })}</Label>
                   <div className="flex gap-1">
-                    {ITEM_TYPES.map((t) => (
+                    {ITEM_TYPES.map((tt) => (
                       <Button
-                        key={t}
+                        key={tt}
                         variant="outline"
                         size="sm"
                         className="h-7 px-2 text-xs"
-                        onClick={() => setDraft({ ...draft, items: [...draft.items, emptyItem(t)] })}
+                        onClick={() => setDraft({ ...draft, items: [...draft.items, emptyItem(tt)] })}
                       >
                         <Plus className="size-3.5" />
-                        {ITEM_TYPE_LABELS[t]}
+                        {t(ITEM_TYPE_LABELS[tt])}
                       </Button>
                     ))}
                   </div>
@@ -382,7 +386,7 @@ export default function QuickRepliesPage(): React.JSX.Element {
                   ))}
                   {draft.items.length === 0 && (
                     <p className="rounded-lg border border-dashed border-border p-4 text-center text-xs text-muted-foreground">
-                      还没有组件，点击上方按钮添加文字 / 图片 / 名片。
+                      {t('quickReplies.emptyItemsHint')}
                     </p>
                   )}
                 </div>
@@ -392,13 +396,13 @@ export default function QuickRepliesPage(): React.JSX.Element {
 
           <DialogFooter className="mt-4">
             <Button variant="outline" onClick={() => setDraft(null)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button
               onClick={() => void saveReply()}
               disabled={!canSave || createReply.isPending || updateReply.isPending}
             >
-              {createReply.isPending || updateReply.isPending ? '保存中…' : '保存'}
+              {createReply.isPending || updateReply.isPending ? t('labels.saving') : t('labels.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -408,27 +412,27 @@ export default function QuickRepliesPage(): React.JSX.Element {
       <Dialog open={groupDraft !== null} onOpenChange={(open) => !open && setGroupDraft(null)}>
         <DialogContent className="sm:max-w-sm">
           <DialogHeader>
-            <DialogTitle>{groupDraft?.id != null ? '重命名分组' : '新建分组'}</DialogTitle>
+            <DialogTitle>{groupDraft?.id != null ? t('quickReplies.rename') : t('quickReplies.newGroup')}</DialogTitle>
           </DialogHeader>
           {groupDraft && (
             <div className="space-y-1.5">
-              <Label>分组名称</Label>
+              <Label>{t('quickReplies.groupNameLabel')}</Label>
               <Input
                 value={groupDraft.name}
                 onChange={(e) => setGroupDraft({ ...groupDraft, name: e.target.value })}
-                placeholder="例如：售前咨询"
+                placeholder={t('quickReplies.groupNamePlaceholder')}
               />
             </div>
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setGroupDraft(null)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button
               onClick={() => void saveGroup()}
               disabled={!groupDraft?.name.trim() || createGroup.isPending || updateGroup.isPending}
             >
-              保存
+              {t('labels.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -460,6 +464,7 @@ function ReplyCard({
   onEdit: () => void
   onDelete: () => void
 }): React.JSX.Element {
+  const { t } = useTranslation()
   return (
     <div className="flex flex-col rounded-xl border border-border/60 bg-card">
       <div className="flex items-start justify-between gap-2 border-b border-border/60 px-4 py-3">
@@ -473,12 +478,12 @@ function ReplyCard({
             )}
           </p>
           <p className="mt-0.5 truncate text-xs text-muted-foreground">
-            {groupName ?? '未分组'} · {reply.items.length} 个组件 · 已用 {reply.useCount} 次
+            {t('quickReplies.cardMeta', { group: groupName ?? t('quickReplies.ungrouped'), count: reply.items.length, uses: reply.useCount })}
           </p>
         </div>
         <Button size="sm" variant={copied ? 'secondary' : 'default'} className="h-7 shrink-0 gap-1 px-2 text-xs" onClick={onCopy}>
           {copied ? <Check className="size-3.5" /> : <Copy className="size-3.5" />}
-          {copied ? '已复制' : '复制'}
+          {copied ? t('quickReplies.copiedDone') : t('quickReplies.copy')}
         </Button>
       </div>
 
@@ -489,10 +494,10 @@ function ReplyCard({
       </div>
 
       <div className="flex items-center justify-end gap-1 border-t border-border/60 px-4 py-2">
-        <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" title="编辑" onClick={onEdit}>
+        <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground" title={t('materials.edit')} onClick={onEdit}>
           <Pencil className="size-3.5" />
         </button>
-        <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive" title="删除" onClick={onDelete}>
+        <button className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-destructive" title={t('materials.delete')} onClick={onDelete}>
           <Trash2 className="size-3.5" />
         </button>
       </div>
@@ -501,18 +506,19 @@ function ReplyCard({
 }
 
 function ItemPreview({ item }: { item: QuickReplyItemVO }): React.JSX.Element {
+  const { t } = useTranslation()
   if (item.type === 2) {
     return (
       <div className="flex items-center gap-2 rounded-lg bg-muted/40 p-2">
         {item.mediaUrl ? (
-          <img src={item.mediaUrl} alt="素材" className="size-12 shrink-0 rounded object-cover" />
+          <img src={item.mediaUrl} alt={t('quickReplies.previewImgAlt')} className="size-12 shrink-0 rounded object-cover" />
         ) : (
           <span className="flex size-12 shrink-0 items-center justify-center rounded bg-muted text-muted-foreground">
             <ImageIcon className="size-5" />
           </span>
         )}
         <Badge variant="outline" className="text-[10px]">
-          图片组件
+          {t('quickReplies.imageComponent')}
         </Badge>
       </div>
     )
@@ -554,6 +560,7 @@ function ItemEditor({
   onMoveDown: () => void
   onRemove: () => void
 }): React.JSX.Element {
+  const { t } = useTranslation()
   const [pickOpen, setPickOpen] = useState(false)
   const valid = itemValid(item)
 
@@ -562,16 +569,16 @@ function ItemEditor({
       <div className="mb-2 flex items-center gap-2">
         <Badge variant="outline" className="gap-1 text-[10px]">
           {item.type === 1 ? <Type className="size-3" /> : item.type === 2 ? <ImageIcon className="size-3" /> : <CreditCard className="size-3" />}
-          {ITEM_TYPE_LABELS[item.type]}
+          {t(ITEM_TYPE_LABELS[item.type])}
         </Badge>
         <div className="ml-auto flex items-center gap-0.5">
-          <IconAction title="上移" disabled={index === 0} onClick={onMoveUp}>
+          <IconAction title={t('quickReplies.moveUp')} disabled={index === 0} onClick={onMoveUp}>
             <ArrowUp className="size-3.5" />
           </IconAction>
-          <IconAction title="下移" disabled={index === total - 1} onClick={onMoveDown}>
+          <IconAction title={t('quickReplies.moveDown')} disabled={index === total - 1} onClick={onMoveDown}>
             <ArrowDown className="size-3.5" />
           </IconAction>
-          <IconAction title="删除组件" onClick={onRemove} danger>
+          <IconAction title={t('quickReplies.removeItem')} onClick={onRemove} danger>
             <Trash2 className="size-3.5" />
           </IconAction>
         </div>
@@ -582,7 +589,7 @@ function ItemEditor({
           className="h-20 w-full resize-none rounded-md border border-border bg-transparent px-3 py-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
           value={item.content}
           onChange={(e) => onChange({ ...item, content: e.target.value })}
-          placeholder="回复正文，支持换行"
+          placeholder={t('quickReplies.textPlaceholder')}
         />
       )}
 
@@ -590,18 +597,18 @@ function ItemEditor({
         <div className="space-y-2">
           <div className="flex items-center gap-2">
             {item.mediaUrl && (
-              <img src={item.mediaUrl} alt="预览" className="size-14 shrink-0 rounded-md border border-border object-cover" />
+              <img src={item.mediaUrl} alt={t('quickReplies.previewImgAlt')} className="size-14 shrink-0 rounded-md border border-border object-cover" />
             )}
             <div className="min-w-0 flex-1 space-y-1.5">
               <Input
-                value={item.mediaUrl.startsWith('data:') ? '（内嵌本地图片）' : item.mediaUrl}
+                value={item.mediaUrl.startsWith('data:') ? t('quickReplies.inlineImage') : item.mediaUrl}
                 onChange={(e) => onChange({ ...item, mediaUrl: e.target.value, materialId: null })}
-                placeholder="素材图片 URL，或从素材库选择"
+                placeholder={t('quickReplies.mediaUrlPlaceholder')}
               />
               <div className="flex gap-1">
                 <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => setPickOpen(true)}>
                   <ImageIcon className="size-3.5" />
-                  从素材库选择
+                  {t('quickReplies.pickFromLibrary')}
                 </Button>
                 {(item.mediaUrl || item.materialId != null) && (
                   <Button
@@ -610,7 +617,7 @@ function ItemEditor({
                     className="h-7 text-xs"
                     onClick={() => onChange({ ...item, mediaUrl: '', materialId: null })}
                   >
-                    清除
+                    {t('quickReplies.clear')}
                   </Button>
                 )}
               </div>
@@ -632,12 +639,12 @@ function ItemEditor({
           <Input
             value={item.cardName}
             onChange={(e) => onChange({ ...item, cardName: e.target.value })}
-            placeholder="名片名称"
+            placeholder={t('quickReplies.cardNamePlaceholder')}
           />
           <Input
             value={item.cardPhone}
             onChange={(e) => onChange({ ...item, cardPhone: e.target.value })}
-            placeholder="联系电话（可选）"
+            placeholder={t('quickReplies.cardPhonePlaceholder')}
           />
         </div>
       )}
@@ -654,19 +661,20 @@ function MaterialPicker({
   onOpenChange: (open: boolean) => void
   onPick: (material: MaterialVO) => void
 }): React.JSX.Element {
+  const { t } = useTranslation()
   const materials = useMaterials({ type: 1 })
   const images = materials.data ?? []
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>选择图片素材</DialogTitle>
-          <DialogDescription>来自素材库的图片会记录 materialId，并快照当前地址。</DialogDescription>
+          <DialogTitle>{t('quickReplies.pickerTitle')}</DialogTitle>
+          <DialogDescription>{t('quickReplies.pickerDesc')}</DialogDescription>
         </DialogHeader>
         {materials.isPending ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">加载素材中…</p>
+          <p className="py-10 text-center text-sm text-muted-foreground">{t('materials.loading')}</p>
         ) : images.length === 0 ? (
-          <p className="py-10 text-center text-sm text-muted-foreground">素材库里还没有图片，请先到「素材库」添加。</p>
+          <p className="py-10 text-center text-sm text-muted-foreground">{t('quickReplies.pickerEmpty')}</p>
         ) : (
           <div className="grid max-h-[50vh] grid-cols-3 gap-3 overflow-y-auto sm:grid-cols-4">
             {images.map((material) => (
