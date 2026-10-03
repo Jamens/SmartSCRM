@@ -24,6 +24,7 @@ B6 的实现分成了两段交付：**Java 数据层**（`3771927`）与**桥侧
 | `fad3fda`（+ 8b 修正轮一次提交） | Task 8b 的八条语义校准：V13 两列 + `MemberPageVO` + `markSnapshotSuccess`/`markGate` 分工 + 行序/转义/账号收窄/导出码数/事件投影/入参长度闸；附 17 条校准单测（读侧 10 / 写侧 7）与 2 条「缺必填查询参数 = 400」的形状单测 | Task 8b | 已交付（`apps/server` 全量 `./mvnw test` 绿；V13 两列由 `tmp/P8Tables.java` 探针实测已进库） |
 | `954eb58` `4852494` | 计划与本 spec 的文档同步 | — | 已交付 |
 | 契约腿（`tmp/p8-group-members-contract.mjs` + `tmp/P8Purge.java`，**不进 git**） | Task 14：HTTP 契约档 48 格断言 + 按精确键收尾清理 | Task 14 | **实测 2026-10-03**（`:8180` = 含 `33c8785` 的 jar，库 = `smartscrm_react`，账号 7 / platformType 1）：**46 绿 / 2 红 / 记账 48**（分母 = 脚本里 `check(` 的调用数，与 §Task 14 Step 10 推定的 48 一致），退出码 **1**（断言红；前置档另测一次得 **2**，见 `tmp/p8-contract-premise.log`），日志 `tmp/p8-contract.log`。清理腿在三条退出路径上都挂着，本轮 affected rows = `group_member_event` 2 / `group_member_state` 12 / `chat_group` 2，**三表 residual 全 0**（`tmp/p8-purge.log`）。**两条红 = 8b 的 ⑥ 与 ① 各有一半在真库里没按 §A.2 的口径生效**：⑥ `sort=stale` 的 NULL 方向反了——`GroupMemberQueryService.java:72` 写的是 `orderByAsc("ISNULL(last_snapshot_at)", …)`，`ISNULL()` 对未建档行给 **1**，升序就把已建档(0) 排前、未建档(1) 沉底，与「未建档最前」相反 ⇒ 格 `13.1` 红（同一条 idiom 在 `:133` 的成员名单上是**正确**的，那里要的就是 NULL 沉底，`10.4` 绿可作对照）。① 的「只含空白的搜索词」走的是 `:118` 的 `!q.isBlank()` 短路：`"\u3000".isBlank()` 为真（实测 `tmp/p8-u3000-probe.log`，同一探针另证 `trim()` 消不掉 U+3000 而 `strip()` 能），于是 `SearchPattern.like()` 的 strip 纪律**根本没被调到**，q 被当成「没带搜索词」，名单原样返回 12 行而不是空名单 ⇒ 格 `10.3` 红。两条都**不放宽判据**：回 8b 修（⑥ 把第一排序键改成 `DESC`；① 要么让守卫只判 `q != null` 把空白判定交给 `SearchPattern`，要么明确「全空白 = 不过滤」是新口径并回写 §A.2 ①），改完重跑本腿。 |
+| 契约腿 8b-fix2（`tmp/p8-group-members-contract.mjs` + `tmp/p8-run.sh` + `tmp/P8Purge.java`，**不进 git**） | 处理上面那两条红：13.1=代码已修、10.3=判据改口；另补一格跨账号负例 | Task 8b 修正轮（F-2 / F-1 / F-3） | **2026-10-03**。**F-2 / 13.1（真产品缺陷，方向反了）**：`GroupMemberQueryService.java:72` 从 `orderByAsc("ISNULL(last_snapshot_at)", …)` 改成 `orderByDesc("ISNULL(last_snapshot_at)").orderByAsc("last_snapshot_at").orderByAsc("id")`——`ISNULL()` 对未建档行给 1，`DESC` 才把它顶到最前（升序反把已建档排前）；spec §7 与计划 ⑥ 那两格照抄的 `ISNULL(...)` 升序文本同步改成 `ISNULL(...) DESC`。补 Java 方向哨兵 `GroupMemberReadCalibrationTest.staleSortDirectionIsNullDescWhileMemberListStaysAsc`：断 stale 分支 `ISNULL(last_snapshot_at)` 紧跟 `DESC`、成员名单 `:133` 的 `ISNULL(latest_join_at)` 紧跟 `ASC`（两处意图相反，挡"一起改成 DESC"）；先对旧代码跑红（`tmp/p8fix-red-stale.log`，`expected DESC but was ASC`），改后 `./mvnw test` **142 绿 / 0 失败**（`tmp/p8fix-test.log`，基线 141 + 本条 1）。**HTTP 复跑 13.1 由控制席在新 jar 上做**（本席不许重打包/重启 `:8180`）——本轮 8b-fix2 对现网（含 `33c8785`、不含本修复）跑一遍：只剩 13.1 红、新格全绿、退出码 **1**（`tmp/p8-contract-prefix.log`：49 绿/1 红/记账 50，清理三表 residual 全 0），作用是证明驱动改动本身无语法/布景问题，**不是 13.1 的收口**。**F-1 / 10.3（判据错在计划文本，不在产品，`:118` 行为不动）**：旧格断「全角空格 ⇒ 空名单（0 行）」无规范支撑，且与它声称同形的参考实现 `MessageQueryService.java:75-78` 相反——Java `String.isBlank()` 把 U+3000 判为空白 ⇒ `:118` 短路、不加过滤 ⇒ 名单返回全量。换成两条更有判别力的断言：**10.3a** 空白即不搜（全角 U+3000 / ASCII 空格各一趟，都断名单条数 = 布景全量且 ≥1，把实际读到的行数打出来当「全量 vs 空名单」判别器）；**10.3b** 尾随 U+3000 仍精确命中已知存在的成员「客户夹具」那一行（`length===1` 且 displayName 对得上；`strip()` 误写成 `trim()` 时 U+3000 消不掉 ⇒ `%…　%` 0 命中，这一格变红——这才是 strip-vs-trim 的真证人，旧格那句「trim 会命中全表」的变异理由也是错的）。旧 10.1/10.2（null 契约 + 转义）保留不动。现网实测两格皆绿。**F-3 跨账号负例**：新增 **14.1**——从 `GET /api/platform-accounts` 现取一个 platformType 合法且 ≠ 本轮账号的其它账号（实测 `otherAccountId=10 / platformType=7`，**不新建账号**），查本轮群列表 ⇒ 不含本轮两把群键；找不到就写 `BLOCKED(premise)`、不造数据。现网实测绿。契约腿分母 48 → **50**（−1 旧 10.3 +2 10.3a/b +1 14.1）。 |
 
 **未开工**：Task 9、10、12、13、15、16、17（Task 14 的契约腿已跑，读数见上表最后一行）。
 
@@ -2807,7 +2808,7 @@ EOF
 | ③ | `:122-133` 现场拿**当前这一页**的 `inGroup` 数除以分母算 coverage（翻页就变数）；`Controller:70` 用 `Map.of` 装容器，`coverage==null` 被压成空串 `""` | 闸读数改从 `chat_group` 的两列读（V13），算的一侧只写不读；容器换成 record `MemberPageVO`，`null` 就是 `null` | R1 / R33 / R37 |
 | ④ | `customerGroups(tenantId, customerId)` 不带账号，同一客户在两个账号下的群混在一起回 | 加必填 `accountId`，两路查询都按 `(platform, account_id)` 收窄 | R16 / spec §9 |
 | ⑤ | `exportRows:255-260` 不去重、超限给 40000、不校验群键形态 | 先去重再计数再查；超限给 **40016**；剔掉非 `@g.us` 的键，剔空了给 40000 | R40 / spec §10 |
-| ⑥ | `pageGroups` 只按 `last_snapshot_at DESC` 排，泵读不到「谁最该补档」 | 加 `sort=stale`：`ISNULL(last_snapshot_at), last_snapshot_at, id`（未建档最前，最旧的其次） | R28 / R41 |
+| ⑥ | `pageGroups` 只按 `last_snapshot_at DESC` 排，泵读不到「谁最该补档」 | 加 `sort=stale`：`ISNULL(last_snapshot_at) DESC, last_snapshot_at ASC, id ASC`（未建档最前，最旧的其次；`ISNULL()` 给未建档行 1，要 `DESC` 才顶到最前） | R28 / R41 |
 | ⑦ | `GroupMemberService:197-200` 批量 `insertIgnoreBatch` 后**无条件**逐条 `projectEvent`——并发重报时 `join_count` 双计且回不去 | 改单条 `insertIgnore`，只有 affected rows = 1 才投影 | R39 / spec §6 |
 | ⑧ | 入参长度无闸：`member_key`/`dedup_key` 超列宽会让整条 SQL 抛 500；`phone` 入库写原样（`+8613800000000`）而匹配用归一值，按号码那一路永远命中不上 | 长度超限整批 40000；`phone` 入库前过 `ChatKeys.normalizePhone`；`display_name` clip 到 128 | R42 / R38 |
 
@@ -3236,7 +3237,8 @@ powershell -NoProfile -ExecutionPolicy Bypass -File tmp/p7b-kill8180.ps1
             .eq("tenant_id", tenantId).eq("account_id", accountId).eq("platform", platform);
         if ("stale".equals(sort)) {
             // 建档泵那一支（R28 / R41）：没成功快照的最前，其余按上次成功快照从旧到新。
-            w.orderByAsc("ISNULL(last_snapshot_at)", "last_snapshot_at", "id");
+            // ISNULL(x) 对未建档行给 1、已建档给 0，所以要 DESC 才把未建档顶到最前（升序会反）。
+            w.orderByDesc("ISNULL(last_snapshot_at)").orderByAsc("last_snapshot_at").orderByAsc("id");
         } else {
             w.orderByDesc("last_snapshot_at").orderByDesc("id");
         }

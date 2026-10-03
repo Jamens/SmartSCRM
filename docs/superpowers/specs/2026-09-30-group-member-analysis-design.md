@@ -188,7 +188,7 @@ upsert 每个到场成员：命中 → is_in_group=1、role/name/phone 刷新、
 | 端点 | 用途 |
 |---|---|
 | `POST /batch` | 采集入库（§6，主进程专用，带 `X-Device`/JWT 同现有消息面） |
-| `GET /groups?accountId&page&size&sort` | 群列表：`chat_group` + 在群人数 + 最近变动时间 + 闸的两个读数（`lastCoverage` / `lastReconcileReason`）。`sort` 可选，`sort=stale` = 从没成功快照的排最前、其余按 `last_snapshot_at` 从旧到新（`ORDER BY ISNULL(last_snapshot_at), last_snapshot_at, id`），给建档泵当优先级用（位置即 rank，不在调用方比日期串）；缺省 = 新的在前 |
+| `GET /groups?accountId&page&size&sort` | 群列表：`chat_group` + 在群人数 + 最近变动时间 + 闸的两个读数（`lastCoverage` / `lastReconcileReason`）。`sort` 可选，`sort=stale` = 从没成功快照的排最前、其余按 `last_snapshot_at` 从旧到新（`ORDER BY ISNULL(last_snapshot_at) DESC, last_snapshot_at ASC, id ASC`——`ISNULL()` 对未建档行给 1，要 `DESC` 才把未建档顶到最前），给建档泵当优先级用（位置即 rank，不在调用方比日期串）；缺省 = 新的在前 |
 | `GET /group/members?chatKey&isInGroup&role&q&page&size` | 成员名单（带 `coverage/reason` 快照新鲜度字段；`coverage` 可空就是空，行序 `ISNULL(latest_join_at)` 沉底） |
 | `GET /group/events?chatKey&eventType&page&size` | 进退流水 |
 | `GET /customer/{customerId}/groups?accountId` | 按客户手机号反查其所在群（§9 的数据源）。`accountId` **必填**：同一客户在两个账号下的群不许混成一份名单；缺这一参数得到 400 |

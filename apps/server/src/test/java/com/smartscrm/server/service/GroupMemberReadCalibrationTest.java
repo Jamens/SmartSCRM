@@ -260,6 +260,65 @@ class GroupMemberReadCalibrationTest {
     }
 
     /**
+     * 方向哨兵（契约腿 13.1 / F-2）：上面那条 {@code staleSort...} 只看得到列名和 "ISNULL("，
+     * 看不出 {@code ISNULL(last_snapshot_at)} 这一排序键跟的是 ASC 还是 DESC——把 {@code :72} 从
+     * {@code orderByAsc} 改成 {@code orderByDesc} 它照样绿，这正是 13.1 在真库里才红、Java 侧测不到的原因。
+     * 这里补的正是那一维，且**断的是关系不是整串字面量**（MP 小版本会在列名后追加方向词，整串是版本相关字面量）：
+     * <ul>
+     *   <li>stale 分支：{@code ISNULL(last_snapshot_at)} 紧跟的那个词必须是 {@code DESC}
+     *       （R28 / R41：未建档最前、位置即 rank）。改坏 {@code GroupMemberQueryService.java:72} 的方向这一条就红。</li>
+     *   <li>成员名单 {@code :133}：{@code ISNULL(latest_join_at)} 之后**不许**是 {@code DESC}
+     *       ——那里要的是 NULL 沉底（真库 {@code 10.4} 绿是它的对照），两处的意图本来就相反。
+     *       这一半挡的是"下一个人把两处一起修成 DESC"。</li>
+     * </ul>
+     */
+    @Test
+    void staleSortDirectionIsNullDescWhileMemberListStaysAsc() {
+        ArgumentCaptor<QueryWrapper<ChatGroup>> groupCap = ArgumentCaptor.forClass(QueryWrapper.class);
+        when(groupMapper.selectPage(any(), groupCap.capture())).thenAnswer(inv -> inv.getArgument(0));
+
+        query.pageGroups(TENANT, ACCOUNT, "whatsapp", 1, 200, "stale");
+
+        String seg = groupCap.getValue().getSqlSegment();
+        assertEquals("DESC", directionAfter(seg, "ISNULL(last_snapshot_at)"),
+            "sort=stale 的第一排序键 ISNULL(last_snapshot_at) 不是 DESC ⇒ 未建档的行沉底而不是最前"
+                + "（改坏 GroupMemberQueryService.java:72 那行的 orderByDesc/orderByAsc 方向，这一条就红）: " + seg);
+
+        ArgumentCaptor<QueryWrapper<GroupMemberState>> memberCap = ArgumentCaptor.forClass(QueryWrapper.class);
+        when(stateMapper.selectPage(any(), memberCap.capture())).thenAnswer(inv -> inv.getArgument(0));
+        when(messageMapper.statsBySenders(any(), any(), any())).thenReturn(List.of());
+        when(groupMapper.selectByKey(TENANT, "whatsapp", ACCOUNT, GROUP)).thenReturn(null);
+
+        query.pageMembers(TENANT, ACCOUNT, "whatsapp", GROUP, null, null, null, 1, 50);
+
+        String mseg = memberCap.getValue().getSqlSegment();
+        assertEquals("ASC", directionAfter(mseg, "ISNULL(latest_join_at)"),
+            "成员名单 ISNULL(latest_join_at) 被顺手改成 DESC ⇒ 没进群时间的人会占满第一页"
+                + "（与 :133 的意图相反，那一格要的是 NULL 沉底）: " + mseg);
+    }
+
+    // ---------------------------------------------------------------------
+    // 方向哨兵的私有工具
+    // ---------------------------------------------------------------------
+
+    /**
+     * 取 {@code getSqlSegment()} 里紧跟 {@code expr} 之后那一个词（排序方向 ASC/DESC），取不到返回空串。
+     * 只比这一个词、不写整串：MP 小版本会在列名后追加/调整方向词，把整串写进断言等于拿版本相关字面量当契约
+     * ——本文件其余断言一律 {@code regionMatches} 而非整串比较，同一份纪律。
+     */
+    private static String directionAfter(String seg, String expr) {
+        int i = seg.indexOf(expr);
+        if (i < 0) {
+            return "";
+        }
+        String rest = seg.substring(i + expr.length()).trim();
+        int comma = rest.indexOf(',');
+        String head = (comma < 0 ? rest : rest.substring(0, comma)).trim();
+        String[] parts = head.split("\\s+");
+        return parts.length == 0 ? "" : parts[0];
+    }
+
+    /**
      * ③ 落在群行上的两个新键（{@code GroupVO.lastCoverage} / {@code lastReconcileReason}）此前没有任何测试跑到：
      * 两条 pageGroups 的既有测试都在空记录上早返回。这里让两行**非空**的群流过 pageGroups——
      * 一行有读数，一行没做过判定。后者钉的是 ③ 要消掉的那一类缺陷本身：空值必须以 null 出线，
