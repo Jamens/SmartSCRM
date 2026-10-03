@@ -31,9 +31,11 @@ public class JwtAuthFilter extends OncePerRequestFilter {
             boolean isAccess = claims != null && "access".equals(claims.get("typ", String.class));
             if (isAccess) {
                 Long userId = Long.valueOf(claims.getSubject());
-                Long tenantId = claims.get("tid", Number.class).longValue();
+                // Platform accounts have no tenant, so the tid claim is optional.
+                Number tid = claims.get("tid", Number.class);
+                Long tenantId = tid == null ? null : tid.longValue();
                 String role = claims.get("role", String.class);
-                AuthPrincipal principal = new AuthPrincipal(userId, tenantId, claims.get("ic", String.class), role);
+                AuthPrincipal principal = AuthPrincipal.of(userId, tenantId, claims.get("ic", String.class), role);
                 var auth = new UsernamePasswordAuthenticationToken(
                     principal, null, List.of(new SimpleGrantedAuthority("ROLE_" + role.toUpperCase())));
                 SecurityContextHolder.getContext().setAuthentication(auth);

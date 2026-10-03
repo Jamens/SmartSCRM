@@ -27,8 +27,8 @@ mybatis-plus:
 app:
   jwt:
     secret: "smartscrm-local-dev-secret-key-please-change-32bytes-min"
-    access-ttl-seconds: 7200
-    refresh-ttl-seconds: 2592000
+    access-ttl-seconds: 604800
+    refresh-ttl-seconds: 5184000
 
 logging:
   level:

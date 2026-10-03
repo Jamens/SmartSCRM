@@ -20,8 +20,8 @@ public class JwtService {
 
     public JwtService(
         @Value("${app.jwt.secret}") String secret,
-        @Value("${app.jwt.access-ttl-seconds:7200}") long accessTtlSeconds,
-        @Value("${app.jwt.refresh-ttl-seconds:2592000}") long refreshTtlSeconds
+        @Value("${app.jwt.access-ttl-seconds:604800}") long accessTtlSeconds,
+        @Value("${app.jwt.refresh-ttl-seconds:5184000}") long refreshTtlSeconds
     ) {
         this.key = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
         this.accessTtlSeconds = accessTtlSeconds;
