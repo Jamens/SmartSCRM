@@ -1,6 +1,7 @@
 // src/renderer/src/components/customers/CustomerTimeline.tsx
 import { useMemo } from 'react'
 import { useNavigate } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { ArrowUpRight, MessageSquareDashed } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import MessageBubble from '@/components/messages/MessageBubble'
@@ -14,6 +15,7 @@ import { useChatJumpStore } from '@/stores/chatJump'
 const SIZE = 20
 
 export default function CustomerTimeline({ customerId }: { customerId: number }): React.JSX.Element {
+  const { t } = useTranslation()
   const { data, isPending, isError } = useCustomerTimeline(customerId, SIZE)
   const navigate = useNavigate()
   const hold = useChatJumpStore((s) => s.hold)
@@ -34,12 +36,12 @@ export default function CustomerTimeline({ customerId }: { customerId: number })
     return map
   }, [data])
 
-  if (isPending) return <p className="text-xs text-muted-foreground">读取最近消息…</p>
-  if (isError) return <p className="text-xs text-destructive">读不到时间线，请确认后端已启动。</p>
+  if (isPending) return <p className="text-xs text-muted-foreground">{t('customers.timeline.loading')}</p>
+  if (isError) return <p className="text-xs text-destructive">{t('customers.timeline.loadError')}</p>
   if (groups.length === 0) {
     return (
       <p data-p6-timeline="empty" className="text-xs text-muted-foreground">
-        还没有采到这位客户的消息。
+        {t('customers.timeline.empty')}
       </p>
     )
   }
@@ -59,10 +61,10 @@ export default function CustomerTimeline({ customerId }: { customerId: number })
               <MessageSquareDashed className="size-3.5 shrink-0 text-muted-foreground" />
               <span className="min-w-0 flex-1 truncate text-xs font-medium text-foreground">
                 {head ? titleOfConversation(head) : group.title}
-                {group.isGroup && <span className="ml-1 text-[10px] text-muted-foreground">群</span>}
+                {group.isGroup && <span className="ml-1 text-[10px] text-muted-foreground">{t('customers.timeline.group')}</span>}
               </span>
               <span className="shrink-0 text-[10px] text-muted-foreground">{listTime(group.lastTs)}</span>
-              <span title={head ? undefined : '这条会话的会话头还没投影出来（只采到了消息），暂时跳不过去'}>
+              <span title={head ? undefined : t('customers.timeline.noHeadTitle')}>
                 <Button
                   size="sm"
                   variant="ghost"
@@ -76,7 +78,7 @@ export default function CustomerTimeline({ customerId }: { customerId: number })
                   }}
                 >
                   <ArrowUpRight className="size-3" />
-                  打开
+                  {t('customers.timeline.open')}
                 </Button>
               </span>
             </header>

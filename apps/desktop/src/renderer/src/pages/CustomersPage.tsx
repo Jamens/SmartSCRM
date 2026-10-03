@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import dayjs from 'dayjs'
+import { useTranslation } from 'react-i18next'
 import { ChevronLeft, ChevronRight, RefreshCw, Search, Users2, X } from 'lucide-react'
 import { PLATFORMS, platformOf } from '@/lib/platform'
 import { Button } from '@/components/ui/button'
@@ -22,6 +23,7 @@ const PAGE_SIZE = 10
 const ALL = 'all'
 
 export default function CustomersPage(): React.JSX.Element {
+  const { t } = useTranslation()
   const [keyword, setKeyword] = useState('')
   const [platformType, setPlatformType] = useState<string>(ALL)
   const [country, setCountry] = useState('')
@@ -70,13 +72,13 @@ export default function CustomersPage(): React.JSX.Element {
         <div>
           <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
             <Users2 className="size-5 text-primary" />
-            客户管理
+            {t('customers.title')}
           </h1>
-          <p className="text-xs text-muted-foreground">共 {total} 位客户</p>
+          <p className="text-xs text-muted-foreground">{t('customers.totalCount', { count: total })}</p>
         </div>
         <Button variant="outline" size="sm" onClick={() => void refetch()} disabled={isFetching}>
           <RefreshCw className={cn('size-4', isFetching && 'animate-spin')} />
-          刷新
+          {t('customers.refresh')}
         </Button>
       </header>
 
@@ -85,7 +87,7 @@ export default function CustomersPage(): React.JSX.Element {
           <Search className="absolute left-2.5 top-1/2 size-4 -translate-y-1/2 text-muted-foreground" />
           <Input
             className="pl-8"
-            placeholder="搜索昵称 / 手机 / 邮箱"
+            placeholder={t('customers.searchPlaceholder')}
             value={keyword}
             onChange={(e) => {
               setKeyword(e.target.value)
@@ -101,10 +103,10 @@ export default function CustomersPage(): React.JSX.Element {
           }}
         >
           <SelectTrigger className="w-36">
-            <SelectValue placeholder="全部平台" />
+            <SelectValue placeholder={t('customers.allPlatforms')} />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>全部平台</SelectItem>
+            <SelectItem value={ALL}>{t('customers.allPlatforms')}</SelectItem>
             {Object.values(PLATFORMS).map((p) => (
               <SelectItem key={p.type} value={String(p.type)}>
                 {p.label}
@@ -114,7 +116,7 @@ export default function CustomersPage(): React.JSX.Element {
         </Select>
         <Input
           className="w-32"
-          placeholder="国家/地区"
+          placeholder={t('customers.countryPlaceholder')}
           value={country}
           onChange={(e) => {
             setCountry(e.target.value)
@@ -124,14 +126,14 @@ export default function CustomersPage(): React.JSX.Element {
         {hasActiveFilter && (
           <Button variant="ghost" size="sm" onClick={resetFilters}>
             <X className="size-4" />
-            清除筛选
+            {t('customers.clearFilters')}
           </Button>
         )}
       </div>
 
       {tree.length > 0 && (
         <div className="flex flex-wrap items-center gap-1.5 border-b border-border/60 px-6 py-2.5">
-          <span className="mr-1 text-xs text-muted-foreground">标签：</span>
+          <span className="mr-1 text-xs text-muted-foreground">{t('customers.labelPrefix')}</span>
           {tree.flatMap((group) =>
             group.labels.map((label) => {
               const active = labelIds.includes(label.id)
@@ -156,21 +158,21 @@ export default function CustomersPage(): React.JSX.Element {
 
       <div className="min-h-0 flex-1 overflow-auto">
         {isPending ? (
-          <TableMessage>加载客户中…</TableMessage>
+          <TableMessage>{t('customers.loading')}</TableMessage>
         ) : isError ? (
-          <TableMessage tone="error">无法加载客户，请确认后端已启动。</TableMessage>
+          <TableMessage tone="error">{t('customers.loadError')}</TableMessage>
         ) : records.length === 0 ? (
-          <TableMessage>没有符合条件的客户。</TableMessage>
+          <TableMessage>{t('customers.empty')}</TableMessage>
         ) : (
           <table className="w-full border-collapse text-sm">
             <thead className="sticky top-0 z-10 bg-muted/60 text-left text-xs text-muted-foreground backdrop-blur">
               <tr>
-                <Th className="pl-6">客户</Th>
-                <Th>平台</Th>
-                <Th>联系方式</Th>
-                <Th>国家</Th>
-                <Th>标签</Th>
-                <Th>最近联系</Th>
+                <Th className="pl-6">{t('customers.col.customer')}</Th>
+                <Th>{t('customers.col.platform')}</Th>
+                <Th>{t('customers.col.contact')}</Th>
+                <Th>{t('customers.col.country')}</Th>
+                <Th>{t('customers.col.labels')}</Th>
+                <Th>{t('customers.col.lastContact')}</Th>
               </tr>
             </thead>
             <tbody>
@@ -193,7 +195,7 @@ export default function CustomersPage(): React.JSX.Element {
         <div className="flex items-center gap-2">
           <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
             <ChevronLeft className="size-4" />
-            上一页
+            {t('customers.prevPage')}
           </Button>
           <Button
             variant="outline"
@@ -201,7 +203,7 @@ export default function CustomersPage(): React.JSX.Element {
             disabled={page >= pageCount}
             onClick={() => setPage((p) => Math.min(pageCount, p + 1))}
           >
-            下一页
+            {t('customers.nextPage')}
             <ChevronRight className="size-4" />
           </Button>
         </div>
@@ -215,6 +217,7 @@ export default function CustomersPage(): React.JSX.Element {
 }
 
 function CustomerRow({ customer, onOpen }: { customer: CustomerVO; onOpen: () => void }): React.JSX.Element {
+  const { t } = useTranslation()
   const meta = platformOf(customer.platformType)
   const Icon = meta?.icon
   return (
@@ -231,7 +234,7 @@ function CustomerRow({ customer, onOpen }: { customer: CustomerVO; onOpen: () =>
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0">
-            <p className="truncate font-medium text-foreground">{customer.nickname ?? '未命名客户'}</p>
+            <p className="truncate font-medium text-foreground">{customer.nickname ?? t('customers.unnamed')}</p>
             <p className="truncate text-xs text-muted-foreground">{customer.openId}</p>
           </div>
         </div>

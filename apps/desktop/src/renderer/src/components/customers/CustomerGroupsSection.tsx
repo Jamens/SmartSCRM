@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import type React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Download, Users } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -23,6 +24,7 @@ interface Props {
  * `group:export` 收的是群键数组，能"选出若干群"的地方只有这份列表，不是单个群的弹层。
  */
 export default function CustomerGroupsSection({ customerId }: Props): React.JSX.Element {
+  const { t } = useTranslation()
   const { data: accounts = [] } = useAccounts()
   const selectedId = useSelectionStore((s) => s.selectedId)
   // 只认「在线的 WhatsApp 且视图挂着」那一档：`status===1` 是在线，`viewId` 空 = 没有可下命令的视图
@@ -95,7 +97,7 @@ export default function CustomerGroupsSection({ customerId }: Props): React.JSX.
       <Separator className="my-5" />
       <div className="mb-2 flex items-center gap-2">
         <h3 className="min-w-0 flex-1 truncate text-sm font-semibold">
-          所在群
+          {t('customers.groups.title')}
           {accountName && <span className="ml-1.5 text-xs font-normal text-muted-foreground">{accountName}</span>}
         </h3>
         {candidates.length > 1 && (
@@ -120,7 +122,7 @@ export default function CustomerGroupsSection({ customerId }: Props): React.JSX.
           onClick={exportPicked}
         >
           <Download className="size-3.5" />
-          {groupExport.pending ? '导出中…' : `导出所选（${picked.size}）`}
+          {groupExport.pending ? t('customers.groups.exporting') : t('customers.groups.exportSelected', { count: picked.size })}
         </Button>
       </div>
 
@@ -128,17 +130,17 @@ export default function CustomerGroupsSection({ customerId }: Props): React.JSX.
           所以"没有在线账号"必须排在 loading 前——否则"什么都没做"被显示成"正在做"。 */}
       {accountId === null ? (
         <p className="text-xs text-muted-foreground" data-p8g-no-account="">
-          没有在线的 WhatsApp 账号。群成员只在账号上线时采集，连上之后这里会自动出内容。
+          {t('customers.groups.noOnlineAccount')}
         </p>
       ) : isPending ? (
-        <p className="text-xs text-muted-foreground">读取中…</p>
+        <p className="text-xs text-muted-foreground">{t('common.loading')}</p>
       ) : isError ? (
         <p className="text-xs text-destructive" data-p8g-error="">
-          读不到所在群：确认后端已启动。
+          {t('customers.groups.loadError')}
         </p>
       ) : rows.length === 0 ? (
         <p className="text-xs text-muted-foreground" data-p8g-empty="">
-          这位客户还没有匹配到的群成员行。匹配是按手机号做的，所以没存进通讯录的陌生号群不会出现在这里。
+          {t('customers.groups.empty')}
         </p>
       ) : (
         <ul className="space-y-1.5">
@@ -155,7 +157,7 @@ export default function CustomerGroupsSection({ customerId }: Props): React.JSX.
                   data-p8g-check={row.chatKey}
                   checked={picked.has(row.chatKey)}
                   onChange={() => toggle(row.chatKey)}
-                  aria-label={`选择 ${row.title ?? row.chatKey}`}
+                  aria-label={t('customers.groups.selectAria', { name: row.title ?? row.chatKey })}
                 />
                 <div className="min-w-0 flex-1">
                   <p className="flex items-center gap-1.5 text-xs font-medium text-foreground">
@@ -163,7 +165,7 @@ export default function CustomerGroupsSection({ customerId }: Props): React.JSX.
                     <span className="truncate">{row.title ?? row.chatKey}</span>
                     {row.isFinal && (
                       <Badge variant="outline" data-p8g-final="">
-                        已解散/已退出
+                        {t('customers.groups.disbanded')}
                       </Badge>
                     )}
                     {area !== 'built' && (
@@ -174,8 +176,11 @@ export default function CustomerGroupsSection({ customerId }: Props): React.JSX.
                   </p>
                   {/* 两个数分开写：不等 = 这一轮的快照被覆盖率闸拦下、没记账（GroupVO 的类注释、R20）。 */}
                   <p className="truncate text-[11px] text-muted-foreground">
-                    在群 {row.inGroupCount} · 上次快照 {row.participantCount} · 快照于{' '}
-                    {timeCopy(row.lastSnapshotAt)}
+                    {t('customers.groups.inGroup', {
+                      in: row.inGroupCount,
+                      snapshot: row.participantCount,
+                      time: timeCopy(row.lastSnapshotAt)
+                    })}
                   </p>
                 </div>
                 <Button
@@ -184,7 +189,7 @@ export default function CustomerGroupsSection({ customerId }: Props): React.JSX.
                   data-p8g-open={row.chatKey}
                   onClick={() => setDialog({ accountId, row })}
                 >
-                  查看群成员
+                  {t('customers.groups.viewMembers')}
                 </Button>
               </li>
             )
