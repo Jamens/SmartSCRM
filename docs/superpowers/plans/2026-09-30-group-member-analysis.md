@@ -1355,7 +1355,7 @@ EOF
 
 ## Task 5: 后端 ingest——群登记 + 事件先行投影
 
-> **已交付**（`3771927`：`GroupMemberService` + `GroupMemberBatchDTO` + `GroupMemberController`）。线形以 §A.2 ① 为准（两计数、四值 reason、空名单不返 40000）；这一层**没有 JUnit 覆盖**，补测在 Task 8b。本节正文不改写。
+> **已交付**（`3771927`：`GroupMemberService` + `GroupMemberBatchDTO` + `GroupMemberController`）。线形以 §A.2 ① 为准（两计数、四值 reason、空名单不返 40000）；这一层的语义与补测由 Task 8b 收口（`fad3fda` + 修正轮 `33c8785`：写侧 7 条 + 读侧 10 条 mock-mapper 单测 + 异常映射 2 条，模块 `./mvnw test` 141 绿）。本节正文不改写。
 
 **Files:**
 - Create: `apps/server/src/main/java/com/smartscrm/server/web/dto/GroupBatchDTO.java`（内嵌 record 或同包四支：`GroupRefDTO` `GroupSnapshotDTO` `GroupMemberDTO` `GroupEventDTO`）
@@ -1836,7 +1836,7 @@ EOF
 
 ## Task 6: 后端快照收口与覆盖率闸
 
-> **已交付**（`3771927`）。闸放行才记账那一条读码确认落实（R20：`markSnapshotSuccess` 只在 `allowed` 分支调用）；闸读数没落库（R1 那两列走 V13，见 Task 8b ③）。本节正文不改写。
+> **已交付**（`3771927`）。闸放行才记账那一条读码确认落实（R20：`markSnapshotSuccess` 只在 `allowed` 分支调用）；闸读数已由 Task 8b ③ 落库（V13 的 `last_coverage` / `last_reconcile_reason` 两列已在本地库生效，`tmp/p8-tables.log` 实测）。本节正文不改写。
 
 **Files:**
 - Modify: `apps/server/src/main/java/com/smartscrm/server/service/GroupMemberService.java`（补 `reconcile`，`accept` 的第 ① ③ 步接上）
@@ -2120,7 +2120,7 @@ EOF
 
 ## Task 7: 后端读端点四支
 
-> **已交付**（`3771927`：`GroupMemberQueryService` + `GroupVO` / `GroupMemberVO` / `GroupEventVO`，全是 record，见 R31）。四处语义偏差见 Task 8b（① 搜索转义、② 名单行序、③ 闸读数与 `coverage` 容器、⑥ `sort=stale`）；`sort=stale` 尚未实现。本节正文不改写。
+> **已交付**（`3771927`：`GroupMemberQueryService` + `GroupVO` / `GroupMemberVO` / `GroupEventVO`，全是 record，见 R31）。四处语义偏差由 Task 8b 收口（① 搜索转义、② 名单行序、③ 闸读数与 `coverage` 容器、⑥ `sort=stale`）；`sort=stale` 已在后端实现，但**主进程建档泵没有读者**（泵只有 `ingest`，接线会重做已交付的 Task 11），这笔账留在 P8 之外。本节正文不改写。
 
 **Files:**
 - Modify: `apps/server/src/main/java/com/smartscrm/server/service/GroupMemberQueryService.java`
@@ -2383,7 +2383,7 @@ EOF
 
 ## Task 8: 第五支读端点 `export-rows`（14 列取数 + 后端行序）
 
-> **已交付**（`3771927`：`GroupExportRowVO`，14 个键逐字见 §A.2 ⑥——群键叫 `groupId`，`inGroup` 已是 `'是'|'否'`，三个消息列叫 `lastMsgAt / dayMsgCount / msgCount`）。超限错误码今天用 40000 而非 40016、不去重、不校验群键形态——见 Task 8b ⑤。本节正文不改写。
+> **已交付**（`3771927`：`GroupExportRowVO`，14 个键逐字见 §A.2 ⑥——群键叫 `groupId`，`inGroup` 已是 `'是'|'否'`，三个消息列叫 `lastMsgAt / dayMsgCount / msgCount`）。超限错误码已由 Task 8b ⑤ 改成 40016、先去重再计数、并用 `ChatKeys.isGroup` 校验群键形态。这里的口径是一条裁定，不是 brief 字面：**被拒形态是单聊键（`@c.us`）**，`ChatKeys.isGroup` 还收 `-100…` 与 `@group`，因为导出按账号收窄，非 WhatsApp 账号的群键不该被静默丢掉；Task 14 的契约腿必须按这个口径断言，不能写成"任何不以 `@g.us` 结尾的串"。本节正文不改写。
 
 **Files:**
 - Modify: `apps/server/src/main/java/com/smartscrm/server/mapper/GroupMemberStateMapper.java`（+ `selectMembersForExport`）
