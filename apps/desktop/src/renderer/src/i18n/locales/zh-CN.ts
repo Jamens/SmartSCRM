@@ -126,7 +126,9 @@ export const zhCN = {
     // 语言
     language: '语言',
     languageDesc: '界面显示语言。改动立即生效，并记到本机设置里。',
-    languageLabel: '界面语言'
+    languageLabel: '界面语言',
+    identityLine: '{{name}}（{{role}}）· 租户 {{tenant}} · 邀请码 {{code}}',
+    notSignedIn: '未登录',
   },
   log: {
     browserNote: '当前是浏览器预览，日志由主进程产生，桌面端打开才能查看与导出。',

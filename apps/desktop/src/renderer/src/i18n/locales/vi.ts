@@ -116,7 +116,9 @@ export const vi: DeepString<typeof zhCN> = {
     deviceLogin: 'Đã đăng nhập: {{who}} · Địa chỉ dịch vụ {{api}}',
     language: 'Ngôn ngữ',
     languageDesc: 'Ngôn ngữ hiển thị giao diện. Thay đổi có hiệu lực ngay và được ghi vào cài đặt cục bộ.',
-    languageLabel: 'Ngôn ngữ giao diện'
+    languageLabel: 'Ngôn ngữ giao diện',
+    identityLine: '{{name}} ({{role}}) · Tenant {{tenant}} · Mã mời {{code}}',
+    notSignedIn: 'Chưa đăng nhập',
   },
   log: {
     browserNote: 'Đang xem trước trình duyệt, nhật ký do tiến trình chính tạo, mở bản máy tính mới xem và xuất được.',
