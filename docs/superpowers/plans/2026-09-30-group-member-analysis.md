@@ -21,9 +21,10 @@ B6 的实现分成了两段交付：**Java 数据层**（`3771927`）与**桥侧
 | `2b2df31` | V12 三表迁移 + `shared/groupMembers.ts` 纯模型与 JS 单测 | Task 1（迁移部分）、Task 2 | 已交付 |
 | `3771927` | 三实体 + 三 Mapper + `GroupMemberService` / `GroupMemberQueryService` + `GroupMemberController` | Task 1、5、6、7、8 | 已交付，**无 JUnit 覆盖**（`apps/server/src/test` 下没有 `GroupMember*Test.java`，实测：该目录只有 batch/msg/provider/translation 几类）——补测就是 Task 8b 的载体 |
 | `ade904e` | 桥侧群名单/快照/在线事件 + 系统消息旁路（`bridge/whatsapp/groups.ts` +311 行、`chatTypes.ts` 三帧两命令、299 行单测） | Task 3、4 | 已交付 |
+| `fad3fda`（+ 8b 修正轮一次提交） | Task 8b 的八条语义校准：V13 两列 + `MemberPageVO` + `markSnapshotSuccess`/`markGate` 分工 + 行序/转义/账号收窄/导出码数/事件投影/入参长度闸；附 17 条校准单测（读侧 10 / 写侧 7）与 2 条「缺必填查询参数 = 400」的形状单测 | Task 8b | 已交付（`apps/server` 全量 `./mvnw test` 绿；V13 两列由 `tmp/P8Tables.java` 探针实测已进库） |
 | `954eb58` `4852494` | 计划与本 spec 的文档同步 | — | 已交付 |
 
-**未开工**：Task 8b、9、10、12、13、14、15、16、17。
+**未开工**：Task 9、10、12、13、14、15、16、17。
 
 **Task 11 是例外，且这一条例外要写成现场判定而不是结论**（实测 2026-10-01）：`git status --porcelain -- apps/desktop/src/main/services/groupCollect/` 返回 `?? apps/desktop/src/main/services/groupCollect/`，`git log --oneline -- …groupCollect/` 无输出，Glob 可见 `engine.ts`（导出 `GroupListReply`/`GroupSnapshotReply`/`GroupCommand`/`GroupDispatch`/`IngestPayload`/`GroupCollectApi`/`GroupCollectDeps`/`BuildResult`/`class GroupCollectEngine`，方法 `get busy()` 与 `runBuildForAccount(accountId: number, chatKeys?: string[]): Promise<BuildResult>`，唯一 import 是 `../../../shared/groupMembers.ts`）与 `engine.test.ts`（10 条 `test(...)`）。**读码**：这两支文件不在 `apps/desktop/tsconfig.unit.json` 的 `include` 里（该表的 groupCollect 条目由 Task 9 补，见其 Files），也不在另外三路 typecheck 覆盖面内——所以这台泵**从未被编译过、从未被 `node --test` 跑过**，它的"存在"目前只是磁盘事实，不是验收事实。
 
@@ -66,13 +67,13 @@ pnpm run test:unit 2>&1 | tail -15                            # 期望：泵那 
 - **空名单不是 40000**：正文 Task 5 里「空名单整批拒收」那一格没实现，实现走的是 §A.5 的 `no_snapshot`（语义与 spec §4「空名单不当成功快照」一致，只是不拒收）。闸放行时才 `markSnapshotSuccess`；被闸拦下时**分母、`last_snapshot_at`、`snapshot_count` 三列都不动**（R20 已落实，读码确认）。
 - 非法 `roleType` 归 `member`；非法 `eventType` / `source` 静默丢弃；`bodySnapshot` 与展示文本 clip 512。
 
-**② `GET /groups?accountId&page&size`** → `PageResult<GroupVO>`，`GroupVO(chatKey,title,platform,participantCount,snapshotCount,inGroupCount,lastSnapshotAt,lastEventAt,isFinal)`。`isFinal` 是 Java `boolean` → JSON `true|false`，**不是 0/1**。`platform` 由账号反查，客户端说了不算。
+**② `GET /groups?accountId&page&size&sort`** → `PageResult<GroupVO>`，`GroupVO(chatKey,title,platform,participantCount,snapshotCount,inGroupCount,lastSnapshotAt,lastEventAt,isFinal,lastCoverage,lastReconcileReason)`（后两键是 8b ③ 补的，追加在末尾）。`isFinal` 是 Java `boolean` → JSON `true|false`，**不是 0/1**。`platform` 由账号反查，客户端说了不算。`sort` 可选（8b ⑥）：`sort=stale` 给建档泵那一支，`ORDER BY ISNULL(last_snapshot_at), last_snapshot_at, id`（从没成功快照的最前，其余按上次成功快照从旧到新）；缺省或不认识的值 = 今天那份顺序（`last_snapshot_at DESC, id DESC`，新的在前）。泵读返回的**位置**当 rank，不解析日期串（R28 / R41）。
 
-**③ `GET /group/members?accountId&chatKey&isInGroup&role&q&page&size`** → 一个三键对象 `{members, coverage, reason}`：`members` 是 `PageResult<GroupMemberVO>`；`coverage` 是 `Double`；`reason` 是上面那四值之一。**当前实现**因为 `Map.of` 不许 null，把 `coverage==null` 压成了空串 `""`——这是缺陷，Task 8b ③ 修；修完才是 `null`。`GroupMemberVO` 的 `isInGroup` 是 `boolean`。
+**③ `GET /group/members?accountId&chatKey&isInGroup&role&q&page&size`** → 一个三键对象 `{members, coverage, reason}`：`members` 是 `PageResult<GroupMemberVO>`；`coverage` 在**线路上是 `number | null`**（已修，8b ③：容器是 record `MemberPageVO(members, coverage, reason)`，`null` 原样是 `null`，不折成空串）；`reason` 是上面那四值之一。这两个读数**读的是 `chat_group` 落库的那两列**（`last_coverage` / `last_reconcile_reason`，见本节末 V12/V13 那一行），不在翻页时现场算——现场算用的是当前这一页的在群人数，翻页会给出不同的 coverage（`GroupMemberVO` 的 `isInGroup` 是 `boolean`）。
 
 **④ `GET /group/events?accountId&chatKey&eventType&page&size`** → `PageResult<GroupEventVO(id,chatKey,groupTitle,memberKey,actorKey,actorName,eventType,occurredAt,source,rawType,rawSubtype,bodySnapshot)>`。`groupTitle` 列存在但**写入侧恒为 NULL**（Task 8b 不修它，界面按「可能为空」渲染）。
 
-**⑤ `GET /customer/{customerId}/groups`** → `List<GroupVO>`，**没有 `accountId` 参数**：这一跳今天跨账号混读，与 R16 冲突，Task 8b ④ 修。
+**⑤ `GET /customer/{customerId}/groups?accountId`** → `List<GroupVO>`。`accountId` 是**必填**参数（已修，8b ④）：这一跳按 `(platform, account_id)` 收窄，两个账号下的同名群不会混成一份名单（R16 / spec §9）。缺这一个参数得到 **HTTP 400**（`GlobalExceptionHandler` 对「缺必填查询参数」有自己那一支，返回 `code=40000`、`message` 点出缺的是哪个字段），不是 500。
 
 **⑥ `GET /group/members/export-rows?accountId&chatKeys`**（`chatKeys` 是逗号分隔的 `List<String>`）→ `List<GroupExportRowVO>`：
 
@@ -82,7 +83,7 @@ pnpm run test:unit 2>&1 | tail -15                            # 期望：泵那 
 
 四处与正文不同，Task 13 的 exporter 逐字按这里写：群键列叫 **`groupId`** 不叫 `chatKey`；**没有 `memberKey`、没有 `firstSeenAt`**（14 列本来就不含它们）；`inGroup` 已经是中文串 **`'是'|'否'`**（后端 `GroupExportRowVO` 里格式化过，主进程**不许再映射一次**）；`role` 仍是原始码 `member|admin|super`（要过 `groupRoleLabel`）。三个消息列叫 `lastMsgAt / dayMsgCount / msgCount`，不叫 `lastChatAt / dayCount / totalCount`。
 
-**V12 列宽（写夹具用）**：`chat_key` 128、`member_key` 160、`phone` 32、`display_name` 128、`role_type` 16、`exit_method` 24、`group_title` 256、`body_snapshot` 512、`dedup_key` 160。V12 **没有** `last_coverage` / `last_reconcile_reason` 两列（R1 要的，Task 8b ③ 补迁移）。
+**`chat_group` 的列宽与闸读数**：`chat_key` 128、`title` 256。闸的两个**读数**落在 `chat_group` 自己的两列上（已修，8b ③ 的 `V13__group_gate_reading.sql`）：`last_coverage DOUBLE NULL`（`NULL` = 没做过可判定的快照）、`last_reconcile_reason VARCHAR(24) NULL`（`ok | first_build | coverage_too_low | no_snapshot`），位置在 `snapshot_count` 之后；`markSnapshotSuccess` 与 `markGate` 是它们的唯一写者，读侧（② 的两个新键、③ 的 `coverage`/`reason`）只读不写。V12 那三张表的列宽（写夹具用）：`chat_key` 128、`member_key` 160、`phone` 32、`display_name` 128、`role_type` 16、`exit_method` 24、`group_title` 256、`body_snapshot` 512、`dedup_key` 160——入参长度闸（8b ⑧）用的就是这几个数。
 
 ### §A.3 权威线形——已交付的 JS 侧实名
 
@@ -3665,7 +3666,7 @@ export interface GroupRowWire {
    * 判 `=== true` / `=== false`，不判真值：`undefined`（后端没给这一键）在真值判法下会冒充"没解散"。
    */
   isFinal: boolean
-  /** 闸读数（R1 / R35）：Task 8b ③ 之前后端**不给这两个键**，所以类型上是可选。 */
+  /** 闸读数（R1 / R35）：Task 8b ③ 之前后端**不给这两个键**，所以类型上是可选。**8b 之后后端给这两个键**（`GroupVO` 末尾那两键，值可为 `null`），可选声明留着不动是为了不回头改已交付的引用。 */
   lastCoverage?: number | null
   lastReconcileReason?: CoverageReason | null
   lastEventAt: string | null
@@ -3776,7 +3777,7 @@ export function createGroupApi(opts: GroupApiOptions) {
     postBatch: (payload: GroupBatchPayload) =>
       call<GroupIngestResult>('/api/group-members/batch', jsonInit(payload)),
 
-    /** `sort` 只有泵用（R28 / R41）；不传就是后端的默认顺序。这一参数要等 Task 8b ⑥ 落地才有读数，传了也不报错（Spring 忽略未声明的请求参数）。 */
+    /** `sort` 只有泵用（R28 / R41）；不传就是后端的默认顺序。这一参数要等 Task 8b ⑥ 落地才有读数，传了也不报错（Spring 忽略未声明的请求参数）。**8b 之后这一参数有读数**：`sort=stale` = 从没成功快照的群排最前，其余按 `last_snapshot_at` 从旧到新，`id` 定全序；缺省 = 新的在前。 */
     groups: (accountId: number, page: number, size: number, sort?: 'stale') =>
       call<PageWire<GroupRowWire>>(
         `/api/group-members/groups?accountId=${accountId}&page=${page}&size=${size}` +

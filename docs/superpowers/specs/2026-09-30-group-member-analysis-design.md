@@ -59,12 +59,15 @@ title VARCHAR(256) NULL,
 participant_count INT NOT NULL DEFAULT 0   COMMENT '只被成功快照覆盖；覆盖率闸的分母',
 last_snapshot_at DATETIME(3) NULL,
 snapshot_count INT NOT NULL DEFAULT 0,
+last_coverage DOUBLE NULL                  COMMENT '最近一次快照判定的覆盖率；NULL = 没做过可判定的快照（V13）',
+last_reconcile_reason VARCHAR(24) NULL     COMMENT 'ok | first_build | coverage_too_low | no_snapshot（V13）',
 is_final TINYINT(1) NOT NULL DEFAULT 0     COMMENT '群已解散/账号已退出',
 created_at, updated_at
 UNIQUE uk_group (tenant_id, platform, account_id, chat_key)
 KEY idx_group_list (tenant_id, account_id, last_snapshot_at)
 FK → tenant, platform_account（与 V8 会话头同款 ON DELETE CASCADE）
 ```
+闸的两个**读数**（`last_coverage` / `last_reconcile_reason`）由 `V13__group_gate_reading.sql` 增补在 `snapshot_count` 之后，写者只有 `markSnapshotSuccess`（闸放行，与分母同一次写）与 `markGate`（闸拦下，只写读数）。它们是 §8 那句"本次未做退群判定"与群列表读数的唯一来源：**读侧只读列，不现场算**——现场算用的是当前这一页的人数，翻页会给出不同的覆盖率。覆盖率是比值不是金额，所以用 `DOUBLE`；读数带浮点尾巴由渲染层格式化。
 为什么不复用会话头投影：`chat_conversation` 只被消息驱动，`getAllGroups` 能列出从没发过消息的群。少了这张表，群名单与它的下游目标池都会少一批人。
 
 **`group_member_state` —— 状态快照（§11 契约的本体）**
@@ -185,10 +188,10 @@ upsert 每个到场成员：命中 → is_in_group=1、role/name/phone 刷新、
 | 端点 | 用途 |
 |---|---|
 | `POST /batch` | 采集入库（§6，主进程专用，带 `X-Device`/JWT 同现有消息面） |
-| `GET /groups?accountId&page&size` | 群列表：`chat_group` + 在群人数 + 最近变动时间 |
-| `GET /group/members?chatKey&isInGroup&role&q&page&size` | 成员名单（带 `coverage/reason` 快照新鲜度字段） |
+| `GET /groups?accountId&page&size&sort` | 群列表：`chat_group` + 在群人数 + 最近变动时间 + 闸的两个读数（`lastCoverage` / `lastReconcileReason`）。`sort` 可选，`sort=stale` = 从没成功快照的排最前、其余按 `last_snapshot_at` 从旧到新（`ORDER BY ISNULL(last_snapshot_at), last_snapshot_at, id`），给建档泵当优先级用（位置即 rank，不在调用方比日期串）；缺省 = 新的在前 |
+| `GET /group/members?chatKey&isInGroup&role&q&page&size` | 成员名单（带 `coverage/reason` 快照新鲜度字段；`coverage` 可空就是空，行序 `ISNULL(latest_join_at)` 沉底） |
 | `GET /group/events?chatKey&eventType&page&size` | 进退流水 |
-| `GET /customer/{customerId}/groups` | 按客户手机号反查其所在群（§9 的数据源） |
+| `GET /customer/{customerId}/groups?accountId` | 按客户手机号反查其所在群（§9 的数据源）。`accountId` **必填**：同一客户在两个账号下的群不许混成一份名单；缺这一参数得到 400 |
 | `GET /group/members/export-rows?chatKeys` | 导出取数：14 列的行，顺序规则见 §10 |
 
 `GET /groups` 与 `export-rows` 的"最近聊天时间 / 当日发言数 / 发言数"从 `chat_message` 聚合：按 `(chat_key, sender_key)` 取 `MAX(msg_time)`、`COUNT(*)`，以及 `MAX(msg_time)` **所在那一天**的当日条数（"当日"锚定该成员最近发言日，不是导出执行日——这条歧义在这里钉死）。租户闸与分页参数沿用现有查询面。
@@ -216,7 +219,7 @@ upsert 每个到场成员：命中 → is_in_group=1、role/name/phone 刷新、
 
 `group:export` IPC（渲染 → 主进程，参数只给 `chatKeys` 与租户已由 JWT 定死）→ 主进程拉 `export-rows` → 生成 XLSX → `dialog.showSaveDialog` → 落盘。渲染包不带编码库，大群不占渲染内存。
 列序固定：`序号 / 群组名称 / 群Id / 手机号 / 名称 / 角色 / 是否在群 / 进群时间 / 进群数 / 退群时间 / 退出方式 / 最近聊天时间 / 当日发言数 / 发言数`。无"地区"列（没有数据来源，§2#5）。
-**行序也钉死**：群按 `chatKeys` 传入顺序，群内按 `latest_join_at` 升序、`latest_join_at IS NULL` 的排到该群末尾并按 `first_seen_at` 升序；`序号` 是整份文件内的连续序号（跨群不重置）。一次导出不超过 50 个群（`chatKeys` 超出即 400，界面按所选数量提前拦住）。
+**行序也钉死**：群按 `chatKeys` 传入顺序，群内按 `latest_join_at` 升序、`latest_join_at IS NULL` 的排到该群末尾并按 `first_seen_at` 升序，最后按 `id` 定全序——导出与成员名单是**同一份**行序，同进群时间的两个人不许在两条路上各排一次；`序号` 是整份文件内的连续序号（跨群不重置）。一次导出不超过 50 个群：`chatKeys` **先去重再计数**（同一群勾两遍不算两拨活），去重后仍超限给 **40016**，与"参数不对"的 40000 分两个码（前者的下一步是少勾两个群，后者的下一步是看请求怎么拼的），界面按所选数量提前拦住。
 新增依赖：`apps/desktop` 主进程侧 XLSX 编码库，选定 `exceljs`（MIT，纯 JS，无原生模块）。**待验证**：它必须只出现在主进程产物里，不得进渲染包（§15#4）。
 
 ## 11. 给后续群运营阶段的契约面

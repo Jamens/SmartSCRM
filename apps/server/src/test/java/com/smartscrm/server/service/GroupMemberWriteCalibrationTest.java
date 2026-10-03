@@ -2,6 +2,7 @@ package com.smartscrm.server.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyInt;
@@ -100,7 +101,34 @@ class GroupMemberWriteCalibrationTest {
         verify(groupMapper, never()).markGate(anyLong(), any(), any(), any());
     }
 
-    /** ③：闸拦下 → 只写读数那两列。这条是 R20 的守门人：一旦有人把 markGate 换成 markSnapshotSuccess，分母就被 4 人污染。 */
+    /**
+     * ③ / §8：首次建档这一跳没有分母可除，{@code coverage} 必须是**真 null** 原样进
+     * {@code markSnapshotSuccess}——这正是 ③ 要消掉的「null 被折成 {@code ""} / {@code 0.0}」那一路：
+     * 写 0.0 会让界面把「没做过可判定的快照」显示成「覆盖率为 0」，写空串则连类型都不对。
+     * 把 {@code GroupMemberService.reconcileSnapshot} 里的 {@code firstBuild ? null : cur / prev}
+     * 改成给 0.0（或给 {@code COVERAGE_MIN}），这条就红。
+     */
+    @Test
+    void firstBuildSnapshotWritesNullCoverageInsteadOfZero() {
+        ChatGroup g = new ChatGroup();
+        g.setId(3L);
+        g.setParticipantCount(0);                     // 没有分母 → firstBuild
+        when(groupMapper.selectByKey(TENANT, "whatsapp", ACCOUNT, GROUP)).thenReturn(g);
+        when(stateMapper.selectByGroup(TENANT, "whatsapp", ACCOUNT, GROUP)).thenReturn(List.of());
+        ArgumentCaptor<Double> coverage = ArgumentCaptor.forClass(Double.class);
+        ArgumentCaptor<String> reason = ArgumentCaptor.forClass(String.class);
+
+        GroupMemberService.IngestResult r = service.ingest(TENANT, batchWithSnapshot(4));
+
+        assertEquals("first_build", r.reason());
+        assertNull(r.coverage(), "首次建档的响应里 coverage 被折成了非 null 值");
+        verify(groupMapper).markSnapshotSuccess(eq(3L), eq(4), coverage.capture(), reason.capture(), any());
+        assertNull(coverage.getValue(), "首次建档落库的 coverage 不是 null——界面会把「没判定」读成「判定为 0」");
+        assertEquals("first_build", reason.getValue());
+        verify(groupMapper, never()).markGate(anyLong(), any(), any(), any());
+    }
+
+    /** ③：闸拦下 → 只写读数那两列（外加 updated_at）。这条是 R20 的守门人：一旦有人把 markGate 换成 markSnapshotSuccess，分母就被 4 人污染。 */
     @Test
     void blockedSnapshotWritesGateReadingOnly() {
         ChatGroup g = new ChatGroup();

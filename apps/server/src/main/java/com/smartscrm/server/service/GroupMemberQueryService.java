@@ -57,8 +57,6 @@ public class GroupMemberQueryService {
         this.customerMapper = customerMapper;
     }
 
-    /** 成员名单 + 本次快照的新鲜度：直接返回 {@link MemberPageVO}，coverage 可空就空，不折成 ""。 */
-
     // -----------------------------------------------------------------------
     // 群列表
     // -----------------------------------------------------------------------
@@ -100,6 +98,10 @@ public class GroupMemberQueryService {
     // 成员名单
     // -----------------------------------------------------------------------
 
+    /**
+     * 成员名单 + 本次快照的新鲜度（③）：一次返回 {@link MemberPageVO}，名单与读数同一份响应。
+     * 新鲜度读的是闸写在群行上的两列，coverage 可空就空——不许折成 {@code ""}，也不在这里现场算。
+     */
     public MemberPageVO pageMembers(Long tenantId, Long accountId, String platform, String chatKey,
                                     Boolean isInGroup, String role, String q, int page, int size) {
         // ①②：用 QueryWrapper 的字符串列名，为的是那条 ORDER BY——MP 的 lambda 排序给不出 ISNULL(...) 表达式，
@@ -264,7 +266,8 @@ public class GroupMemberQueryService {
 
     /**
      * 导出取数（spec §10）。行序钉死：群按 {@code chatKeys} 的传入顺序，
-     * 群内按 {@code latest_join_at} 升序、为空的排到该群末尾并按 {@code first_seen_at} 升序；
+     * 群内按 {@code latest_join_at} 升序、为空的排到该群末尾并按 {@code first_seen_at} 升序，
+     * 最后按 {@code id} 定全序——与 {@link #pageMembers} 那条 ORDER BY 同一份行序，名单与导出不许分叉；
      * {@code seq} 是整份文件内连续序号，跨群不重置。
      */
     public List<GroupExportRowVO> exportRows(Long tenantId, Long accountId, String platform, List<String> chatKeys) {
@@ -287,12 +290,15 @@ public class GroupMemberQueryService {
         for (String chatKey : keys) {   // 行序：入参顺序 = 去重后保留的首次出现顺序；seq 只由这一段写（R22）
             ChatGroup g = groupMapper.selectByKey(tenantId, platform, accountId, chatKey);
             String groupName = g == null ? null : g.getTitle();
-            // 取可变副本再原地排：mapper 给回的列表不保证可 sort（MyBatis 平时给 ArrayList，但只读实现会拒绝），
-            // 而这份行序（latest_join_at 空的沉到本群末尾、按 first_seen_at 升序）与 pageMembers 是同一口径。
+            // 取可变副本再原地排：mapper 给回的列表不保证可 sort（MyBatis 平时给 ArrayList，但只读实现会拒绝）。
+            // 行序与 pageMembers 那条 ORDER BY 逐键同口径（②：名单与导出是同一份行序）——
+            // ISNULL(latest_join_at) 让空值沉到本群末尾、再 latest_join_at、再 first_seen_at，
+            // 最后以 id 定全序：少了那一键，同进群时间、同首次见到时间的两个人在两条路上次序可以不同。
             List<GroupMemberState> rows = new ArrayList<>(stateMapper.selectByGroup(tenantId, platform, accountId, chatKey));
             rows.sort(Comparator
                 .comparing(GroupMemberState::getLatestJoinAt, Comparator.nullsLast(Comparator.naturalOrder()))
-                .thenComparing(GroupMemberState::getFirstSeenAt, Comparator.nullsLast(Comparator.naturalOrder())));
+                .thenComparing(GroupMemberState::getFirstSeenAt, Comparator.nullsLast(Comparator.naturalOrder()))
+                .thenComparing(GroupMemberState::getId, Comparator.nullsLast(Comparator.naturalOrder())));
             for (GroupMemberVO v : toMemberVOs(tenantId, chatKey, rows)) {
                 out.add(new GroupExportRowVO(seq++, groupName, chatKey, v.phone(),
                     v.displayName(), v.roleType(), v.isInGroup() ? "是" : "否", v.latestJoinAt(),

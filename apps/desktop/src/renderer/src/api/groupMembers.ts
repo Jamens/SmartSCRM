@@ -26,9 +26,12 @@ const BASE = '/api/group-members'
 /**
  * `GET /api/group-members/groups` / `customer/{id}/groups` 的一行。字段后端 `GroupVO` 逐字对上。
  *
- * 注：后端 8b 计划给 `GroupVO` 末尾补 `lastCoverage` / `lastReconcileReason` 两键（闸读数落到群行上），
- * 那两键**尚未落地**，所以这里不声明——声明了就是谎报（运行时 undefined，而类型说有）。
- * 8b 落地时补回这两行，界面读侧不用改（本期的名单页读的是 `/group/members` 那份 `coverage`）。
+ * `lastCoverage` / `lastReconcileReason` 是覆盖率闸落在群行上的两个读数（后端 `chat_group` 的两列，V13）：
+ * 前者是最近一次快照判定的覆盖率，**`null` 表示没做过可判定的快照**（首次建档、或这一轮没带快照），
+ * 后者是判定结论 `ok | first_build | coverage_too_low | no_snapshot`。两个都可能为 `null`，
+ * 界面上「没有读数」与「读数是空串」是两回事，不许折成一回事。
+ * 名单页顶栏那句「本次快照人数较上次少 x%，未做退群判定」读的是 `/group/members` 那份 `coverage`/`reason`
+ * （同一份落库读数的另一条出口），这两个键是给群行用的。
  */
 export interface GroupRowVO {
   chatKey: string
@@ -40,6 +43,8 @@ export interface GroupRowVO {
   lastSnapshotAt: string | null
   lastEventAt: string | null
   isFinal: boolean
+  lastCoverage: number | null
+  lastReconcileReason: string | null
 }
 
 export interface GroupMemberRowVO {

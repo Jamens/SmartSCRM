@@ -44,8 +44,13 @@ public interface ChatGroupMapper extends BaseMapper<ChatGroup> {
                             @Param("reason") String reason, @Param("at") LocalDateTime at);
 
     /**
-     * 被闸拦下时只写读数那两列，**绝不碰**分母 / 时间戳 / 次数：截断的名单一旦参与记账，
-     * 分母就被污染，而那种污染在界面上永远看不出来（R20）。
+     * 被闸拦下时写三列：{@code last_coverage}、{@code last_reconcile_reason} 这两列读数，加上 {@code updated_at}
+     * （一次写该给自己盖时间戳；没有任何读者拿这一列当业务读数）。
+     *
+     * **绝不碰**分母 / 快照时间戳 / 快照次数：R20 保护的是 {@code participant_count}、
+     * {@code last_snapshot_at}、{@code snapshot_count} 那三列记账，而 {@code updated_at} 不在其中——
+     * 它不参与覆盖率计算，也不是建档队列的依据。截断的名单一旦参与记账，分母就被污染，
+     * 而那种污染在界面上永远看不出来。
      */
     @Update("UPDATE chat_group SET last_coverage = #{coverage}, last_reconcile_reason = #{reason},"
         + " updated_at = #{at} WHERE id = #{id}")
