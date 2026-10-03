@@ -3,6 +3,12 @@ import { initReactI18next } from 'react-i18next'
 import { isLocaleCode, FALLBACK_LOCALE, type LocaleCode } from '@shared/i18n'
 import { zhCN } from './locales/zh-CN'
 import { en } from './locales/en'
+import { zhTW } from './locales/zh-TW'
+import { ja } from './locales/ja'
+import { ko } from './locales/ko'
+import { vi } from './locales/vi'
+import { id } from './locales/id'
+import { th } from './locales/th'
 
 /**
  * i18n 实例（A4）。文案是打包进来的（不是 fetch），所以 `init` 之后 `t()` 立刻可用、
@@ -10,7 +16,13 @@ import { en } from './locales/en'
  */
 export const resources = {
   'zh-CN': { translation: zhCN },
-  en: { translation: en }
+  en: { translation: en },
+  'zh-TW': { translation: zhTW },
+  ja: { translation: ja },
+  ko: { translation: ko },
+  vi: { translation: vi },
+  id: { translation: id },
+  th: { translation: th }
 } as const
 
 let initialized = false
