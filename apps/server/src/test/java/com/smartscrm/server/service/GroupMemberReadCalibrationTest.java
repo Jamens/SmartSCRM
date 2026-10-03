@@ -261,13 +261,15 @@ class GroupMemberReadCalibrationTest {
 
     /**
      * 方向哨兵（契约腿 13.1 / F-2）：上面那条 {@code staleSort...} 只看得到列名和 "ISNULL("，
-     * 看不出 {@code ISNULL(last_snapshot_at)} 这一排序键跟的是 ASC 还是 DESC——把 {@code :72} 从
+     * 看不出 {@code ISNULL(last_snapshot_at)} 这一排序键跟的是 ASC 还是 DESC——把 {@code pageGroups} 的 stale 分支从
      * {@code orderByAsc} 改成 {@code orderByDesc} 它照样绿，这正是 13.1 在真库里才红、Java 侧测不到的原因。
-     * 这里补的正是那一维，且**断的是关系不是整串字面量**（MP 小版本会在列名后追加方向词，整串是版本相关字面量）：
+     * 这里补的正是那一维，且**断的是关系不是整串字面量**（MP 小版本会在列名后追加方向词，整串是版本相关字面量）。
+     * 定位一律用「方法名 + 列名」而不是行号：这两支文件的行号会随注释增删漂移（本条测试初稿写的 {@code :72}/{@code :133}
+     * 在 F-2 那轮补注释后就变成了 {@code :75}/{@code :136}），而方法名与列名是这块排序语义自己的契约面：
      * <ul>
      *   <li>stale 分支：{@code ISNULL(last_snapshot_at)} 紧跟的那个词必须是 {@code DESC}
-     *       （R28 / R41：未建档最前、位置即 rank）。改坏 {@code GroupMemberQueryService.java:72} 的方向这一条就红。</li>
-     *   <li>成员名单 {@code :133}：{@code ISNULL(latest_join_at)} 之后**不许**是 {@code DESC}
+     *       （R28 / R41：未建档最前、位置即 rank）。改坏 {@code GroupMemberQueryService.pageGroups} 里那一行的方向这一条就红。</li>
+     *   <li>成员名单（{@code pageMembers} 的 {@code ISNULL(latest_join_at)}）：之后**不许**是 {@code DESC}
      *       ——那里要的是 NULL 沉底（真库 {@code 10.4} 绿是它的对照），两处的意图本来就相反。
      *       这一半挡的是"下一个人把两处一起修成 DESC"。</li>
      * </ul>
@@ -282,7 +284,7 @@ class GroupMemberReadCalibrationTest {
         String seg = groupCap.getValue().getSqlSegment();
         assertEquals("DESC", directionAfter(seg, "ISNULL(last_snapshot_at)"),
             "sort=stale 的第一排序键 ISNULL(last_snapshot_at) 不是 DESC ⇒ 未建档的行沉底而不是最前"
-                + "（改坏 GroupMemberQueryService.java:72 那行的 orderByDesc/orderByAsc 方向，这一条就红）: " + seg);
+                + "（改坏 GroupMemberQueryService.pageGroups 里 ISNULL(last_snapshot_at) 那行的 orderByDesc/orderByAsc 方向，这一条就红）: " + seg);
 
         ArgumentCaptor<QueryWrapper<GroupMemberState>> memberCap = ArgumentCaptor.forClass(QueryWrapper.class);
         when(stateMapper.selectPage(any(), memberCap.capture())).thenAnswer(inv -> inv.getArgument(0));

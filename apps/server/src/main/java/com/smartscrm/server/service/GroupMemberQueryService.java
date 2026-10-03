@@ -71,7 +71,8 @@ public class GroupMemberQueryService {
             // 建档泵那一支（R28 / R41）：没成功快照的最前，其余按上次成功快照从旧到新。
             // ISNULL(x) 对未建档行给 1、已建档给 0，所以要 DESC 才把未建档(1) 顶到最前；
             // 用 orderByAsc 会反把已建档排前、未建档沉底（13.1 红的那一版）。同 idiom 在成员名单
-            // :133 处方向相反——那里要的是 NULL 沉底，两处的意图本就相反，别顺手一起改。
+            // 的 pageMembers（ISNULL(latest_join_at) 那一行）方向相反——那里要的是 NULL 沉底，
+            // 两处的意图本就相反，别顺手一起改。定位用方法名不用行号：这两块的行号会随注释增删漂移。
             w.orderByDesc("ISNULL(last_snapshot_at)").orderByAsc("last_snapshot_at").orderByAsc("id");
         } else {
             w.orderByDesc("last_snapshot_at").orderByDesc("id");
