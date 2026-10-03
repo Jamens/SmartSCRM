@@ -84,6 +84,25 @@ public class AuthService {
         return toUserInfo(user, tenantMapper.selectById(user.getTenantId()));
     }
 
+    /**
+     * 修改登录密码。校验原密码后重写哈希；新密码不得与原密码相同。
+     * 调用方（Controller）负责在成功后让当前会话重新登录——本方法只管落到库里。
+     */
+    public void changePassword(Long userId, String oldPassword, String newPassword) {
+        AppUser user = userMapper.selectById(userId);
+        if (user == null || user.getStatus() != 1) {
+            throw BizException.unauthorized("账号不可用");
+        }
+        if (!passwordEncoder.matches(oldPassword, user.getPasswordHash())) {
+            throw new BizException(40001, "原密码错误");
+        }
+        if (passwordEncoder.matches(newPassword, user.getPasswordHash())) {
+            throw new BizException(40002, "新密码不能与原密码相同");
+        }
+        user.setPasswordHash(passwordEncoder.encode(newPassword));
+        userMapper.updateById(user);
+    }
+
     private LoginResponse.UserInfo toUserInfo(AppUser user, Tenant tenant) {
         return new LoginResponse.UserInfo(
             user.getId(), user.getUsername(), user.getNickname(), user.getAvatar(), user.getRole(),

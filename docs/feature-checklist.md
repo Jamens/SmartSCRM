@@ -13,7 +13,7 @@
 | A6 | 自动更新框架（本地源） | P14 |
 | A7 | 内存/性能监控 | P14 |
 | A8 | 敏感词风控（本地库） | P14 |
-| A9 | 修改密码（改密后强制重新登录） | P14 |
+| A9 | 修改密码（改密后强制重新登录） | ✅ 已交付（2026-10-03） |
 | A10 | 消息中心 / 站内通知（列表 + 未读 + 系统通知投递） | P14 |
 | A11 | 帮助文档与 FAQ 模板下载 | P14 |
 | A12 | 任务栏未读角标（数字 + Windows 叠加图标，值来自会话未读投影） | P6 收尾 |
@@ -156,6 +156,7 @@ B6 不是一次交付，按四个切面推进，前三个已提交，第四个�
 - **A17 已交付**（commit `27062f2`）：共享规则层 `shared/notification` + 主进程 `desktopNotify` + IPC `notify:show`/`notify:clicked` + 渲染层 `liveTailSync` 提请与 `AppLayout` 跳转。
 - **A18 已交付**：GPU 后端在 `app.ready` 之前定（启动参数 `--gpu-safe-mode` 关 GPU）；崩溃走 `child-process-gone`（`type==='gpu'`）→ 记 `gpuSafeMode` 并带参重启；设置页「图形」卡含硬件加速开关与「重试标准模式」；`WebContentsViewManager.syncZoomToWindow` 把缩放对齐到主窗口并在 DPI 变化时同步。设计见 `docs/superpowers/specs/2026-10-03-gpu-fallback-design.md`。
 - **A19 已交付**：主进程日志中心——`console.*` 接管按 `[tag]` 归四类（app/ipc/bridge/error）、捕获 `uncaughtException`/`unhandledRejection`、内存环 5000 条 + 按天批量落盘 + 退出前 flush；`installIpcLogging` 包 `ipcMain.handle` 记每次调用；日志中心页 `/logs` 可筛选/刷新/清空/打开目录，只落本地不上报。设计见 `docs/superpowers/specs/2026-10-03-log-center-design.md`。
+- **A9 已交付**（2026-10-03）：设置页新增「账户安全」卡。后端 `ChangePasswordRequest`（record，`newPassword @Size(8,64)`）+ `AuthService.changePassword`（校验原密码 / 新旧不可相同 / 重写哈希）+ `AuthController POST /api/auth/change-password`；前端 `api/auth.ts` + `SettingsPage` 表单（原/新/确认 + 可见性切换 + 长度与一致性前端校验）。改密成功后 `useAuthStore.logout()` 清本机会话，`App` 在 `phase==='anonymous'` 自动渲染登录页，实现「强制重新登录」。未做 tokenVersion 失效（保持无状态 JWT 架构）。设计见 `docs/superpowers/specs/2026-10-03-change-password-design.md`。
 - **A19 只落本地。** 本项目的定位是外部服务一律自托管或不接，遥测外传那一档不做。
 - **「每日养号计划 runner」本轮不入册**：「服务端编排 → 客户端执行」这一形态要不要保留属裁定问题，
   不是实现问题——裁定前不占阶段、不给编号。
