@@ -1,6 +1,7 @@
 package com.smartscrm.server.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.query.QueryWrapper;
 import com.baomidou.mybatisplus.extension.plugins.pagination.Page;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.common.PageResult;
@@ -14,10 +15,12 @@ import com.smartscrm.server.mapper.CustomerMapper;
 import com.smartscrm.server.mapper.GroupMemberEventMapper;
 import com.smartscrm.server.mapper.GroupMemberStateMapper;
 import com.smartscrm.server.service.msg.ChatKeys;
+import com.smartscrm.server.service.msg.SearchPattern;
 import com.smartscrm.server.web.vo.GroupEventVO;
 import com.smartscrm.server.web.vo.GroupExportRowVO;
 import com.smartscrm.server.web.vo.GroupMemberVO;
 import com.smartscrm.server.web.vo.GroupVO;
+import com.smartscrm.server.web.vo.MemberPageVO;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -54,21 +57,25 @@ public class GroupMemberQueryService {
         this.customerMapper = customerMapper;
     }
 
-    /** 成员名单 + 本次快照的新鲜度。{@code coverage}/{@code reason} 来自最近一次 ingest 的判定。 */
-    public record MemberPage(PageResult<GroupMemberVO> page, Double coverage, String reason) {}
+    /** 成员名单 + 本次快照的新鲜度：直接返回 {@link MemberPageVO}，coverage 可空就空，不折成 ""。 */
 
     // -----------------------------------------------------------------------
     // 群列表
     // -----------------------------------------------------------------------
 
-    public PageResult<GroupVO> pageGroups(Long tenantId, Long accountId, String platform, int page, int size) {
+    public PageResult<GroupVO> pageGroups(Long tenantId, Long accountId, String platform,
+                                          int page, int size, String sort) {
         Page<ChatGroup> p = new Page<>(Math.max(1, page), Math.min(Math.max(1, size), 200));
-        groupMapper.selectPage(p, new LambdaQueryWrapper<ChatGroup>()
-            .eq(ChatGroup::getTenantId, tenantId)
-            .eq(ChatGroup::getAccountId, accountId)
-            .eq(ChatGroup::getPlatform, platform)
-            .orderByDesc(ChatGroup::getLastSnapshotAt)
-            .orderByDesc(ChatGroup::getId));
+        // ⑥：用 QueryWrapper 的字符串列，为的是 sort=stale 那条 ISNULL(...) 表达式——lambda 排序给不出表达式。
+        QueryWrapper<ChatGroup> w = new QueryWrapper<ChatGroup>()
+            .eq("tenant_id", tenantId).eq("account_id", accountId).eq("platform", platform);
+        if ("stale".equals(sort)) {
+            // 建档泵那一支（R28 / R41）：没成功快照的最前，其余按上次成功快照从旧到新。
+            w.orderByAsc("ISNULL(last_snapshot_at)", "last_snapshot_at", "id");
+        } else {
+            w.orderByDesc("last_snapshot_at").orderByDesc("id");
+        }
+        groupMapper.selectPage(p, w);
         List<ChatGroup> rows = p.getRecords();
         if (rows.isEmpty()) {
             return PageResult.of(List.<GroupVO>of(), p.getTotal(), p.getCurrent(), p.getSize());
@@ -84,7 +91,7 @@ public class GroupMemberQueryService {
             vos.add(new GroupVO(g.getChatKey(), g.getTitle(), g.getPlatform(), g.getParticipantCount(),
                 g.getSnapshotCount(), toInt(a == null ? null : a.get("inGroupCount")),
                 g.getLastSnapshotAt(), toTime(a == null ? null : a.get("lastEventAt")),
-                g.getIsFinal() != null && g.getIsFinal() == 1));
+                g.getIsFinal() != null && g.getIsFinal() == 1, g.getLastCoverage(), g.getLastReconcileReason()));
         }
         return PageResult.of(vos, p.getTotal(), p.getCurrent(), p.getSize());
     }
@@ -93,44 +100,47 @@ public class GroupMemberQueryService {
     // 成员名单
     // -----------------------------------------------------------------------
 
-    public MemberPage pageMembers(Long tenantId, Long accountId, String platform, String chatKey,
-                                 Boolean isInGroup, String role, String q, int page, int size) {
-        LambdaQueryWrapper<GroupMemberState> w = new LambdaQueryWrapper<GroupMemberState>()
-            .eq(GroupMemberState::getTenantId, tenantId)
-            .eq(GroupMemberState::getAccountId, accountId)
-            .eq(GroupMemberState::getPlatform, platform)
-            .eq(GroupMemberState::getChatKey, chatKey);
+    public MemberPageVO pageMembers(Long tenantId, Long accountId, String platform, String chatKey,
+                                    Boolean isInGroup, String role, String q, int page, int size) {
+        // ①②：用 QueryWrapper 的字符串列名，为的是那条 ORDER BY——MP 的 lambda 排序给不出 ISNULL(...) 表达式，
+        // 而 MySQL 的 ASC 会把 NULL 排在最前，于是"没有进群时间的人"占满第一页——那正是 R36 要消掉的形状。
+        QueryWrapper<GroupMemberState> w = new QueryWrapper<GroupMemberState>()
+            .eq("tenant_id", tenantId).eq("account_id", accountId)
+            .eq("platform", platform).eq("chat_key", chatKey);
         if (isInGroup != null) {
-            w.eq(GroupMemberState::getIsInGroup, isInGroup ? 1 : 0);
+            w.eq("is_in_group", isInGroup ? 1 : 0);
         }
         if (role != null && !role.isBlank()) {
-            w.eq(GroupMemberState::getRoleType, role);
+            w.eq("role_type", role);
         }
         if (q != null && !q.isBlank()) {
-            String like = "%" + q.trim() + "%";
-            w.and(x -> x.like(GroupMemberState::getDisplayName, like)
-                .or().like(GroupMemberState::getPhone, like)
-                .or().like(GroupMemberState::getMemberKey, like));
+            // ①：搜索词交给 SearchPattern（返回**已带 %、且把 %/_ 转义过**的模式）。这里必须先分两种 null：
+            // q 本就为空 → 跳过整个搜索块查全量；q 非空而 like==null（只由 %/_ 组成）→ 按「不搜」给空名单，
+            // 当成"没有过滤条件"就是一次全表扫。写成"like==null 一律返回空名单"会让不带 q 的名单永远空。
+            String like = SearchPattern.like(q);
+            if (like == null) {
+                return new MemberPageVO(PageResult.of(List.<GroupMemberVO>of(), 0L, Math.max(1, page),
+                    Math.min(Math.max(1, size), 200)), null, "no_snapshot");
+            }
+            // MP 的 like() 会把参数再包一层 %，与 SearchPattern 已包的那一层叠成 %%…%%（搜 % 变搜全表）；
+            // 所以走 apply("col LIKE {0}", like)，让已转义的模式原样进绑定值。{0} 是 MP 的占位，不是 ?。
+            w.and(x -> x.apply("display_name LIKE {0}", like)
+                .or().apply("phone LIKE {0}", like)
+                .or().apply("member_key LIKE {0}", like));
         }
-        // 排序与导出同一口径：先进群的在前，没有进群时间的排后面按"首次见到"排。
-        w.orderByAsc(GroupMemberState::getLatestJoinAt).orderByAsc(GroupMemberState::getFirstSeenAt);
+        w.orderByAsc("ISNULL(latest_join_at)", "latest_join_at", "first_seen_at", "id");
 
         Page<GroupMemberState> p = new Page<>(Math.max(1, page), Math.min(Math.max(1, size), 200));
         stateMapper.selectPage(p, w);
         List<GroupMemberVO> vos = toMemberVOs(tenantId, chatKey, p.getRecords());
 
         ChatGroup g = groupMapper.selectByKey(tenantId, platform, accountId, chatKey);
-        // 新鲜度按当前状态推：没建过档就是 first_build，否则用"在场人数 / 上次成功快照人数"。
-        Double coverage = null;
-        String reason = "no_snapshot";
-        if (g != null && g.getParticipantCount() != null && g.getParticipantCount() > 0) {
-            int inGroup = (int) vos.stream().filter(GroupMemberVO::isInGroup).count();
-            coverage = (double) inGroup / g.getParticipantCount();
-            reason = coverage >= 0.6 ? "ok" : "coverage_too_low";
-        } else if (g != null && g.getSnapshotCount() != null && g.getSnapshotCount() > 0) {
-            reason = "first_build";
-        }
-        return new MemberPage(PageResult.of(vos, p.getTotal(), p.getCurrent(), p.getSize()), coverage, reason);
+        // ③：新鲜度读闸落下来的那两列，不在这里现场算——现场算用的是当前这一页的在群数，翻页会给出
+        // 不同的 coverage，而 §8 那句"本次未做退群判定"必须只有一个答案。
+        Double coverage = g == null ? null : g.getLastCoverage();
+        String reason = (g == null || g.getLastReconcileReason() == null)
+            ? "no_snapshot" : g.getLastReconcileReason();
+        return new MemberPageVO(PageResult.of(vos, p.getTotal(), p.getCurrent(), p.getSize()), coverage, reason);
     }
 
     private List<GroupMemberVO> toMemberVOs(Long tenantId, String chatKey, List<GroupMemberState> rows) {
@@ -193,29 +203,27 @@ public class GroupMemberQueryService {
      * 匹配用两路：已经回填的 {@code customer_id}，以及手机号相等（客户手机号改过、成员行还没回填时靠它）。
      * 两路都不是精确外键——客户与成员之间没有外键关系，所以这里是"尽力匹配"，匹配不上就是没有。
      */
-    public List<GroupVO> customerGroups(Long tenantId, Long accountId, Long customerId) {
+    public List<GroupVO> customerGroups(Long tenantId, Long accountId, String platform, Long customerId) {
         Customer customer = customerMapper.selectById(customerId);
         if (customer == null || !tenantId.equals(customer.getTenantId())) {
             throw new BizException(40404, "客户不存在: " + customerId);
         }
         String phone = ChatKeys.normalizePhone(customer.getPhone());
-        // 8b：accountId 是账号收窄的那一维（R16/R40 不许跨账号混读）。传 null 时退化为旧行为（匹配该客户全部账号的群）。
+        // ④：accountId 是账号收窄的那一维（R16 / spec §9 不许跨账号混读），两路查询都按 (platform, account_id) 过滤。
         LambdaQueryWrapper<GroupMemberState> w = new LambdaQueryWrapper<GroupMemberState>()
             .eq(GroupMemberState::getTenantId, tenantId)
+            .eq(GroupMemberState::getAccountId, accountId)
+            .eq(GroupMemberState::getPlatform, platform)
             .eq(GroupMemberState::getCustomerId, customerId);
-        if (accountId != null) {
-            w.eq(GroupMemberState::getAccountId, accountId);
-        }
         List<GroupMemberState> byCustomer = stateMapper.selectList(w);
 
         List<GroupMemberState> all = new ArrayList<>(byCustomer);
         if (phone != null) {
             LambdaQueryWrapper<GroupMemberState> phoneW = new LambdaQueryWrapper<GroupMemberState>()
                 .eq(GroupMemberState::getTenantId, tenantId)
+                .eq(GroupMemberState::getAccountId, accountId)
+                .eq(GroupMemberState::getPlatform, platform)
                 .eq(GroupMemberState::getPhone, phone);
-            if (accountId != null) {
-                phoneW.eq(GroupMemberState::getAccountId, accountId);
-            }
             List<GroupMemberState> byPhone = stateMapper.selectList(phoneW);
             Set<Long> seen = new java.util.HashSet<>();
             for (GroupMemberState s : all) {
@@ -245,7 +253,7 @@ public class GroupMemberQueryService {
             out.add(new GroupVO(g.getChatKey(), g.getTitle(), g.getPlatform(), g.getParticipantCount(),
                 g.getSnapshotCount(), toInt(a == null ? null : a.get("inGroupCount")),
                 g.getLastSnapshotAt(), toTime(a == null ? null : a.get("lastEventAt")),
-                g.getIsFinal() != null && g.getIsFinal() == 1));
+                g.getIsFinal() != null && g.getIsFinal() == 1, g.getLastCoverage(), g.getLastReconcileReason()));
         }
         return out;
     }
@@ -263,15 +271,25 @@ public class GroupMemberQueryService {
         if (chatKeys == null || chatKeys.isEmpty()) {
             throw new BizException(40000, "chatKeys 不能为空");
         }
-        if (chatKeys.size() > MAX_EXPORT_GROUPS) {
-            throw new BizException(40000, "一次最多导出 " + MAX_EXPORT_GROUPS + " 个群，当前 " + chatKeys.size());
+        // ⑤：先去重（R40）再剔非群键再计数——拦的是工作量，重复勾选不该被计成两拨活。
+        List<String> keys = new ArrayList<>(new LinkedHashSet<>(chatKeys));
+        keys.removeIf(k -> k == null || k.isBlank() || !ChatKeys.isGroup(k));
+        if (keys.isEmpty()) {
+            throw new BizException(40000, "chatKeys 里没有一个是群键");
+        }
+        if (keys.size() > MAX_EXPORT_GROUPS) {
+            // 40016 而不是 40000：界面要能把"选太多"与"参数不对"分成两句文案说，
+            // 前者的下一步是少勾两个群，后者的下一步是看请求怎么拼的。
+            throw new BizException(40016, "一次最多导出 " + MAX_EXPORT_GROUPS + " 个群，当前 " + keys.size());
         }
         List<GroupExportRowVO> out = new ArrayList<>();
         int seq = 1;
-        for (String chatKey : chatKeys) {
+        for (String chatKey : keys) {   // 行序：入参顺序 = 去重后保留的首次出现顺序；seq 只由这一段写（R22）
             ChatGroup g = groupMapper.selectByKey(tenantId, platform, accountId, chatKey);
             String groupName = g == null ? null : g.getTitle();
-            List<GroupMemberState> rows = stateMapper.selectByGroup(tenantId, platform, accountId, chatKey);
+            // 取可变副本再原地排：mapper 给回的列表不保证可 sort（MyBatis 平时给 ArrayList，但只读实现会拒绝），
+            // 而这份行序（latest_join_at 空的沉到本群末尾、按 first_seen_at 升序）与 pageMembers 是同一口径。
+            List<GroupMemberState> rows = new ArrayList<>(stateMapper.selectByGroup(tenantId, platform, accountId, chatKey));
             rows.sort(Comparator
                 .comparing(GroupMemberState::getLatestJoinAt, Comparator.nullsLast(Comparator.naturalOrder()))
                 .thenComparing(GroupMemberState::getFirstSeenAt, Comparator.nullsLast(Comparator.naturalOrder())));

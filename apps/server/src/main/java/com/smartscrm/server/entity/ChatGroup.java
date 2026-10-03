@@ -33,6 +33,10 @@ public class ChatGroup {
     private Integer participantCount;
     private LocalDateTime lastSnapshotAt;
     private Integer snapshotCount;
+    /** 最近一次快照判定的覆盖率。只有 {@link com.smartscrm.server.mapper.ChatGroupMapper} 的 `markSnapshotSuccess` / `markGate` 写它。 */
+    private Double lastCoverage;
+    /** 最近一次判定结论：`ok | first_build | coverage_too_low | no_snapshot`。 */
+    private String lastReconcileReason;
     /** 1 = 群已解散/账号已退出：建档泵跳过它，但流水仍要读得到。 */
     private Integer isFinal;
     private LocalDateTime createdAt;

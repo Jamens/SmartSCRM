@@ -30,10 +30,25 @@ public interface ChatGroupMapper extends BaseMapper<ChatGroup> {
     int upsertGroup(@Param("e") ChatGroup e, @Param("now") LocalDateTime now);
 
     /**
-     * 一次**成功**快照的记账：写分母、打时间戳、快照次数 +1。
-     * 只有调用方确认这份快照可用（非空名单）时才调用——空名单当成功会把整群人判成已退群。
+     * 一次**成功**快照的记账：一次写五列——分母、时间戳、快照次数 +1，外加闸的两列读数
+     * （{@code last_coverage} / {@code last_reconcile_reason}，V13）。
+     * 只有调用方确认这份快照可用（非空名单、过了闸）时才调用——空名单当成功会把整群人判成已退群。
+     *
+     * 读数与分母同一次写，是为了读侧 {@code pageMembers} 只读列、不在翻页时现场算（§8 那句
+     * "本次未做退群判定"必须只有一个答案）。首次建档这一跳 {@code coverage} 传 null（没有分母可除）。
      */
     @Update("UPDATE chat_group SET participant_count = #{count}, last_snapshot_at = #{at},"
-        + " snapshot_count = snapshot_count + 1, updated_at = #{at} WHERE id = #{id}")
-    int markSnapshotSuccess(@Param("id") Long id, @Param("count") int count, @Param("at") LocalDateTime at);
+        + " snapshot_count = snapshot_count + 1, last_coverage = #{coverage},"
+        + " last_reconcile_reason = #{reason}, updated_at = #{at} WHERE id = #{id}")
+    int markSnapshotSuccess(@Param("id") Long id, @Param("count") int count, @Param("coverage") Double coverage,
+                            @Param("reason") String reason, @Param("at") LocalDateTime at);
+
+    /**
+     * 被闸拦下时只写读数那两列，**绝不碰**分母 / 时间戳 / 次数：截断的名单一旦参与记账，
+     * 分母就被污染，而那种污染在界面上永远看不出来（R20）。
+     */
+    @Update("UPDATE chat_group SET last_coverage = #{coverage}, last_reconcile_reason = #{reason},"
+        + " updated_at = #{at} WHERE id = #{id}")
+    int markGate(@Param("id") Long id, @Param("coverage") Double coverage, @Param("reason") String reason,
+                 @Param("at") LocalDateTime at);
 }

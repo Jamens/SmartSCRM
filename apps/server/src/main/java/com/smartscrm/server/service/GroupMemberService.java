@@ -48,6 +48,17 @@ public class GroupMemberService {
      */
     private static final double COVERAGE_MIN = 0.6;
 
+    /**
+     * 入参长度闸（⑧ / R42）：常量照 V12 的列宽。超长键会让整条 {@code INSERT} 在库里抛错变 500，
+     * 所以在最前面整批拒收成 40000。客户端已有一道同名同值的闸（Task 10 的 {@code fits()}），
+     * 能走到 Java 的超长键只可能是手搓请求或桥侧漏过滤——那种情况下指出问题比静默跳过更便宜。
+     */
+    private static final int CHAT_KEY_MAX = 128;
+    private static final int MEMBER_KEY_MAX = 160;
+    private static final int DEDUP_KEY_MAX = 160;
+    private static final int PHONE_MAX = 32;
+    private static final int DISPLAY_NAME_MAX = 128;
+
     private static final Set<String> EVENT_TYPES =
         Set.of("added", "joined", "left", "removed", "promoted", "demoted");
     private static final Set<String> SOURCES = Set.of("system_message", "live_event");
@@ -78,6 +89,31 @@ public class GroupMemberService {
     @Transactional
     public IngestResult ingest(Long tenantId, GroupMemberBatchDTO dto) {
         ResolvedAccount acc = resolveAccount(tenantId, dto.getAccountId());
+        // ⑧：长度闸跑在任何写动作之前。混进一个超长键就整批拒收，绝不留"前面的都写了、这条抛 500"的半套。
+        requireFits("chatKey", dto.getSnapshot() == null ? null : dto.getSnapshot().getChatKey(), CHAT_KEY_MAX);
+        if (dto.getGroups() != null) {
+            for (GroupItem g : dto.getGroups()) {
+                if (g != null) {
+                    requireFits("chatKey", g.getChatKey(), CHAT_KEY_MAX);
+                }
+            }
+        }
+        if (dto.getSnapshot() != null && dto.getSnapshot().getParticipants() != null) {
+            for (ParticipantItem p : dto.getSnapshot().getParticipants()) {
+                if (p != null) {
+                    requireFits("memberKey", p.getMemberKey(), MEMBER_KEY_MAX);
+                }
+            }
+        }
+        if (dto.getEvents() != null) {
+            for (EventItem e : dto.getEvents()) {
+                if (e != null) {
+                    requireFits("chatKey", e.getChatKey(), CHAT_KEY_MAX);
+                    requireFits("memberKey", e.getMemberKey(), MEMBER_KEY_MAX);
+                    requireFits("dedupKey", e.getDedupKey(), DEDUP_KEY_MAX);
+                }
+            }
+        }
         // 必须按 CHAT_ZONE 读：MsgTimes.toDbTime 的未来钳制以它为准，用系统默认时区会让整条时间轴平移。
         LocalDateTime now = LocalDateTime.now(MsgTimes.CHAT_ZONE);
 
@@ -194,9 +230,13 @@ public class GroupMemberService {
             fresh.sort(Comparator.comparing(GroupMemberEvent::getOccurredAt)
                 .thenComparing(GroupMemberEvent::getDedupKey));
 
-            inserted += eventMapper.insertIgnoreBatch(fresh);
+            // ⑦：逐条 INSERT IGNORE，只有真插了行（affected rows = 1）才投影。批量给不出"哪几行是新的"，
+            // 被 IGNORE 掉的那条一旦再投影，join_count 就双计且永远回不去（R39 / spec §6）。
             for (GroupMemberEvent e : fresh) {
-                projectEvent(tenantId, acc, e, now);
+                if (eventMapper.insertIgnore(e) == 1) {
+                    inserted++;
+                    projectEvent(tenantId, acc, e, now);
+                }
             }
         }
         return inserted;
@@ -303,8 +343,11 @@ public class GroupMemberService {
             e.setPlatform(acc.platform());
             e.setChatKey(chatKey);
             e.setMemberKey(p.getMemberKey());
-            e.setPhone(trimToNull(p.getPhone()));
-            e.setDisplayName(trimToNull(p.getDisplayName()));
+            // ⑧ / R38：phone 入库即归一（匹配用归一值，写侧原样会带 + 空格/破折号，按号码那一路永远命中不上）；
+            // 归一后仍超列宽就整列留 NULL，不猜。display_name clip 到列宽。
+            String normalized = ChatKeys.normalizePhone(p.getPhone());
+            e.setPhone(normalized == null || normalized.length() > PHONE_MAX ? null : normalized);
+            e.setDisplayName(clip(trimToNull(p.getDisplayName()), DISPLAY_NAME_MAX));
             e.setRoleType(ROLES.contains(p.getRoleType()) ? p.getRoleType() : "member");
             e.setCustomerId(matchCustomer(tenantId, acc.platformType(), p.getMemberKey(), p.getPhone()));
             stateMapper.upsertFromSnapshot(e, now);
@@ -331,11 +374,16 @@ public class GroupMemberService {
          * 这里选安全而非灵敏：把在群的人误判成已退群，比漏判一次缩员贵得多。
          * last_snapshot_at 不动还有个好处：这个群会留在建档队列靠前的位置，下一轮更早被重试。
          */
+        // ③：读数落库分两路。放行 → markSnapshotSuccess 一次写五列（分母 + 时间 + 次数 + 两列读数）；
+        // 被拦 → markGate 只写那两列读数，绝不动分母。R20 那条「三列一起挡」不松动：截断的名单一旦参与
+        // 记账，分母就被污染且界面上看不出来。没带快照的那一批两种都不写（见上面的 no_snapshot 早返回）。
         if (allowed) {
             ChatGroup after = groupMapper.selectByKey(tenantId, acc.platform(), acc.accountId(), chatKey);
             if (after != null) {
-                groupMapper.markSnapshotSuccess(after.getId(), cur, now);
+                groupMapper.markSnapshotSuccess(after.getId(), cur, coverage, reason, now);
             }
+        } else if (group != null) {
+            groupMapper.markGate(group.getId(), coverage, reason, now);
         }
         return new CoverageVerdict(allowed, coverage, reason);
     }
@@ -401,5 +449,12 @@ public class GroupMemberService {
             return null;
         }
         return s.length() <= max ? s : s.substring(0, max);
+    }
+
+    /** ⑧：值非空且超过列宽就整批 40000，错误里点名是哪一列、上限多少——把契约违约指出来，而不是藏进 200。 */
+    private static void requireFits(String field, String value, int max) {
+        if (value != null && value.length() > max) {
+            throw new BizException(40000, field + " 超过 " + max + " 字符");
+        }
     }
 }

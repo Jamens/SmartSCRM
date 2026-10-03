@@ -10,10 +10,9 @@ import com.smartscrm.server.web.vo.GroupEventVO;
 import com.smartscrm.server.web.vo.GroupExportRowVO;
 import com.smartscrm.server.web.vo.GroupMemberVO;
 import com.smartscrm.server.web.vo.GroupVO;
+import com.smartscrm.server.web.vo.MemberPageVO;
 import jakarta.validation.Valid;
-import java.util.HashMap;
 import java.util.List;
-import java.util.Map;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -50,13 +49,16 @@ public class GroupMemberController {
     public ApiResponse<PageResult<GroupVO>> groups(@AuthenticationPrincipal AuthPrincipal principal,
             @RequestParam Long accountId,
             @RequestParam(defaultValue = "1") int page,
-            @RequestParam(defaultValue = "20") int size) {
+            @RequestParam(defaultValue = "20") int size,
+            @RequestParam(required = false) String sort) {
         var acc = service.resolveAccount(principal.tenantId(), accountId);
-        return ApiResponse.ok(query.pageGroups(principal.tenantId(), acc.accountId(), acc.platform(), page, size));
+        // ⑥：sort=stale 给建档泵那一支用（未建档的最前）；不认识的值走默认（新的在前）。
+        return ApiResponse.ok(query.pageGroups(principal.tenantId(), acc.accountId(), acc.platform(),
+            page, size, sort));
     }
 
     @GetMapping("/group/members")
-    public ApiResponse<Map<String, Object>> members(@AuthenticationPrincipal AuthPrincipal principal,
+    public ApiResponse<MemberPageVO> members(@AuthenticationPrincipal AuthPrincipal principal,
             @RequestParam Long accountId,
             @RequestParam String chatKey,
             @RequestParam(required = false) Boolean isInGroup,
@@ -65,17 +67,12 @@ public class GroupMemberController {
             @RequestParam(defaultValue = "1") int page,
             @RequestParam(defaultValue = "50") int size) {
         var acc = service.resolveAccount(principal.tenantId(), accountId);
-        GroupMemberQueryService.MemberPage mp = query.pageMembers(principal.tenantId(), acc.accountId(),
-            acc.platform(), chatKey, isInGroup, role, q, page, size);
+        MemberPageVO mp = query.pageMembers(principal.tenantId(), acc.accountId(), acc.platform(), chatKey,
+            isInGroup, role, q, page, size);
         // 名单与快照新鲜度同一份响应返回：分两次取会让"名单是一秒前的、闸是三秒前的"这种错位成为可能。
-        // 8b：coverage 为 null（首次建档，没有分母可除）必须原样返回 null，不能折成 ""。
-        // 前端 MemberPageVO.coverage 是 number | null，"" 会让它拿不到"这是首次建档"的信号，
-        // 从而把 first_build 误判成 ok 去算百分比。Map.of 不允许 null value，改用 HashMap。
-        Map<String, Object> body = new HashMap<>();
-        body.put("members", mp.page());
-        body.put("coverage", mp.coverage());
-        body.put("reason", mp.reason());
-        return ApiResponse.ok(body);
+        // 用 record（MemberPageVO）而不是 Map.of：Map.of 不许 null，会把首次建档的 coverage==null 压成 ""，
+        // 而前端 MemberPageVO.coverage 是 number | null，"" 会让它拿不到"这是首次建档"的信号。record 原样带 null。
+        return ApiResponse.ok(mp);
     }
 
     @GetMapping("/group/events")
@@ -92,9 +89,12 @@ public class GroupMemberController {
 
     @GetMapping("/customer/{customerId}/groups")
     public ApiResponse<List<GroupVO>> customerGroups(@AuthenticationPrincipal AuthPrincipal principal,
-                                                     @RequestParam(required = false) Long accountId,
+                                                     @RequestParam Long accountId,
                                                      @PathVariable long customerId) {
-        return ApiResponse.ok(query.customerGroups(principal.tenantId(), accountId, customerId));
+        // ④：accountId 必填——与另外四支读端点同一条租户/账号闸，先 resolveAccount 拿 platform 再传下去。
+        // 老脚本手搓不带 accountId 的 URL 会得到 400（Spring 缺参），那正是要它响。
+        var acc = service.resolveAccount(principal.tenantId(), accountId);
+        return ApiResponse.ok(query.customerGroups(principal.tenantId(), acc.accountId(), acc.platform(), customerId));
     }
 
     /** 导出取数。列序与行序由服务层钉死，这里只负责转发与限流（50 群上限）。 */

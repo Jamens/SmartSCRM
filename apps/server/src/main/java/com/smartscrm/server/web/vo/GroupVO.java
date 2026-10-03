@@ -18,6 +18,9 @@ public record GroupVO(
     Integer inGroupCount,
     LocalDateTime lastSnapshotAt,
     LocalDateTime lastEventAt,
-    boolean isFinal
+    boolean isFinal,
+    /** ③：闸落在群行上的两个读数（V13）；界面据此显示"覆盖率 / 为什么没判定"，不在翻页时现算。 */
+    Double lastCoverage,
+    String lastReconcileReason
 ) {
 }
