@@ -686,5 +686,39 @@ export const zhTW: DeepString<typeof zhCN> = {
       audio: '音訊',
       file: '檔案'
     }
+  },
+
+  audiences: {
+    title: '人群包',
+    subtitle: '按標籤 / 平台 / 關鍵字組合保存的客戶分群',
+    newAudience: '新建人群包',
+    loading: '載入人群包中…',
+    empty: '還沒有人群包，點擊右上角新建。',
+    platformPrefix: '平台：',
+    keywordPrefix: '關鍵字：',
+    tagPrefix: '標籤：',
+    none: '—',
+    view: '查看',
+    edit: '編輯',
+    delete: '刪除',
+    deleteConfirm: '確認刪除人群包「{{name}}」？',
+    editAudience: '編輯人群包',
+    dialogDesc: '條件為「同時滿足」：所選標籤全部命中，再疊加平台與關鍵字。',
+    name: '名稱',
+    namePlaceholder: '例如：高價值成交客戶',
+    platform: '平台',
+    keyword: '關鍵字',
+    allPlatforms: '全部平台',
+    keywordPlaceholder: '匹配暱稱/手機/信箱',
+    tagField: '標籤（需全部命中）',
+    noLabelsHint: '還沒有標籤，請先到「標籤」建立。',
+    previewTitle: '人群包客戶',
+    previewDesc: '共 {{total}} 位客戶命中該人群包條件。',
+    previewEmpty: '暫無命中客戶。',
+    unnamedCustomer: '未命名客戶',
+    pageInfo: '第 {{page}} / {{pageCount}} 頁',
+    prevPage: '上一頁',
+    nextPage: '下一頁',
+    all: '全部'
   }
 }

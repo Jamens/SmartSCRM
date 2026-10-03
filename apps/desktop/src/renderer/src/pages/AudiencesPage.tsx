@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
 import { ChevronLeft, ChevronRight, Eye, Pencil, Plus, Target, Trash2, Users } from 'lucide-react'
 import { PLATFORMS, platformOf } from '@/lib/platform'
@@ -53,6 +54,7 @@ function toInput(draft: AudienceDraft): { name: string; platformType: number | n
 }
 
 export default function AudiencesPage(): React.JSX.Element {
+  const { t } = useTranslation()
   const { data: audiences = [], isPending } = useAudiences()
   const { data: tree = [] } = useLabelTree()
   const [draft, setDraft] = useState<AudienceDraft | null>(null)
@@ -86,7 +88,7 @@ export default function AudiencesPage(): React.JSX.Element {
   }
 
   const remove = (audience: AudienceVO): void => {
-    if (!window.confirm(`确认删除人群包「${audience.name}」？`)) return
+    if (!window.confirm(t('audiences.deleteConfirm', { name: audience.name }))) return
     removeAudience.mutate(audience.id)
   }
 
@@ -102,21 +104,21 @@ export default function AudiencesPage(): React.JSX.Element {
         <div>
           <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
             <Target className="size-5 text-primary" />
-            人群包
+            {t('audiences.title')}
           </h1>
-          <p className="text-xs text-muted-foreground">按标签 / 平台 / 关键词组合保存的客户分群</p>
+          <p className="text-xs text-muted-foreground">{t('audiences.subtitle')}</p>
         </div>
         <Button size="sm" onClick={openCreate}>
           <Plus className="size-4" />
-          新建人群包
+          {t('audiences.newAudience')}
         </Button>
       </header>
 
       <div className="min-h-0 flex-1 overflow-auto p-6">
         {isPending ? (
-          <p className="py-16 text-center text-sm text-muted-foreground">加载人群包中…</p>
+          <p className="py-16 text-center text-sm text-muted-foreground">{t('audiences.loading')}</p>
         ) : audiences.length === 0 ? (
-          <p className="py-16 text-center text-sm text-muted-foreground">还没有人群包，点击右上角新建。</p>
+          <p className="py-16 text-center text-sm text-muted-foreground">{t('audiences.empty')}</p>
         ) : (
           <div className="grid grid-cols-1 gap-4 lg:grid-cols-2 xl:grid-cols-3">
             {audiences.map((audience) => (
@@ -129,10 +131,10 @@ export default function AudiencesPage(): React.JSX.Element {
                   </Badge>
                 </div>
                 <div className="mb-3 space-y-1 text-xs text-muted-foreground">
-                  <p>平台：{audience.platformType != null ? platformOf(audience.platformType)?.label : '全部'}</p>
-                  <p className="truncate">关键词：{audience.keyword || '—'}</p>
+                  <p>{t('audiences.platformPrefix')}{audience.platformType != null ? platformOf(audience.platformType)?.label : t('audiences.all')}</p>
+                  <p className="truncate">{t('audiences.keywordPrefix')}{audience.keyword || t('audiences.none')}</p>
                   <div className="flex flex-wrap gap-1">
-                    {audience.tagIds.length === 0 && <span>标签：—</span>}
+                    {audience.tagIds.length === 0 && <span>{t('audiences.tagPrefix')}{t('audiences.none')}</span>}
                     {audience.tagIds.map((id) => {
                       const label = labelById.get(id)
                       return (
@@ -152,12 +154,12 @@ export default function AudiencesPage(): React.JSX.Element {
                   <div className="flex items-center gap-1">
                     <Button size="sm" variant="ghost" onClick={() => setPreviewId(audience.id)}>
                       <Eye className="size-4" />
-                      查看
+                      {t('audiences.view')}
                     </Button>
-                    <button className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title="编辑" onClick={() => openEdit(audience)}>
+                    <button className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-foreground" title={t('audiences.edit')} onClick={() => openEdit(audience)}>
                       <Pencil className="size-3.5" />
                     </button>
-                    <button className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive" title="删除" onClick={() => remove(audience)}>
+                    <button className="rounded p-1.5 text-muted-foreground hover:bg-muted hover:text-destructive" title={t('audiences.delete')} onClick={() => remove(audience)}>
                       <Trash2 className="size-3.5" />
                     </button>
                   </div>
@@ -172,24 +174,24 @@ export default function AudiencesPage(): React.JSX.Element {
       <Dialog open={draft !== null} onOpenChange={(open) => !open && setDraft(null)}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
-            <DialogTitle>{draft?.id != null ? '编辑人群包' : '新建人群包'}</DialogTitle>
-            <DialogDescription>条件为「同时满足」：所选标签全部命中，再叠加平台与关键词。</DialogDescription>
+            <DialogTitle>{draft?.id != null ? t('audiences.editAudience') : t('audiences.newAudience')}</DialogTitle>
+            <DialogDescription>{t('audiences.dialogDesc')}</DialogDescription>
           </DialogHeader>
           {draft && (
             <div className="space-y-4">
               <div className="space-y-1.5">
-                <Label>名称</Label>
-                <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder="例如：高价值成交客户" />
+                <Label>{t('audiences.name')}</Label>
+                <Input value={draft.name} onChange={(e) => setDraft({ ...draft, name: e.target.value })} placeholder={t('audiences.namePlaceholder')} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div className="space-y-1.5">
-                  <Label>平台</Label>
+                  <Label>{t('audiences.platform')}</Label>
                   <Select value={draft.platformType} onValueChange={(v) => setDraft({ ...draft, platformType: v })}>
                     <SelectTrigger>
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value={ALL}>全部平台</SelectItem>
+                      <SelectItem value={ALL}>{t('audiences.allPlatforms')}</SelectItem>
                       {Object.values(PLATFORMS).map((p) => (
                         <SelectItem key={p.type} value={String(p.type)}>
                           {p.label}
@@ -199,13 +201,13 @@ export default function AudiencesPage(): React.JSX.Element {
                   </Select>
                 </div>
                 <div className="space-y-1.5">
-                  <Label>关键词</Label>
-                  <Input value={draft.keyword} onChange={(e) => setDraft({ ...draft, keyword: e.target.value })} placeholder="匹配昵称/手机/邮箱" />
+                  <Label>{t('audiences.keyword')}</Label>
+                  <Input value={draft.keyword} onChange={(e) => setDraft({ ...draft, keyword: e.target.value })} placeholder={t('audiences.keywordPlaceholder')} />
                 </div>
               </div>
               <div className="space-y-1.5">
-                <Label>标签（需全部命中）</Label>
-                {tree.length === 0 && <p className="text-xs text-muted-foreground">还没有标签，请先到「标签」创建。</p>}
+                <Label>{t('audiences.tagField')}</Label>
+                {tree.length === 0 && <p className="text-xs text-muted-foreground">{t('audiences.noLabelsHint')}</p>}
                 <div className="space-y-2">
                   {tree.map((group) => (
                     <div key={group.id} className="flex flex-wrap items-center gap-1.5">
@@ -234,10 +236,10 @@ export default function AudiencesPage(): React.JSX.Element {
           )}
           <DialogFooter>
             <Button variant="outline" onClick={() => setDraft(null)}>
-              取消
+              {t('common.cancel')}
             </Button>
             <Button onClick={() => void save()} disabled={!draft?.name.trim() || createAudience.isPending || updateAudience.isPending}>
-              {createAudience.isPending || updateAudience.isPending ? '保存中…' : '保存'}
+              {createAudience.isPending || updateAudience.isPending ? t('labels.saving') : t('labels.save')}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -255,6 +257,7 @@ function AudiencePreviewDialog({
   audienceId: number
   onClose: () => void
 }): React.JSX.Element {
+  const { t } = useTranslation()
   const [page, setPage] = useState(1)
   const pageSize = 8
   const { data, isPending } = useAudienceCustomers(audienceId, page, pageSize)
@@ -266,14 +269,14 @@ function AudiencePreviewDialog({
     <Dialog open onOpenChange={(open) => !open && onClose()}>
       <DialogContent className="sm:max-w-xl">
         <DialogHeader>
-          <DialogTitle>人群包客户</DialogTitle>
-          <DialogDescription>共 {total} 位客户命中该人群包条件。</DialogDescription>
+          <DialogTitle>{t('audiences.previewTitle')}</DialogTitle>
+          <DialogDescription>{t('audiences.previewDesc', { total })}</DialogDescription>
         </DialogHeader>
         <div className="max-h-[50vh] space-y-1 overflow-auto">
           {isPending ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">加载中…</p>
+            <p className="py-10 text-center text-sm text-muted-foreground">{t('audiences.loading')}</p>
           ) : records.length === 0 ? (
-            <p className="py-10 text-center text-sm text-muted-foreground">暂无命中客户。</p>
+            <p className="py-10 text-center text-sm text-muted-foreground">{t('audiences.previewEmpty')}</p>
           ) : (
             records.map((customer) => {
               const meta = platformOf(customer.platformType)
@@ -286,7 +289,7 @@ function AudiencePreviewDialog({
                     </AvatarFallback>
                   </Avatar>
                   <div className="min-w-0 flex-1">
-                    <p className="truncate text-sm font-medium">{customer.nickname ?? '未命名客户'}</p>
+                    <p className="truncate text-sm font-medium">{customer.nickname ?? t('audiences.unnamedCustomer')}</p>
                     <p className="truncate text-xs text-muted-foreground">{meta?.label} · {customer.openId}</p>
                   </div>
                   <div className="flex max-w-[10rem] flex-wrap justify-end gap-1">
@@ -303,15 +306,15 @@ function AudiencePreviewDialog({
         </div>
         <div className="flex items-center justify-between text-xs text-muted-foreground">
           <span>
-            第 {page} / {pageCount} 页
+            {t('audiences.pageInfo', { page, pageCount })}
           </span>
           <div className="flex gap-2">
             <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage((p) => Math.max(1, p - 1))}>
               <ChevronLeft className="size-4" />
-              上一页
+              {t('audiences.prevPage')}
             </Button>
             <Button variant="outline" size="sm" disabled={page >= pageCount} onClick={() => setPage((p) => Math.min(pageCount, p + 1))}>
-              下一页
+              {t('audiences.nextPage')}
               <ChevronRight className="size-4" />
             </Button>
           </div>

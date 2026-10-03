@@ -686,5 +686,39 @@ export const ko: DeepString<typeof zhCN> = {
       audio: '오디오',
       file: '파일'
     }
+  },
+
+  audiences: {
+    title: '오디언스',
+    subtitle: '태그 / 플랫폼 / 키워드로 조합해 저장한 고객 세그먼트',
+    newAudience: '오디언스 새로 만들기',
+    loading: '오디언스 불러오는 중…',
+    empty: '아직 오디언스가 없습니다. 오른쪽 위에서 새로 만드세요.',
+    platformPrefix: '플랫폼: ',
+    keywordPrefix: '키워드: ',
+    tagPrefix: '태그: ',
+    none: '—',
+    view: '보기',
+    edit: '편집',
+    delete: '삭제',
+    deleteConfirm: '오디언스 "{{name}}"을(를) 삭제할까요?',
+    editAudience: '오디언스 편집',
+    dialogDesc: '조건은 "모두 만족"입니다. 선택한 태그가 모두 일치하고 플랫폼과 키워드가 추가됩니다.',
+    name: '이름',
+    namePlaceholder: '예: 고가치 성사 고객',
+    platform: '플랫폼',
+    keyword: '키워드',
+    allPlatforms: '모든 플랫폼',
+    keywordPlaceholder: '닉네임/전화/이메일 일치',
+    tagField: '태그 (모두 일치해야 함)',
+    noLabelsHint: '태그가 없습니다. 먼저 "라벨"에서 만드세요.',
+    previewTitle: '오디언스 고객',
+    previewDesc: '이 오디언스 조건에 {{total}}명의 고객이 일치합니다.',
+    previewEmpty: '일치하는 고객이 없습니다.',
+    unnamedCustomer: '이름 없는 고객',
+    pageInfo: '{{page}} / {{pageCount}} 페이지',
+    prevPage: '이전',
+    nextPage: '다음',
+    all: '전체'
   }
 }

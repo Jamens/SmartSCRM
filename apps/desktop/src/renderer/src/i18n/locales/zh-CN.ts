@@ -696,6 +696,40 @@ export const zhCN = {
       audio: '音频',
       file: '文件'
     }
+  },
+
+  audiences: {
+    title: '人群包',
+    subtitle: '按标签 / 平台 / 关键词组合保存的客户分群',
+    newAudience: '新建人群包',
+    loading: '加载人群包中…',
+    empty: '还没有人群包，点击右上角新建。',
+    platformPrefix: '平台：',
+    keywordPrefix: '关键词：',
+    tagPrefix: '标签：',
+    none: '—',
+    view: '查看',
+    edit: '编辑',
+    delete: '删除',
+    deleteConfirm: '确认删除人群包「{{name}}」？',
+    editAudience: '编辑人群包',
+    dialogDesc: '条件为「同时满足」：所选标签全部命中，再叠加平台与关键词。',
+    name: '名称',
+    namePlaceholder: '例如：高价值成交客户',
+    platform: '平台',
+    keyword: '关键词',
+    allPlatforms: '全部平台',
+    keywordPlaceholder: '匹配昵称/手机/邮箱',
+    tagField: '标签（需全部命中）',
+    noLabelsHint: '还没有标签，请先到「标签」创建。',
+    previewTitle: '人群包客户',
+    previewDesc: '共 {{total}} 位客户命中该人群包条件。',
+    previewEmpty: '暂无命中客户。',
+    unnamedCustomer: '未命名客户',
+    pageInfo: '第 {{page}} / {{pageCount}} 页',
+    prevPage: '上一页',
+    nextPage: '下一页',
+    all: '全部'
   }
 } as const
 

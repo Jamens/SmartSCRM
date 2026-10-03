@@ -686,5 +686,39 @@ export const id: DeepString<typeof zhCN> = {
       audio: 'Audio',
       file: 'File'
     }
+  },
+
+  audiences: {
+    title: 'Audiens',
+    subtitle: 'Segmen pelanggan yang disimpan, digabungkan menurut label / platform / kata kunci',
+    newAudience: 'Buat audiens',
+    loading: 'Memuat audiens…',
+    empty: 'Belum ada audiens, klik "Buat" di kanan atas.',
+    platformPrefix: 'Platform: ',
+    keywordPrefix: 'Kata kunci: ',
+    tagPrefix: 'Label: ',
+    none: '—',
+    view: 'Lihat',
+    edit: 'Edit',
+    delete: 'Hapus',
+    deleteConfirm: 'Hapus audiens "{{name}}"?',
+    editAudience: 'Edit audiens',
+    dialogDesc: 'Kondisinya "harus memenuhi semua": semua label terpilih harus cocok, lalu platform dan kata kunci ditambahkan.',
+    name: 'Nama',
+    namePlaceholder: 'Mis. Pelanggan bernilai tinggi yang menutup',
+    platform: 'Platform',
+    keyword: 'Kata kunci',
+    allPlatforms: 'Semua platform',
+    keywordPlaceholder: 'Cocokkan nama panggilan / telepon / email',
+    tagField: 'Label (harus cocok semua)',
+    noLabelsHint: 'Belum ada label, buat dulu di "Label".',
+    previewTitle: 'Pelanggan audiens',
+    previewDesc: '{{total}} pelanggan cocok dengan kondisi audiens ini.',
+    previewEmpty: 'Tidak ada pelanggan yang cocok.',
+    unnamedCustomer: 'Pelanggan tanpa nama',
+    pageInfo: 'Halaman {{page}} / {{pageCount}}',
+    prevPage: 'Sebelumnya',
+    nextPage: 'Berikutnya',
+    all: 'Semua'
   }
 }

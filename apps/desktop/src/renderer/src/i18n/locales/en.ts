@@ -692,5 +692,39 @@ export const en: DeepString<typeof zhCN> = {
       audio: 'Audio',
       file: 'File'
     }
+  },
+
+  audiences: {
+    title: 'Audiences',
+    subtitle: 'Saved customer segments combined by tag / platform / keyword',
+    newAudience: 'New audience',
+    loading: 'Loading audiences…',
+    empty: 'No audiences yet — click New in the top-right.',
+    platformPrefix: 'Platform: ',
+    keywordPrefix: 'Keyword: ',
+    tagPrefix: 'Tags: ',
+    none: '—',
+    view: 'View',
+    edit: 'Edit',
+    delete: 'Delete',
+    deleteConfirm: 'Delete audience "{{name}}"?',
+    editAudience: 'Edit audience',
+    dialogDesc: 'Conditions are AND: all selected tags must match, then platform and keyword are layered on top.',
+    name: 'Name',
+    namePlaceholder: 'e.g. High-value closed customers',
+    platform: 'Platform',
+    keyword: 'Keyword',
+    allPlatforms: 'All platforms',
+    keywordPlaceholder: 'Match nickname / phone / email',
+    tagField: 'Tags (all must match)',
+    noLabelsHint: 'No tags yet — create some under "Labels" first.',
+    previewTitle: 'Audience customers',
+    previewDesc: '{{total}} customers match this audience.',
+    previewEmpty: 'No matching customers.',
+    unnamedCustomer: 'Unnamed customer',
+    pageInfo: 'Page {{page}} / {{pageCount}}',
+    prevPage: 'Previous',
+    nextPage: 'Next',
+    all: 'All'
   }
 }
