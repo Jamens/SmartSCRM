@@ -138,6 +138,156 @@ export const zhCN = {
     clear: '清空',
     filterByCategory: '按类别筛选',
     filterByLevel: '按级别筛选'
+  },
+  messages: {
+    title: '聊天记录',
+    tab: {
+      conversations: '会话',
+      search: '全局搜索'
+    },
+    empty: {
+      noAccount: '先在工作台添加并选择一个平台账号。',
+      noSelection: '从左侧选择一个会话查看记录。'
+    },
+    list: {
+      selectAccount: '选择账号',
+      searchPlaceholder: '搜索会话标题',
+      platform: '平台',
+      allPlatforms: '全部平台',
+      syncHistory: '同步历史',
+      syncHintOnline: '让页面把当前会话列表往回补一段',
+      syncHintOffline: '会话未在线，无法补底',
+      syncStarted: '补底已开始，消息到一条刷一条',
+      syncNotOnline: '会话未在线，补底未启动',
+      syncRequestFailed: '补底请求没发出去，请检查会话是否在线',
+      loading: '加载会话中…',
+      pickAccountFirst: '先在上面选择一个平台账号。',
+      loadError: '无法加载会话，请确认后端已启动。',
+      emptyFiltered:
+        '没有匹配当前筛选条件的会话，清空关键字或选回「全部平台」试试。',
+      emptyNoData:
+        '这个账号还没有采集到会话。登录后会自动补底，也可以点上面的「同步历史」。',
+      badgeGroup: '群',
+      badgeStranger: '陌生',
+      noText: '（无文字内容）',
+      loadMore: '加载更多会话',
+      loadingMore: '加载中…'
+    },
+    thread: {
+      stranger: '陌生',
+      count: '{{count}} 条',
+      located:
+        '已定位到 {{label}} 那条消息：更早的记录在下面，比它更新的消息不在这个窗口里。',
+      backToLatest: '回到最新',
+      loading: '加载消息中…',
+      loadError: '无法读取历史消息，请确认后端已启动。',
+      empty: '这个会话还没有采集到消息。',
+      loadingEarlier: '正在拉更早的消息…',
+      reachedEarliest: '已经到最早的一条',
+      retry: '重试'
+    },
+    search: {
+      inputPlaceholder: '搜索消息正文（至少 {{min}} 个字）',
+      allPlatforms: '全部平台',
+      allAccounts: '全部账号',
+      allDirections: '全部方向',
+      directionIn: '收到',
+      directionOut: '发出',
+      to: '至',
+      currentCustomerOnly: '只看当前客户',
+      clearFilters: '清除过滤',
+      customerFilterDisabled: '先在右侧选中一个已关联客户的会话',
+      customerFilterHint:
+        '当前会话没有关联客户，「只看当前客户」暂时停用；换到已关联客户的会话会自动恢复。',
+      searching: '搜索中…',
+      minHint: '输入至少 {{min}} 个字开始搜索。搜索扫的是已入库的消息正文。',
+      loadError: '搜索请求失败，请确认后端已启动。',
+      noHits: '没有命中。换个关键词，或把时间窗放宽。',
+      media: '（媒体消息）',
+      noConversationHead: '这条消息没有对应的会话头，无法跳转。',
+      loadMore: '加载更多',
+      loadingMore: '加载中…',
+      barTitle: '{{day}} 收 {{in}} 发 {{out}}'
+    },
+    stats: {
+      dayUnit: '{{days}} 天',
+      pickAccount: '选一个账号看统计。',
+      loading: '统计加载中…',
+      loadError: '统计读取失败，请确认后端已启动。',
+      labelTotal: '消息',
+      labelIn: '收到',
+      labelOut: '发出',
+      labelActive: '活跃会话',
+      legend: '近 {{days}} 天：实心收到 / 浅色发出'
+    },
+    actions: {
+      direction: '语向',
+      createCustomer: '建为客户',
+      unknownCustomer: '客户 #{{id}}'
+    },
+    composer: {
+      translateFirst: '先译再发',
+      offlinePlaceholder: '会话未在线，登录后才能在这里回复',
+      inputPlaceholder: '输入消息，Enter 发送，Shift+Enter 换行',
+      send: '发送',
+      scopeNotHeld: '这一档的定位不在手里，未写入任何一行',
+      flagsSavedNoSync: '开关已保存，但没能同步到内嵌页',
+      flagsSaveFailed: '开关保存失败：{{error}}',
+      translateFailed: '译文获取失败：{{error}}',
+      sentScope: '这一条按{{scope}}译出'
+    },
+    createCustomer: {
+      title: '建为客户',
+      desc: '创建这位会话对端的客户，并把该会话已入库的历史消息回填给他。',
+      notAllowed: '这个会话不能建客户（群会话或已关联客户）。',
+      conversationId: '会话 ID（open_id）',
+      conversationIdHint: '就是这条会话的 chat_key，改它等于给另一个号码建客户。',
+      nickname: '昵称',
+      nicknamePlaceholder: '留空则不填',
+      phone: '手机号',
+      phonePlaceholder: '留空则不填',
+      remark: '备注',
+      remarkPlaceholder: '可选',
+      createError: '创建失败',
+      duplicateHint:
+        ' —— 该平台下这个 open_id 已经有客户了。当前没有"按 open_id 找已有客户"的入口（客户列表的关键词只搜昵称 / 手机 / 邮箱），请到客户管理页确认是哪一位。',
+      linkFailed: '客户 #{{id}} 已经创建成功，但历史消息关联失败（会话头还没挂上）。',
+      linkError: '关联失败',
+      linkRetryHint:
+        '重试只会补「关联」这一步，不会再建一位重复客户——重复的 open_id 会被后端挡在 40901。',
+      close: '先关掉',
+      cancel: '取消',
+      retryLink: '重试关联',
+      linking: '关联中…',
+      creating: '创建中…',
+      submit: '建为客户并关联历史'
+    },
+    direction: {
+      title: '该客户的语向',
+      desc: '只改这位客户的语向。页内气泡与记录页回复框都按「会话 → 客户 → 全局」取第一条命中的档，所以这一份覆盖实际作用到哪一层，看上方那枚徽标与回复框旁的「本会话专属」标注。',
+      inherited: '沿用全局',
+      owned: '该客户专属',
+      inheritedHint: '保存后只为这位客户建一份覆盖，全局设置不动。',
+      ownedHint: '覆盖行 · 客户 #{{id}}',
+      receive: '收信',
+      send: '发信',
+      saveFailed: '保存失败：{{error}}',
+      saveFailedFallback: '后端不可用',
+      resetFailed: '恢复失败：{{error}}',
+      resetFailedFallback: '后端不可用',
+      reset: '恢复全局',
+      resetPending: '恢复中…',
+      save: '保存',
+      savePending: '保存中…',
+      saveDirty: '保存（{{count}} 处改动）',
+      cancel: '取消'
+    },
+    bubble: {
+      groupMember: '群成员',
+      media: '媒体消息',
+      empty: '（空消息）',
+      sendFailed: '发送失败'
+    }
   }
 } as const
 

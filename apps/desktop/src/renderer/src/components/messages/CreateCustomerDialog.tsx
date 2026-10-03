@@ -1,6 +1,7 @@
 // src/renderer/src/components/messages/CreateCustomerDialog.tsx
 import { useMemo, useState } from 'react'
 import { UserPlus } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Button } from '@/components/ui/button'
 import {
   Dialog,
@@ -35,6 +36,7 @@ export default function CreateCustomerDialog({
   onOpenChange,
   onLinked
 }: Props): React.JSX.Element {
+  const { t } = useTranslation()
   // 取账号真实 platformType（尤其 type-7 协议号），避免建客户时被错标成 1（B27 出站腿）。
   const { data: accounts } = useAccounts()
   const platformType =
@@ -107,52 +109,52 @@ export default function CreateCustomerDialog({
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <UserPlus className="size-4 text-primary" />
-            建为客户
+            {t('messages.createCustomer.title')}
           </DialogTitle>
           <DialogDescription>
-            创建这位会话对端的客户，并把该会话已入库的历史消息回填给他。
+            {t('messages.createCustomer.desc')}
           </DialogDescription>
         </DialogHeader>
 
         {!prefill && (
           <p className="py-4 text-center text-xs text-muted-foreground">
-            这个会话不能建客户（群会话或已关联客户）。
+            {t('messages.createCustomer.notAllowed')}
           </p>
         )}
 
         {prefill && phase !== 'link-failed' && (
           <div className="flex flex-col gap-3">
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">会话 ID（open_id）</Label>
+              <Label className="text-xs">{t('messages.createCustomer.conversationId')}</Label>
               <Input value={prefill.openId} readOnly className="bg-muted text-muted-foreground" />
               <p className="text-[11px] text-muted-foreground">
-                就是这条会话的 chat_key，改它等于给另一个号码建客户。
+                {t('messages.createCustomer.conversationIdHint')}
               </p>
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs">昵称</Label>
+                <Label className="text-xs">{t('messages.createCustomer.nickname')}</Label>
                 <Input
                   value={nickname}
                   onChange={(e) => setNickname(e.target.value)}
-                  placeholder="留空则不填"
+                  placeholder={t('messages.createCustomer.nicknamePlaceholder')}
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label className="text-xs">手机号</Label>
+                <Label className="text-xs">{t('messages.createCustomer.phone')}</Label>
                 <Input
                   value={phone}
                   onChange={(e) => setPhone(e.target.value)}
-                  placeholder="留空则不填"
+                  placeholder={t('messages.createCustomer.phonePlaceholder')}
                 />
               </div>
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label className="text-xs">备注</Label>
+              <Label className="text-xs">{t('messages.createCustomer.remark')}</Label>
               <Input
                 value={remark}
                 onChange={(e) => setRemark(e.target.value)}
-                placeholder="可选"
+                placeholder={t('messages.createCustomer.remarkPlaceholder')}
               />
             </div>
             {create.isError && (
@@ -161,9 +163,8 @@ export default function CreateCustomerDialog({
                 data-p6-error-code={create.error instanceof ApiError ? String(create.error.code) : ''}
                 className="text-xs text-destructive"
               >
-                {create.error instanceof Error ? create.error.message : '创建失败'}
-                {duplicate &&
-                  ' —— 该平台下这个 open_id 已经有客户了。当前没有"按 open_id 找已有客户"的入口（客户列表的关键词只搜昵称 / 手机 / 邮箱），请到客户管理页确认是哪一位。'}
+                {create.error instanceof Error ? create.error.message : t('messages.createCustomer.createError')}
+                {duplicate && t('messages.createCustomer.duplicateHint')}
               </p>
             )}
           </div>
@@ -172,7 +173,7 @@ export default function CreateCustomerDialog({
         {phase === 'link-failed' && createdId !== null && (
           <div className="flex flex-col gap-2" data-p6-link-failed="">
             <p className="text-xs text-destructive">
-              客户 #{createdId} 已经创建成功，但历史消息关联失败（会话头还没挂上）。
+              {t('messages.createCustomer.linkFailed', { id: createdId })}
             </p>
             {/*
              * 第二步的失败原因也要露，而且露的是**码**：这一段原来是固定文案，于是 40404（会话行不在了）、
@@ -186,18 +187,18 @@ export default function CreateCustomerDialog({
                 data-p6-error-code={link.error instanceof ApiError ? String(link.error.code) : ''}
                 className="text-xs text-destructive"
               >
-                {link.error instanceof Error ? link.error.message : '关联失败'}
+                {link.error instanceof Error ? link.error.message : t('messages.createCustomer.linkError')}
               </p>
             )}
             <p className="text-[11px] text-muted-foreground">
-              重试只会补「关联」这一步，不会再建一位重复客户——重复的 open_id 会被后端挡在 40901。
+              {t('messages.createCustomer.linkRetryHint')}
             </p>
           </div>
         )}
 
         <DialogFooter className="items-center gap-2 sm:justify-between">
           <Button variant="ghost" size="sm" onClick={() => onOpenChange(false)}>
-            {phase === 'link-failed' ? '先关掉' : '取消'}
+            {phase === 'link-failed' ? t('messages.createCustomer.close') : t('messages.createCustomer.cancel')}
           </Button>
           {phase === 'link-failed' && createdId !== null ? (
             <Button
@@ -206,7 +207,9 @@ export default function CreateCustomerDialog({
               disabled={link.isPending}
               onClick={() => doLink(createdId)}
             >
-              {link.isPending ? '关联中…' : '重试关联'}
+              {link.isPending
+                ? t('messages.createCustomer.linking')
+                : t('messages.createCustomer.retryLink')}
             </Button>
           ) : (
             <Button
@@ -215,7 +218,11 @@ export default function CreateCustomerDialog({
               disabled={!prefill || create.isPending || phase === 'linking'}
               onClick={submit}
             >
-              {phase === 'linking' ? '关联中…' : create.isPending ? '创建中…' : '建为客户并关联历史'}
+              {phase === 'linking'
+                ? t('messages.createCustomer.linking')
+                : create.isPending
+                  ? t('messages.createCustomer.creating')
+                  : t('messages.createCustomer.submit')}
             </Button>
           )}
         </DialogFooter>

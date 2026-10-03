@@ -1,6 +1,7 @@
 // src/renderer/src/components/messages/SearchPanel.tsx
 import { useMemo, useState } from 'react'
 import { LoaderCircle, Search, X } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -31,6 +32,7 @@ interface Props {
 }
 
 export default function SearchPanel({ onJump, currentCustomerId }: Props): React.JSX.Element {
+  const { t } = useTranslation()
   const { data: accounts = [] } = useAccounts()
   const [keyword, setKeyword] = useState('')
   const [platform, setPlatform] = useState<string>(ALL)
@@ -92,28 +94,28 @@ export default function SearchPanel({ onJump, currentCustomerId }: Props): React
             <Input
               data-p6-search-input
               className="pl-8"
-              placeholder={`搜索消息正文（至少 ${MIN_QUERY} 个字）`}
+              placeholder={t('messages.search.inputPlaceholder', { min: MIN_QUERY })}
               value={keyword}
               onChange={(e) => setKeyword(e.target.value)}
             />
           </div>
           <Select value={platform} onValueChange={setPlatform}>
             <SelectTrigger className="w-32">
-              <SelectValue placeholder="全部平台" />
+              <SelectValue placeholder={t('messages.search.allPlatforms')} />
             </SelectTrigger>
             <SelectContent>
               {/* 只有这两个平台有消息桥：列全平台会造出"选了永远没结果"的筛选项 */}
-              <SelectItem value={ALL}>全部平台</SelectItem>
+              <SelectItem value={ALL}>{t('messages.search.allPlatforms')}</SelectItem>
               <SelectItem value="whatsapp">WhatsApp</SelectItem>
               <SelectItem value="telegram">Telegram</SelectItem>
             </SelectContent>
           </Select>
           <Select value={account} onValueChange={setAccount}>
             <SelectTrigger className="w-44">
-              <SelectValue placeholder="全部账号" />
+              <SelectValue placeholder={t('messages.search.allAccounts')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL}>全部账号</SelectItem>
+              <SelectItem value={ALL}>{t('messages.search.allAccounts')}</SelectItem>
               {accounts.map((a) => (
                 <SelectItem key={a.id} value={String(a.id)}>
                   {platformOf(a.platformType)?.short ?? '?'} · {a.name}
@@ -123,16 +125,16 @@ export default function SearchPanel({ onJump, currentCustomerId }: Props): React
           </Select>
           <Select value={direction} onValueChange={setDirection}>
             <SelectTrigger className="w-28">
-              <SelectValue placeholder="全部方向" />
+              <SelectValue placeholder={t('messages.search.allDirections')} />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value={ALL}>全部方向</SelectItem>
-              <SelectItem value="in">收到</SelectItem>
-              <SelectItem value="out">发出</SelectItem>
+              <SelectItem value={ALL}>{t('messages.search.allDirections')}</SelectItem>
+              <SelectItem value="in">{t('messages.search.directionIn')}</SelectItem>
+              <SelectItem value="out">{t('messages.search.directionOut')}</SelectItem>
             </SelectContent>
           </Select>
           <Input type="date" className="w-36" value={from} onChange={(e) => setFrom(e.target.value)} />
-          <span className="text-xs text-muted-foreground">至</span>
+          <span className="text-xs text-muted-foreground">{t('messages.search.to')}</span>
           <Input type="date" className="w-36" value={to} onChange={(e) => setTo(e.target.value)} />
           <Button
             type="button"
@@ -142,27 +144,31 @@ export default function SearchPanel({ onJump, currentCustomerId }: Props): React
             aria-pressed={customerFilterOn}
             size="sm"
             disabled={currentCustomerId === null}
-            title={currentCustomerId === null ? '先在右侧选中一个已关联客户的会话' : undefined}
+            title={
+              currentCustomerId === null
+                ? t('messages.search.customerFilterDisabled')
+                : undefined
+            }
             onClick={() => setOnlyCurrentCustomer((v) => !v)}
           >
-            只看当前客户
+            {t('messages.search.currentCustomerOnly')}
           </Button>
           {filtersOn && (
             <Button variant="ghost" size="sm" onClick={reset}>
               <X className="size-4" />
-              清除过滤
+              {t('messages.search.clearFilters')}
             </Button>
           )}
         </div>
         {onlyCurrentCustomer && currentCustomerId === null && (
           <p className="text-[11px] text-muted-foreground">
-            当前会话没有关联客户，「只看当前客户」暂时停用；换到已关联客户的会话会自动恢复。
+            {t('messages.search.customerFilterHint')}
           </p>
         )}
         {searchable && isFetching && !isPending && (
           <p className="flex items-center gap-1.5 text-[11px] text-muted-foreground">
             <LoaderCircle className="size-3 animate-spin" />
-            搜索中…
+            {t('messages.search.searching')}
           </p>
         )}
       </div>
@@ -170,16 +176,18 @@ export default function SearchPanel({ onJump, currentCustomerId }: Props): React
       <div className="min-h-0 flex-1 overflow-y-auto px-6 py-3">
         {!searchable && (
           <p className="py-6 text-center text-xs text-muted-foreground">
-            输入至少 {MIN_QUERY} 个字开始搜索。搜索扫的是已入库的消息正文。
+            {t('messages.search.minHint', { min: MIN_QUERY })}
           </p>
         )}
-        {searchable && isPending && <p className="py-6 text-center text-xs text-muted-foreground">搜索中…</p>}
+        {searchable && isPending && (
+          <p className="py-6 text-center text-xs text-muted-foreground">{t('messages.search.searching')}</p>
+        )}
         {searchable && isError && (
-          <p className="py-6 text-center text-xs text-destructive">搜索请求失败，请确认后端已启动。</p>
+          <p className="py-6 text-center text-xs text-destructive">{t('messages.search.loadError')}</p>
         )}
         {searchable && !isPending && !isError && hits.length === 0 && (
           <p className="py-6 text-center text-xs text-muted-foreground">
-            没有命中。换个关键词，或把时间窗放宽。
+            {t('messages.search.noHits')}
           </p>
         )}
         {hits.map((hit) => {
@@ -213,7 +221,9 @@ export default function SearchPanel({ onJump, currentCustomerId }: Props): React
                   variant={hit.message.direction === 'out' ? 'secondary' : 'outline'}
                   className="px-1.5 py-0 text-[10px]"
                 >
-                  {hit.message.direction === 'out' ? '发出' : '收到'}
+                  {hit.message.direction === 'out'
+                    ? t('messages.search.directionOut')
+                    : t('messages.search.directionIn')}
                 </Badge>
                 <span className="text-muted-foreground">
                   {platformOf(accountTypeOfPlatform(hit.message.platform))?.label ?? hit.message.platform}
@@ -223,10 +233,12 @@ export default function SearchPanel({ onJump, currentCustomerId }: Props): React
                 </span>
               </div>
               <p className="mt-1 line-clamp-2 text-sm text-foreground">
-                {hit.message.body ?? '（媒体消息）'}
+                {hit.message.body ?? t('messages.search.media')}
               </p>
               {target === null && (
-                <p className="mt-1 text-[11px] text-muted-foreground">这条消息没有对应的会话头，无法跳转。</p>
+                <p className="mt-1 text-[11px] text-muted-foreground">
+                  {t('messages.search.noConversationHead')}
+                </p>
               )}
             </button>
           )
@@ -239,7 +251,7 @@ export default function SearchPanel({ onJump, currentCustomerId }: Props): React
             disabled={isFetchingNextPage}
             onClick={() => void fetchNextPage()}
           >
-            {isFetchingNextPage ? '加载中…' : '加载更多'}
+            {isFetchingNextPage ? t('messages.search.loadingMore') : t('messages.search.loadMore')}
           </Button>
         )}
       </div>

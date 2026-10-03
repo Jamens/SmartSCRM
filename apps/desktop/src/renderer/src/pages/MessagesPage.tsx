@@ -1,6 +1,7 @@
 // src/renderer/src/pages/MessagesPage.tsx
 import { useEffect, useState } from 'react'
 import { History, MessagesSquare, Search } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { useQueryClient } from '@tanstack/react-query'
 import ConversationList from '@/components/messages/ConversationList'
 import ConversationActions from '@/components/messages/ConversationActions'
@@ -54,6 +55,7 @@ function ViewTab({
 }
 
 export default function MessagesPage(): React.JSX.Element {
+  const { t } = useTranslation()
   const selectedId = useSelectionStore((s) => s.selectedId)
   const select = useSelectionStore((s) => s.select)
   const markRead = useMarkRead().mutate
@@ -181,19 +183,19 @@ export default function MessagesPage(): React.JSX.Element {
         <header className="flex items-center gap-2 border-b border-border/60 px-6 py-4">
           <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
             <History className="size-5 text-primary" />
-            聊天记录
+            {t('messages.title')}
           </h1>
           <div className="ml-auto flex items-center gap-1">
             <ViewTab
               active={view === 'conversations'}
               icon={<MessagesSquare className="size-3.5" />}
-              label="会话"
+              label={t('messages.tab.conversations')}
               onClick={() => setView('conversations')}
             />
             <ViewTab
               active={view === 'search'}
               icon={<Search className="size-3.5" />}
-              label="全局搜索"
+              label={t('messages.tab.search')}
               onClick={() => setView('search')}
             />
           </div>
@@ -226,8 +228,8 @@ export default function MessagesPage(): React.JSX.Element {
         ) : (
           <p className="flex flex-1 items-center justify-center px-6 text-sm text-muted-foreground">
             {selectedId === null
-              ? '先在工作台添加并选择一个平台账号。'
-              : '从左侧选择一个会话查看记录。'}
+              ? t('messages.empty.noAccount')
+              : t('messages.empty.noSelection')}
           </p>
         )}
       </main>
