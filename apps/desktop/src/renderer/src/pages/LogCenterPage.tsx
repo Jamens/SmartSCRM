@@ -1,4 +1,5 @@
 import { useState } from 'react'
+import { useTranslation } from 'react-i18next'
 import { FileText, FolderOpen, Trash2 } from 'lucide-react'
 import { Card, CardContent } from '@/components/ui/card'
 import {
@@ -33,6 +34,7 @@ function formatTime(ts: number): string {
 }
 
 export default function LogCenterPage(): React.JSX.Element {
+  const { t } = useTranslation()
   const [category, setCategory] = useState<LogCategory | 'all'>('all')
   const [level, setLevel] = useState<LogLevel | 'all'>('all')
   const { entries, loading, host, refresh, clear, openFolder } = useLogs(category, level)
@@ -43,7 +45,7 @@ export default function LogCenterPage(): React.JSX.Element {
         <Header onRefresh={refresh} onOpenFolder={openFolder} onClear={clear} category={category} level={level} setCategory={setCategory} setLevel={setLevel} />
         <div className="flex flex-1 items-center justify-center p-6">
           <p className="text-sm text-muted-foreground">
-            当前是浏览器预览，日志由主进程产生，桌面端打开才能查看与导出。
+            {t('log.browserNote')}
           </p>
         </div>
       </div>
@@ -66,11 +68,11 @@ export default function LogCenterPage(): React.JSX.Element {
           <CardContent className="h-full p-0">
             {loading && entries.length === 0 ? (
               <p className="p-4 text-sm text-muted-foreground" data-testid="log-loading">
-                读取日志中…
+                {t('log.loading')}
               </p>
             ) : entries.length === 0 ? (
               <p className="p-4 text-sm text-muted-foreground" data-testid="log-empty">
-                没有匹配的日志。调试时主进程打的带 `[tag]` 的 console 会自动归到对应类别。
+                {t('log.empty')}
               </p>
             ) : (
               <ul className="divide-y divide-border/50 font-mono text-xs" data-testid="log-list">
@@ -121,26 +123,27 @@ function Header({
   setCategory: (v: LogCategory | 'all') => void
   setLevel: (v: LogLevel | 'all') => void
 }): React.JSX.Element {
+  const { t } = useTranslation()
   return (
     <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border/60 px-6 py-4">
       <div>
         <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
           <FileText className="size-5 text-primary" />
-          日志中心
+          {t('log.title')}
         </h1>
         <p className="text-xs text-muted-foreground">
-          主进程四类日志（app / ipc / bridge / error）+ 未处理 Promise 拒绝，只落本地、不上报服务端。
+          {t('log.desc')}
         </p>
       </div>
       <div className="flex flex-wrap items-center gap-2">
         <select
-          aria-label="按类别筛选"
+          aria-label={t('log.filterByCategory')}
           value={category}
           onChange={(e) => setCategory(e.target.value as LogCategory | 'all')}
           className="rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground"
           data-testid="log-category"
         >
-          <option value="all">全部类别</option>
+          <option value="all">{t('log.allCategories')}</option>
           {LOG_CATEGORIES.map((c) => (
             <option key={c} value={c}>
               {c}
@@ -148,7 +151,7 @@ function Header({
           ))}
         </select>
         <select
-          aria-label="按级别筛选"
+          aria-label={t('log.filterByLevel')}
           value={level}
           onChange={(e) => setLevel(e.target.value as LogLevel | 'all')}
           className="rounded-md border border-border bg-background px-2 py-1.5 text-xs text-foreground"
@@ -156,7 +159,7 @@ function Header({
         >
           {LEVELS.map((l) => (
             <option key={l} value={l}>
-              {l === 'all' ? '全部级别' : l}
+              {l === 'all' ? t('log.allLevels') : l}
             </option>
           ))}
         </select>
@@ -165,7 +168,7 @@ function Header({
           onClick={onRefresh}
           className="rounded-md border border-border px-3 py-1.5 text-xs text-foreground hover:bg-muted"
         >
-          刷新
+          {t('log.refresh')}
         </button>
         <button
           type="button"
@@ -173,7 +176,7 @@ function Header({
           className="flex items-center gap-1 rounded-md border border-border px-3 py-1.5 text-xs text-foreground hover:bg-muted"
         >
           <FolderOpen className="size-3.5" />
-          打开日志目录
+          {t('log.openFolder')}
         </button>
         <button
           type="button"
@@ -182,7 +185,7 @@ function Header({
           data-testid="log-clear"
         >
           <Trash2 className="size-3.5" />
-          清空
+          {t('log.clear')}
         </button>
       </div>
     </header>

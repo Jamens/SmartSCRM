@@ -1,5 +1,20 @@
 import { useEffect, useState, type FormEvent } from 'react'
-import { BellRing, Eye, EyeOff, HardDrive, KeyRound, LoaderCircle, MessageSquare, Monitor, MonitorSmartphone, Moon, Palette, Sun } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
+import {
+  BellRing,
+  Eye,
+  EyeOff,
+  HardDrive,
+  KeyRound,
+  Languages,
+  LoaderCircle,
+  MessageSquare,
+  Monitor,
+  MonitorSmartphone,
+  Moon,
+  Palette,
+  Sun
+} from 'lucide-react'
 import { useUnreadTotal } from '@/api/messages'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -18,18 +33,27 @@ import {
 import { useBadgeEnabled } from '@/lib/unreadBadge'
 import { useNotifyEnabled } from '@/lib/desktopNotify'
 import { useGpuFatal, useGpuSettings } from '@/lib/gpu'
+import { useLanguage } from '@/lib/language'
 import { changePassword } from '@/api/auth'
 import { API_BASE, ApiError } from '@/lib/http'
 import { cn } from '@/lib/utils'
+import { SUPPORTED_LOCALES, type LocaleCode } from '@shared/i18n'
 import type { ThemePref } from '@shared/theme'
 
-const OPTIONS: Array<{ pref: ThemePref; label: string; hint: string; icon: typeof Sun }> = [
-  { pref: 'light', label: '浅色', hint: '始终用亮色令牌', icon: Sun },
-  { pref: 'dark', label: '深色', hint: '始终用暗色令牌', icon: Moon },
-  { pref: 'system', label: '跟随系统', hint: '操作系统改档位时这里跟着改', icon: MonitorSmartphone }
+const THEME_OPTIONS: Array<{ pref: ThemePref; labelKey: string; hintKey: string; icon: typeof Sun }> = [
+  { pref: 'light', labelKey: 'settings.themeLight', hintKey: 'settings.themeLightHint', icon: Sun },
+  { pref: 'dark', labelKey: 'settings.themeDark', hintKey: 'settings.themeDarkHint', icon: Moon },
+  {
+    pref: 'system',
+    labelKey: 'settings.themeSystem',
+    hintKey: 'settings.themeSystemHint',
+    icon: MonitorSmartphone
+  }
 ]
 
 export default function SettingsPage(): React.JSX.Element {
+  const { t } = useTranslation()
+  const lang = useLanguage()
   const [state, setState] = useState<ThemeUiState | null>(null)
   const [busy, setBusy] = useState<ThemePref | null>(null)
   const badge = useBadgeEnabled()
@@ -61,11 +85,11 @@ export default function SettingsPage(): React.JSX.Element {
     setPwErr(null)
     setPwOk(false)
     if (newPwd.length < 8) {
-      setPwErr('新密码至少 8 位')
+      setPwErr(t('settings.errPwdTooShort'))
       return
     }
     if (newPwd !== confirmPwd) {
-      setPwErr('两次输入的新密码不一致')
+      setPwErr(t('settings.errPwdMismatch'))
       return
     }
     setPwBusy(true)
@@ -75,7 +99,7 @@ export default function SettingsPage(): React.JSX.Element {
       // 清掉本机会话强制重登：App 在 phase==='anonymous' 时自动渲染登录页，无需手动导航。
       void useAuthStore.getState().logout()
     } catch (err) {
-      setPwErr(err instanceof ApiError ? err.message : '修改失败，请重试')
+      setPwErr(err instanceof ApiError ? err.message : t('settings.errPwdFailed'))
     } finally {
       setPwBusy(false)
     }
@@ -107,14 +131,16 @@ export default function SettingsPage(): React.JSX.Element {
         <div>
           <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
             <Palette className="size-5 text-primary" />
-            设置
+            {t('settings.title')}
           </h1>
           <p className="text-xs text-muted-foreground">
             {state
-              ? `生效：${state.effective === 'dark' ? '深色' : '浅色'} · 系统：${
-                  state.systemDark ? '深色' : '浅色'
-                } · 档位存于${state.host === 'electron' ? '本机设置文件' : '浏览器预览（不落盘）'}`
-              : '读取设置中…'}
+              ? t('settings.statusLine', {
+                  effective: state.effective === 'dark' ? t('settings.effectiveDark') : t('settings.effectiveLight'),
+                  system: state.systemDark ? t('settings.effectiveDark') : t('settings.effectiveLight'),
+                  host: state.host === 'electron' ? t('settings.storedLocal') : t('settings.storedBrowser')
+                })
+              : t('common.reading')}
           </p>
         </div>
       </header>
@@ -123,20 +149,43 @@ export default function SettingsPage(): React.JSX.Element {
         <div className="flex max-w-3xl flex-col gap-4">
           <Card>
             <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Languages className="size-4 text-primary" />
+                {t('settings.language')}
+              </CardTitle>
+              <CardDescription>{t('settings.languageDesc')}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <Label htmlFor="lang-select">{t('settings.languageLabel')}</Label>
+              <select
+                id="lang-select"
+                value={lang.language}
+                onChange={(e) => lang.setLanguage(e.target.value as LocaleCode)}
+                className="h-10 rounded-md border border-border bg-background px-3 text-sm text-foreground"
+                data-testid="lang-select"
+              >
+                {SUPPORTED_LOCALES.map((loc) => (
+                  <option key={loc.code} value={loc.code}>
+                    {loc.label}
+                  </option>
+                ))}
+              </select>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle>外观</CardTitle>
-              <CardDescription>
-                只影响本应用的数据界面；内嵌的第三方页面（WhatsApp Web 等）由它们自己决定配色，
-                不跟随这里的档位。
-              </CardDescription>
+              <CardDescription>{t('settings.appearanceDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-wrap gap-2">
-              {OPTIONS.map(({ pref, label, hint, icon: Icon }) => {
+              {THEME_OPTIONS.map(({ pref, labelKey, hintKey, icon: Icon }) => {
                 const active = state?.pref === pref
                 return (
                   <button
                     key={pref}
                     type="button"
-                    title={hint}
+                    title={t(hintKey)}
                     disabled={busy !== null}
                     onClick={() => void choose(pref)}
                     className={cn(
@@ -148,7 +197,7 @@ export default function SettingsPage(): React.JSX.Element {
                     )}
                   >
                     <Icon className="size-4" />
-                    {label}
+                    {t(labelKey)}
                   </button>
                 )
               })}
@@ -159,30 +208,27 @@ export default function SettingsPage(): React.JSX.Element {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <BellRing className="size-4 text-primary" />
-                通知
+                {t('settings.notifications')}
               </CardTitle>
-              <CardDescription>
-                任务栏角标只统计本账号租户的未读，开关存在本机设置文件里。
-              </CardDescription>
+              <CardDescription>{t('settings.badgeDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="flex items-start justify-between gap-6">
               <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">任务栏未读角标</p>
-                <p className="text-xs text-muted-foreground">
-                  窗口不在前台时，把未读消息总数标到任务栏图标上：Windows 是图标右下角的红点
-                  （那个平台的接口画不了数字），macOS 与 Linux 是数字角标。
-                  正在用这个应用时不显示——那时未读正在被读掉，挂上去的数下一秒就过期。
-                </p>
+                <p className="text-sm font-medium text-foreground">{t('settings.badgeTitle')}</p>
+                <p className="text-xs text-muted-foreground">{t('settings.badgeDetail')}</p>
                 <p className="mt-1 text-xs text-muted-foreground" data-testid="badge-status">
                   {badge.host === 'browser'
-                    ? '当前宿主不画任务栏角标（浏览器预览）'
+                    ? t('settings.badgeStatusBrowser')
                     : unread.data
-                      ? `现在：未读 ${unread.data.total} 条，分布在 ${unread.data.conversations} 个会话`
-                      : '未读取中…'}
+                      ? t('settings.badgeStatusNow', {
+                          total: unread.data.total,
+                          conversations: unread.data.conversations
+                        })
+                      : t('settings.badgeStatusLoading')}
                 </p>
               </div>
               <Switch
-                aria-label="任务栏未读角标"
+                aria-label={t('settings.badgeTitle')}
                 checked={badge.enabled}
                 onCheckedChange={(v) => badge.setEnabled(v === true)}
               />
@@ -193,30 +239,24 @@ export default function SettingsPage(): React.JSX.Element {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <MessageSquare className="size-4 text-primary" />
-                桌面消息通知
+                {t('settings.desktopNotify')}
               </CardTitle>
-              <CardDescription>
-                与任务栏角标是两个独立的开关：关掉一个不会牵连另一个。
-              </CardDescription>
+              <CardDescription>{t('settings.desktopNotifyDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="flex items-start justify-between gap-6">
               <div className="min-w-0">
-                <p className="text-sm font-medium text-foreground">收到消息时弹系统通知</p>
-                <p className="text-xs text-muted-foreground">
-                  窗口不在前台时，收到的消息会弹一条系统通知；点它会回到这个应用并打开对应会话。
-                  同一个会话连着来好几条会并成一条（标题上带条数），不会刷屏。
-                  正在用这个应用时不弹——那时你已经在看了。
-                </p>
+                <p className="text-sm font-medium text-foreground">{t('settings.desktopNotifyTitle')}</p>
+                <p className="text-xs text-muted-foreground">{t('settings.desktopNotifyDetail')}</p>
                 <p className="mt-1 text-xs text-muted-foreground" data-testid="notify-status">
                   {notify.host === 'browser'
-                    ? '当前宿主弹不出系统通知（浏览器预览）'
+                    ? t('settings.desktopNotifyBrowser')
                     : notify.enabled
-                      ? '已开启'
-                      : '已关闭'}
+                      ? t('settings.enabled')
+                      : t('settings.disabled')}
                 </p>
               </div>
               <Switch
-                aria-label="桌面消息通知"
+                aria-label={t('settings.desktopNotify')}
                 checked={notify.enabled}
                 onCheckedChange={(v) => notify.setEnabled(v === true)}
               />
@@ -227,16 +267,14 @@ export default function SettingsPage(): React.JSX.Element {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <KeyRound className="size-4 text-primary" />
-                账户安全
+                {t('settings.accountSecurity')}
               </CardTitle>
-              <CardDescription>
-                修改登录密码。改密成功后当前登录会立即失效，需要用新密码重新登录。
-              </CardDescription>
+              <CardDescription>{t('settings.accountSecurityDesc')}</CardDescription>
             </CardHeader>
             <CardContent>
               <form onSubmit={submitPassword} className="flex max-w-sm flex-col gap-3">
                 <div className="space-y-1.5">
-                  <Label htmlFor="old-pwd">原密码</Label>
+                  <Label htmlFor="old-pwd">{t('settings.oldPassword')}</Label>
                   <Input
                     id="old-pwd"
                     type={showPwd ? 'text' : 'password'}
@@ -248,7 +286,7 @@ export default function SettingsPage(): React.JSX.Element {
                   />
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="new-pwd">新密码</Label>
+                  <Label htmlFor="new-pwd">{t('settings.newPassword')}</Label>
                   <div className="relative">
                     <Input
                       id="new-pwd"
@@ -263,14 +301,14 @@ export default function SettingsPage(): React.JSX.Element {
                       type="button"
                       onClick={() => setShowPwd((v) => !v)}
                       className="absolute top-1/2 right-3 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                      aria-label="切换密码可见"
+                      aria-label={t('settings.togglePwdVisible')}
                     >
                       {showPwd ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
                     </button>
                   </div>
                 </div>
                 <div className="space-y-1.5">
-                  <Label htmlFor="confirm-pwd">确认新密码</Label>
+                  <Label htmlFor="confirm-pwd">{t('settings.confirmPassword')}</Label>
                   <Input
                     id="confirm-pwd"
                     type={showPwd ? 'text' : 'password'}
@@ -295,7 +333,7 @@ export default function SettingsPage(): React.JSX.Element {
                     className="rounded-lg border border-emerald-500/30 bg-emerald-500/5 px-3 py-2 text-sm text-emerald-600"
                     data-testid="pw-ok"
                   >
-                    密码已修改，正在退出登录…
+                    {t('settings.pwdChanged')}
                   </p>
                 )}
 
@@ -306,10 +344,10 @@ export default function SettingsPage(): React.JSX.Element {
                 >
                   {pwBusy ? (
                     <>
-                      <LoaderCircle className="mr-2 size-4 animate-spin" /> 提交中…
+                      <LoaderCircle className="mr-2 size-4 animate-spin" /> {t('settings.submitting')}
                     </>
                   ) : (
-                    '修改密码'
+                    t('settings.changePassword')
                   )}
                 </Button>
               </form>
@@ -320,31 +358,25 @@ export default function SettingsPage(): React.JSX.Element {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <Monitor className="size-4 text-primary" />
-                图形
+                {t('settings.graphics')}
               </CardTitle>
-              <CardDescription>
-                硬件加速用 GPU 渲染界面，更流畅；出问题时可以关掉改用软件渲染。改动需重启生效，
-                应用会自己重启一次以切换到新的渲染后端。
-              </CardDescription>
+              <CardDescription>{t('settings.graphicsDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-4">
               <div className="flex items-start justify-between gap-6">
                 <div className="min-w-0">
-                  <p className="text-sm font-medium text-foreground">硬件加速</p>
-                  <p className="text-xs text-muted-foreground">
-                    关掉后用软件渲染（CPU）跑界面，更稳但更费电。部分老显卡驱动会崩 GPU
-                    进程，那时应用会自动切到这个模式并提醒你。
-                  </p>
+                  <p className="text-sm font-medium text-foreground">{t('settings.hardwareAccel')}</p>
+                  <p className="text-xs text-muted-foreground">{t('settings.hardwareAccelDetail')}</p>
                   <p className="mt-1 text-xs text-muted-foreground" data-testid="gpu-status">
                     {gpu.host === 'browser'
-                      ? '当前宿主（浏览器预览）没有 GPU 后端可切换'
+                      ? t('settings.accelBrowser')
                       : gpu.hardwareAcceleration
-                        ? '已开启（使用 GPU）'
-                        : '已关闭（软件渲染）'}
+                        ? t('settings.accelOn')
+                        : t('settings.accelOff')}
                   </p>
                 </div>
                 <Switch
-                  aria-label="硬件加速"
+                  aria-label={t('settings.hardwareAccel')}
                   checked={gpu.hardwareAcceleration}
                   disabled={gpu.host === 'browser'}
                   onCheckedChange={(v) => gpu.setHardwareAcceleration(v === true)}
@@ -356,11 +388,11 @@ export default function SettingsPage(): React.JSX.Element {
                   className="rounded-lg border border-border bg-muted p-3 text-xs"
                   data-testid="gpu-safe-note"
                 >
-                  <p className="font-medium text-foreground">当前处于图形降级模式</p>
+                  <p className="font-medium text-foreground">{t('settings.safeModeTitle')}</p>
                   <p className="mt-1 text-muted-foreground">
                     {gpuFatal
-                      ? `降级模式下 GPU 仍崩溃（原因：${gpuFatal.reason}），多半是显卡驱动问题，建议更新驱动。`
-                      : '上次启动因 GPU 进程崩溃被自动切到这里。可以尝试恢复正常模式：'}
+                      ? t('settings.safeModeFatal', { reason: gpuFatal.reason })
+                      : t('settings.safeModeRecover')}
                   </p>
                   <button
                     type="button"
@@ -368,7 +400,7 @@ export default function SettingsPage(): React.JSX.Element {
                     className="mt-2 rounded-md bg-primary px-3 py-1.5 text-xs font-medium text-primary-foreground hover:opacity-90"
                     data-testid="gpu-retry"
                   >
-                    重试标准模式
+                    {t('settings.retryStandard')}
                   </button>
                 </div>
               ) : null}
@@ -379,18 +411,15 @@ export default function SettingsPage(): React.JSX.Element {
             <CardHeader>
               <CardTitle className="flex items-center gap-2">
                 <HardDrive className="size-4 text-primary" />
-                设备信息
+                {t('settings.deviceInfo')}
               </CardTitle>
-              <CardDescription>
-                这台机器与这个应用的现状。机器码与系统版本按登录时上报后端 `device`
-                那份口径取，所以卡片上写的与库里存的应当是同一串。
-              </CardDescription>
+              <CardDescription>{t('settings.deviceInfoDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               {device.loading ? (
                 // 没取到之前不画那一排：先闪一排「未知」再闪回真值，读起来像数据在抖。
                 <p className="text-xs text-muted-foreground" data-testid="device-loading">
-                  读取中…
+                  {t('settings.deviceLoading')}
                 </p>
               ) : (
                 <dl
@@ -408,10 +437,7 @@ export default function SettingsPage(): React.JSX.Element {
                 </dl>
               )}
               <p className="text-xs text-muted-foreground">
-                当前登录：<span data-testid="device-identity">{who}</span> · 服务地址{' '}
-                <span data-testid="device-api" className="font-mono select-text">
-                  {API_BASE}
-                </span>
+                {t('settings.deviceLogin', { who, api: API_BASE })}
               </p>
             </CardContent>
           </Card>

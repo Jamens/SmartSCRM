@@ -1,11 +1,13 @@
 import { NavLink } from 'react-router-dom'
+import { useTranslation } from 'react-i18next'
 import { NAV_ITEMS } from '@/lib/nav'
 import { cn } from '@/lib/utils'
 
 export default function ModuleRail(): React.JSX.Element {
+  const { t } = useTranslation()
   return (
     <nav className="flex h-full w-16 shrink-0 flex-col items-center gap-1 overflow-y-auto scrollbar-hidden border-r border-border/60 bg-muted/40 py-3">
-      {NAV_ITEMS.map(({ path, label, icon: Icon }) => (
+      {NAV_ITEMS.map(({ path, i18nKey, icon: Icon }) => (
         <NavLink
           key={path}
           to={path}
@@ -28,7 +30,7 @@ export default function ModuleRail(): React.JSX.Element {
               >
                 <Icon className="size-4.5" />
               </span>
-              <span className={cn(isActive && 'font-semibold')}>{label}</span>
+              <span className={cn(isActive && 'font-semibold')}>{t(i18nKey)}</span>
             </>
           )}
         </NavLink>

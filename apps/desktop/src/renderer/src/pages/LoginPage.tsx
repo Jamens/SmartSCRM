@@ -1,4 +1,5 @@
 import { useState, type FormEvent } from 'react'
+import { useTranslation } from 'react-i18next'
 import { Building2, User, Lock, Eye, EyeOff, ShieldCheck, Languages, Rocket, LoaderCircle } from 'lucide-react'
 import { useAuthStore } from '@/stores/auth'
 import { Button } from '@/components/ui/button'
@@ -9,6 +10,7 @@ import { Separator } from '@/components/ui/separator'
 const INVITE_KEY = 'scrm-remember-invite'
 
 export default function LoginPage(): React.JSX.Element {
+  const { t } = useTranslation()
   const { login, submitting, error } = useAuthStore()
   const [inviteCode, setInviteCode] = useState(() => localStorage.getItem(INVITE_KEY) ?? 'DEMO0001')
   const [username, setUsername] = useState('')
@@ -44,56 +46,56 @@ export default function LoginPage(): React.JSX.Element {
         <div className="relative max-w-md">
           <div className="mb-6 h-px w-16 bg-gradient-to-r from-gold to-transparent" />
           <h1 className="text-4xl leading-snug font-bold text-white">
-            让每一次客户对话
+            {t('login.heroTitle1')}
             <br />
-            都<span className="text-gold">创造价值</span>
+            <span className="text-gold">{t('login.heroTitle2')}</span>
           </h1>
           <p className="mt-5 text-sm leading-relaxed text-blue-100/80">
-            多平台客户统一经营 · AI 消息翻译 · 智能化群发与增长引擎，为跨境团队提供一站式私域运营能力。
+            {t('login.heroSub')}
           </p>
           <ul className="mt-10 space-y-5 text-sm text-blue-50/90">
             <li className="flex items-center gap-3">
               <span className="flex size-8 items-center justify-center rounded-lg bg-white/10 ring-1 ring-gold/40">
                 <Languages className="size-4 text-gold" />
               </span>
-              全渠道消息实时互译，沟通零障碍
+              {t('login.feature1')}
             </li>
             <li className="flex items-center gap-3">
               <span className="flex size-8 items-center justify-center rounded-lg bg-white/10 ring-1 ring-gold/40">
                 <Rocket className="size-4 text-gold" />
               </span>
-              群发与炒群引擎，增长自动化
+              {t('login.feature2')}
             </li>
             <li className="flex items-center gap-3">
               <span className="flex size-8 items-center justify-center rounded-lg bg-white/10 ring-1 ring-gold/40">
                 <ShieldCheck className="size-4 text-gold" />
               </span>
-              本地数据层，安全可控可回放
+              {t('login.feature3')}
             </li>
           </ul>
         </div>
 
-        <p className="relative text-xs text-blue-200/50">© 2026 SmartSCRM · 本地演示环境 · 数据全部存储于本机</p>
+        <p className="relative text-xs text-blue-200/50">{t('login.footer')}</p>
       </div>
 
       {/* Form panel */}
       <div className="relative flex flex-1 items-center justify-center bg-gradient-to-b from-muted via-background to-primary/5 p-8">
         <div className="no-drag w-full max-w-[380px]">
           <div className="rounded-2xl border border-border/60 bg-card/70 p-8 shadow-2xl shadow-primary/10 backdrop-blur-xl">
-            <h2 className="text-2xl font-bold text-foreground">欢迎回来</h2>
-            <p className="mt-1.5 text-sm text-muted-foreground">登录你的 SCRM 工作台</p>
+            <h2 className="text-2xl font-bold text-foreground">{t('login.welcome')}</h2>
+            <p className="mt-1.5 text-sm text-muted-foreground">{t('login.subtitle')}</p>
             <div className="mt-3 h-1 w-10 rounded-full bg-gradient-to-r from-primary to-gold" />
 
             <form onSubmit={onSubmit} className="mt-8 space-y-5">
               <div className="space-y-2">
-                <Label htmlFor="invite">企业邀请码</Label>
+                <Label htmlFor="invite">{t('login.invite')}</Label>
                 <div className="relative">
                   <Building2 className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-primary/50" />
                   <Input
                     id="invite"
                     value={inviteCode}
                     onChange={(e) => setInviteCode(e.target.value)}
-                    placeholder="例如 DEMO0001"
+                    placeholder={t('login.invitePlaceholder', { sample: 'DEMO0001' })}
                     className="h-11 pl-10 font-medium tracking-wide"
                     required
                   />
@@ -101,14 +103,14 @@ export default function LoginPage(): React.JSX.Element {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="username">账号</Label>
+                <Label htmlFor="username">{t('login.username')}</Label>
                 <div className="relative">
                   <User className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-primary/50" />
                   <Input
                     id="username"
                     value={username}
                     onChange={(e) => setUsername(e.target.value)}
-                    placeholder="请输入账号"
+                    placeholder={t('login.usernamePlaceholder')}
                     autoComplete="username"
                     className="h-11 pl-10"
                     required
@@ -117,7 +119,7 @@ export default function LoginPage(): React.JSX.Element {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="password">密码</Label>
+                <Label htmlFor="password">{t('login.password')}</Label>
                 <div className="relative">
                   <Lock className="absolute top-1/2 left-3 size-4 -translate-y-1/2 text-primary/50" />
                   <Input
@@ -125,7 +127,7 @@ export default function LoginPage(): React.JSX.Element {
                     type={showPassword ? 'text' : 'password'}
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
-                    placeholder="请输入密码"
+                    placeholder={t('login.passwordPlaceholder')}
                     autoComplete="current-password"
                     className="h-11 pr-10 pl-10"
                     required
@@ -147,7 +149,7 @@ export default function LoginPage(): React.JSX.Element {
                   onChange={(e) => setRemember(e.target.checked)}
                   className="size-3.5 accent-primary"
                 />
-                记住邀请码
+                {t('login.rememberInvite')}
               </label>
 
               {error && (
@@ -163,10 +165,10 @@ export default function LoginPage(): React.JSX.Element {
               >
                 {submitting ? (
                   <>
-                    <LoaderCircle className="mr-2 size-4 animate-spin" /> 登录中…
+                    <LoaderCircle className="mr-2 size-4 animate-spin" /> {t('login.signing')}
                   </>
                 ) : (
-                  '登 录'
+                  t('login.signIn')
                 )}
               </Button>
             </form>
@@ -174,9 +176,9 @@ export default function LoginPage(): React.JSX.Element {
             <Separator className="my-6" />
             <div className="flex items-center justify-between text-xs text-muted-foreground">
               <span>
-                演示账号 <code className="rounded bg-muted px-1.5 py-0.5">admin / admin123</code>
+                {t('login.demoAccount')} <code className="rounded bg-muted px-1.5 py-0.5">admin / admin123</code>
               </span>
-              <span className="text-muted-foreground">数据仅存储于本机 MySQL</span>
+              <span className="text-muted-foreground">{t('login.storedLocally')}</span>
             </div>
           </div>
         </div>

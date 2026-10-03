@@ -1,6 +1,7 @@
 import { app, nativeTheme } from 'electron'
 import { existsSync, readFileSync, writeFileSync } from 'fs'
 import { join } from 'path'
+import { isLocaleCode, FALLBACK_LOCALE, type LocaleCode } from '@shared/i18n'
 import {
   isThemePref,
   resolveEffectiveTheme,
@@ -33,6 +34,11 @@ export interface AppSettings {
    * 设置页「重试标准模式」会把它清回 false，并尝试回到标准渲染。
    */
   gpuSafeMode: boolean
+  /**
+   * 界面显示语言（A4）。值必须是 `SUPPORTED_LOCALES` 里的代码，否则不采信、回退默认值。
+   * 渲染层在首帧前读它来初始化 i18next，改动即时生效并落盘。
+   */
+  language: LocaleCode
 }
 
 /** 交给渲染层的完整快照：`effective` 由主进程解析，页面只负责挂类名。 */
@@ -47,7 +53,8 @@ const DEFAULTS: AppSettings = {
   badgeEnabled: true,
   notificationEnabled: true,
   hardwareAcceleration: true,
-  gpuSafeMode: false
+  gpuSafeMode: false,
+  language: FALLBACK_LOCALE
 }
 
 const settingsFile = (): string => join(app.getPath('userData'), 'scrm-settings.json')
@@ -76,6 +83,8 @@ function mergeKnown(base: AppSettings, raw: unknown): AppSettings {
     if (typeof patch.gpuSafeMode === 'boolean') {
       next.gpuSafeMode = patch.gpuSafeMode
     }
+    // 语言只认清单里的代码：把任意字符串写进设置既没用，还会让回退逻辑失准。
+    if (isLocaleCode(patch.language)) next.language = patch.language
   }
   return next
 }
