@@ -1,6 +1,8 @@
 package com.smartscrm.server.common;
 
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
+import org.springframework.security.access.AccessDeniedException;
 import org.springframework.web.bind.MethodArgumentNotValidException;
 import org.springframework.web.bind.MissingServletRequestParameterException;
 import org.springframework.web.bind.annotation.ExceptionHandler;
@@ -32,6 +34,16 @@ public class GlobalExceptionHandler {
     public ResponseEntity<ApiResponse<Void>> handleMissingParam(MissingServletRequestParameterException e) {
         return ResponseEntity.badRequest()
             .body(ApiResponse.error(40000, e.getParameterName() + " is required"));
+    }
+
+    /**
+     * 权限不足：{@code @PreAuthorize} 判定不通过时 Spring 抛 AccessDeniedException。
+     * 不加这一支它会落到下面的 catch-all 变成 500，前端就分不清"没权限"和"服务端炸了"，
+     * 而且真正的 500 会被这类正常拒绝淹没。权限拒绝必须响 403（spec §3.2）。
+     */
+    @ExceptionHandler(AccessDeniedException.class)
+    public ResponseEntity<ApiResponse<Void>> handleAccessDenied(AccessDeniedException e) {
+        return ResponseEntity.status(HttpStatus.FORBIDDEN).body(ApiResponse.error(40300, "forbidden"));
     }
 
     @ExceptionHandler(Exception.class)
