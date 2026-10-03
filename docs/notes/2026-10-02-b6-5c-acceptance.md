@@ -75,3 +75,21 @@ body  : {"code":0,"message":"ok","data":[{"chatKey":"120363270043062051@g.us", .
 - 测试种子数据（群 + 客户 45 一条群成员行）仍保留在库；如需保持环境干净，待用户确认后清除。
 - 切面 5c 原计划「CDP 界面腿 20 条」以单条综合复检脚本（`tmp/cdp-recheck.mjs`）替代实现，断言了开抽屉→读数的关键链路；
   若后续要补 20 条细分腿，可在此基础上扩展用例。
+
+## 2026-10-03 种子数据清理（实测）
+
+本台账「遗留」那条已在 2026-10-03 处理完。清之前先只读枚举（`tmp/p8-seed-enumerate.mjs`，全 7 个账号），
+按 `(account_id, chat_key)` 精确删（`tmp/P8SeedPurge.java`），删完回 HTTP 复查（`tmp/p8-seed-enumerate-after.log`）。
+
+- **枚举到的实际污染面与本台账写的不一致**，记录以免下一个人照本台账查空：
+  - accountId 7 / 群 `120363270043062051@g.us`：群行在，但 `participant_count=0`、`snapshot_count=0`、`last_snapshot_at` NULL；
+    成员行是 `8613790000000@c.us`（`join_count=3`、`customer_id` NULL），**本台账 §种子数据 里的 `991790424428005@c.us` 与那条 `added` 事件在 10-03 已不在库**（何人所作：待验证）。
+  - accountId 2：两个标题「契约验证群」的键 `12036787632763@g.us`（11 成员 / 2 事件）与 `120363000000000001@g.us`（11 成员 / 2 事件），
+    覆盖率读数 1 与 2.5 —— 那是后端契约腿留下的，本台账没提。
+- **删除计数**（`tmp/p8-seed-purge.log`）：accountId 2 → `group_member_event` 4、`group_member_state` 22、`chat_group` 2；
+  accountId 7 → `group_member_event` 0、`group_member_state` 1、`chat_group` 1。三次删除后各自 residual 复查均为 0。
+- **复查**：7 个账号的 `/api/group-members/groups` 全部 0 行；`customer/45/groups?accountId=7` 0 行。
+  删前确认过这些账号里没有真实采集来的群（枚举里除上述三键外没有任何群行），所以本次清理没有动真实数据。
+- **为什么必须清**：同键复跑时 `chat_group.participant_count` 与 `group_member_state.join_count` 已有值，
+  「首次建档」那条断言会读到 `ok`/`join_count>1` 而不是 `first_build`，验证数据会伪装成产品行为。
+  因此**后端契约腿（Task 14）每次跑完都要把本轮自己造的两个群键删掉**，而不是留给下一个人手工清。
