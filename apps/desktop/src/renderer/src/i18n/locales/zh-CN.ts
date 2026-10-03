@@ -9,7 +9,8 @@
 export const zhCN = {
   common: {
     loading: '读取中…',
-    reading: '读取设置中…'
+    reading: '读取设置中…',
+    close: '关闭'
   },
   nav: {
     workspace: '工作台',
@@ -287,6 +288,108 @@ export const zhCN = {
       media: '媒体消息',
       empty: '（空消息）',
       sendFailed: '发送失败'
+    }
+  },
+  customers: {
+    title: '客户管理',
+    totalCount: '共 {{count}} 位客户',
+    refresh: '刷新',
+    searchPlaceholder: '搜索昵称 / 手机 / 邮箱',
+    allPlatforms: '全部平台',
+    countryPlaceholder: '国家/地区',
+    clearFilters: '清除筛选',
+    labelPrefix: '标签：',
+    loading: '加载客户中…',
+    loadError: '无法加载客户，请确认后端已启动。',
+    empty: '没有符合条件的客户。',
+    col: {
+      customer: '客户',
+      platform: '平台',
+      contact: '联系方式',
+      country: '国家',
+      labels: '标签',
+      lastContact: '最近联系'
+    },
+    prevPage: '上一页',
+    nextPage: '下一页',
+    unnamed: '未命名客户',
+    drawer: {
+      unknownPlatform: '未知平台',
+      createdOn: '创建于 {{date}}',
+      lastContactOn: '· 最近联系 {{time}}',
+      nickname: '昵称',
+      email: '邮箱',
+      country: '国家/地区',
+      countryHint: '如 {{sample}}',
+      sex: '性别',
+      sexUnknown: '未知',
+      sexMale: '男',
+      sexFemale: '女',
+      remark: '备注',
+      boundPhone: '绑定手机：',
+      saveProfile: '保存资料',
+      savingProfile: '保存中…',
+      labels: '标签',
+      saveLabels: '保存标签',
+      savingLabels: '保存中…',
+      noLabels: '暂无标签',
+      noLabelGroups: '还没有标签分组。',
+      recentMessages: '最近消息',
+      deleteCustomer: '删除客户',
+      saveFailed: '保存失败，请重试',
+      confirmDelete: '确认删除客户「{{name}}」？'
+    },
+    timeline: {
+      loading: '读取最近消息…',
+      loadError: '读不到时间线，请确认后端已启动。',
+      empty: '还没有采到这位客户的消息。',
+      group: '群',
+      open: '打开',
+      noHeadTitle: '这条会话的会话头还没投影出来（只采到了消息），暂时跳不过去'
+    },
+    groups: {
+      title: '所在群',
+      exporting: '导出中…',
+      exportSelected: '导出所选（{{count}}）',
+      noOnlineAccount: '没有在线的 WhatsApp 账号。群成员只在账号上线时采集，连上之后这里会自动出内容。',
+      loading: '读取中…',
+      loadError: '读不到所在群：确认后端已启动。',
+      empty: '这位客户还没有匹配到的群成员行。匹配是按手机号做的，所以没存进通讯录的陌生号群不会出现在这里。',
+      disbanded: '已解散/已退出',
+      inGroup: '在群 {{in}} · 上次快照 {{snapshot}} · 快照于 {{time}}',
+      viewMembers: '查看群成员',
+      selectAria: '选择 {{name}}',
+      unitPeople: '人',
+      unitItems: '条',
+      pageInfo: '第 {{page}} / {{pageCount}} 页 · 共 {{total}} {{unit}}'
+    },
+    dialog: {
+      desc: '在群 {{in}} 人 · 上次快照 {{snapshot}} 人 · 快照于 {{time}} · 已成功快照 {{count}} 次。名单是**建档那一刻**为真，要新读数就点「刷新成员」。',
+      disbanded: '已解散/已退出',
+      refresh: '刷新成员',
+      building: '建档中…',
+      exportOne: '导出本群',
+      exporting: '导出中…',
+      refreshSkipFinal: '泵会跳过已解散/已退出的群（spec §8）',
+      refreshOneShot: '只给这个群重新拉一次成员快照',
+      exportNoSnapshot: '还没建过档，导出会得到一份空文件（spec §10 的 no_rows）',
+      buildingNote: '建档中：这一轮跑完会自动刷新这里的读数。',
+      tabMembers: '成员名单',
+      tabEvents: '进退流水',
+      filterAllMembers: '全部成员',
+      filterInGroup: '在群',
+      filterOutGroup: '已退群',
+      filterAllRoles: '全部角色',
+      filterAllEvents: '全部事件',
+      searchPlaceholder: '名称或手机号',
+      membersLoading: '读取中…',
+      membersLoadError: '读不到成员名单。',
+      membersEmpty: '这个筛选条件下没有人。',
+      memberHeader: '名称 / 手机号 / 角色 / 是否在群 / 进群时间 / 进群数 / 退群时间 / 退出方式 / 最近发言 / 发言数',
+      eventsLoading: '读取中…',
+      eventsLoadError: '读不到进退流水。',
+      eventsEmpty: '还没有加减人的流水。事件只在账号上线且桥就绪时采集。',
+      eventHeader: '时间 / 事件 / 目标人 / 操作人 / 来源'
     }
   }
 } as const

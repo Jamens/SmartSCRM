@@ -7,7 +7,8 @@ import type { DeepString, zhCN } from './zh-CN'
 export const en: DeepString<typeof zhCN> = {
   common: {
     loading: 'Loading…',
-    reading: 'Reading settings…'
+    reading: 'Reading settings…',
+    close: 'Close'
   },
   nav: {
     workspace: 'Workspace',
@@ -283,6 +284,108 @@ export const en: DeepString<typeof zhCN> = {
       media: 'Media message',
       empty: '(empty message)',
       sendFailed: 'Send failed'
+    }
+  },
+  customers: {
+    title: 'Customers',
+    totalCount: '{{count}} customers total',
+    refresh: 'Refresh',
+    searchPlaceholder: 'Search nickname / phone / email',
+    allPlatforms: 'All platforms',
+    countryPlaceholder: 'Country/Region',
+    clearFilters: 'Clear filters',
+    labelPrefix: 'Labels:',
+    loading: 'Loading customers…',
+    loadError: 'Cannot load customers. Make sure the backend is running.',
+    empty: 'No customers match the criteria.',
+    col: {
+      customer: 'Customer',
+      platform: 'Platform',
+      contact: 'Contact',
+      country: 'Country',
+      labels: 'Labels',
+      lastContact: 'Last contact'
+    },
+    prevPage: 'Previous',
+    nextPage: 'Next',
+    unnamed: 'Unnamed customer',
+    drawer: {
+      unknownPlatform: 'Unknown platform',
+      createdOn: 'Created on {{date}}',
+      lastContactOn: '· Last contact {{time}}',
+      nickname: 'Nickname',
+      email: 'Email',
+      country: 'Country/Region',
+      countryHint: 'e.g. {{sample}}',
+      sex: 'Gender',
+      sexUnknown: 'Unknown',
+      sexMale: 'Male',
+      sexFemale: 'Female',
+      remark: 'Remark',
+      boundPhone: 'Bound phone:',
+      saveProfile: 'Save profile',
+      savingProfile: 'Saving…',
+      labels: 'Labels',
+      saveLabels: 'Save labels',
+      savingLabels: 'Saving…',
+      noLabels: 'No labels yet',
+      noLabelGroups: 'No label groups yet.',
+      recentMessages: 'Recent messages',
+      deleteCustomer: 'Delete customer',
+      saveFailed: 'Save failed, please retry',
+      confirmDelete: 'Delete customer “{{name}}”?'
+    },
+    timeline: {
+      loading: 'Reading recent messages…',
+      loadError: 'Cannot read timeline. Make sure the backend is running.',
+      empty: 'No messages collected for this customer yet.',
+      group: 'Group',
+      open: 'Open',
+      noHeadTitle: 'This conversation’s head is not projected yet (only messages were collected), jump is disabled for now'
+    },
+    groups: {
+      title: 'Groups',
+      exporting: 'Exporting…',
+      exportSelected: 'Export selected ({{count}})',
+      noOnlineAccount: 'No online WhatsApp account. Group members are only collected while the account is online; content appears here automatically once connected.',
+      loading: 'Loading…',
+      loadError: 'Cannot read groups. Make sure the backend is running.',
+      empty: 'No matched group-member rows for this customer yet. Matching is by phone number, so stranger groups not saved to contacts will not appear here.',
+      disbanded: 'Disbanded / left',
+      inGroup: 'In group {{in}} · last snapshot {{snapshot}} · snapshot at {{time}}',
+      viewMembers: 'View members',
+      selectAria: 'Select {{name}}',
+      unitPeople: 'people',
+      unitItems: 'entries',
+      pageInfo: 'Page {{page}} / {{pageCount}} · {{total}} {{unit}} total'
+    },
+    dialog: {
+      desc: '{{in}} in group · last snapshot {{snapshot}} · snapshot at {{time}} · successfully snapshotted {{count}} times. The roster is true **at the moment of archiving**; click “Refresh members” for new readings.',
+      disbanded: 'Disbanded / left',
+      refresh: 'Refresh members',
+      building: 'Archiving…',
+      exportOne: 'Export this group',
+      exporting: 'Exporting…',
+      refreshSkipFinal: 'The pump skips disbanded / left groups (spec §8)',
+      refreshOneShot: 'Re-pull one member snapshot for just this group',
+      exportNoSnapshot: 'No archive yet; exporting would yield an empty file (spec §10 no_rows)',
+      buildingNote: 'Archiving: readings here refresh automatically once this round finishes.',
+      tabMembers: 'Member roster',
+      tabEvents: 'Join/leave log',
+      filterAllMembers: 'All members',
+      filterInGroup: 'In group',
+      filterOutGroup: 'Left group',
+      filterAllRoles: 'All roles',
+      filterAllEvents: 'All events',
+      searchPlaceholder: 'Name or phone',
+      membersLoading: 'Loading…',
+      membersLoadError: 'Cannot read member roster.',
+      membersEmpty: 'No one matches this filter.',
+      memberHeader: 'Name / Phone / Role / In group / Joined / Join count / Left / Leave method / Last message / Message count',
+      eventsLoading: 'Loading…',
+      eventsLoadError: 'Cannot read join/leave log.',
+      eventsEmpty: 'No join/leave events yet. Events are collected only while the account is online and the bridge is ready.',
+      eventHeader: 'Time / Event / Target / Actor / Source'
     }
   }
 }

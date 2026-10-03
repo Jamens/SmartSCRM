@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type React from 'react'
+import { useTranslation } from 'react-i18next'
 import { Download, RefreshCw, X } from 'lucide-react'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -50,6 +51,7 @@ interface Props {
 }
 
 export default function GroupMembersDialog({ accountId, row, onClose }: Props): React.JSX.Element {
+  const { t } = useTranslation()
   const [tab, setTab] = useState('members')
   const build = useGroupBuild()
   const groupExport = useGroupExport()
@@ -73,12 +75,15 @@ export default function GroupMembersDialog({ accountId, row, onClose }: Props): 
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2 text-base">
             <span className="truncate">{row.title ?? row.chatKey}</span>
-            {row.isFinal && <Badge variant="outline">已解散/已退出</Badge>}
+            {row.isFinal && <Badge variant="outline">{t('customers.groups.disbanded')}</Badge>}
           </DialogTitle>
           <DialogDescription>
-            在群 {row.inGroupCount} 人 · 上次快照 {row.participantCount} 人 · 快照于{' '}
-            {timeCopy(row.lastSnapshotAt)} · 已成功快照 {row.snapshotCount} 次。名单是**建档那一刻**为真，
-            要新读数就点「刷新成员」。
+            {t('customers.dialog.desc', {
+              in: row.inGroupCount,
+              snapshot: row.participantCount,
+              time: timeCopy(row.lastSnapshotAt),
+              count: row.snapshotCount
+            })}
           </DialogDescription>
         </DialogHeader>
 
@@ -88,11 +93,11 @@ export default function GroupMembersDialog({ accountId, row, onClose }: Props): 
             variant="outline"
             data-p8g-refresh=""
             disabled={build.pending || row.isFinal}
-            title={row.isFinal ? '泵会跳过已解散/已退出的群（spec §8）' : '只给这个群重新拉一次成员快照'}
+            title={row.isFinal ? t('customers.dialog.refreshSkipFinal') : t('customers.dialog.refreshOneShot')}
             onClick={refresh}
           >
             <RefreshCw className={cn('size-3.5', build.pending && 'animate-spin')} />
-            {build.pending ? '建档中…' : '刷新成员'}
+            {build.pending ? t('customers.dialog.building') : t('customers.dialog.refresh')}
           </Button>
           <Button
             size="sm"
@@ -101,23 +106,23 @@ export default function GroupMembersDialog({ accountId, row, onClose }: Props): 
             disabled={groupExport.pending || row.snapshotCount === 0}
             title={
               row.snapshotCount === 0
-                ? '还没建过档，导出会得到一份空文件（spec §10 的 no_rows）'
+                ? t('customers.dialog.exportNoSnapshot')
                 : undefined
             }
             onClick={() => groupExport.exportRows({ accountId, chatKeys: [row.chatKey] })}
           >
             <Download className="size-3.5" />
-            {groupExport.pending ? '导出中…' : '导出本群'}
+            {groupExport.pending ? t('customers.dialog.exporting') : t('customers.dialog.exportOne')}
           </Button>
           <Button size="sm" variant="ghost" data-p8g-close="" className="ml-auto" onClick={onClose}>
             <X className="size-4" />
-            关闭
+            {t('common.close')}
           </Button>
         </div>
 
         {build.pending && (
           <p className="text-xs text-muted-foreground" data-p8g-build-pending="">
-            建档中：这一轮跑完会自动刷新这里的读数。
+            {t('customers.dialog.buildingNote')}
           </p>
         )}
         {areaNote && (
@@ -140,10 +145,10 @@ export default function GroupMembersDialog({ accountId, row, onClose }: Props): 
           <Tabs value={tab} onValueChange={setTab}>
             <TabsList>
               <TabsTrigger value="members" data-p8g-tab-members="">
-                成员名单
+                {t('customers.dialog.tabMembers')}
               </TabsTrigger>
               <TabsTrigger value="events" data-p8g-tab-events="">
-                进退流水
+                {t('customers.dialog.tabEvents')}
               </TabsTrigger>
             </TabsList>
             <TabsContent value="members">
@@ -168,6 +173,7 @@ function MemberTable({
   accountId: number
   chatKey: string
 }): React.JSX.Element {
+  const { t } = useTranslation()
   const [inGroup, setInGroup] = useState(ALL)
   const [role, setRole] = useState(ALL)
   const [q, setQ] = useState('')
@@ -195,9 +201,9 @@ function MemberTable({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>全部成员</SelectItem>
-            <SelectItem value="in">在群</SelectItem>
-            <SelectItem value="out">已退群</SelectItem>
+            <SelectItem value={ALL}>{t('customers.dialog.filterAllMembers')}</SelectItem>
+            <SelectItem value="in">{t('customers.dialog.filterInGroup')}</SelectItem>
+            <SelectItem value="out">{t('customers.dialog.filterOutGroup')}</SelectItem>
           </SelectContent>
         </Select>
         <Select value={role} onValueChange={(v) => { setRole(v); setPage(1) }}>
@@ -205,7 +211,7 @@ function MemberTable({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>全部角色</SelectItem>
+            <SelectItem value={ALL}>{t('customers.dialog.filterAllRoles')}</SelectItem>
             {ROLES.map((r) => (
               <SelectItem key={r} value={r}>
                 {groupRoleLabel(r)}
@@ -216,7 +222,7 @@ function MemberTable({
         <Input
           className="w-44"
           data-p8g-f-q=""
-          placeholder="名称或手机号"
+          placeholder={t('customers.dialog.searchPlaceholder')}
           value={q}
           onChange={(e) => { setQ(e.target.value); setPage(1) }}
         />
@@ -228,21 +234,21 @@ function MemberTable({
       </div>
 
       {isPending ? (
-        <p className="py-8 text-center text-xs text-muted-foreground">读取中…</p>
+        <p className="py-8 text-center text-xs text-muted-foreground">{t('common.loading')}</p>
       ) : isError ? (
-        <p className="py-8 text-center text-xs text-destructive">读不到成员名单。</p>
+        <p className="py-8 text-center text-xs text-destructive">{t('customers.dialog.membersLoadError')}</p>
       ) : records.length === 0 ? (
-        <p className="py-8 text-center text-xs text-muted-foreground">这个筛选条件下没有人。</p>
+        <p className="py-8 text-center text-xs text-muted-foreground">{t('customers.dialog.membersEmpty')}</p>
       ) : (
         <div className="max-h-[52vh] overflow-auto rounded-lg border border-border/50">
           <table className="w-full border-collapse text-xs">
             <thead className="sticky top-0 z-10 bg-muted/70 text-left text-[11px] text-muted-foreground backdrop-blur">
               <tr>
-                {['名称', '手机号', '角色', '是否在群', '进群时间', '进群数', '退群时间', '退出方式', '最近发言', '发言数'].map(
-                  (h) => (
+                {t('customers.dialog.memberHeader')
+                  .split(' / ')
+                  .map((h) => (
                     <Th key={h}>{h}</Th>
-                  )
-                )}
+                  ))}
               </tr>
             </thead>
             <tbody>
@@ -279,7 +285,7 @@ function MemberTable({
         </div>
       )}
 
-      <Pager anchor="member" page={page} pageCount={pageCount} total={total} unit="人" onPage={setPage} />
+      <Pager anchor="member" page={page} pageCount={pageCount} total={total} unit={t('customers.groups.unitPeople')} onPage={setPage} />
     </div>
   )
 }
@@ -291,6 +297,7 @@ function EventTable({
   accountId: number
   chatKey: string
 }): React.JSX.Element {
+  const { t } = useTranslation()
   const [eventType, setEventType] = useState(ALL)
   const [page, setPage] = useState(1)
   const { data, isPending, isError } = useGroupEvents(
@@ -311,7 +318,7 @@ function EventTable({
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value={ALL}>全部事件</SelectItem>
+            <SelectItem value={ALL}>{t('customers.dialog.filterAllEvents')}</SelectItem>
             {EVENT_TYPES.map((t) => (
               <SelectItem key={t} value={t}>
                 {eventTypeCopy(t)}
@@ -323,21 +330,23 @@ function EventTable({
       </div>
 
       {isPending ? (
-        <p className="py-8 text-center text-xs text-muted-foreground">读取中…</p>
+        <p className="py-8 text-center text-xs text-muted-foreground">{t('common.loading')}</p>
       ) : isError ? (
-        <p className="py-8 text-center text-xs text-destructive">读不到进退流水。</p>
+        <p className="py-8 text-center text-xs text-destructive">{t('customers.dialog.eventsLoadError')}</p>
       ) : records.length === 0 ? (
         <p className="py-8 text-center text-xs text-muted-foreground">
-          还没有加减人的流水。事件只在账号上线且桥就绪时采集。
+          {t('customers.dialog.eventsEmpty')}
         </p>
       ) : (
         <div className="max-h-[52vh] overflow-auto rounded-lg border border-border/50">
           <table className="w-full border-collapse text-xs">
             <thead className="sticky top-0 z-10 bg-muted/70 text-left text-[11px] text-muted-foreground backdrop-blur">
               <tr>
-                {['时间', '事件', '目标人', '操作人', '来源'].map((h) => (
-                  <Th key={h}>{h}</Th>
-                ))}
+                {t('customers.dialog.eventHeader')
+                  .split(' / ')
+                  .map((h) => (
+                    <Th key={h}>{h}</Th>
+                  ))}
               </tr>
             </thead>
             <tbody>
@@ -364,7 +373,7 @@ function EventTable({
         </div>
       )}
 
-      <Pager anchor="event" page={page} pageCount={pageCount} total={total} unit="条" onPage={setPage} />
+      <Pager anchor="event" page={page} pageCount={pageCount} total={total} unit={t('customers.groups.unitItems')} onPage={setPage} />
     </div>
   )
 }
@@ -395,20 +404,21 @@ function Pager({
   unit: string
   onPage: (next: number) => void
 }): React.JSX.Element {
+  const { t } = useTranslation()
   return (
     <div className="flex items-center justify-between text-xs text-muted-foreground">
       <span
         data-p8g-event-page={anchor === 'event' ? '' : undefined}
         data-p8g-member-page={anchor === 'member' ? '' : undefined}
       >
-        第 {page} / {pageCount} 页 · 共 {total} {unit}
+        {t('customers.groups.pageInfo', { page, pageCount, total, unit })}
       </span>
       <div className="flex gap-2">
         <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => onPage(page - 1)}>
-          上一页
+          {t('customers.prevPage')}
         </Button>
         <Button size="sm" variant="outline" disabled={page >= pageCount} onClick={() => onPage(page + 1)}>
-          下一页
+          {t('customers.nextPage')}
         </Button>
       </div>
     </div>

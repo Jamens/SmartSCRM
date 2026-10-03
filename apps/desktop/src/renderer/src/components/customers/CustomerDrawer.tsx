@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import dayjs from 'dayjs'
+import { useTranslation } from 'react-i18next'
 import { Trash2, X } from 'lucide-react'
 import { platformOf } from '@/lib/platform'
 import { Button } from '@/components/ui/button'
@@ -25,9 +26,9 @@ interface Props {
 }
 
 const SEX_OPTIONS = [
-  { value: 0, label: '未知' },
-  { value: 1, label: '男' },
-  { value: 2, label: '女' }
+  { value: 0, labelKey: 'customers.drawer.sexUnknown' },
+  { value: 1, labelKey: 'customers.drawer.sexMale' },
+  { value: 2, labelKey: 'customers.drawer.sexFemale' }
 ]
 
 function initials(name: string | null): string {
@@ -36,6 +37,7 @@ function initials(name: string | null): string {
 }
 
 export default function CustomerDrawer({ customer, tree, onClose }: Props): React.JSX.Element {
+  const { t } = useTranslation()
   const meta = platformOf(customer.platformType)
   const update = useUpdateCustomer()
   const setLabels = useSetCustomerLabels()
@@ -82,7 +84,7 @@ export default function CustomerDrawer({ customer, tree, onClose }: Props): Reac
   }
 
   const handleDelete = async (): Promise<void> => {
-    if (!window.confirm(`确认删除客户「${customer.nickname ?? customer.openId}」？`)) return
+    if (!window.confirm(t('customers.drawer.confirmDelete', { name: customer.nickname ?? customer.openId }))) return
     await remove.mutateAsync(customer.id)
     onClose()
   }
@@ -99,10 +101,10 @@ export default function CustomerDrawer({ customer, tree, onClose }: Props): Reac
             </AvatarFallback>
           </Avatar>
           <div className="min-w-0 flex-1">
-            <p className="truncate text-sm font-semibold">{customer.nickname ?? '未命名客户'}</p>
+            <p className="truncate text-sm font-semibold">{customer.nickname ?? t('customers.unnamed')}</p>
             <p className="truncate text-xs text-muted-foreground">{customer.openId}</p>
           </div>
-          <Button variant="ghost" size="icon" onClick={onClose} title="关闭">
+          <Button variant="ghost" size="icon" onClick={onClose} title={t('common.close')}>
             <X className="size-4" />
           </Button>
         </header>
@@ -113,26 +115,26 @@ export default function CustomerDrawer({ customer, tree, onClose }: Props): Reac
               className="flex items-center gap-1.5 rounded-full px-2 py-0.5 text-white"
               style={{ backgroundColor: meta?.color }}
             >
-              {meta?.label ?? '未知平台'}
+              {meta?.label ?? t('customers.drawer.unknownPlatform')}
             </span>
-            <span>创建于 {dayjs(customer.createdAt).format('YYYY-MM-DD')}</span>
+            <span>{t('customers.drawer.createdOn', { date: dayjs(customer.createdAt).format('YYYY-MM-DD') })}</span>
             {customer.lastContactAt && (
-              <span>· 最近联系 {dayjs(customer.lastContactAt).format('MM-DD HH:mm')}</span>
+              <span>{t('customers.drawer.lastContactOn', { time: dayjs(customer.lastContactAt).format('MM-DD HH:mm') })}</span>
             )}
           </div>
 
           <div className="space-y-3">
-            <Field id="nickname" label="昵称">
+            <Field id="nickname" label={t('customers.drawer.nickname')}>
               <Input id="nickname" value={nickname} onChange={(e) => setNickname(e.target.value)} />
             </Field>
-            <Field id="email" label="邮箱">
+            <Field id="email" label={t('customers.drawer.email')}>
               <Input id="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="—" />
             </Field>
             <div className="grid grid-cols-2 gap-3">
-              <Field id="country" label="国家/地区">
-                <Input id="country" value={country} onChange={(e) => setCountry(e.target.value)} placeholder="如 CN" />
+              <Field id="country" label={t('customers.drawer.country')}>
+                <Input id="country" value={country} onChange={(e) => setCountry(e.target.value)} placeholder={t('customers.drawer.countryHint', { sample: 'CN' })} />
               </Field>
-              <Field label="性别">
+              <Field label={t('customers.drawer.sex')}>
                 <div className="flex gap-1.5">
                   {SEX_OPTIONS.map((opt) => (
                     <button
@@ -145,18 +147,19 @@ export default function CustomerDrawer({ customer, tree, onClose }: Props): Reac
                           : 'border-border text-muted-foreground hover:bg-muted'
                       )}
                     >
-                      {opt.label}
+                      {t(opt.labelKey)}
                     </button>
                   ))}
                 </div>
               </Field>
             </div>
-            <Field id="remark" label="备注">
+            <Field id="remark" label={t('customers.drawer.remark')}>
               <Input id="remark" value={remark} onChange={(e) => setRemark(e.target.value)} placeholder="—" />
             </Field>
             {customer.phone && (
               <p className="text-xs text-muted-foreground">
-                绑定手机：<span className="text-foreground">{customer.phone}</span>
+                {t('customers.drawer.boundPhone')}
+                <span className="text-foreground">{customer.phone}</span>
               </p>
             )}
           </div>
@@ -166,21 +169,21 @@ export default function CustomerDrawer({ customer, tree, onClose }: Props): Reac
             onClick={() => void saveProfile()}
             disabled={!dirty || update.isPending}
           >
-            {update.isPending ? '保存中…' : '保存资料'}
+            {update.isPending ? t('customers.drawer.savingProfile') : t('customers.drawer.saveProfile')}
           </Button>
 
           <Separator className="my-5" />
 
           <div>
             <div className="mb-2 flex items-center justify-between">
-              <h3 className="text-sm font-semibold">标签</h3>
+              <h3 className="text-sm font-semibold">{t('customers.drawer.labels')}</h3>
               <Button
                 size="sm"
                 variant="secondary"
                 onClick={() => void saveLabels()}
                 disabled={!labelsDirty || setLabels.isPending}
               >
-                {setLabels.isPending ? '保存中…' : '保存标签'}
+                {setLabels.isPending ? t('customers.drawer.savingLabels') : t('customers.drawer.saveLabels')}
               </Button>
             </div>
             <div className="space-y-3">
@@ -204,17 +207,17 @@ export default function CustomerDrawer({ customer, tree, onClose }: Props): Reac
                         </button>
                       )
                     })}
-                    {group.labels.length === 0 && <span className="text-xs text-muted-foreground/60">暂无标签</span>}
+                    {group.labels.length === 0 && <span className="text-xs text-muted-foreground/60">{t('customers.drawer.noLabels')}</span>}
                   </div>
                 </div>
               ))}
-              {tree.length === 0 && <p className="text-xs text-muted-foreground">还没有标签分组。</p>}
+              {tree.length === 0 && <p className="text-xs text-muted-foreground">{t('customers.drawer.noLabelGroups')}</p>}
             </div>
           </div>
 
           <Separator className="my-5" />
           <div>
-            <h3 className="mb-2 text-sm font-semibold">最近消息</h3>
+            <h3 className="mb-2 text-sm font-semibold">{t('customers.drawer.recentMessages')}</h3>
             <CustomerTimeline customerId={customer.id} />
           </div>
 
@@ -225,10 +228,10 @@ export default function CustomerDrawer({ customer, tree, onClose }: Props): Reac
         <footer className="flex items-center justify-between border-t border-border/60 px-5 py-3">
           <Button variant="ghost" size="sm" className="text-destructive hover:text-destructive" onClick={() => void handleDelete()} disabled={remove.isPending}>
             <Trash2 className="size-4" />
-            删除客户
+            {t('customers.drawer.deleteCustomer')}
           </Button>
           {setLabels.isError || update.isError ? (
-            <span className="flex items-center gap-1 text-xs text-destructive">保存失败，请重试</span>
+            <span className="flex items-center gap-1 text-xs text-destructive">{t('customers.drawer.saveFailed')}</span>
           ) : null}
         </footer>
       </aside>
