@@ -10,6 +10,7 @@ import {
   Shield,
   Zap
 } from 'lucide-react'
+import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import {
@@ -62,11 +63,8 @@ function delayTone(delay: number | null): string {
   return 'bg-red-500/15 text-red-600'
 }
 
-function delayText(delay: number | null): string {
-  return delay === null ? '不可达' : `${delay} ms`
-}
-
 export default function TranslationPage(): React.JSX.Element {
+  const { t } = useTranslation()
   const settingsQuery = useTranslationSettings(GLOBAL_REF)
   const nodesQuery = useTranslationNodes()
   const statsQuery = useTranslationCacheStats()
@@ -122,7 +120,7 @@ export default function TranslationPage(): React.JSX.Element {
       <div className="flex min-h-0 flex-1 flex-col overflow-hidden bg-background">
         <PageHeader />
         <p className="py-16 text-center text-sm text-muted-foreground">
-          {settingsQuery.isPending ? '加载翻译设置中…' : '翻译设置读取失败，请确认后端已启动。'}
+          {settingsQuery.isPending ? t('translation.loadingSettings') : t('translation.loadFailed')}
         </p>
       </div>
     )
@@ -155,8 +153,8 @@ export default function TranslationPage(): React.JSX.Element {
             onAuto={() => void patch({ server: pickBestNode(delays, settings.server, settings.channel).server, serverMode: AUTO })}
           />
           <DirectionCard
-            title="接收翻译"
-            description="对方发来的气泡下的译文（R1）"
+            title={t('translation.receiveTitle')}
+            description={t('translation.receiveDesc')}
             enabled={settings.receiveEnabled}
             onToggle={(v) => void patch({ receiveEnabled: v })}
             from={settings.receiveFromLang}
@@ -166,16 +164,16 @@ export default function TranslationPage(): React.JSX.Element {
             onTo={(v) => void patch({ receiveToLang: v })}
             extra={
               <ToggleRow
-                label="语音翻译"
-                hint="本期不生效"
+                label={t('translation.voiceTranslation')}
+                hint={t('translation.notEffectiveYet')}
                 checked={settings.voiceEnabled}
                 onChange={(v) => void patch({ voiceEnabled: v })}
               />
             }
           />
           <DirectionCard
-            title="发送翻译"
-            description="输入框的发送前预览语向；自己发出的气泡也按这个语向译（R1）"
+            title={t('translation.sendTitle')}
+            description={t('translation.sendDesc')}
             enabled={settings.sendEnabled}
             onToggle={(v) => void patch({ sendEnabled: v })}
             from={settings.sendFromLang}
@@ -186,12 +184,12 @@ export default function TranslationPage(): React.JSX.Element {
             extra={
               <>
                 <ToggleRow
-                  label="实时预览"
+                  label={t('translation.realtimePreview')}
                   checked={settings.previewEnabled}
                   onChange={(v) => void patch({ previewEnabled: v })}
                 />
                 <ToggleRow
-                  label="回车即译即发"
+                  label={t('translation.enterToSend')}
                   checked={settings.enterToSend}
                   onChange={(v) => void patch({ enterToSend: v })}
                 />
@@ -202,19 +200,19 @@ export default function TranslationPage(): React.JSX.Element {
             <CardHeader>
               <CardTitle className="flex items-center gap-2 text-sm">
                 <ShieldIcon />
-                风控
+                {t('translation.riskControl')}
               </CardTitle>
-              <CardDescription>注入层按推送的开关提示或拦截</CardDescription>
+              <CardDescription>{t('translation.riskControlDesc')}</CardDescription>
             </CardHeader>
             <CardContent className="flex flex-col gap-3">
               <ToggleRow
-                label="提示译文含中文"
+                label={t('translation.warnContainsChinese')}
                 checked={settings.disableChinese}
                 onChange={(v) => void patch({ disableChinese: v })}
               />
               <ToggleRow
-                label="含中文时拦截发送"
-                hint="开启后若消息含中文将拦截发送并提示"
+                label={t('translation.blockContainsChinese')}
+                hint={t('translation.blockHint')}
                 checked={settings.disableChinesePreventSend}
                 onChange={(v) => void patch({ disableChinesePreventSend: v })}
               />
@@ -232,13 +230,13 @@ export default function TranslationPage(): React.JSX.Element {
               <div>
                 <CardTitle className="flex items-center gap-2 text-sm">
                   <Zap className="size-4 text-gold" />
-                  节点测速
+                  {t('translation.nodeSpeedTest')}
                 </CardTitle>
-                <CardDescription>模拟延迟，不产生任何网络请求</CardDescription>
+                <CardDescription>{t('translation.speedTestDesc')}</CardDescription>
               </div>
               <Button size="sm" variant="outline" className="gap-1.5" onClick={remeasure}>
                 <RotateCw className="size-3.5" />
-                重新测速
+                {t('translation.remeasure')}
               </Button>
             </CardHeader>
             <CardContent className="flex flex-col gap-1.5">
@@ -261,16 +259,14 @@ export default function TranslationPage(): React.JSX.Element {
                       <span className="text-[11px] text-muted-foreground/80">{reason}</span>
                     )}
                     <Badge variant="outline" className={cn('border-0', delayTone(node.delay))}>
-                      {delayText(node.delay)}
+                      {node.delay === null ? t('translation.unreachable') : `${node.delay} ms`}
                     </Badge>
                   </div>
                 )
               })}
               {settings.serverMode === AUTO && choice && (
                 <p className="pt-1 text-[11px] text-muted-foreground">
-                  自动选优结果：<span className="font-semibold text-primary">{choice.server}</span>
-                  （当前 <span className="font-semibold">{settings.server}</span>{' '}
-                  已是最小时保持不变）
+                  {t('translation.autoSelectResult', { server: choice.server, current: settings.server })}
                 </p>
               )}
             </CardContent>
@@ -297,20 +293,21 @@ function PageHeader({
   onlineReady?: boolean
   channelLabel?: string
 }): React.JSX.Element {
+  const { t } = useTranslation()
   const badge = !online
-    ? '模拟通道'
+    ? t('translation.mockChannel')
     : onlineReady
-      ? `线上 · ${channelLabel ?? ''}`
-      : '线上未就绪 · 模拟兜底'
+      ? t('translation.onlineWithChannel', { channel: channelLabel ?? '' })
+      : t('translation.onlineNotReady')
   return (
     <header className="flex items-center justify-between border-b border-border/60 px-6 py-4">
       <div>
         <h1 className="flex items-center gap-2 text-lg font-semibold text-foreground">
           <Languages className="size-5 text-primary" />
-          翻译中心
+          {t('translation.title')}
         </h1>
         <p className="text-xs text-muted-foreground">
-          语向、渠道与生效节点由后端按账号设置解析，页面只做配置
+          {t('translation.subtitle')}
         </p>
       </div>
       <Badge variant="outline" className="gap-1.5">
@@ -364,6 +361,7 @@ function NodeCard({
   onChannel: (channel: string) => void
   onAuto: () => void
 }): React.JSX.Element {
+  const { t } = useTranslation()
   const delayOf = (name: string): number | null =>
     delays.find((d) => d.name === name)?.delay ?? null
   return (
@@ -371,20 +369,20 @@ function NodeCard({
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm">
           <Database className="size-4 text-primary" />
-          节点与线路
+          {t('translation.nodeAndChannel')}
         </CardTitle>
         <CardDescription>
-          节点只影响测速与自动选优；模拟线路译文由本地引擎生成，线上线路（百度/腾讯）需配置密钥
+          {t('translation.nodeChannelDesc')}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">生效节点</span>
+          <span className="text-xs text-muted-foreground">{t('translation.activeNode')}</span>
           <Badge variant="outline" className="border-0 bg-primary/10 text-primary">
             {settings.serverMode === AUTO ? `auto · ${choice?.server ?? settings.server}` : settings.server}
           </Badge>
           <Button size="sm" variant="ghost" className="ml-auto h-7 text-xs" onClick={onAuto}>
-            按测速重选
+            {t('translation.reselectBySpeed')}
           </Button>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -405,14 +403,14 @@ function NodeCard({
                   (delay === null || incompatible) && 'cursor-not-allowed opacity-40'
                 )}
               >
-                {node.name} · {delay === null ? '不可达' : `${delay}ms`}
-                {incompatible && ' · 仅 Google'}
+                {node.name} · {delay === null ? t('translation.unreachable') : `${delay}ms`}
+                {incompatible && t('translation.googleOnly')}
               </button>
             )
           })}
         </div>
         <div className="flex items-center gap-2">
-          <span className="text-xs text-muted-foreground">线路</span>
+          <span className="text-xs text-muted-foreground">{t('translation.channel')}</span>
           <div className="flex flex-wrap gap-1.5">
             {TRANSLATION_CHANNELS.map((channel) => {
               const provider = channelProvider(channel.code)
@@ -421,7 +419,7 @@ function NodeCard({
                 <button
                   key={channel.code}
                   type="button"
-                  title={needsKey ? '未配置密钥，先在下方「密钥配置」填写' : undefined}
+                  title={needsKey ? t('translation.configKeyFirst') : undefined}
                   disabled={needsKey}
                   onClick={() => onChannel(channel.code)}
                   className={cn(
@@ -433,7 +431,7 @@ function NodeCard({
                   )}
                 >
                   {channel.code} {channel.label}
-                  {provider && (needsKey ? ' · 未配置' : ' · 线上')}
+                  {provider && (needsKey ? t('translation.channelUnconfigured') : t('translation.channelOnline'))}
                 </button>
               )
             })}
@@ -467,6 +465,7 @@ function DirectionCard({
   onTo: (v: string) => void
   extra?: React.ReactNode
 }): React.JSX.Element {
+  const { t } = useTranslation()
   const sources = sourceLanguagesFor(channel)
   const targets = targetLanguagesFor(channel)
   const warnings = langWarnings(from, to, channel)
@@ -481,15 +480,15 @@ function DirectionCard({
         <CardDescription>{description}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-3">
-        <ToggleRow label="启用" checked={enabled} onChange={onToggle} />
+        <ToggleRow label={t('translation.enable')} checked={enabled} onChange={onToggle} />
         <div className="grid grid-cols-2 gap-3">
           <div className="flex flex-col gap-1">
-            <Label className="text-[11px] text-muted-foreground">源语言</Label>
+            <Label className="text-[11px] text-muted-foreground">{t('translation.sourceLang')}</Label>
             <LangSelect value={from} allowAuto options={sources} onChange={onFrom} />
             {fromWarn && <LangWarning side="from" text={fromWarn} />}
           </div>
           <div className="flex flex-col gap-1">
-            <Label className="text-[11px] text-muted-foreground">目标语言</Label>
+            <Label className="text-[11px] text-muted-foreground">{t('translation.targetLang')}</Label>
             <LangSelect value={to} options={targets} onChange={onTo} />
             {toWarn && <LangWarning side="to" text={toWarn} />}
           </div>
@@ -517,37 +516,38 @@ function CacheStatsCard({
   } | null
   loading: boolean
 }): React.JSX.Element {
+  const { t } = useTranslation()
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm">
           <Coins className="size-4 text-gold" />
-          译文缓存
+          {t('translation.cacheTitle')}
         </CardTitle>
-        <CardDescription>按租户隔离，键形如 type-channel-from-to-hash</CardDescription>
+        <CardDescription>{t('translation.cacheDesc')}</CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         {loading || !stats ? (
-          <p className="py-4 text-center text-xs text-muted-foreground">读取中…</p>
+          <p className="py-4 text-center text-xs text-muted-foreground">{t('translation.loading')}</p>
         ) : (
           <>
             <div className="flex gap-3 text-xs">
               <span className="rounded-lg bg-muted px-2 py-1">
-                键数 <b className="text-foreground">{stats.totalKeys}</b>
+                {t('translation.keyCount')} <b className="text-foreground">{stats.totalKeys}</b>
               </span>
               <span className="rounded-lg bg-muted px-2 py-1">
-                总命中 <b className="text-foreground">{stats.totalHits}</b>
+                {t('translation.totalHits')} <b className="text-foreground">{stats.totalHits}</b>
               </span>
             </div>
             {stats.top.length === 0 && (
-              <p className="py-3 text-center text-xs text-muted-foreground">还没有缓存条目。</p>
+              <p className="py-3 text-center text-xs text-muted-foreground">{t('translation.cacheEmpty')}</p>
             )}
             {stats.top.map((entry) => (
               <div key={entry.cacheKey} className="rounded-lg border border-border/60 px-2.5 py-2">
                 <div className="flex items-center justify-between gap-2 text-xs">
                   <span className="truncate text-foreground">{entry.sourceText}</span>
                   <Badge variant="outline" className="shrink-0 border-0 bg-primary/10 text-primary">
-                    {entry.hitCount} 次
+                    {t('translation.hitCount', { count: entry.hitCount })}
                   </Badge>
                 </div>
                 <p className="mt-0.5 truncate text-[11px] text-muted-foreground">{entry.targetText}</p>
@@ -565,8 +565,9 @@ function CacheStatsCard({
 }
 
 function TrialCard(): React.JSX.Element {
+  const { t } = useTranslation()
   const trial = useTrialTranslate()
-  const [text, setText] = useState('你好，订单已发货')
+  const [text, setText] = useState(t('translation.sampleText'))
   const [type, setType] = useState<TranslateType>('receive')
 
   return (
@@ -574,33 +575,33 @@ function TrialCard(): React.JSX.Element {
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm">
           <Send className="size-4 text-primary" />
-          翻译试用
+          {t('translation.trialTitle')}
         </CardTitle>
         <CardDescription>
-          不登录 WhatsApp 也能验证引擎与缓存；走的是当前设置解析出的语向
+          {t('translation.trialDesc')}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-2">
         <Input
           value={text}
           onChange={(e) => setText(e.target.value)}
-          placeholder="输入要翻译的文本"
+          placeholder={t('translation.inputPlaceholder')}
           className="h-8 text-xs"
         />
         <div className="flex items-center gap-2">
-          {(['receive', 'send'] as TranslateType[]).map((t) => (
+          {(['receive', 'send'] as TranslateType[]).map((dir) => (
             <button
-              key={t}
+              key={dir}
               type="button"
-              onClick={() => setType(t)}
+              onClick={() => setType(dir)}
               className={cn(
                 'rounded-full border px-2.5 py-1 text-[11px]',
-                type === t
+                type === dir
                   ? 'border-primary bg-primary text-primary-foreground'
                   : 'border-border text-muted-foreground'
               )}
             >
-              {t === 'receive' ? '接收语向' : '发送语向'}
+              {dir === 'receive' ? t('translation.receiveDirection') : t('translation.sendDirection')}
             </button>
           ))}
           <Button
@@ -610,25 +611,27 @@ function TrialCard(): React.JSX.Element {
             onClick={() => trial.mutate({ text: text.trim(), type })}
           >
             <Send className="size-3.5" />
-            翻译
+            {t('translation.translate')}
           </Button>
         </div>
         {trial.data && (
           <div className="rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs">
             <p className="text-foreground">{trial.data.translation}</p>
             <p className="mt-1 flex flex-wrap gap-x-2 text-[11px] text-muted-foreground">
-              <span>{trial.data.cached ? '命中缓存' : '新生成'}</span>
+              <span>{trial.data.cached ? t('translation.cacheHit') : t('translation.newlyGenerated')}</span>
               {trial.data.degraded && (
                 <span className="text-amber-600" title={trial.data.degradeReason ?? ''}>
-                  降级·模拟
+                  {t('translation.degradedMock')}
                 </span>
               )}
               {trial.data.partial && <span className="text-amber-600">partial</span>}
-              {trial.data.containsChinese && <span className="text-amber-600">含中文</span>}
+              {trial.data.containsChinese && (
+                <span className="text-amber-600">{t('translation.containsChinese')}</span>
+              )}
               <span>
                 {trial.data.fromLangCode || 'auto'} → {trial.data.toLangCode}
               </span>
-              <span>渠道 {trial.data.channel}</span>
+              <span>{t('translation.channelPrefix', { channel: trial.data.channel })}</span>
             </p>
             {trial.data.degraded && trial.data.degradeReason && (
               <p className="mt-1 text-[11px] text-muted-foreground">{trial.data.degradeReason}</p>
@@ -639,7 +642,7 @@ function TrialCard(): React.JSX.Element {
           </div>
         )}
         {trial.isError && (
-          <p className="text-[11px] text-red-600">翻译请求失败，请检查后端是否运行。</p>
+          <p className="text-[11px] text-red-600">{t('translation.requestFailed')}</p>
         )}
       </CardContent>
     </Card>
@@ -665,21 +668,21 @@ interface ProviderForm {
 const PROVIDER_FORMS: ProviderForm[] = [
   {
     provider: 'baidu',
-    title: '百度翻译',
-    appIdLabel: 'App ID',
-    appIdPlaceholder: '例：20240101000000001',
-    secretLabel: '密钥',
-    hint: '翻译开放平台 · 通用翻译 API（线路 5）· 免费额度约 200 万字符/月'
+    title: 'translation.providerBaidu',
+    appIdLabel: 'translation.baiduAppIdLabel',
+    appIdPlaceholder: 'translation.appIdPlaceholderBaidu',
+    secretLabel: 'translation.baiduSecretLabel',
+    hint: 'translation.hintBaidu'
   },
   {
     provider: 'tencent',
-    title: '腾讯云 TMT',
-    appIdLabel: 'SecretId',
-    appIdPlaceholder: '例：AKID****************',
-    secretLabel: 'SecretKey',
-    regionLabel: '地域（可选）',
-    regionPlaceholder: '默认 ap-shanghai',
-    hint: '机器翻译 TextTranslate（线路 7）· 免费额度约 500 万字符/月'
+    title: 'translation.providerTencent',
+    appIdLabel: 'translation.tencentAppIdLabel',
+    appIdPlaceholder: 'translation.appIdPlaceholderTencent',
+    secretLabel: 'translation.tencentSecretLabel',
+    regionLabel: 'translation.regionLabel',
+    regionPlaceholder: 'translation.regionPlaceholder',
+    hint: 'translation.hintTencent'
   }
 ]
 
@@ -690,21 +693,21 @@ function KeyConfigCard({
   credentialOf: (provider: string) => TranslationCredentialVO | undefined
   loadError: boolean
 }): React.JSX.Element {
+  const { t } = useTranslation()
   return (
     <Card>
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-sm">
           <KeyRound className="size-4 text-primary" />
-          密钥配置
+          {t('translation.keyConfig')}
         </CardTitle>
         <CardDescription>
-          密钥只保存在本地后端，写入后不再回读；留空密钥保存表示保留原值。
-          未配置密钥的线上线路自动回退本地模拟引擎并标降级。
+          {t('translation.keyConfigDesc')}
         </CardDescription>
       </CardHeader>
       <CardContent className="flex flex-col gap-4">
         {loadError && (
-          <p className="text-[11px] text-red-600">密钥状态读取失败，请确认后端已启动。</p>
+          <p className="text-[11px] text-red-600">{t('translation.keyLoadFailed')}</p>
         )}
         {PROVIDER_FORMS.map((form) => {
           const credential = credentialOf(form.provider)
@@ -724,6 +727,7 @@ function ProviderKeyForm({
   form: ProviderForm
   credential?: TranslationCredentialVO
 }): React.JSX.Element {
+  const { t } = useTranslation()
   const put = usePutCredential()
   const test = useTestCredential()
   const [appId, setAppId] = useState(credential?.appId ?? '')
@@ -756,49 +760,49 @@ function ProviderKeyForm({
     try {
       setTestResult(await test.mutateAsync(form.provider))
     } catch {
-      setTestResult({ ok: false, latencyMs: null, message: '测试请求失败，请确认后端已启动' })
+      setTestResult({ ok: false, latencyMs: null, message: t('translation.testRequestFailed') })
     }
   }
 
   return (
     <div className="flex flex-col gap-2 rounded-lg border border-border/60 px-3 py-3">
       <div className="flex items-center gap-2">
-        <span className="text-xs font-semibold text-foreground">{form.title}</span>
+        <span className="text-xs font-semibold text-foreground">{t(form.title)}</span>
         <Badge
           variant="outline"
           className={cn('border-0', configured ? 'bg-emerald-500/15 text-emerald-600' : 'bg-muted text-muted-foreground')}
         >
-          {configured ? '已配置' : '未配置'}
+          {configured ? t('translation.configured') : t('translation.unconfigured')}
         </Badge>
-        <span className="ml-auto text-[10px] text-muted-foreground/80">{form.hint}</span>
+        <span className="ml-auto text-[10px] text-muted-foreground/80">{t(form.hint)}</span>
       </div>
       <div className={cn('grid gap-2', form.regionLabel ? 'grid-cols-3' : 'grid-cols-2')}>
         <div className="flex flex-col gap-1">
-          <Label className="text-[11px] text-muted-foreground">{form.appIdLabel}</Label>
+          <Label className="text-[11px] text-muted-foreground">{t(form.appIdLabel)}</Label>
           <Input
             value={appId}
             onChange={(e) => setAppId(e.target.value)}
-            placeholder={form.appIdPlaceholder}
+            placeholder={t(form.appIdPlaceholder)}
             className="h-8 text-xs"
           />
         </div>
         <div className="flex flex-col gap-1">
-          <Label className="text-[11px] text-muted-foreground">{form.secretLabel}</Label>
+          <Label className="text-[11px] text-muted-foreground">{t(form.secretLabel)}</Label>
           <Input
             type="password"
             value={secret}
             onChange={(e) => setSecret(e.target.value)}
-            placeholder={configured ? '已保存，留空则不修改' : ''}
+            placeholder={configured ? t('translation.secretPlaceholder') : ''}
             className="h-8 text-xs"
           />
         </div>
         {form.regionLabel && (
           <div className="flex flex-col gap-1">
-            <Label className="text-[11px] text-muted-foreground">{form.regionLabel}</Label>
+            <Label className="text-[11px] text-muted-foreground">{t(form.regionLabel)}</Label>
             <Input
               value={region}
               onChange={(e) => setRegion(e.target.value)}
-              placeholder={form.regionPlaceholder}
+              placeholder={t(form.regionPlaceholder ?? '')}
               className="h-8 text-xs"
             />
           </div>
@@ -812,7 +816,7 @@ function ProviderKeyForm({
           disabled={!appId.trim() || put.isPending}
           onClick={() => void save()}
         >
-          保存
+          {t('translation.save')}
         </Button>
         <Button
           size="sm"
@@ -821,12 +825,12 @@ function ProviderKeyForm({
           disabled={!configured || test.isPending}
           onClick={() => void runTest()}
         >
-          {test.isPending ? '测试中…' : '测试'}
+          {test.isPending ? t('translation.testing') : t('translation.test')}
         </Button>
-        {put.isSuccess && <span className="text-[11px] text-emerald-600">已保存</span>}
+        {put.isSuccess && <span className="text-[11px] text-emerald-600">{t('translation.saved')}</span>}
         {put.isError && (
           <span className="truncate text-[11px] text-red-600">
-            {(put.error as Error)?.message ?? '保存失败'}
+            {(put.error as Error)?.message ?? t('translation.saveFailed')}
           </span>
         )}
       </div>
@@ -838,8 +842,8 @@ function ProviderKeyForm({
           )}
         >
           {testResult.ok
-            ? `可用 · ${testResult.latencyMs ?? '?'}ms`
-            : `不可用：${testResult.message}`}
+            ? t('translation.testOk', { ms: testResult.latencyMs ?? '?' })
+            : t('translation.testUnavailable', { message: testResult.message })}
         </p>
       )}
     </div>

@@ -8,7 +8,7 @@
 | A1 | 登录/鉴权（账号密码 + 邀请码租户 + 机器码设备绑定，JWT） | P1 |
 | A2 | 无边框主窗（自绘标题栏、托盘、单实例） | P1 |
 | A3 | 多开/窗口管理（同账号多窗检测、登录态分区） | P2 |
-| A4 | i18n（zh-CN / en 起，8 语种框架；覆盖面铺开中：壳层 + messages 域 + customers 域 + broadcast 域 + 布局壳层(AccountStage/AccountSidebar/AddAccountDialog) + Labels 页面 + Materials 页面 + Audiences 页面 + QuickReplies 页面(主组件 + ReplyCard + ItemPreview + ItemEditor + MaterialPicker 5 子组件) 已抽 t()，仅 Translation 页面待抽；zh-TW/ja/ko/vi/id/th 已补译并在 `i18n/index.ts` 注册生效） | P14（已交付） |
+| A4 | i18n（zh-CN / en 起，8 语种框架；覆盖面铺开中：壳层 + messages 域 + customers 域 + broadcast 域 + 布局壳层(AccountStage/AccountSidebar/AddAccountDialog) + Labels 页面 + Materials 页面 + Audiences 页面 + QuickReplies 页面(主组件 + ReplyCard + ItemPreview + ItemEditor + MaterialPicker 5 子组件) + Translation 页面(主组件 + PageHeader + NodeCard + DirectionCard + CacheStatsCard + TrialCard + KeyConfigCard + ProviderKeyForm 8 子组件) 已抽 t()；zh-TW/ja/ko/vi/id/th 已补译并在 `i18n/index.ts` 注册生效） | P14（已交付） |
 | A5 | 主题色板：宝蓝主色 + 金色点缀（light/dark 两套变量层） | P1 |
 | A6 | 自动更新框架（本地源） | P14 |
 | A7 | 内存/性能监控 | P14 |
