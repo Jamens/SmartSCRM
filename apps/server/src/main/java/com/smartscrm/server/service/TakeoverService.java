@@ -61,6 +61,20 @@ public class TakeoverService {
     }
 
     /**
+     * 规则引擎触发点（B28 P2）：仅当会话当前处于 AI 态才把它推入接管队列。
+     * 已被坐席接管（HUMAN_ACTIVE）或已在队列（WAITING_TAKEOVER）的会话不被规则覆盖，
+     * 避免一条新入站消息把正在服务的坐席"抢走"。已是队列态时此方法是幂等的 no-op。
+     */
+    @Transactional
+    public ConversationVO transferIfAi(Long tenantId, Long conversationId, String reason) {
+        ChatConversation head = query.requireOwned(tenantId, conversationId);
+        if (!AI.equals(head.getHandlingStatus())) {
+            return ConversationVO.of(head);
+        }
+        return transferHuman(tenantId, conversationId, reason);
+    }
+
+    /**
      * 恢复 AI：HUMAN_ACTIVE / WAITING_TAKEOVER → AI，清空 assignee 与原因。
      * 该会话重新交还给（未来的）AI 人设引擎处理。
      */

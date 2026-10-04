@@ -2,6 +2,7 @@ package com.smartscrm.server.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smartscrm.server.common.BizException;
+import com.smartscrm.server.entity.AiTransferRule;
 import com.smartscrm.server.entity.ChatConversation;
 import com.smartscrm.server.entity.ChatMessage;
 import com.smartscrm.server.entity.Customer;
@@ -10,6 +11,7 @@ import com.smartscrm.server.mapper.ChatConversationMapper;
 import com.smartscrm.server.mapper.ChatMessageMapper;
 import com.smartscrm.server.mapper.CustomerMapper;
 import com.smartscrm.server.mapper.PlatformAccountMapper;
+import com.smartscrm.server.service.AiTransferRuleService;
 import com.smartscrm.server.service.msg.ChatKeys;
 import com.smartscrm.server.service.msg.MsgTimes;
 import com.smartscrm.server.service.msg.StatusLadder;
@@ -26,6 +28,7 @@ import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -45,13 +48,18 @@ public class MessageService {
     private final ChatConversationMapper conversationMapper;
     private final CustomerMapper customerMapper;
     private final PlatformAccountMapper accountMapper;
+    private final TakeoverService takeover;
+    private final AiTransferRuleService aiTransferRuleService;
 
     public MessageService(ChatMessageMapper messageMapper, ChatConversationMapper conversationMapper,
-                          CustomerMapper customerMapper, PlatformAccountMapper accountMapper) {
+                          CustomerMapper customerMapper, PlatformAccountMapper accountMapper,
+                          @Lazy TakeoverService takeover, AiTransferRuleService aiTransferRuleService) {
         this.messageMapper = messageMapper;
         this.conversationMapper = conversationMapper;
         this.customerMapper = customerMapper;
         this.accountMapper = accountMapper;
+        this.takeover = takeover;
+        this.aiTransferRuleService = aiTransferRuleService;
     }
 
     public record ResolvedAccount(Long accountId, String platform, Integer platformType) {}
@@ -83,6 +91,9 @@ public class MessageService {
         // containsKey 那一步不能省成 computeIfAbsent：匹配不到客户时值是 null，而
         // computeIfAbsent 把"映射到 null"当成"没有映射"，未命中的会话每条还是会重算一次。
         Map<String, Long> customerByChat = new HashMap<>();
+        // 一批内同一会话的入站消息只评估一次规则：绝大多数批次只有两三个 chatKey，
+        // 重复评估既浪费查询又会在已转人工的会话上反复走幂等守卫。
+        Set<String> evaluatedChatKeys = new HashSet<>();
 
         for (MessageItemDTO item : items) {
             if (!DIRECTIONS.contains(item.direction()) || !SOURCES.contains(item.source())) {
@@ -155,6 +166,26 @@ public class MessageService {
             head.setLastMsgBody(row.getBody() != null ? row.getBody() : row.getMediaSummary());
             head.setUnreadDelta(unreadDelta(row, dto.activeChatKey()));
             conversationMapper.upsertHead(head);
+            // B28 P2 — 转人工规则引擎：每条新入库的入站消息命中规则，即把该会话从 AI 推入
+            // 接管队列（WAITING_TAKEOVER）。transferIfAi 内部守卫"仅 AI 态才转"，所以已被坐席
+            // 接管的会话不会被规则抢走。每个 chatKey 每批只评估一次。
+            if ("in".equals(row.getDirection()) && row.getBody() != null
+                    && evaluatedChatKeys.add(row.getChatKey())) {
+                AiTransferRule matched = aiTransferRuleService.firstMatch(tenantId, row.getBody());
+                if (matched != null) {
+                    ChatConversation conv = conversationMapper.selectOne(new LambdaQueryWrapper<ChatConversation>()
+                        .eq(ChatConversation::getTenantId, tenantId)
+                        .eq(ChatConversation::getAccountId, row.getAccountId())
+                        .eq(ChatConversation::getPlatform, row.getPlatform())
+                        .eq(ChatConversation::getChatKey, row.getChatKey())
+                        .last("LIMIT 1"));
+                    if (conv != null) {
+                        String reason = matched.getTransferReason() != null
+                            ? matched.getTransferReason() : ("rule:" + matched.getRuleName());
+                        takeover.transferIfAi(tenantId, conv.getId(), reason);
+                    }
+                }
+            }
         }
         return new BatchAcceptVO(accepted, duplicated, rejected, reasons.stream().limit(20).toList());
     }
