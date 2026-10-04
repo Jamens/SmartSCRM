@@ -176,7 +176,21 @@ export const zhCN = {
       badgeStranger: '陌生',
       noText: '（无文字内容）',
       loadMore: '加载更多会话',
-      loadingMore: '加载中…'
+      loadingMore: '加载中…',
+      waitingFilter: '待接',
+      waitingFilterHint: '只看已转人工、等待坐席接管的会话'
+    },
+    takeover: {
+      status: {
+        AI: 'AI 应答中',
+        WAITING_TAKEOVER: '待人工接管',
+        HUMAN_ACTIVE: '坐席处理中'
+      },
+      takeover: '接管',
+      resumeAi: '交还 AI',
+      transferHuman: '转人工',
+      requeue: '重新入队',
+      reason: '转人工原因：{{reason}}'
     },
     thread: {
       stranger: '陌生',

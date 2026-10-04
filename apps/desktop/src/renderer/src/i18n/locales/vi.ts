@@ -166,7 +166,21 @@ export const vi: DeepString<typeof zhCN> = {
       badgeStranger: 'Lạ',
       noText: '(không có nội dung)',
       loadMore: 'Tải thêm cuộc hội thoại',
-      loadingMore: 'Đang tải…'
+      loadingMore: 'Đang tải…',
+      waitingFilter: 'Chờ tiếp',
+      waitingFilterHint: 'Chỉ hiện cuộc hội thoại đã chuyển sang nhân viên và đang chờ tiếp nhận'
+    },
+    takeover: {
+      status: {
+        AI: 'AI đang trả lời',
+        WAITING_TAKEOVER: 'Chờ nhân viên',
+        HUMAN_ACTIVE: 'Nhân viên đang xử lý'
+      },
+      takeover: 'Tiếp nhận',
+      resumeAi: 'Trả lại cho AI',
+      transferHuman: 'Chuyển sang nhân viên',
+      requeue: 'Đưa lại hàng đợi',
+      reason: 'Lý do chuyển: {{reason}}'
     },
     thread: {
       stranger: 'Lạ',

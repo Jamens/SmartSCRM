@@ -49,6 +49,17 @@ export interface JumpConversation {
   lastMsgTime: null
   lastMsgBody: null
   unreadCount: number
+  /**
+   * B28 处理态这一组合成行**没有**：搜索命中来自 `chat_message`，不带会话头的
+   * `handling_status` / `assignee_id`。填 null 而不是编一个值——`handlingOf` 把 null
+   * 归一成 'AI'，于是跳进来的会话右列会显示「转人工」按钮而不是徽标，这是**可接受的
+   * 保守读法**（点一下后端按真实状态处理：已在队列的接管会被 `transferIfAi` 的守卫
+   * 跳过）。编一个 'AI' 反而会在它其实已被接管时显示错的按钮组。
+   */
+  handlingStatus: null
+  assigneeId: null
+  waitTakeoverAt: null
+  transferReason: null
 }
 
 export interface JumpTarget {
@@ -84,7 +95,12 @@ export function jumpToOfHit(hit: HitShape): JumpTarget | null {
       customerId: m.customerId,
       lastMsgTime: null,
       lastMsgBody: null,
-      unreadCount: 0
+      unreadCount: 0,
+      // 处理态未知：搜索命中不带会话头这一列，见 JumpConversation 上的说明。
+      handlingStatus: null,
+      assigneeId: null,
+      waitTakeoverAt: null,
+      transferReason: null
     },
     anchor: {
       msgKey: m.msgKey,

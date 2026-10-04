@@ -1,6 +1,6 @@
 // src/renderer/src/components/messages/ConversationList.tsx
 import { useMemo, useState } from 'react'
-import { RefreshCw, Search } from 'lucide-react'
+import { Hand, RefreshCw, Search } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
@@ -23,10 +23,12 @@ import {
   flattenConversations,
   unfilteredConversationQuery,
   useConversations,
+  useTakeoverQueueCount,
   type ConversationVO
 } from '@/api/messages'
 import { listTime } from '@/lib/chatDays'
 import { titleOfConversation } from '@/lib/chatDisplay'
+import { handlingOf, statusLabelKey, statusToneClass } from '@/lib/handlingStatus'
 import { isChatPlatform } from '@shared/chatPlatform'
 
 const ALL = 'all'
@@ -54,17 +56,25 @@ export default function ConversationList({
   const { data: accounts = [] } = useAccounts()
   const [keyword, setKeyword] = useState('')
   const [platform, setPlatform] = useState<string>(ALL)
+  const [onlyWaiting, setOnlyWaiting] = useState(false)
   const [syncHint, setSyncHint] = useState<SyncHint | null>(null)
   const debouncedKeyword = useDebouncedValue(keyword, 300)
   const bridge = useBridgeOf(accountId)
+  const waitingCount = useTakeoverQueueCount()
 
+  /**
+   * `handlingStatus` 只在「只看待接」打开时才进查询对象：关着时必须是 `undefined`
+   * 而不是 `'AI'` 或 `null`——查询键是整个参数对象的哈希，键里多一个字段就是另一份缓存，
+   * 于是「清掉筛选」会切到一份从未被填过的缓存上，表现为列表闪一下空再回来。
+   */
   const query = useMemo(
     () => ({
       ...unfilteredConversationQuery(accountId),
       platform: isChatPlatform(platform) ? platform : null,
-      q: debouncedKeyword.trim() || undefined
+      q: debouncedKeyword.trim() || undefined,
+      handlingStatus: onlyWaiting ? ('WAITING_TAKEOVER' as const) : undefined
     }),
-    [accountId, platform, debouncedKeyword]
+    [accountId, platform, debouncedKeyword, onlyWaiting]
   )
   const { data, isPending, isError, hasNextPage, isFetchingNextPage, fetchNextPage } =
     useConversations(query)
@@ -141,6 +151,21 @@ export default function ConversationList({
             <RefreshCw className="size-4" />
             {t('messages.list.syncHistory')}
           </Button>
+          <Button
+            variant={onlyWaiting ? 'default' : 'outline'}
+            size="sm"
+            className="shrink-0 gap-1"
+            onClick={() => setOnlyWaiting((v) => !v)}
+            title={t('messages.list.waitingFilterHint')}
+            data-p6-action="waiting-filter"
+            data-p6-waiting-on={onlyWaiting ? '1' : '0'}
+          >
+            <Hand className="size-4" />
+            {t('messages.list.waitingFilter')}
+            {(waitingCount.data ?? 0) > 0 && (
+              <span className="tabular-nums">{waitingCount.data}</span>
+            )}
+          </Button>
         </div>
 
         {syncHint !== null && syncHint.accountId === accountId && (
@@ -169,8 +194,9 @@ export default function ConversationList({
         )}
         {accountId !== null && !isPending && !isError && conversations.length === 0 && (
           <p className="px-2 py-6 text-center text-xs text-muted-foreground">
-            {/* 空列表有两种原因：账号真没数据，还是被筛选条件筛空。指错原因会让人以为采集丢了。 */}
-            {debouncedKeyword.trim() !== '' || platform !== ALL
+            {/* 空列表有两种原因：账号真没数据，还是被筛选条件筛空。指错原因会让人以为采集丢了。
+                「只看待接」也算筛选条件——开着时为空是常态（没人转人工），不能报成"没数据"。 */}
+            {debouncedKeyword.trim() !== '' || platform !== ALL || onlyWaiting
               ? t('messages.list.emptyFiltered')
               : t('messages.list.emptyNoData')}
           </p>
@@ -178,6 +204,8 @@ export default function ConversationList({
         {conversations.map((c) => {
           const active = picked?.id === c.id
           const summary = c.lastMsgBody ?? ''
+          const status = handlingOf(c)
+          const tone = statusToneClass(status)
           return (
             <button
               key={c.id}
@@ -196,6 +224,17 @@ export default function ConversationList({
                   <span className="truncate text-sm font-medium text-foreground">
                     {titleOfConversation(c)}
                   </span>
+                  {/* AI 态不挂徽标（默认态挂了等于整列同色）；另两态各一个色块，
+                      这样"哪几条在等人"扫一眼就知道，不必点进去。 */}
+                  {tone !== null && (
+                    <Badge
+                      variant="outline"
+                      className={cn('shrink-0 border-0 px-1.5 py-0 text-[10px]', tone)}
+                      data-p6-list-status={status}
+                    >
+                      {t(statusLabelKey(status))}
+                    </Badge>
+                  )}
                   {c.isGroup && (
                     <Badge variant="secondary" className="shrink-0 px-1.5 py-0 text-[10px]">
                       {t('messages.list.badgeGroup')}

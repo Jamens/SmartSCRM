@@ -166,7 +166,21 @@ export const th: DeepString<typeof zhCN> = {
       badgeStranger: 'ไม่รู้จัก',
       noText: '(ไม่มีข้อความ)',
       loadMore: 'โหลดการสนทนาเพิ่ม',
-      loadingMore: 'กำลังโหลด…'
+      loadingMore: 'กำลังโหลด…',
+      waitingFilter: 'รอรับ',
+      waitingFilterHint: 'แสดงเฉพาะการสนทนาที่โอนให้เจ้าหน้าที่แล้วและกำลังรอรับ'
+    },
+    takeover: {
+      status: {
+        AI: 'AI กำลังตอบ',
+        WAITING_TAKEOVER: 'รอเจ้าหน้าที่',
+        HUMAN_ACTIVE: 'เจ้าหน้าที่กำลังดูแล'
+      },
+      takeover: 'รับช่วง',
+      resumeAi: 'คืนให้ AI',
+      transferHuman: 'โอนให้เจ้าหน้าที่',
+      requeue: 'ส่งกลับเข้าคิว',
+      reason: 'เหตุผลที่โอน: {{reason}}'
     },
     thread: {
       stranger: 'ไม่รู้จัก',

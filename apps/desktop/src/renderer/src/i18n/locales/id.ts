@@ -166,7 +166,21 @@ export const id: DeepString<typeof zhCN> = {
       badgeStranger: 'Asing',
       noText: '(tidak ada teks)',
       loadMore: 'Muat lebih banyak percakapan',
-      loadingMore: 'Memuat…'
+      loadingMore: 'Memuat…',
+      waitingFilter: 'Menunggu',
+      waitingFilterHint: 'Hanya percakapan yang sudah dialihkan ke manusia dan menunggu agen'
+    },
+    takeover: {
+      status: {
+        AI: 'AI menangani',
+        WAITING_TAKEOVER: 'Menunggu agen',
+        HUMAN_ACTIVE: 'Agen menangani'
+      },
+      takeover: 'Ambil alih',
+      resumeAi: 'Kembalikan ke AI',
+      transferHuman: 'Alihkan ke manusia',
+      requeue: 'Kembalikan ke antrean',
+      reason: 'Alasan pengalihan: {{reason}}'
     },
     thread: {
       stranger: 'Asing',

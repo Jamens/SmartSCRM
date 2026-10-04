@@ -166,7 +166,21 @@ export const zhTW: DeepString<typeof zhCN> = {
       badgeStranger: '陌生',
       noText: '（無文字內容）',
       loadMore: '載入更多會話',
-      loadingMore: '載入中…'
+      loadingMore: '載入中…',
+      waitingFilter: '待接',
+      waitingFilterHint: '只看已轉人工、等待坐席接管的會話'
+    },
+    takeover: {
+      status: {
+        AI: 'AI 回覆中',
+        WAITING_TAKEOVER: '待人工接管',
+        HUMAN_ACTIVE: '坐席處理中'
+      },
+      takeover: '接管',
+      resumeAi: '交還 AI',
+      transferHuman: '轉人工',
+      requeue: '重新排隊',
+      reason: '轉人工原因：{{reason}}'
     },
     thread: {
       stranger: '陌生',

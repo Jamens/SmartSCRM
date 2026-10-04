@@ -17,6 +17,12 @@ import { pendingKey, type TailRow } from '@shared/liveTail'
 import type { Direction, MediaType, MsgSource, MsgStatus } from '@shared/chatTypes'
 import type { ChatPlatform } from '@shared/chatPlatform'
 
+/**
+ * B28 会话处理态。三态互斥：AI（AI 应答中）/ WAITING_TAKEOVER（已转人工，在接管队列里）
+ * / HUMAN_ACTIVE（坐席已接管）。后端 V16 列 `handling_status`，白名单一致。
+ */
+export type HandlingStatus = 'AI' | 'WAITING_TAKEOVER' | 'HUMAN_ACTIVE'
+
 export interface ConversationVO {
   id: number
   accountId: number
@@ -28,6 +34,18 @@ export interface ConversationVO {
   lastMsgTime: string | null
   lastMsgBody: string | null
   unreadCount: number
+  /**
+   * 缺省按 `AI` 读：V16 给这列的 DB 默认值就是 'AI'，而老行/手工插入的行可能是 NULL。
+   * 界面上把它当 AI 处理才是对的（没有转人工就是 AI 应答中），所以这里在类型上补齐，
+   * 免得每个读它的地方都要写一遍 `?? 'AI'` 而其中一处会漏。
+   */
+  handlingStatus: HandlingStatus | null
+  /** 接管坐席（app_user.id）；AI / WAITING_TAKEOVER 态为 null。 */
+  assigneeId: number | null
+  /** 进入 WAITING_TAKEOVER 的时间，供队列按等待时长排序与展示。 */
+  waitTakeoverAt: string | null
+  /** 转人工原因（规则名或坐席手填）。 */
+  transferReason: string | null
 }
 
 export interface MessageVO {
@@ -102,6 +120,8 @@ export interface ConversationQuery {
   platform?: ChatPlatform | null
   q?: string
   size?: number
+  /** B28：只看待接管（WAITING_TAKEOVER）的会话。留空 = 不过滤。 */
+  handlingStatus?: HandlingStatus | null
 }
 
 export interface MessageQuery {
@@ -138,6 +158,8 @@ export const queryKeys = {
   timeline: (id: number | null, size: number) => ['msg', 'timeline', id, size] as const,
   /** 租户级未读总量：整片只有一份，不按账号分（角标要的是"这个应用总共有多少没读的"）。 */
   unreadTotal: ['msg', 'unread-total'] as const,
+  /** B28 接管队列：独立于左列列表（那是按账号 + 游标翻页的），故单列一个键。 */
+  takeoverQueue: ['msg', 'takeover-queue'] as const,
   bridges: ['msg', 'bridges'] as const,
   /** 失效用的前缀：新消息会让整张列表与所有天数的统计同时过期，逐个 days 点名会漏。 */
   conversationsRoot: ['msg', 'conversations'] as const,
@@ -178,7 +200,12 @@ export function unfilteredConversationQuery(accountId: number | null): Conversat
   return { accountId, platform: null, size: CONVERSATION_LIST_SIZE }
 }
 
-export function useConversations(p: ConversationQuery): import("@tanstack/react-query").UseInfiniteQueryResult<import("@tanstack/react-query").InfiniteData<ConversationPageVO, unknown>, Error> {
+export function useConversations(
+  p: ConversationQuery
+): import('@tanstack/react-query').UseInfiniteQueryResult<
+  import('@tanstack/react-query').InfiniteData<ConversationPageVO, unknown>,
+  Error
+> {
   return useInfiniteQuery({
     queryKey: queryKeys.conversations(p),
     enabled: p.accountId !== null,
@@ -190,7 +217,12 @@ export function useConversations(p: ConversationQuery): import("@tanstack/react-
   })
 }
 
-export function useMessages(p: MessageQuery): import("@tanstack/react-query").UseInfiniteQueryResult<import("@tanstack/react-query").InfiniteData<MessagePageVO, unknown>, Error> {
+export function useMessages(
+  p: MessageQuery
+): import('@tanstack/react-query').UseInfiniteQueryResult<
+  import('@tanstack/react-query').InfiniteData<MessagePageVO, unknown>,
+  Error
+> {
   return useInfiniteQuery({
     queryKey: queryKeys.messages(p),
     enabled: p.accountId !== null && !!p.chatKey,
@@ -212,7 +244,12 @@ export function useMessages(p: MessageQuery): import("@tanstack/react-query").Us
   })
 }
 
-export function useSearchMessages(p: SearchQuery): import("@tanstack/react-query").UseInfiniteQueryResult<import("@tanstack/react-query").InfiniteData<MessageSearchVO, unknown>, Error> {
+export function useSearchMessages(
+  p: SearchQuery
+): import('@tanstack/react-query').UseInfiniteQueryResult<
+  import('@tanstack/react-query').InfiniteData<MessageSearchVO, unknown>,
+  Error
+> {
   return useInfiniteQuery({
     queryKey: queryKeys.search(p, null),
     enabled: p.q.trim().length >= MIN_QUERY,
@@ -223,7 +260,10 @@ export function useSearchMessages(p: SearchQuery): import("@tanstack/react-query
   })
 }
 
-export function useMessageStats(accountId: number | null, days: 7 | 30): import("@tanstack/react-query").UseQueryResult<MessageStatsVO, Error> {
+export function useMessageStats(
+  accountId: number | null,
+  days: 7 | 30
+): import('@tanstack/react-query').UseQueryResult<MessageStatsVO, Error> {
   return useQuery({
     queryKey: queryKeys.stats(accountId, days),
     enabled: accountId !== null,
@@ -232,7 +272,10 @@ export function useMessageStats(accountId: number | null, days: 7 | 30): import(
   })
 }
 
-export function useCustomerTimeline(id: number | null, size = 20): import("@tanstack/react-query").UseQueryResult<CustomerTimelineVO, Error> {
+export function useCustomerTimeline(
+  id: number | null,
+  size = 20
+): import('@tanstack/react-query').UseQueryResult<CustomerTimelineVO, Error> {
   return useQuery({
     queryKey: queryKeys.timeline(id, size),
     enabled: id !== null,
@@ -253,7 +296,10 @@ export const UNREAD_TOTAL_POLL_MS = 30_000
  * 轮询本身也不可省：手机侧读掉的消息平台不会推给我们（`msg:live` 只覆盖桥连着的新消息），
  * 那些未读只能靠这一轮追平。30s 是"最小化半小时后角标还准"与"不给会话表加常驻读压力"之间的取值。
  */
-export function useUnreadTotal(): import("@tanstack/react-query").UseQueryResult<UnreadTotalVO, Error> {
+export function useUnreadTotal(): import('@tanstack/react-query').UseQueryResult<
+  UnreadTotalVO,
+  Error
+> {
   return useQuery({
     queryKey: queryKeys.unreadTotal,
     queryFn: () => http.get<UnreadTotalVO>('/api/messages/unread-total'),
@@ -271,7 +317,12 @@ export function invalidateUnreadTotal(qc: QueryClient): void {
   void qc.invalidateQueries({ queryKey: queryKeys.unreadTotal })
 }
 
-export function useMarkRead(): import("@tanstack/react-query").UseMutationResult<{ cleared: number; }, Error, number, unknown> {
+export function useMarkRead(): import('@tanstack/react-query').UseMutationResult<
+  { cleared: number },
+  Error,
+  number,
+  unknown
+> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (conversationId: number) =>
@@ -301,6 +352,111 @@ export function useMarkRead(): import("@tanstack/react-query").UseMutationResult
 }
 
 /**
+ * B28 接管动作的三个 mutation。**三者共用一份收尾**：服务端返回的是那条会话的**最新整行**
+ * （`ConversationVO`），所以本地把列表里同 id 那一行整个换掉即可，不必等 refetch——
+ * 不换的话，按钮点完到 refetch 回来之间界面还写着旧状态，而这段时间里用户可能又点一次
+ * （第二次会被后端 40900 拒掉，于是"我明明是第一个点的"）。
+ *
+ * 失效一律走 `queryKeys.root` 前缀：处理态一变，左列徽标、右列按钮、接管队列、未读角标
+ * 都得跟着变，逐个点名必然漏一处（漏的表现是队列里还挂着刚被自己接管的会话）。
+ */
+function useConversationTransition(
+  run: (id: number) => Promise<ConversationVO>
+): import('@tanstack/react-query').UseMutationResult<ConversationVO, Error, number, unknown> {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id: number) => run(id),
+    onSuccess: (updated) => {
+      qc.setQueriesData<{ pages: ConversationPageVO[] }>(
+        { queryKey: queryKeys.conversationsRoot },
+        (data) =>
+          data
+            ? {
+                ...data,
+                pages: data.pages.map((page) => ({
+                  ...page,
+                  records: page.records.map((c) => (c.id === updated.id ? updated : c))
+                }))
+              }
+            : data
+      )
+      void qc.invalidateQueries({ queryKey: queryKeys.takeoverQueue })
+      void qc.invalidateQueries({ queryKey: queryKeys.conversationsRoot })
+    }
+  })
+}
+
+/** 坐席接管：AI / 等待中 → HUMAN_ACTIVE。已被他人接管时后端回 40900，错误原样抛给调用方。 */
+export function useTakeover(): import('@tanstack/react-query').UseMutationResult<
+  ConversationVO,
+  Error,
+  number,
+  unknown
+> {
+  return useConversationTransition((id) =>
+    http.post<ConversationVO>(`/api/conversations/${id}/takeover`)
+  )
+}
+
+/** 交还 AI：HUMAN_ACTIVE / WAITING_TAKEOVER → AI，清 assignee 与转人工原因。 */
+export function useResumeAi(): import('@tanstack/react-query').UseMutationResult<
+  ConversationVO,
+  Error,
+  number,
+  unknown
+> {
+  return useConversationTransition((id) =>
+    http.post<ConversationVO>(`/api/conversations/${id}/resume-ai`)
+  )
+}
+
+/** 坐席手动转人工：→ WAITING_TAKEOVER。reason 缺省时后端存 null，界面回读时再补默认文案。 */
+export function useTransferHuman(): import('@tanstack/react-query').UseMutationResult<
+  ConversationVO,
+  Error,
+  number,
+  unknown
+> {
+  return useConversationTransition((id) =>
+    http.post<ConversationVO>(`/api/conversations/${id}/transfer-human`)
+  )
+}
+
+/**
+ * 接管队列待接条数。**只取数字**：徽标要的是"有几件等着我"，而端点返回的是整份会话行，
+ * 徽标每 30s 刷一次会把整张表拉下来。队列按定义就是小集合（每条一个等待中的会话），
+ * 这点开销可接受；需要整份列表的调用方用下面的 `useTakeoverQueue`，两者共用同一个查询键，
+ * 不会各发一次请求。
+ */
+export function useTakeoverQueueCount(
+  pollMs = UNREAD_TOTAL_POLL_MS
+): import('@tanstack/react-query').UseQueryResult<number, Error> {
+  const q = useQuery({
+    queryKey: queryKeys.takeoverQueue,
+    queryFn: () => http.get<ConversationVO[]>('/api/conversations/takeover-queue'),
+    refetchInterval: pollMs,
+    // 最小化的窗口正是没人盯着队列的时候，角标与待接数恰恰要在那时保持准确。
+    refetchIntervalInBackground: true
+  })
+  return { ...q, data: q.data?.length ?? 0 } as import('@tanstack/react-query').UseQueryResult<
+    number,
+    Error
+  >
+}
+
+/** 整份接管队列（后端已按等待时长升序，最久的排最前），与徽标共用同一份缓存。 */
+export function useTakeoverQueue(
+  pollMs = UNREAD_TOTAL_POLL_MS
+): import('@tanstack/react-query').UseQueryResult<ConversationVO[], Error> {
+  return useQuery({
+    queryKey: queryKeys.takeoverQueue,
+    queryFn: () => http.get<ConversationVO[]>('/api/conversations/takeover-queue'),
+    refetchInterval: pollMs,
+    refetchIntervalInBackground: true
+  })
+}
+
+/**
  * 「建为客户」的第一步在 `api/customers.ts`（Step 1b）：那里已经有改删查三份 hooks，创建是第四份。
  *
  * 成功后本地抹会话缓存那一条的 `customerId`，与 `useMarkRead` 同一套做法。不抹就会有一段窗口：
@@ -309,7 +465,12 @@ export function useMarkRead(): import("@tanstack/react-query").UseMutationResult
  * open_id 建出第二位客户；回复框那位读者更脏——它按 `conversation.customerId` 选写回层，
  * 这段时间点「先译再发」改的是**全局**行。refetch 会追上，但追上之前界面在说假话。
  */
-export function useLinkCustomer(): import("@tanstack/react-query").UseMutationResult<{ conversationId: number; customerId: number; messagesLinked: number; }, Error, { conversationId: number; customerId: number; }, unknown> {
+export function useLinkCustomer(): import('@tanstack/react-query').UseMutationResult<
+  { conversationId: number; customerId: number; messagesLinked: number },
+  Error,
+  { conversationId: number; customerId: number },
+  unknown
+> {
   const qc = useQueryClient()
   return useMutation({
     mutationFn: (input: { conversationId: number; customerId: number }) =>

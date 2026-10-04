@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import CustomerDirectionDialog from '@/components/messages/CustomerDirectionDialog'
 import CreateCustomerDialog from '@/components/messages/CreateCustomerDialog'
+import TakeoverBar from '@/components/messages/TakeoverBar'
 import { useCustomer } from '@/api/customers'
 import { useTranslationSettings } from '@/api/translation'
 import { customerRefOf } from '@/lib/scopeLabel'
@@ -65,6 +66,9 @@ export default function ConversationActions({
   const creatable = canCreateCustomer(conversation)
   return (
     <div className="flex shrink-0 items-center gap-1.5" data-p6-actions="header">
+      {/* 接管条在最左：它决定"这个会话现在归谁"，而右边的语向/建客户都建立在
+          "有人（或 AI）在处理它"的前提上。顺序反过来会让坐席先看到一排与当前态无关的按钮。 */}
+      <TakeoverBar conversation={conversation} />
       {conversation.customerId !== null && <LinkedIdentity customerId={conversation.customerId} />}
       {creatable && (
         <>

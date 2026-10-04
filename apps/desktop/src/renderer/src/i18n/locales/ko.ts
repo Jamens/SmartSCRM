@@ -166,7 +166,21 @@ export const ko: DeepString<typeof zhCN> = {
       badgeStranger: '모름',
       noText: '(내용 없음)',
       loadMore: '대화 더 불러오기',
-      loadingMore: '로드 중…'
+      loadingMore: '로드 중…',
+      waitingFilter: '대기 중',
+      waitingFilterHint: '상담원에게 인계되어 인계 대기 중인 대화만 보기'
+    },
+    takeover: {
+      status: {
+        AI: 'AI 응대 중',
+        WAITING_TAKEOVER: '인계 대기',
+        HUMAN_ACTIVE: '상담원 응대 중'
+      },
+      takeover: '인계 받기',
+      resumeAi: 'AI로 돌려보내기',
+      transferHuman: '상담원에게 인계',
+      requeue: '대기열로 되돌리기',
+      reason: '인계 사유: {{reason}}'
     },
     thread: {
       stranger: '모름',

@@ -169,7 +169,21 @@ export const en: DeepString<typeof zhCN> = {
       badgeStranger: 'Stranger',
       noText: '(no text content)',
       loadMore: 'Load more conversations',
-      loadingMore: 'Loading…'
+      loadingMore: 'Loading…',
+      waitingFilter: 'Waiting',
+      waitingFilterHint: 'Only conversations already transferred to a human and awaiting takeover'
+    },
+    takeover: {
+      status: {
+        AI: 'AI handling',
+        WAITING_TAKEOVER: 'Awaiting agent',
+        HUMAN_ACTIVE: 'Agent handling'
+      },
+      takeover: 'Take over',
+      resumeAi: 'Hand back to AI',
+      transferHuman: 'Transfer to human',
+      requeue: 'Re-queue',
+      reason: 'Transfer reason: {{reason}}'
     },
     thread: {
       stranger: 'Stranger',

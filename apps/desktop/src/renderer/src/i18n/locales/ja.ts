@@ -166,7 +166,21 @@ export const ja: DeepString<typeof zhCN> = {
       badgeStranger: '未知',
       noText: '（本文なし）',
       loadMore: 'さらに会話を読み込む',
-      loadingMore: '読み込み中…'
+      loadingMore: '読み込み中…',
+      waitingFilter: '受付待ち',
+      waitingFilterHint: '人工へ切り替わり、オペレーターの受付待ちになった会話だけを表示します'
+    },
+    takeover: {
+      status: {
+        AI: 'AI 対応中',
+        WAITING_TAKEOVER: '受付待ち',
+        HUMAN_ACTIVE: '対応中'
+      },
+      takeover: '受け付ける',
+      resumeAi: 'AI に戻す',
+      transferHuman: '人工へ切り替える',
+      requeue: '待ち列に戻す',
+      reason: '人工へ切り替えた理由：{{reason}}'
     },
     thread: {
       stranger: '未知',
