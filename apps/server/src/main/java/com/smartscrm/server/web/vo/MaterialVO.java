@@ -12,11 +12,16 @@ public record MaterialVO(
     String mimeType,
     Long sizeBytes,
     String remark,
+    /** B17 P1：public / personal / contact。 */
+    String ownerScope,
+    /** personal 时是拥有者 app_user.id，contact 时是 customer.id，public 时为 null。 */
+    String ownerKey,
     LocalDateTime createdAt
 ) {
 
     public static MaterialVO of(Material m) {
         return new MaterialVO(m.getId(), m.getGroupId(), m.getType(), m.getName(), m.getUrl(),
-            m.getMimeType(), m.getSizeBytes(), m.getRemark(), m.getCreatedAt());
+            m.getMimeType(), m.getSizeBytes(), m.getRemark(),
+            m.getOwnerScope(), m.getOwnerKey(), m.getCreatedAt());
     }
 }

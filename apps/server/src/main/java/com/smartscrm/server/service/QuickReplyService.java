@@ -113,18 +113,18 @@ public class QuickReplyService {
     }
 
     @Transactional
-    public QuickReplyVO create(Long tenantId, QuickReplyRequest req) {
+    public QuickReplyVO create(Long tenantId, Long userId, QuickReplyRequest req) {
         QuickReply reply = new QuickReply();
         reply.setTenantId(tenantId);
         applyHeader(reply, tenantId, req);
         reply.setUseCount(0);
         replyMapper.insert(reply);
-        saveItems(tenantId, reply.getId(), req.items());
+        saveItems(tenantId, userId, reply.getId(), req.items());
         return detail(tenantId, reply.getId());
     }
 
     @Transactional
-    public QuickReplyVO update(Long tenantId, Long id, QuickReplyRequest req) {
+    public QuickReplyVO update(Long tenantId, Long userId, Long id, QuickReplyRequest req) {
         QuickReply reply = requireReply(tenantId, id);
         applyHeader(reply, tenantId, req);
         replyMapper.updateById(reply);
@@ -133,7 +133,7 @@ public class QuickReplyService {
             .eq(QuickReply::getId, id)
             .set(QuickReply::getShortcut, reply.getShortcut()));
         itemMapper.delete(new LambdaQueryWrapper<QuickReplyItem>().eq(QuickReplyItem::getReplyId, id));
-        saveItems(tenantId, id, req.items());
+        saveItems(tenantId, userId, id, req.items());
         return detail(tenantId, id);
     }
 
@@ -161,7 +161,7 @@ public class QuickReplyService {
         reply.setSort(req.sort() == null ? 0 : req.sort());
     }
 
-    private void saveItems(Long tenantId, Long replyId, List<QuickReplyItemRequest> items) {
+    private void saveItems(Long tenantId, Long userId, Long replyId, List<QuickReplyItemRequest> items) {
         int index = 0;
         for (QuickReplyItemRequest req : items) {
             QuickReplyItem item = new QuickReplyItem();
@@ -173,7 +173,7 @@ public class QuickReplyService {
             switch (type) {
                 case 2 -> {
                     if (req.materialId() != null) {
-                        Material material = materialService.requireOwned(tenantId, req.materialId());
+                        Material material = materialService.requireOwned(tenantId, userId, req.materialId());
                         item.setMaterialId(material.getId());
                         item.setMediaUrl(material.getUrl());
                     } else if (StringUtils.hasText(req.mediaUrl())) {

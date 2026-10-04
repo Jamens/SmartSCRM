@@ -1,0 +1,176 @@
+package com.smartscrm.server.service;
+
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.junit.jupiter.api.Assertions.assertTrue;
+import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.never;
+import static org.mockito.Mockito.verify;
+import static org.mockito.Mockito.when;
+
+import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import com.smartscrm.server.common.BizException;
+import com.smartscrm.server.entity.Material;
+import com.smartscrm.server.mapper.MaterialGroupMapper;
+import com.smartscrm.server.mapper.MaterialMapper;
+import com.smartscrm.server.web.dto.MaterialRequest;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
+import org.apache.ibatis.session.Configuration;
+import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+
+/** B17 P1 — material ownership: what each caller may see, and what they may touch. */
+class MaterialServiceTest {
+
+    private MaterialMapper materialMapper;
+    private MaterialGroupMapper groupMapper;
+    private MaterialService service;
+
+    @BeforeEach
+    void setUp() {
+        // Pure unit test has no Spring context; register TableInfo so the lambda wrappers
+        // can resolve column names.
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new Configuration(), ""), Material.class);
+        materialMapper = mock(MaterialMapper.class);
+        groupMapper = mock(MaterialGroupMapper.class);
+        service = new MaterialService(materialMapper, groupMapper);
+    }
+
+    @SuppressWarnings("unchecked")
+    private LambdaQueryWrapper<Material> capturedListWrapper() {
+        ArgumentCaptor<LambdaQueryWrapper<Material>> cap =
+            ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(materialMapper).selectList(cap.capture());
+        return cap.getValue();
+    }
+
+    @Test
+    void list_scopesToPublicOrOwnPersonal() {
+        when(materialMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(java.util.List.of());
+
+        service.list(7L, 42L, null, null, null, null, null);
+
+        // 测试环境没开 MP 的下划线策略，列名渲染成 camelCase；生产是 snake_case。
+        // 两端都接受，断言才不会依赖全局配置（TakeoverServiceTest 里踩过同一处）。
+        String sql = capturedListWrapper().getTargetSql().toLowerCase(java.util.Locale.ROOT).replace("_", "");
+        assertTrue(sql.contains("ownerscope"), "可见性过滤没进 WHERE: " + sql);
+        assertTrue(sql.contains("or"), "可见集不是并集，而是单条件: " + sql);
+    }
+
+    /**
+     * 联系人档不该无条件出现在列表里。分支数就是证据：可见集每多一档就多一个
+     * `owner_scope = ?`，所以不给 customerId 时应是 2（公共 + 我的个人），给了才是 3。
+     * 比"SQL 变长了"这类断言强——变长可能是别的原因。
+     */
+    @Test
+    void list_omitsContactRowsUnlessACustomerIsNamed() {
+        when(materialMapper.selectList(any(LambdaQueryWrapper.class))).thenReturn(java.util.List.of());
+        service.list(7L, 42L, null, null, null, null, null);
+        service.list(7L, 42L, null, null, null, null, 99L);
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<LambdaQueryWrapper<Material>> cap =
+            ArgumentCaptor.forClass(LambdaQueryWrapper.class);
+        verify(materialMapper, org.mockito.Mockito.times(2)).selectList(cap.capture());
+        int withoutCustomer = countOwnerScope(cap.getAllValues().get(0).getTargetSql());
+        int withCustomer = countOwnerScope(cap.getAllValues().get(1).getTargetSql());
+        assertEquals(2, withoutCustomer, "没给客户时可见集应只有公共+我的个人两档");
+        assertEquals(3, withCustomer, "给了客户后应多并入联系人档");
+    }
+
+    private static int countOwnerScope(String rawSql) {
+        String sql = rawSql.toLowerCase(java.util.Locale.ROOT).replace("_", "");
+        int n = 0;
+        int i = 0;
+        while ((i = sql.indexOf("ownerscope", i)) >= 0) {
+            n++;
+            i += "ownerscope".length();
+        }
+        return n;
+    }
+
+    @Test
+    void list_rejectsUnknownScope() {
+        BizException ex = assertThrows(BizException.class,
+            () -> service.list(7L, 42L, null, null, null, "team", null));
+        assertEquals(40000, ex.getCode());
+    }
+
+    @Test
+    void create_stampsPersonalKeyFromTheCallerNotTheRequest() {
+        when(materialMapper.insert(any(Material.class))).thenReturn(1);
+        Material saved = new Material();
+        saved.setId(1L);
+        // mock 的 insert 不会回填自增 id，所以 selectById 收到的是 null：用 any() 接住。
+        when(materialMapper.selectById(any())).thenReturn(saved);
+
+        service.create(7L, 42L, new MaterialRequest(null, 1, "n", "http://x", null, null, null,
+            "personal", "999"));
+
+        ArgumentCaptor<Material> cap = ArgumentCaptor.forClass(Material.class);
+        verify(materialMapper).insert(cap.capture());
+        assertEquals("personal", cap.getValue().getOwnerScope());
+        // 客户端传了 999，落库的必须是调用者自己的 42。
+        assertEquals("42", cap.getValue().getOwnerKey());
+    }
+
+    @Test
+    void create_defaultsToPublicWithNullKey() {
+        when(materialMapper.insert(any(Material.class))).thenReturn(1);
+        when(materialMapper.selectById(any())).thenReturn(new Material());
+
+        service.create(7L, 42L, new MaterialRequest(null, 1, "n", "http://x", null, null, null,
+            null, null));
+
+        ArgumentCaptor<Material> cap = ArgumentCaptor.forClass(Material.class);
+        verify(materialMapper).insert(cap.capture());
+        assertEquals("public", cap.getValue().getOwnerScope());
+        assertEquals(null, cap.getValue().getOwnerKey());
+    }
+
+    @Test
+    void requireOwned_allowsOwnerOfPersonalMaterial() {
+        when(materialMapper.selectById(1L)).thenReturn(material("personal", "42"));
+
+        assertEquals(1L, service.requireOwned(7L, 42L, 1L).getId());
+    }
+
+    @Test
+    void requireOwned_hidesOtherSeatsPersonalMaterial() {
+        when(materialMapper.selectById(1L)).thenReturn(material("personal", "42"));
+
+        BizException ex = assertThrows(BizException.class, () -> service.requireOwned(7L, 8L, 1L));
+        // 40404 而不是 403：不给对方确认"这份素材存在"。
+        assertEquals(40404, ex.getCode());
+    }
+
+    @Test
+    void requireOwned_rejectsForeignTenantEvenForPublicMaterial() {
+        Material foreign = material("public", null);
+        foreign.setTenantId(9L);
+        when(materialMapper.selectById(1L)).thenReturn(foreign);
+
+        assertThrows(BizException.class, () -> service.requireOwned(7L, 42L, 1L));
+    }
+
+    @Test
+    void delete_refusesOtherSeatsPersonalMaterial() {
+        when(materialMapper.selectById(1L)).thenReturn(material("personal", "42"));
+
+        assertThrows(BizException.class, () -> service.delete(7L, 8L, 1L));
+        // deleteById 有 (Serializable) 与 (T) 两个重载，any() 会歧义；显式转 Serializable。
+        verify(materialMapper, never()).deleteById((java.io.Serializable) any());
+    }
+
+    private static Material material(String scope, String key) {
+        Material m = new Material();
+        m.setId(1L);
+        m.setTenantId(7L);
+        m.setOwnerScope(scope);
+        m.setOwnerKey(key);
+        return m;
+    }
+}

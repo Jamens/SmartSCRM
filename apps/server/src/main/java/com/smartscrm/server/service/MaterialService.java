@@ -75,9 +75,34 @@ public class MaterialService {
         groupMapper.deleteById(id);
     }
 
-    public List<MaterialVO> list(Long tenantId, Long groupId, Integer type, String keyword) {
+    /**
+     * B17 P1 — 按归属可见性列出素材。
+     *
+     * <p>可见集是「公共 + 我自己的个人 +（指定客户时）该客户的联系人素材」三者之并，
+     * 且这个并集是**硬边界**：`ownerScope` 过滤只能在可见集之内再收窄（"只看我的个人素材"），
+     * 永远不能用来看到别人的个人素材。所以过滤是 AND 上去的，不是替换掉可见集。
+     *
+     * <p>联系人档默认不在列表里：它绑定的是某一位客户，没有客户上下文时列出来既是噪声
+     * 又容易被误当成公共素材用掉。要取就显式传 `customerId`。
+     */
+    public List<MaterialVO> list(Long tenantId, Long userId, Long groupId, Integer type, String keyword,
+                                 String ownerScope, Long customerId) {
+        String uid = String.valueOf(userId);
         LambdaQueryWrapper<Material> wrapper = new LambdaQueryWrapper<Material>()
-            .eq(Material::getTenantId, tenantId);
+            .eq(Material::getTenantId, tenantId)
+            .and(x -> {
+                x.eq(Material::getOwnerScope, MaterialScope.PUBLIC)
+                    .or(y -> y.eq(Material::getOwnerScope, MaterialScope.PERSONAL)
+                        .eq(Material::getOwnerKey, uid));
+                if (customerId != null) {
+                    x.or(y -> y.eq(Material::getOwnerScope, MaterialScope.CONTACT)
+                        .eq(Material::getOwnerKey, String.valueOf(customerId)));
+                }
+            });
+        if (ownerScope != null && !ownerScope.isBlank()) {
+            MaterialScope.requireValid(ownerScope);
+            wrapper.eq(Material::getOwnerScope, MaterialScope.normalize(ownerScope));
+        }
         if (groupId != null) {
             wrapper.eq(Material::getGroupId, groupId);
         }
@@ -92,17 +117,17 @@ public class MaterialService {
         return materialMapper.selectList(wrapper).stream().map(MaterialVO::of).toList();
     }
 
-    public MaterialVO create(Long tenantId, MaterialRequest req) {
+    public MaterialVO create(Long tenantId, Long userId, MaterialRequest req) {
         Material material = new Material();
         material.setTenantId(tenantId);
-        apply(material, tenantId, req);
+        apply(material, tenantId, userId, req);
         materialMapper.insert(material);
         return MaterialVO.of(materialMapper.selectById(material.getId()));
     }
 
-    public MaterialVO update(Long tenantId, Long id, MaterialRequest req) {
-        Material material = requireMaterial(tenantId, id);
-        apply(material, tenantId, req);
+    public MaterialVO update(Long tenantId, Long userId, Long id, MaterialRequest req) {
+        Material material = requireOwned(tenantId, userId, id);
+        apply(material, tenantId, userId, req);
         materialMapper.updateById(material);
         // updateById skips null fields, so clear the optional columns explicitly.
         materialMapper.update(null, new LambdaUpdateWrapper<Material>()
@@ -114,12 +139,12 @@ public class MaterialService {
         return MaterialVO.of(materialMapper.selectById(id));
     }
 
-    public void delete(Long tenantId, Long id) {
-        requireMaterial(tenantId, id);
+    public void delete(Long tenantId, Long userId, Long id) {
+        requireOwned(tenantId, userId, id);
         materialMapper.deleteById(id);
     }
 
-    private void apply(Material material, Long tenantId, MaterialRequest req) {
+    private void apply(Material material, Long tenantId, Long userId, MaterialRequest req) {
         if (req.groupId() != null) {
             requireGroup(tenantId, req.groupId());
         }
@@ -130,6 +155,11 @@ public class MaterialService {
         material.setMimeType(StringUtils.hasText(req.mimeType()) ? req.mimeType().trim() : null);
         material.setSizeBytes(req.sizeBytes());
         material.setRemark(StringUtils.hasText(req.remark()) ? req.remark().trim() : null);
+        // 归属键由 MaterialScope 成形：personal 强制写调用者自己的 userId，客户传什么都不算。
+        String scope = MaterialScope.normalize(req.ownerScope());
+        MaterialScope.requireValid(scope);
+        material.setOwnerScope(scope);
+        material.setOwnerKey(MaterialScope.keyFor(scope, userId, req.ownerKey()));
     }
 
     private MaterialGroup requireGroup(Long tenantId, Long id) {
@@ -148,9 +178,18 @@ public class MaterialService {
         return material;
     }
 
-    /** Exposed for other services (e.g. quick-reply) to snapshot an owned material. */
-    public Material requireOwned(Long tenantId, Long id) {
-        return requireMaterial(tenantId, id);
+    /**
+     * Exposed for other services (e.g. quick-reply) to snapshot a material the caller may use.
+     *
+     * <p>别人的 personal 素材回 40404 而不是 403：403 会替对方确认"这份素材存在"，
+     * 而存在的正是别人名字下的东西。不存在是无害的回答。
+     */
+    public Material requireOwned(Long tenantId, Long userId, Long id) {
+        Material material = requireMaterial(tenantId, id);
+        if (!MaterialScope.usableBy(material.getOwnerScope(), material.getOwnerKey(), userId)) {
+            throw new BizException(40404, "素材不存在");
+        }
+        return material;
     }
 
     private boolean existsGroupName(Long tenantId, String name, Long excludeId) {

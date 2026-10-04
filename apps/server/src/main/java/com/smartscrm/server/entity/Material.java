@@ -22,6 +22,12 @@ public class Material {
     private String mimeType;
     private Long sizeBytes;
     private String remark;
+    /**
+     * B17 P1 归属：public（租户内共享，owner_key 为 NULL）/ personal（owner_key = app_user.id）
+     * / contact（owner_key = customer.id）。取值与键的成形只在 {@link com.smartscrm.server.service.MaterialScope} 里。
+     */
+    private String ownerScope;
+    private String ownerKey;
     private LocalDateTime createdAt;
     @TableField(update = "CURRENT_TIMESTAMP(3)")
     private LocalDateTime updatedAt;

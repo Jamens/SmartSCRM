@@ -59,26 +59,29 @@ public class MaterialController {
     public ApiResponse<List<MaterialVO>> list(@AuthenticationPrincipal AuthPrincipal principal,
                                               @RequestParam(required = false) Long groupId,
                                               @RequestParam(required = false) Integer type,
-                                              @RequestParam(required = false) String keyword) {
-        return ApiResponse.ok(service.list(principal.tenantId(), groupId, type, keyword));
+                                              @RequestParam(required = false) String keyword,
+                                              @RequestParam(required = false) String ownerScope,
+                                              @RequestParam(required = false) Long customerId) {
+        return ApiResponse.ok(service.list(principal.tenantId(), principal.userId(), groupId, type,
+            keyword, ownerScope, customerId));
     }
 
     @PostMapping("/materials")
     public ApiResponse<MaterialVO> create(@AuthenticationPrincipal AuthPrincipal principal,
                                           @Valid @RequestBody MaterialRequest req) {
-        return ApiResponse.ok(service.create(principal.tenantId(), req));
+        return ApiResponse.ok(service.create(principal.tenantId(), principal.userId(), req));
     }
 
     @PutMapping("/materials/{id}")
     public ApiResponse<MaterialVO> update(@AuthenticationPrincipal AuthPrincipal principal,
                                           @PathVariable Long id,
                                           @Valid @RequestBody MaterialRequest req) {
-        return ApiResponse.ok(service.update(principal.tenantId(), id, req));
+        return ApiResponse.ok(service.update(principal.tenantId(), principal.userId(), id, req));
     }
 
     @DeleteMapping("/materials/{id}")
     public ApiResponse<Void> delete(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
-        service.delete(principal.tenantId(), id);
+        service.delete(principal.tenantId(), principal.userId(), id);
         return ApiResponse.ok(null);
     }
 }

@@ -70,14 +70,14 @@ public class QuickReplyController {
     @PostMapping("/quick-replies")
     public ApiResponse<QuickReplyVO> create(@AuthenticationPrincipal AuthPrincipal principal,
                                             @Valid @RequestBody QuickReplyRequest req) {
-        return ApiResponse.ok(service.create(principal.tenantId(), req));
+        return ApiResponse.ok(service.create(principal.tenantId(), principal.userId(), req));
     }
 
     @PutMapping("/quick-replies/{id}")
     public ApiResponse<QuickReplyVO> update(@AuthenticationPrincipal AuthPrincipal principal,
                                             @PathVariable Long id,
                                             @Valid @RequestBody QuickReplyRequest req) {
-        return ApiResponse.ok(service.update(principal.tenantId(), id, req));
+        return ApiResponse.ok(service.update(principal.tenantId(), principal.userId(), id, req));
     }
 
     @DeleteMapping("/quick-replies/{id}")
