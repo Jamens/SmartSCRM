@@ -2,6 +2,7 @@ package com.smartscrm.server.mapper;
 
 import com.baomidou.mybatisplus.core.mapper.BaseMapper;
 import com.smartscrm.server.entity.SysMenu;
+import java.util.List;
 import java.util.Set;
 import org.apache.ibatis.annotations.Param;
 import org.apache.ibatis.annotations.Select;
@@ -46,4 +47,19 @@ public interface AdminPermissionMapper {
         ORDER BY m.type, m.sort, m.id
         """)
     Set<SysMenu> selectMenusByUserId(@Param("userId") Long userId);
+
+    /**
+     * Full menu catalog (every node, including button leaf nodes) for role-grant
+     * editing. Deliberately NOT filtered by the caller's own grants, so an editor
+     * can grant any menu/button to any role — the sidebar endpoint
+     * {@link #selectMenusByUserId} serves the per-user navigation tree instead.
+     *
+     * @return all menu rows, ordered for stable tree rendering
+     */
+    @Select("""
+        SELECT m.id, m.parent_id, m.name, m.code, m.type, m.path, m.icon, m.sort
+        FROM sys_menu m
+        ORDER BY m.type, m.sort, m.id
+        """)
+    List<SysMenu> selectAllMenus();
 }

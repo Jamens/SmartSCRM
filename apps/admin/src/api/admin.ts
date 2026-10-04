@@ -20,6 +20,7 @@ export interface LoginPayload {
 // ---- auth ----
 export const login = (p: LoginPayload) => http.post<LoginResponse>('/api/auth/login', p);
 export const getMenus = () => http.get<MenuNode[]>('/api/admin/menus');
+export const getMenuCatalog = () => http.get<MenuNode[]>('/api/admin/menus/all');
 export const getMyCodes = () => http.get<string[]>('/api/admin/my-codes');
 
 // ---- tenants ----

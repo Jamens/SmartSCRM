@@ -6,6 +6,7 @@ import com.smartscrm.server.mapper.AdminPermissionMapper;
 import com.smartscrm.server.security.AuthPrincipal;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
+import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -54,6 +55,18 @@ public class AdminMenuController {
             return ApiResponse.ok(Set.of());
         }
         return ApiResponse.ok(principal.menuCodes());
+    }
+
+    /**
+     * Full catalogue of every menu node (directories, menus and hidden button
+     * nodes), unfiltered by the caller's own grants. Intended for the role-grant
+     * editor so an admin can assign any node to any role. Contrast with
+     * {@link #menus} which returns only the caller's own navigation tree.
+     */
+    @GetMapping("/menus/all")
+    @PreAuthorize("hasAuthority('role:update')")
+    public ApiResponse<List<MenuNode>> allMenus() {
+        return ApiResponse.ok(build(new LinkedHashSet<>(permissionMapper.selectAllMenus())));
     }
 
     private List<MenuNode> build(Set<SysMenu> granted) {

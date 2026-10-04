@@ -38,7 +38,7 @@ export default function RoleEdit() {
   const qc = useQueryClient();
   const navigate = useNavigate();
 
-  const catalogQ = useQuery({ queryKey: ['menus-catalog'], queryFn: () => api.getMenus() });
+  const catalogQ = useQuery({ queryKey: ['menus-catalog'], queryFn: () => api.getMenuCatalog() });
   const grantedQ = useQuery({
     queryKey: ['role-granted', roleId],
     queryFn: () => api.roleGrantedMenus(roleId),
