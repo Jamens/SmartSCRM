@@ -34,6 +34,9 @@ class AdminTenantServiceTest {
     @BeforeEach
     void setUp() {
         mapper = mock(AdminTenantMapper.class);
+        // Default: no seat usage, so page/detail don't trip on an unstubbed List.
+        when(mapper.userCountsByTenantIds(any())).thenReturn(List.of());
+        when(mapper.countUsers(anyLong())).thenReturn(0L);
         service = new AdminTenantService(mapper);
     }
 
@@ -79,6 +82,34 @@ class AdminTenantServiceTest {
         assertEquals(1, res.records().get(0).status());
         assertEquals(1L, res.records().get(0).id());
         assertEquals("Tenant A", res.records().get(0).name());
+    }
+
+    @Test
+    void page_mapsSeatUsedFromBatchCount() {
+        when(mapper.selectPage(any(IPage.class), any(LambdaQueryWrapper.class)))
+                .thenReturn(new Page<Tenant>(1, 20) {{
+                    setRecords(List.of(tenant(1L, "A", "Tenant A", 1), tenant(2L, "B", "Tenant B", 0)));
+                    setTotal(2);
+                }});
+        when(mapper.userCountsByTenantIds(any())).thenReturn(List.of(
+                new AdminTenantMapper.TenantUserCount(1L, 5L),
+                new AdminTenantMapper.TenantUserCount(2L, 0L)));
+
+        PageResult<TenantRow> res = service.page(null, null, 1, 20);
+
+        assertEquals(5L, res.records().get(0).seatUsed());
+        assertEquals(0L, res.records().get(1).seatUsed());
+    }
+
+    @Test
+    void detail_mapsSeatUsedIntoRow() {
+        Tenant t = tenant(5L, "CODE", "Name", 1);
+        when(mapper.selectById(5L)).thenReturn(t);
+        when(mapper.countUsers(5L)).thenReturn(8L);
+
+        TenantRow row = service.detail(5L);
+
+        assertEquals(8L, row.seatUsed());
     }
 
     @Test

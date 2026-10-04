@@ -7,7 +7,9 @@ import com.smartscrm.server.common.PageResult;
 import com.smartscrm.server.entity.Tenant;
 import com.smartscrm.server.mapper.AdminTenantMapper;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.util.StringUtils;
@@ -45,12 +47,24 @@ public class AdminTenantService {
         w.orderByDesc(Tenant::getId);
 
         Page<Tenant> result = tenantMapper.selectPage(new Page<>(page, pageSize), w);
-        List<TenantRow> rows = result.getRecords().stream().map(AdminTenantService::toRow).toList();
+        List<Tenant> records = result.getRecords();
+        List<TenantRow> rows;
+        if (records.isEmpty()) {
+            rows = List.of();
+        } else {
+            List<Long> ids = records.stream().map(Tenant::getId).toList();
+            Map<Long, Long> used = tenantMapper.userCountsByTenantIds(ids).stream()
+                    .collect(HashMap::new, (m, c) -> m.put(c.tenantId(), c.cnt()), HashMap::putAll);
+            rows = records.stream()
+                    .map(t -> toRow(t, used.getOrDefault(t.getId(), 0L)))
+                    .toList();
+        }
         return PageResult.of(rows, result.getTotal(), result.getCurrent(), result.getSize());
     }
 
     public TenantRow detail(Long id) {
-        return toRow(require(id));
+        Tenant t = require(id);
+        return toRow(t, tenantMapper.countUsers(t.getId()));
     }
 
     /**
@@ -68,7 +82,7 @@ public class AdminTenantService {
         Tenant t = require(id);
         t.setSeatLimit(seatLimit);
         tenantMapper.updateById(t);
-        return toRow(t);
+        return toRow(t, tenantMapper.countUsers(t.getId()));
     }
 
     /**
@@ -140,7 +154,7 @@ public class AdminTenantService {
         t.setName(name.trim());
         t.setStatus(1);
         tenantMapper.insert(t);
-        return toRow(t);
+        return toRow(t, 0L);
     }
 
     private static final String INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
@@ -169,12 +183,12 @@ public class AdminTenantService {
         return t;
     }
 
-    private static TenantRow toRow(Tenant t) {
-        return new TenantRow(t.getId(), t.getInviteCode(), t.getName(), t.getStatus(), t.getSeatLimit(), t.getCreatedAt());
+    private static TenantRow toRow(Tenant t, long seatUsed) {
+        return new TenantRow(t.getId(), t.getInviteCode(), t.getName(), t.getStatus(), t.getSeatLimit(), seatUsed, t.getCreatedAt());
     }
 
     /** Tenant as exposed to the admin console. */
-    public record TenantRow(Long id, String inviteCode, String name, Integer status, Integer seatLimit, LocalDateTime createdAt) {}
+    public record TenantRow(Long id, String inviteCode, String name, Integer status, Integer seatLimit, Long seatUsed, LocalDateTime createdAt) {}
 
     /** Per-tenant aggregate counts. */
     public record TenantCounts(long users, long platformAccounts) {}

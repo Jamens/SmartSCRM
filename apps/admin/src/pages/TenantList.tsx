@@ -101,6 +101,8 @@ export default function TenantList() {
     enabled: detailId !== null,
   });
 
+  const detailRow = data?.records.find((r) => r.id === detailId) ?? null;
+
   const columns: ColumnsType<TenantRow> = [
     { title: 'ID', dataIndex: 'id', width: 80 },
     { title: '邀请码', dataIndex: 'inviteCode', width: 140 },
@@ -120,9 +122,20 @@ export default function TenantList() {
     },
     {
       title: '席位',
-      dataIndex: 'seatLimit',
-      width: 100,
-      render: (v: number | null) => (v == null ? <Tag color="default">不限</Tag> : v),
+      key: 'seats',
+      width: 150,
+      render: (_, r: TenantRow) => {
+        const used = r.seatUsed ?? 0;
+        if (r.seatLimit == null) {
+          return <span>已用 {used} / 不限</span>;
+        }
+        const over = used > r.seatLimit;
+        return (
+          <span style={over ? { color: '#cf1322', fontWeight: 600 } : undefined}>
+            已用 {used} / 上限 {r.seatLimit}
+          </span>
+        );
+      },
     },
     {
       title: '操作',
@@ -275,6 +288,11 @@ export default function TenantList() {
       <Modal title="租户详情" open={detailId !== null} onCancel={() => setDetailId(null)} footer={null}>
         {countsQ.data ? (
           <Descriptions column={1} bordered>
+            {detailRow && (
+              <Descriptions.Item label="席位用量">
+                {detailRow.seatUsed} / {detailRow.seatLimit == null ? '不限' : detailRow.seatLimit}
+              </Descriptions.Item>
+            )}
             <Descriptions.Item label="用户数">{countsQ.data.users}</Descriptions.Item>
             <Descriptions.Item label="平台账号数">
               {countsQ.data.platformAccounts}

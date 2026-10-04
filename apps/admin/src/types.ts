@@ -47,6 +47,7 @@ export interface TenantRow {
   name: string;
   status: number; // 1 active, 0 suspended
   seatLimit: number | null; // null = unlimited
+  seatUsed: number; // current sub-account count against the seat limit
   createdAt: string;
 }
 
