@@ -9,6 +9,8 @@ import type {
   TeamRow,
   UserRow,
   UserCreatePayload,
+  AiRuleRow,
+  AiRulePayload,
 } from '@/types';
 
 export interface LoginPayload {
@@ -78,3 +80,15 @@ export const userDelete = (id: number) => http.del<void>(`/api/admin/users/${id}
 export const userTeams = (id: number) => http.get<number[]>(`/api/admin/users/${id}/teams`);
 export const userAssignTeams = (id: number, teamIds: number[]) =>
   http.put<void>(`/api/admin/users/${id}/teams`, { teamIds });
+
+// ---- AI transfer-to-human rules (B28) ----
+// tenantId is a query param, never a body field: a tenant-scoped admin is pinned to
+// its own tenant by the backend, a platform admin must name one. The full rule list
+// is small and unordered by the API contract, so it is fetched in one shot.
+export const aiRules = (tenantId?: number) => http.get<AiRuleRow[]>(`/api/admin/ai-rules${qs({ tenantId })}`);
+export const aiRuleCreate = (p: AiRulePayload, tenantId?: number) =>
+  http.post<AiRuleRow>(`/api/admin/ai-rules${qs({ tenantId })}`, p);
+export const aiRuleUpdate = (id: number, p: AiRulePayload, tenantId?: number) =>
+  http.put<AiRuleRow>(`/api/admin/ai-rules/${id}${qs({ tenantId })}`, p);
+export const aiRuleDelete = (id: number, tenantId?: number) =>
+  http.del<void>(`/api/admin/ai-rules/${id}${qs({ tenantId })}`);

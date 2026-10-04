@@ -4,6 +4,7 @@ import { Link, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { Avatar, Button, Layout, Menu, Result, Tag, Typography } from 'antd';
 import {
   BankOutlined,
+  RobotOutlined,
   SafetyCertificateOutlined,
   TeamOutlined,
   UserOutlined,
@@ -26,6 +27,7 @@ const NAV: NavItem[] = [
   { code: 'role:list', label: '角色权限', path: '/roles', icon: <SafetyCertificateOutlined /> },
   { code: 'team:list', label: '团队管理', path: '/teams', icon: <TeamOutlined /> },
   { code: 'user:list', label: '子账号', path: '/users', icon: <UserOutlined /> },
+  { code: 'ai_rule:list', label: '转人工规则', path: '/ai/rules', icon: <RobotOutlined /> },
 ];
 
 export default function AppLayout() {

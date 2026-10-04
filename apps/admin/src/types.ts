@@ -105,3 +105,28 @@ export interface UserRow {
   role: string | null;
   status: number;
 }
+
+/** any = one keyword is enough; all = every keyword must be present. */
+export type RuleMatchMode = 'any' | 'all';
+
+export interface AiRuleRow {
+  id: number;
+  tenantId: number;
+  ruleName: string;
+  matchMode: RuleMatchMode;
+  keywords: string;
+  transferReason: string | null;
+  enabled: number; // 1 enabled, 0 disabled
+  priority: number; // higher is evaluated first
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiRulePayload {
+  ruleName: string;
+  matchMode: RuleMatchMode;
+  keywords: string;
+  transferReason?: string;
+  enabled?: number;
+  priority?: number;
+}
