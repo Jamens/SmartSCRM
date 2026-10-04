@@ -24,6 +24,7 @@ export default function UserList() {
   const canAssign = useAuthStore((s) => s.menuCodes.includes('user:assignRole'));
   const canAssignTeam = useAuthStore((s) => s.menuCodes.includes('user:assignTeam'));
   const canCreate = useAuthStore((s) => s.menuCodes.includes('user:create'));
+  const canDelete = useAuthStore((s) => s.menuCodes.includes('user:delete'));
 
   const [tenantId, setTenantId] = useState<number | undefined>();
   const [keyword, setKeyword] = useState('');
@@ -131,6 +132,15 @@ export default function UserList() {
     onError: (e) => message.error((e as Error).message),
   });
 
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => api.userDelete(id),
+    onSuccess: () => {
+      message.success('用户已删除');
+      qc.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (e) => message.error((e as Error).message),
+  });
+
   const openCreate = () => {
     setCreateUsername('');
     setCreatePassword('');
@@ -177,7 +187,7 @@ export default function UserList() {
     },
     {
       title: '操作',
-      width: 200,
+      width: 300,
       render: (_, r) => (
         <Space>
           <Button size="small" disabled={!canAssign} onClick={() => openRoles(r.id)}>
@@ -192,6 +202,15 @@ export default function UserList() {
           >
             <Button size="small" danger={r.status === 1}>
               {r.status === 1 ? '停用' : '启用'}
+            </Button>
+          </Popconfirm>
+          <Popconfirm
+            title="删除该用户？"
+            description="该用户的角色与团队关联将一并清除"
+            onConfirm={() => deleteMut.mutate(r.id)}
+          >
+            <Button size="small" danger disabled={!canDelete}>
+              删除
             </Button>
           </Popconfirm>
         </Space>

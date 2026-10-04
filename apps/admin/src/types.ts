@@ -46,12 +46,17 @@ export interface TenantRow {
   inviteCode: string;
   name: string;
   status: number; // 1 active, 0 suspended
+  seatLimit: number | null; // null = unlimited
   createdAt: string;
 }
 
 export interface TenantCreatePayload {
   name: string;
   inviteCode?: string;
+}
+
+export interface TenantQuotaPayload {
+  seatLimit: number | null; // null restores unlimited
 }
 
 export interface UserCreatePayload {

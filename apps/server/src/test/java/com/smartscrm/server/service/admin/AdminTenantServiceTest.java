@@ -93,6 +93,84 @@ class AdminTenantServiceTest {
     }
 
     @Test
+    void detail_mapsSeatLimitIntoRow() {
+        Tenant t = tenant(5L, "CODE", "Name", 1);
+        t.setSeatLimit(12);
+        when(mapper.selectById(5L)).thenReturn(t);
+
+        TenantRow row = service.detail(5L);
+
+        assertEquals(12, row.seatLimit());
+    }
+
+    @Test
+    void setQuota_updatesSeatLimit() {
+        Tenant t = tenant(7L, "G", "Tenant G", 1);
+        when(mapper.selectById(7L)).thenReturn(t);
+        when(mapper.updateById(any(Tenant.class))).thenReturn(1);
+
+        TenantRow row = service.setQuota(7L, 25);
+
+        assertEquals(25, row.seatLimit());
+        verify(mapper).updateById(t);
+    }
+
+    @Test
+    void setQuota_allowsUnlimitedViaNull() {
+        Tenant t = tenant(7L, "G", "Tenant G", 1);
+        when(mapper.selectById(7L)).thenReturn(t);
+        when(mapper.updateById(any(Tenant.class))).thenReturn(1);
+
+        TenantRow row = service.setQuota(7L, null);
+
+        assertEquals(null, row.seatLimit());
+        verify(mapper).updateById(t);
+    }
+
+    @Test
+    void setQuota_rejectsNegative() {
+        Tenant t = tenant(7L, "G", "Tenant G", 1);
+        when(mapper.selectById(7L)).thenReturn(t);
+
+        BizException ex = assertThrows(BizException.class, () -> service.setQuota(7L, -1));
+        assertEquals(40001, ex.getCode());
+        verify(mapper, never()).updateById(any(Tenant.class));
+    }
+
+    @Test
+    void setQuota_rejectsOverCap() {
+        Tenant t = tenant(7L, "G", "Tenant G", 1);
+        when(mapper.selectById(7L)).thenReturn(t);
+
+        BizException ex = assertThrows(BizException.class, () -> service.setQuota(7L, 100001));
+        assertEquals(40001, ex.getCode());
+        verify(mapper, never()).updateById(any(Tenant.class));
+    }
+
+    @Test
+    void delete_removesTenantWhenEmpty() {
+        when(mapper.selectById(9L)).thenReturn(tenant(9L, "H", "Tenant H", 1));
+        when(mapper.countUsers(9L)).thenReturn(0L);
+        when(mapper.countPlatformAccounts(9L)).thenReturn(0L);
+        when(mapper.deleteById(9L)).thenReturn(1);
+
+        service.delete(9L);
+
+        verify(mapper).deleteById(9L);
+    }
+
+    @Test
+    void delete_refusesWhenUsersPresent() {
+        when(mapper.selectById(9L)).thenReturn(tenant(9L, "H", "Tenant H", 1));
+        when(mapper.countUsers(9L)).thenReturn(3L);
+        when(mapper.countPlatformAccounts(9L)).thenReturn(0L);
+
+        BizException ex = assertThrows(BizException.class, () -> service.delete(9L));
+        assertEquals(40001, ex.getCode());
+        verify(mapper, never()).deleteById(anyLong());
+    }
+
+    @Test
     void detail_throws_whenMissing() {
         when(mapper.selectById(99L)).thenReturn(null);
 

@@ -127,6 +127,18 @@ public class AdminUserService {
         return userMapper.teamIdsByUserId(userId);
     }
 
+    /**
+     * Deletes a sub-account. Role and team memberships are removed first so the
+     * cascade from {@code sys_user_role}/{@code sys_user_team} back-references is
+     * deterministic; the user row itself is then dropped.
+     */
+    public void delete(Long id) {
+        require(id);
+        userMapper.deleteRolesByUserId(id);
+        userMapper.deleteTeamsByUserId(id);
+        userMapper.deleteById(id);
+    }
+
     private AppUser require(Long id) {
         AppUser u = userMapper.selectById(id);
         if (u == null) {

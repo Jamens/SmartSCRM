@@ -16,6 +16,8 @@ public class Tenant {
     private String inviteCode;
     private String name;
     private Integer status;
+    @TableField("seat_limit")
+    private Integer seatLimit;
     private LocalDateTime createdAt;
     @TableField(update = "CURRENT_TIMESTAMP(3)")
     private LocalDateTime updatedAt;

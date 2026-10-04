@@ -34,6 +34,9 @@ export const tenantSetStatus = (id: number, status: number) =>
   http.post<void>(`/api/admin/tenants/${id}/status${qs({ status })}`);
 export const tenantCounts = (id: number) => http.get<TenantCounts>(`/api/admin/tenants/${id}/counts`);
 export const tenantCreate = (p: TenantCreatePayload) => http.post<TenantRow>('/api/admin/tenants', p);
+export const tenantSetQuota = (id: number, seatLimit: number | null) =>
+  http.post<void>(`/api/admin/tenants/${id}/quota`, { seatLimit });
+export const tenantDelete = (id: number) => http.del<void>(`/api/admin/tenants/${id}`);
 
 // ---- roles ----
 export const rolesPage = (p: { scope?: number; tenantId?: number; page?: number; pageSize?: number }) =>
@@ -71,6 +74,7 @@ export const userAssignRoles = (id: number, roleIds: number[]) =>
 export const userSetStatus = (id: number, status: number) =>
   http.put<void>(`/api/admin/users/${id}/status${qs({ status })}`);
 export const userCreate = (p: UserCreatePayload) => http.post<UserRow>('/api/admin/users', p);
+export const userDelete = (id: number) => http.del<void>(`/api/admin/users/${id}`);
 export const userTeams = (id: number) => http.get<number[]>(`/api/admin/users/${id}/teams`);
 export const userAssignTeams = (id: number, teamIds: number[]) =>
   http.put<void>(`/api/admin/users/${id}/teams`, { teamIds });

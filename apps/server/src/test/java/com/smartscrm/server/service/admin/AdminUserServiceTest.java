@@ -173,4 +173,16 @@ class AdminUserServiceTest {
     void create_rejectsShortPassword() {
         assertThrows(BizException.class, () -> service.create("eve", "123", null, 1L, null, null, 1L));
     }
+
+    @Test
+    void delete_removesMembershipsThenUser() {
+        when(mapper.selectById(1L)).thenReturn(user(1L, 10L, "alice", 1));
+        when(mapper.deleteById(1L)).thenReturn(1);
+
+        service.delete(1L);
+
+        verify(mapper).deleteRolesByUserId(1L);
+        verify(mapper).deleteTeamsByUserId(1L);
+        verify(mapper).deleteById(1L);
+    }
 }

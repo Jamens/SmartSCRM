@@ -53,6 +53,44 @@ public class AdminTenantService {
         return toRow(require(id));
     }
 
+    /**
+     * Sets the seat quota. A {@code null} value restores unlimited; any other
+     * value must be a non-negative integer capped at {@link #MAX_SEAT_LIMIT}.
+     *
+     * @param id tenant id
+     * @param seatLimit null for unlimited, otherwise 0..MAX_SEAT_LIMIT
+     */
+    public TenantRow setQuota(Long id, Integer seatLimit) {
+        if (seatLimit != null && (seatLimit < 0 || seatLimit > MAX_SEAT_LIMIT)) {
+            throw new BizException(40001,
+                    "seatLimit must be null or between 0 and " + MAX_SEAT_LIMIT, HttpStatus.BAD_REQUEST);
+        }
+        Tenant t = require(id);
+        t.setSeatLimit(seatLimit);
+        tenantMapper.updateById(t);
+        return toRow(t);
+    }
+
+    /**
+     * Deletes a tenant. Refused while the tenant still owns users or platform
+     * accounts -- those would otherwise be orphaned. Callers must re-home or
+     * remove the members first.
+     */
+    public void delete(Long id) {
+        Tenant t = require(id);
+        long users = tenantMapper.countUsers(t.getId());
+        long accounts = tenantMapper.countPlatformAccounts(t.getId());
+        if (users > 0 || accounts > 0) {
+            throw new BizException(40001,
+                    "tenant still has " + users + " user(s) and " + accounts
+                            + " platform account(s); remove them before deletion",
+                    HttpStatus.BAD_REQUEST);
+        }
+        tenantMapper.deleteById(t.getId());
+    }
+
+    private static final int MAX_SEAT_LIMIT = 100000;
+
     public void setStatus(Long id, Integer status) {
         if (status == null || (status != 0 && status != 1)) {
             throw new BizException(40001, "status must be 0 or 1", HttpStatus.BAD_REQUEST);
@@ -132,11 +170,11 @@ public class AdminTenantService {
     }
 
     private static TenantRow toRow(Tenant t) {
-        return new TenantRow(t.getId(), t.getInviteCode(), t.getName(), t.getStatus(), t.getCreatedAt());
+        return new TenantRow(t.getId(), t.getInviteCode(), t.getName(), t.getStatus(), t.getSeatLimit(), t.getCreatedAt());
     }
 
     /** Tenant as exposed to the admin console. */
-    public record TenantRow(Long id, String inviteCode, String name, Integer status, LocalDateTime createdAt) {}
+    public record TenantRow(Long id, String inviteCode, String name, Integer status, Integer seatLimit, LocalDateTime createdAt) {}
 
     /** Per-tenant aggregate counts. */
     public record TenantCounts(long users, long platformAccounts) {}

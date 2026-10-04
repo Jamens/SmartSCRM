@@ -8,6 +8,7 @@ import com.smartscrm.server.service.admin.AdminTenantService.TenantRow;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
@@ -73,6 +74,22 @@ public class AdminTenantController {
         return ApiResponse.ok(tenantService.create(req.name(), req.inviteCode()));
     }
 
+    @PostMapping("/{id}/quota")
+    @PreAuthorize("hasAuthority('tenant:quota')")
+    public ApiResponse<TenantRow> setQuota(@PathVariable Long id, @RequestBody TenantQuotaRequest req) {
+        return ApiResponse.ok(tenantService.setQuota(id, req.seatLimit()));
+    }
+
+    @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('tenant:delete')")
+    public ApiResponse<Void> delete(@PathVariable Long id) {
+        tenantService.delete(id);
+        return ApiResponse.ok(null);
+    }
+
     /** Tenant creation payload. */
     public record TenantCreateRequest(String name, String inviteCode) {}
+
+    /** Tenant seat quota payload. */
+    public record TenantQuotaRequest(Integer seatLimit) {}
 }

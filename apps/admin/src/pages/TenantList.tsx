@@ -6,6 +6,7 @@ import {
   Card,
   Descriptions,
   Input,
+  InputNumber,
   Modal,
   Popconfirm,
   Select,
@@ -23,6 +24,8 @@ export default function TenantList() {
   const { message } = App.useApp();
   const qc = useQueryClient();
   const canCreate = useAuthStore((s) => s.menuCodes.includes('tenant:create'));
+  const canQuota = useAuthStore((s) => s.menuCodes.includes('tenant:quota'));
+  const canDelete = useAuthStore((s) => s.menuCodes.includes('tenant:delete'));
   const [keyword, setKeyword] = useState('');
   const [status, setStatus] = useState<number | undefined>();
   const [page, setPage] = useState(1);
@@ -33,6 +36,8 @@ export default function TenantList() {
   const [createOpen, setCreateOpen] = useState(false);
   const [createName, setCreateName] = useState('');
   const [createCode, setCreateCode] = useState('');
+  const [quotaId, setQuotaId] = useState<number | null>(null);
+  const [quotaLimit, setQuotaLimit] = useState<number | null>(null);
 
   const { data, isLoading } = useQuery({
     queryKey: ['tenants', keyword, status, page, pageSize],
@@ -70,6 +75,26 @@ export default function TenantList() {
     onError: (e) => message.error((e as Error).message),
   });
 
+  const quotaMut = useMutation({
+    mutationFn: () => api.tenantSetQuota(quotaId as number, quotaLimit),
+    onSuccess: () => {
+      message.success('配额已更新');
+      setQuotaId(null);
+      setQuotaLimit(null);
+      qc.invalidateQueries({ queryKey: ['tenants'] });
+    },
+    onError: (e) => message.error((e as Error).message),
+  });
+
+  const deleteMut = useMutation({
+    mutationFn: (id: number) => api.tenantDelete(id),
+    onSuccess: () => {
+      message.success('租户已删除');
+      qc.invalidateQueries({ queryKey: ['tenants'] });
+    },
+    onError: (e) => message.error((e as Error).message),
+  });
+
   const countsQ = useQuery({
     queryKey: ['tenant-counts', detailId],
     queryFn: () => api.tenantCounts(detailId as number),
@@ -94,8 +119,14 @@ export default function TenantList() {
       render: (v: string) => (v ? dayjs(v).format('YYYY-MM-DD HH:mm') : '-'),
     },
     {
+      title: '席位',
+      dataIndex: 'seatLimit',
+      width: 100,
+      render: (v: number | null) => (v == null ? <Tag color="default">不限</Tag> : v),
+    },
+    {
       title: '操作',
-      width: 220,
+      width: 320,
       render: (_, r) => (
         <Space>
           <Button
@@ -113,6 +144,18 @@ export default function TenantList() {
           >
             <Button size="small" danger={r.status === 1}>
               {r.status === 1 ? '停用' : '启用'}
+            </Button>
+          </Popconfirm>
+          <Button size="small" disabled={!canQuota} onClick={() => { setQuotaId(r.id); setQuotaLimit(r.seatLimit); }}>
+            配额
+          </Button>
+          <Popconfirm
+            title="删除该租户？"
+            description="租户下仍有成员或平台账号时将被拒绝"
+            onConfirm={() => deleteMut.mutate(r.id)}
+          >
+            <Button size="small" danger disabled={!canDelete}>
+              删除
             </Button>
           </Popconfirm>
           <Button size="small" onClick={() => setDetailId(r.id)}>
@@ -209,6 +252,24 @@ export default function TenantList() {
             placeholder="邀请码（可选，留空自动生成）"
           />
         </Space>
+      </Modal>
+
+      <Modal
+        title="设置席位配额"
+        open={quotaId !== null}
+        onCancel={() => setQuotaId(null)}
+        onOk={() => quotaMut.mutate()}
+        confirmLoading={quotaMut.isPending}
+        okText="保存"
+      >
+        <InputNumber
+          style={{ width: '100%' }}
+          min={0}
+          max={100000}
+          value={quotaLimit}
+          onChange={(v) => setQuotaLimit(v)}
+          placeholder="留空为不限"
+        />
       </Modal>
 
       <Modal title="租户详情" open={detailId !== null} onCancel={() => setDetailId(null)} footer={null}>
