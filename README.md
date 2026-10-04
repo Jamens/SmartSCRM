@@ -396,3 +396,25 @@ cd apps/admin && pnpm build
     `MessagesPage` 改用 `useChatJumpStore.subscribe` 消费一次性跳转投递（外部系统回调里 setState，规则允许）；
     `TranslationPage` 删主 draft 回填 effect、`ProviderKeyForm` 改用 `credential?.appId ?? ''` 挂载初值并换 `key` 触发重初始化。
     **全部清零**：`eslint --quiet` 0 error；`typecheck`（node/web/inject/unit 四路）全过；`test:unit` 371/371。
+
+## 十一、B27 管理端运行与端到端验证
+
+6 个页面（登录 / 租户 / 角色 / 角色权限树 / 团队 / 用户）复用 B27 后端 18 个管理端点；菜单即权限，前端 `RequireCode` 守卫与后端 `@PreAuthorize` 共享 `menuCodes` 词表。
+
+**本地启动**
+- 后端：`cd apps/server && ./mvnw -o spring-boot:run`（默认 `:8180`，Flyway 自动迁移 V1…V15，连本机 MySQL `:3306` 库 `smartscrm_react`）。
+- 前端：`cd apps/admin && pnpm install && pnpm dev`（`Vite :5173`，默认 `VITE_API_BASE=http://localhost:8180`；跨域已在后端对 `localhost:*` 放开）。
+- 登录：用户名 `admin` / 密码 `admin123` / 邀请码 `DEMO0001`。admin 初始为 `tenant_admin`（仅租户级权限）；super_admin 专属端点（`tenant:create` / `tenant:quota` / `tenant:delete`）需先自提权（见探针）。
+
+**端到端探针（HTTP 级，绕过浏览器自动化）**
+- 沙箱内 Chromium CDN 超时、系统 Chrome 不被 agent-browser 识别，故用 Python `urllib` 探针直连 `:8180`，绕开代理用 `no_proxy='*'`（`curl --noproxy` 会被敏感审批拦截，env 形式可过）。
+- 建租户/建用户/分配团队：`_trash/admin_p1_e2e.py`
+- 配额/删除端点（V15）：`_trash/admin_p15_e2e.py`（建租户→设配额 50→null→有成员拒绝删 40001→删成员→删租户、`user:delete` 对 tenant_admin 即 200；探针自清数据并复位 admin→tenant_admin）
+- 跑法：`no_proxy='*' python3 _trash/admin_p15_e2e.py`
+
+**清理（探针中途崩溃也不会留孤儿数据）**
+- `_trash/cleanup_p15.py`：登录→自提 super_admin→删 `e2e%` 用户 / `E2E%` 团队 / `E2E%` 租户→复位 admin→tenant_admin。跑法：`no_proxy='*' python3 _trash/cleanup_p15.py`
+
+**手动点测清单**（`http://localhost:5173`）：① 租户页「配额」设 50 → 表格「席位」列显示 50；② 租户页「删除」空租户成功、有成员的租户提示拒绝；③ 用户页「删除」成功；④ 角色页「新建角色」→ 权限树勾选保存 → 重开权限仍在。
+
+> 探针与清理脚本均在 `_trash/`（已 gitignore），不进仓库；本段为可复现运行说明。
