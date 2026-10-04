@@ -43,5 +43,10 @@ apps/desktop/resources/wa-js.bundle.js
 # Local verification scratch (throwaway probes and logs)
 tmp/
 
+# Stray install/repair scratch (safe-delete guard leftovers; not source)
+_trash/
+_tmp_*
+*.tsbuildinfo
+
 # WorkBuddy 项目数据（记忆 / 会话产物，非源码）
 .workbuddy/

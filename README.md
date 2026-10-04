@@ -43,6 +43,7 @@ pnpm dev:desktop
 ```
 SmartSCRM/
 ├── apps/
+│   ├── admin/            # 管理端：React 19 + TS + Ant Design 5 + react-query + zustand（多租户后台）
 │   ├── desktop/          # Electron + React 19 + TS（electron-vite、Tailwind v4 + shadcn/ui）
 │   └── server/           # Spring Boot 3.5 + Java 17 + MyBatis-Plus + Flyway
 ├── packages/
@@ -271,6 +272,11 @@ cd apps/desktop && pnpm build && pnpm build:win
 
 # B27 协议号通道离线联调（不依赖真实网关，纯 Node 跑通协议接线）
 cd apps/desktop && pnpm test:b27
+
+# 管理端前端（apps/admin）：typecheck + lint + 生产构建
+cd apps/admin && pnpm typecheck
+cd apps/admin && pnpm lint
+cd apps/admin && pnpm build
 ```
 
 约定：
@@ -308,6 +314,7 @@ cd apps/desktop && pnpm test:b27
 - **A9 修改密码（2026-10-03 已交付）**：设置页新增「账户安全」卡，后端 `POST /api/auth/change-password`（`ChangePasswordRequest` record + `AuthService.changePassword` 校验原密码 / 新旧不可相同 + 重写哈希）+ 前端 `api/auth.ts` 与表单（原/新/确认 + 可见性切换 + 长度与一致性前端校验）；改密成功 `useAuthStore.logout()` 清掉本机会话、`App` 在 `phase==='anonymous'` 自动渲染登录页实现强制重登。未做 tokenVersion 失效机制（保持无状态 JWT 架构），设计见 `docs/superpowers/specs/2026-10-03-change-password-design.md`。
 - **A4 多语言框架（已交付）**：`i18next` + `react-i18next` 接入主进程 `AppSettings.language`（落盘 + 启动读回），渲染层 `i18n` 实例 + 8 语种全量资源（`zh-CN`/`en`/`zh-TW`/`ja`/`ko`/`vi`/`id`/`th`，均在 `i18n/index.ts` 的 `resources` 注册生效），设置页「语言」卡一键切换即时生效；设计见 `docs/superpowers/specs/2026-10-03-i18n-design.md`。按业务域分批铺开 `t()` 抽取：**壳层**（设置/导航/登录/日志中心/标题栏/占位页）→ **messages 域**（10 组件）→ **customers 域**（客户列表/抽屉/时间线/所在群/群成员弹层 5 组件）；每个语种文件用 `DeepString<typeof zhCN>` 强制键同构，漏翻/多翻/层级错编译期即挂（漏键一处 typecheck 全红）。批次已推进到 **页面域**（broadcast / Labels / Materials / Audiences / QuickReplies / Translation，见下条）。
   - **覆盖面铺开**：`messages` 域 10 个组件（`MessagesPage` / `ConversationList` / `ConversationActions` / `ReplyComposer` / `MessageThread` / `SearchPanel` / `StatsCards` / `CreateCustomerDialog` / `CustomerDirectionDialog` / `MessageBubble`）的中文 UI 文案已抽 `t()`，`zh-CN.ts` 新增 `messages` 子树、`en.ts` 由 `DeepString<typeof zhCN>` 强制补齐同构英译；`customers` / `broadcast` / 布局壳层（`AccountStage` / `AccountSidebar` / `AddAccountDialog`）/ `Labels` / `Materials` / `Audiences` / `QuickReplies`（主组件 + `ReplyCard` + `ItemPreview` + `ItemEditor` + `MaterialPicker` 5 子组件）/ `Translation`（主组件 + `PageHeader` + `NodeCard` + `DirectionCard` + `CacheStatsCard` + `TrialCard` + `KeyConfigCard` + `ProviderKeyForm` 8 子组件）页面已抽 t()，`zh-CN.ts` 新增 `translation` 子树（83 键，含 `{{server}}`/`{{count}}`/`{{ms}}`/`{{message}}` 插值）；`SettingsPage` 三处遗漏补齐（「外观」卡标题改 `t('settings.appearance')`、身份行与「未登录」新增 `settings.identityLine`/`settings.notSignedIn` 两个键，`{{name}}`/`{{role}}`/`{{tenant}}`/`{{code}}` 走插值）。
+- **B27 管理端前端（`apps/admin`，2026-10-04 已交付）**：React 19 + TS + Ant Design 5 + react-query + zustand 的多租户管理端，6 个页面（登录 / 租户 / 角色列表 / 角色权限树编辑 / 团队 / 用户），复用 B27 后端 18 个管理端点；菜单即权限，前端 `RequireCode` 守卫与后端 `@PreAuthorize` 共享同一 `menuCodes` 词表，登录走共享 `/api/auth/login`（`deviceId=admin-web`）。`typecheck`/`lint`/`build` 全绿（3103 模块，10.4s），`rc-util` 半链接缺陷经整体重装修复；实时端到端未跑（本机 `:8180` 由代理返回 502、后端未起），但 18 端点契约已在 B27 后端阶段验过。设计见 `docs/plans/2026-10-04-admin-console-design.md`。
 - 体检文档 §12 列出的优先级修复项（删除确认、`apiBase` allowlist、采集重试停摆、`nickname` 清空、`refresh` 复查租户状态）
 
 ## 九、提交约定
