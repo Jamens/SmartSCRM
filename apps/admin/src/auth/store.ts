@@ -35,13 +35,19 @@ export const useAuthStore = create<AuthState>()(
           deviceId: 'admin-web',
           deviceName: 'Admin Console',
         });
+        // The token MUST be applied before the follow-up calls: `tokenStore` is what the
+        // HTTP client reads to build the Authorization header, and /api/admin/menus +
+        // /api/admin/my-codes are authenticated (401 without it). Setting it afterwards
+        // made both calls 401 on every login; the `.catch(() => [])` below then turned
+        // that into an empty menuCodes, so the login page reported "no admin permission"
+        // for a perfectly valid admin — and the failure looked like the account's fault.
+        applyToken(resp.accessToken);
         // Pull the sidebar tree + the caller's permission codes. Either may 403
         // for a non-admin account; we tolerate that and surface "no permission".
         const [menuTree, menuCodes] = await Promise.all([
           api.getMenus().catch(() => []),
           api.getMyCodes().catch(() => []),
         ]);
-        applyToken(resp.accessToken);
         set({
           token: resp.accessToken,
           refreshToken: resp.refreshToken,
