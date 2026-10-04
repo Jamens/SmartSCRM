@@ -49,6 +49,24 @@ export interface TenantRow {
   createdAt: string;
 }
 
+export interface TenantCreatePayload {
+  name: string;
+  inviteCode?: string;
+}
+
+export interface UserCreatePayload {
+  username: string;
+  password: string;
+  nickname?: string;
+  tenantId?: number;
+  role?: string; // legacy role: owner|admin|agent
+  status?: number; // 1 active, 0 disabled
+}
+
+export interface UserTeamAssignPayload {
+  teamIds: number[];
+}
+
 export interface TenantCounts {
   users: number;
   platformAccounts: number;

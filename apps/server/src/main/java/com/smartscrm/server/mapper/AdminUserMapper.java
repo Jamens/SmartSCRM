@@ -25,4 +25,18 @@ public interface AdminUserMapper extends BaseMapper<AppUser> {
         "</script>"
     })
     void insertRoles(@Param("userId") Long userId, @Param("roleIds") Collection<Long> roleIds);
+
+    @Select("SELECT team_id FROM sys_user_team WHERE user_id = #{userId}")
+    Set<Long> teamIdsByUserId(@Param("userId") Long userId);
+
+    @Delete("DELETE FROM sys_user_team WHERE user_id = #{userId}")
+    void deleteTeamsByUserId(@Param("userId") Long userId);
+
+    @Insert({
+        "<script>",
+        "INSERT IGNORE INTO sys_user_team (user_id, team_id) VALUES",
+        "<foreach collection='teamIds' item='t' separator=','>(#{userId}, #{t})</foreach>",
+        "</script>"
+    })
+    void insertTeams(@Param("userId") Long userId, @Param("teamIds") Collection<Long> teamIds);
 }

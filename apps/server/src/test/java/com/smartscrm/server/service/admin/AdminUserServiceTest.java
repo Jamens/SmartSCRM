@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -21,16 +23,21 @@ import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
+import org.springframework.security.crypto.password.PasswordEncoder;
 
 class AdminUserServiceTest {
 
     private AdminUserMapper mapper;
+    private PasswordEncoder encoder;
     private AdminUserService service;
 
     @BeforeEach
     void setUp() {
         mapper = mock(AdminUserMapper.class);
-        service = new AdminUserService(mapper);
+        encoder = mock(PasswordEncoder.class);
+        when(encoder.encode(anyString())).thenReturn("hashed");
+        service = new AdminUserService(mapper, encoder);
     }
 
     private AppUser user(long id, Long tenantId, String username, int status) {
@@ -127,5 +134,43 @@ class AdminUserServiceTest {
         when(mapper.roleIdsByUserId(1L)).thenReturn(Set.of(2L, 3L));
 
         assertEquals(Set.of(2L, 3L), service.roleIds(1L));
+    }
+
+    @Test
+    void create_hashesPasswordAndDefaultsTenant() {
+        when(mapper.insert((AppUser) any())).thenAnswer(inv -> {
+            ((AppUser) inv.getArgument(0)).setId(42L);
+            return 1;
+        });
+
+        UserRow row = service.create("bob", "secret123", "Bob", null, null, null, 10L);
+
+        assertEquals(42L, row.id());
+        assertEquals(10L, row.tenantId());
+        assertEquals("agent", row.role());
+        assertEquals(1, row.status());
+        verify(encoder).encode("secret123");
+    }
+
+    @Test
+    void create_usesOperatorTenantWhenTenantIdOmitted() {
+        service.create("carol", "secret123", null, null, "admin", 0, 5L);
+
+        ArgumentCaptor<AppUser> cap = ArgumentCaptor.forClass(AppUser.class);
+        verify(mapper).insert(cap.capture());
+        AppUser inserted = cap.getValue();
+        assertEquals(5L, inserted.getTenantId());
+        assertEquals("admin", inserted.getRole());
+        assertEquals(0, inserted.getStatus());
+    }
+
+    @Test
+    void create_rejectsWhenNoTenantResolvable() {
+        assertThrows(BizException.class, () -> service.create("dave", "secret123", null, null, null, null, null));
+    }
+
+    @Test
+    void create_rejectsShortPassword() {
+        assertThrows(BizException.class, () -> service.create("eve", "123", null, 1L, null, null, 1L));
     }
 }

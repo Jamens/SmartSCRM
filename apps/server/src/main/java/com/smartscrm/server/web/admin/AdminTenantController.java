@@ -10,6 +10,7 @@ import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.PutMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
@@ -65,4 +66,13 @@ public class AdminTenantController {
         tenantService.setStatus(id, status);
         return ApiResponse.ok(null);
     }
+
+    @PostMapping
+    @PreAuthorize("hasAuthority('tenant:create')")
+    public ApiResponse<TenantRow> create(@RequestBody TenantCreateRequest req) {
+        return ApiResponse.ok(tenantService.create(req.name(), req.inviteCode()));
+    }
+
+    /** Tenant creation payload. */
+    public record TenantCreateRequest(String name, String inviteCode) {}
 }

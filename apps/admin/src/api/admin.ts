@@ -4,9 +4,11 @@ import type {
   MenuNode,
   TenantRow,
   TenantCounts,
+  TenantCreatePayload,
   RoleRow,
   TeamRow,
   UserRow,
+  UserCreatePayload,
 } from '@/types';
 
 export interface LoginPayload {
@@ -31,6 +33,7 @@ export const tenantRename = (id: number, name: string) =>
 export const tenantSetStatus = (id: number, status: number) =>
   http.post<void>(`/api/admin/tenants/${id}/status${qs({ status })}`);
 export const tenantCounts = (id: number) => http.get<TenantCounts>(`/api/admin/tenants/${id}/counts`);
+export const tenantCreate = (p: TenantCreatePayload) => http.post<TenantRow>('/api/admin/tenants', p);
 
 // ---- roles ----
 export const rolesPage = (p: { scope?: number; tenantId?: number; page?: number; pageSize?: number }) =>
@@ -67,3 +70,7 @@ export const userAssignRoles = (id: number, roleIds: number[]) =>
   http.put<void>(`/api/admin/users/${id}/roles`, { roleIds });
 export const userSetStatus = (id: number, status: number) =>
   http.put<void>(`/api/admin/users/${id}/status${qs({ status })}`);
+export const userCreate = (p: UserCreatePayload) => http.post<UserRow>('/api/admin/users', p);
+export const userTeams = (id: number) => http.get<number[]>(`/api/admin/users/${id}/teams`);
+export const userAssignTeams = (id: number, teamIds: number[]) =>
+  http.put<void>(`/api/admin/users/${id}/teams`, { teamIds });

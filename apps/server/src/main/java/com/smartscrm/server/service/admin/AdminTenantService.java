@@ -71,6 +71,51 @@ public class AdminTenantService {
         tenantMapper.updateById(t);
     }
 
+    /**
+     * Creates a tenant. An invite code is generated when omitted and is guaranteed
+     * unique against the existing set.
+     *
+     * @param name tenant display name
+     * @param inviteCode optional explicit invite code; must be unique if provided
+     */
+    public TenantRow create(String name, String inviteCode) {
+        if (!StringUtils.hasText(name) || name.trim().length() > 128) {
+            throw new BizException(40001, "name is required and must be under 128 chars", HttpStatus.BAD_REQUEST);
+        }
+        String code = StringUtils.hasText(inviteCode) ? inviteCode.trim() : null;
+        if (code != null && tenantMapper.selectCount(new LambdaQueryWrapper<Tenant>().eq(Tenant::getInviteCode, code)) > 0) {
+            throw new BizException(40001, "invite code already exists: " + code, HttpStatus.BAD_REQUEST);
+        }
+        if (code == null) {
+            code = generateInviteCode();
+            int tries = 0;
+            while (tenantMapper.selectCount(new LambdaQueryWrapper<Tenant>().eq(Tenant::getInviteCode, code)) > 0 && tries++ < 8) {
+                code = generateInviteCode();
+            }
+            if (tenantMapper.selectCount(new LambdaQueryWrapper<Tenant>().eq(Tenant::getInviteCode, code)) > 0) {
+                throw new BizException(50000, "failed to allocate a unique invite code", HttpStatus.INTERNAL_SERVER_ERROR);
+            }
+        }
+
+        Tenant t = new Tenant();
+        t.setInviteCode(code);
+        t.setName(name.trim());
+        t.setStatus(1);
+        tenantMapper.insert(t);
+        return toRow(t);
+    }
+
+    private static final String INVITE_ALPHABET = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+
+    private String generateInviteCode() {
+        java.security.SecureRandom rnd = new java.security.SecureRandom();
+        StringBuilder sb = new StringBuilder("T");
+        for (int i = 0; i < 7; i++) {
+            sb.append(INVITE_ALPHABET.charAt(rnd.nextInt(INVITE_ALPHABET.length())));
+        }
+        return sb.toString();
+    }
+
     /** Aggregate counts shown on the tenant detail page. */
     public TenantCounts counts(Long tenantId) {
         return new TenantCounts(

@@ -16,11 +16,13 @@ import {
 import type { ColumnsType } from 'antd/es/table';
 import dayjs from 'dayjs';
 import * as api from '@/api/admin';
+import { useAuthStore } from '@/auth/store';
 import type { TenantRow } from '@/types';
 
 export default function TenantList() {
   const { message } = App.useApp();
   const qc = useQueryClient();
+  const canCreate = useAuthStore((s) => s.menuCodes.includes('tenant:create'));
   const [keyword, setKeyword] = useState('');
   const [status, setStatus] = useState<number | undefined>();
   const [page, setPage] = useState(1);
@@ -28,6 +30,9 @@ export default function TenantList() {
   const [renameId, setRenameId] = useState<number | null>(null);
   const [renameName, setRenameName] = useState('');
   const [detailId, setDetailId] = useState<number | null>(null);
+  const [createOpen, setCreateOpen] = useState(false);
+  const [createName, setCreateName] = useState('');
+  const [createCode, setCreateCode] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['tenants', keyword, status, page, pageSize],
@@ -48,6 +53,18 @@ export default function TenantList() {
     mutationFn: (p: { id: number; status: number }) => api.tenantSetStatus(p.id, p.status),
     onSuccess: () => {
       message.success('状态已更新');
+      qc.invalidateQueries({ queryKey: ['tenants'] });
+    },
+    onError: (e) => message.error((e as Error).message),
+  });
+
+  const createMut = useMutation({
+    mutationFn: () => api.tenantCreate({ name: createName, inviteCode: createCode || undefined }),
+    onSuccess: () => {
+      message.success('租户已创建');
+      setCreateOpen(false);
+      setCreateName('');
+      setCreateCode('');
       qc.invalidateQueries({ queryKey: ['tenants'] });
     },
     onError: (e) => message.error((e as Error).message),
@@ -109,6 +126,9 @@ export default function TenantList() {
   return (
     <Card title="租户管理">
       <Space style={{ marginBottom: 16 }} wrap>
+        <Button type="primary" disabled={!canCreate} onClick={() => setCreateOpen(true)}>
+          新建租户
+        </Button>
         <Input.Search
           placeholder="按名称搜索"
           allowClear
@@ -164,6 +184,31 @@ export default function TenantList() {
           maxLength={128}
           placeholder="租户名称"
         />
+      </Modal>
+
+      <Modal
+        title="新建租户"
+        open={createOpen}
+        onCancel={() => setCreateOpen(false)}
+        onOk={() => createMut.mutate()}
+        confirmLoading={createMut.isPending}
+        okText="创建"
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Input
+            value={createName}
+            onChange={(e) => setCreateName(e.target.value)}
+            maxLength={128}
+            placeholder="租户名称（必填）"
+            status={!createName ? 'error' : undefined}
+          />
+          <Input
+            value={createCode}
+            onChange={(e) => setCreateCode(e.target.value)}
+            maxLength={64}
+            placeholder="邀请码（可选，留空自动生成）"
+          />
+        </Space>
       </Modal>
 
       <Modal title="租户详情" open={detailId !== null} onCancel={() => setDetailId(null)} footer={null}>
