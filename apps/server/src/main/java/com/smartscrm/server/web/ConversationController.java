@@ -3,10 +3,12 @@ package com.smartscrm.server.web;
 import com.smartscrm.server.common.ApiResponse;
 import com.smartscrm.server.security.AuthPrincipal;
 import com.smartscrm.server.service.MessageQueryService;
+import com.smartscrm.server.service.TakeoverService;
 import com.smartscrm.server.web.dto.ConversationLinkCustomerDTO;
 import com.smartscrm.server.web.vo.ConversationPageVO;
 import com.smartscrm.server.web.vo.ConversationVO;
 import jakarta.validation.Valid;
+import java.util.List;
 import java.util.Map;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -22,9 +24,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class ConversationController {
 
     private final MessageQueryService query;
+    private final TakeoverService takeover;
 
-    public ConversationController(MessageQueryService query) {
+    public ConversationController(MessageQueryService query, TakeoverService takeover) {
         this.query = query;
+        this.takeover = takeover;
     }
 
     @GetMapping
@@ -33,8 +37,38 @@ public class ConversationController {
                                                @RequestParam(required = false) String platform,
                                                @RequestParam(required = false) String q,
                                                @RequestParam(required = false) String cursor,
-                                               @RequestParam(required = false) Integer size) {
-        return ApiResponse.ok(query.conversations(principal.tenantId(), accountId, platform, q, cursor, size));
+                                               @RequestParam(required = false) Integer size,
+                                               @RequestParam(required = false) String handlingStatus) {
+        return ApiResponse.ok(query.conversations(principal.tenantId(), accountId, platform, q, cursor, size,
+            handlingStatus));
+    }
+
+    /** B28 P1 接管队列：本租户所有等待接管的会话，按等待时长升序。 */
+    @GetMapping("/takeover-queue")
+    public ApiResponse<List<ConversationVO>> takeoverQueue(@AuthenticationPrincipal AuthPrincipal principal) {
+        return ApiResponse.ok(takeover.queue(principal.tenantId()));
+    }
+
+    /** 坐席接管：AI / WAITING_TAKEOVER → HUMAN_ACTIVE（assignee = 当前坐席）。 */
+    @PostMapping("/{id}/takeover")
+    public ApiResponse<ConversationVO> takeover(@AuthenticationPrincipal AuthPrincipal principal,
+                                               @PathVariable Long id) {
+        return ApiResponse.ok(takeover.takeover(principal.tenantId(), principal.userId(), id));
+    }
+
+    /** 恢复 AI：HUMAN_ACTIVE / WAITING_TAKEOVER → AI，交还给 AI 人设引擎。 */
+    @PostMapping("/{id}/resume-ai")
+    public ApiResponse<ConversationVO> resumeAi(@AuthenticationPrincipal AuthPrincipal principal,
+                                                @PathVariable Long id) {
+        return ApiResponse.ok(takeover.resumeAi(principal.tenantId(), id));
+    }
+
+    /** 转人工：→ WAITING_TAKEOVER。reason 可选，描述触发来源（规则名或坐席手动）。 */
+    @PostMapping("/{id}/transfer-human")
+    public ApiResponse<ConversationVO> transferHuman(@AuthenticationPrincipal AuthPrincipal principal,
+                                                     @PathVariable Long id,
+                                                     @RequestParam(required = false) String reason) {
+        return ApiResponse.ok(takeover.transferHuman(principal.tenantId(), id, reason));
     }
 
     /**

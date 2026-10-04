@@ -59,11 +59,17 @@ public class MessageQueryService {
     // ============ 会话列表 ============
 
     public ConversationPageVO conversations(Long tenantId, Long accountId, String platform, String q,
-                                           String cursor, Integer size) {
+                                           String cursor, Integer size, String handlingStatus) {
         int limit = sizeOf(size);
         requirePlatformAllowed(platform);
         LambdaQueryWrapper<ChatConversation> w = new LambdaQueryWrapper<ChatConversation>()
             .eq(ChatConversation::getTenantId, tenantId);
+        // B28 P1: 按处理态过滤（接管队列视图复用同一列表接口）。状态串白名单，
+        // 既挡住非法值乱入查询，也让"列表里出现不认识的态"在验证时一眼能看穿。
+        if (handlingStatus != null && !handlingStatus.isBlank()) {
+            requireHandlingStatusValid(handlingStatus);
+            w.eq(ChatConversation::getHandlingStatus, handlingStatus);
+        }
         if (accountId != null) {
             messageService.resolveAccount(tenantId, accountId);
             w.eq(ChatConversation::getAccountId, accountId);
@@ -409,6 +415,13 @@ public class MessageQueryService {
     private static void requirePlatformAllowed(String platform) {
         if (platform != null && !platform.isBlank() && !ALLOWED_PLATFORMS.contains(platform)) {
             throw new BizException(40000, "platform 只能是 whatsapp 或 telegram");
+        }
+    }
+
+    /** B28 P1: handling_status 白名单，与 V16 迁移里的取值集合保持一致。 */
+    private static void requireHandlingStatusValid(String status) {
+        if (!Set.of("AI", "WAITING_TAKEOVER", "HUMAN_ACTIVE").contains(status)) {
+            throw new BizException(40000, "handlingStatus 只能是 AI / WAITING_TAKEOVER / HUMAN_ACTIVE");
         }
     }
 
