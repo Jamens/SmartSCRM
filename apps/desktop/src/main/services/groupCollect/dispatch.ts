@@ -56,8 +56,11 @@ export function createGroupDispatch(accountId: number, opts?: { timeoutMs?: numb
  * `chatKey` 不传 = 全量建档（从没建过档的优先，超 MAX 截断、剩下的留给下一轮）；
  * 传入 = 只补这一个群（弹层「刷新成员」，R49 单数码）。
  *
- * snapshotAtOf 暂返回 null：排序优化当前不生效（所有群都当"从没建过档"，保输入顺序）。
- * 要真正按"上次成功快照时间"优先，需后端给一个按群查 last_snapshot_at 的端点——待补（spec §5 只要求排序，不要求精确值）。
+ * 优先次序来自后端：engine 在跑全量前取一页
+ * `GET /api/group-members/groups?sort=stale&size=MAX_GROUPS_PER_BUILD`（未建档最前、其余按上次成功
+ * 快照从旧到新）。size 与 MAX_GROUPS_PER_BUILD 同值，也正压在后端 pageGroups 的 size 上限
+ * （`Math.min(Math.max(1,size),200)`）上，所以第 1 页覆盖得住一整轮的队列。
+ * 这一跳失败不影响建档：engine 会退化成保桥次序继续跑（排序是优化，不是判定）。
  */
 export function runGroupBuild(accountId: number, chatKey?: string): Promise<GroupBuildOutcome> {
   const api = createGroupCollectApi({ token: () => getSession()?.accessToken ?? null })
@@ -67,8 +70,7 @@ export function runGroupBuild(accountId: number, chatKey?: string): Promise<Grou
     dispatch,
     sleep: (ms) => new Promise((r) => setTimeout(r, ms)),
     now: () => Date.now(),
-    log: (where, e) => console.log(`[groupCollect] ${where} ${String(e)}`),
-    snapshotAtOf: () => null
+    log: (where, e) => console.log(`[groupCollect] ${where} ${String(e)}`)
   })
   return engine.runBuildForAccount(accountId, chatKey)
 }

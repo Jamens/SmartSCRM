@@ -25,6 +25,8 @@ interface Harness {
   sleeps: number[]
   commands: GroupCommand[]
   ingested: IngestPayload[]
+  /** sort=stale 读口被调了几次——指定单群那一腿要靠它证明"没多问一跳"。 */
+  staleCalls(): number
 }
 
 function harness(opts: {
@@ -36,12 +38,21 @@ function harness(opts: {
   succeedOn?: Record<string, number>
   emptyFor?: string[]
   ingestThrows?: boolean
+  /**
+   * 后端 `sort=stale` 那一页给回的内容。不给就是「该账号一个都没登记」（keys=[]、total=0），
+   * 于是所有桥群都算未建档、保桥次序——与接线前的行为一致，既有那几腿才不必跟着改。
+   * `'throws'` = 读口失败（后端不可达 / 没登录），泵必须退化成保桥次序而不是放弃整轮。
+   */
+  stale?: { keys: string[]; total: number } | 'throws'
+  /** 读口被调时的 size 观测（截断那一腿要确认问的条数和队列上限是同一个小）。 */
+  staleSize?: (size: number) => void
 }): Harness {
   const sleeps: number[] = []
   const commands: GroupCommand[] = []
   const ingested: IngestPayload[] = []
   const attempts: Record<string, number> = {}
   let clock = 1_700_000_000_000
+  let staleCount = 0
 
   const deps: GroupCollectDeps = {
     api: {
@@ -49,6 +60,12 @@ function harness(opts: {
         if (opts.ingestThrows) throw new Error('后端不可达')
         ingested.push(p)
         return { reason: 'ok' }
+      },
+      staleGroups: async (_accountId: number, size: number) => {
+        staleCount += 1
+        opts.staleSize?.(size)
+        if (opts.stale === 'throws') throw new Error('后端不可达')
+        return opts.stale ?? { keys: [], total: 0 }
       }
     },
     dispatch: async (cmd: GroupCommand): Promise<GroupReply> => {
@@ -79,10 +96,9 @@ function harness(opts: {
       clock += ms
     },
     now: () => clock,
-    log: () => {},
-    snapshotAtOf: () => null
+    log: () => {}
   }
-  return { deps, sleeps, commands, ingested }
+  return { deps, sleeps, commands, ingested, staleCalls: () => staleCount }
 }
 
 test('正常一轮：每个群入库一次，群间隔按 GROUP_GAP_MS', async () => {
@@ -129,13 +145,54 @@ test('队列超过 MAX_GROUPS_PER_BUILD 就截断，标记 truncated', async () 
   assert.equal(r.registered, MAX_GROUPS_PER_BUILD)
 })
 
-test('从没建过档的排前面，其余按上次快照时间升序', async () => {
-  const h = harness({ listGroups: ['old@g.us', 'never@g.us', 'new@g.us'] })
-  const at: Record<string, number | null> = { 'old@g.us': 1000, 'new@g.us': 9000, 'never@g.us': null }
-  h.deps.snapshotAtOf = (k: string) => at[k] ?? null
+test('后端 sort=stale 的位置就是队列次序（客户端不重排）', async () => {
+  const h = harness({
+    listGroups: ['a@g.us', 'b@g.us', 'c@g.us'],
+    // 后端按 ISNULL(last_snapshot_at) DESC, last_snapshot_at ASC 给回：c 最旧、b 次之、a 最新
+    stale: { keys: ['c@g.us', 'b@g.us', 'a@g.us'], total: 3 }
+  })
   await new GroupCollectEngine(h.deps).runBuildForAccount(1)
-  const order = h.ingested.map((p) => p.snapshot?.chatKey)
-  assert.deepEqual(order, ['never@g.us', 'old@g.us', 'new@g.us'])
+  assert.deepEqual(h.ingested.map((p) => p.snapshot?.chatKey), ['c@g.us', 'b@g.us', 'a@g.us'],
+    '队列没有照后端给回的位置排 ⇒ 泵还在自己猜次序')
+  assert.equal(h.staleCalls(), 1, '全量建档只该问一跳 stale 页')
+})
+
+test('后端把登记过的群全给回时，桥里没登记过的群排最前（R28/R41 未建档最前）', async () => {
+  const h = harness({
+    listGroups: ['reg1@g.us', 'never1@g.us', 'reg2@g.us', 'never2@g.us'],
+    // total === keys.length ⇒ 全集在手：不在其中的两个群确实一行 chat_group 都没有
+    stale: { keys: ['reg2@g.us', 'reg1@g.us'], total: 2 }
+  })
+  await new GroupCollectEngine(h.deps).runBuildForAccount(1)
+  assert.deepEqual(h.ingested.map((p) => p.snapshot?.chatKey),
+    ['never1@g.us', 'never2@g.us', 'reg2@g.us', 'reg1@g.us'],
+    '从没登记过的群必须排在"已登记但旧"之前——前者是完全没有成员数据')
+})
+
+test('后端只给回一页时，已登记且最旧的排前，剩下的保桥次序垫后', async () => {
+  const h = harness({
+    listGroups: ['x@g.us', 'old@g.us', 'y@g.us'],
+    // total > keys.length ⇒ 分不清 x/y 是"没登记"还是"登记了但不够旧"，保守地把它们垫后
+    stale: { keys: ['old@g.us'], total: 900 }
+  })
+  await new GroupCollectEngine(h.deps).runBuildForAccount(1)
+  assert.deepEqual(h.ingested.map((p) => p.snapshot?.chatKey), ['old@g.us', 'x@g.us', 'y@g.us'])
+})
+
+test('sort=stale 读口失败时退化成保桥次序，整轮照跑（排序是优化不是判定）', async () => {
+  const h = harness({ listGroups: ['g1@g.us', 'g2@g.us'], stale: 'throws' })
+  const r = await new GroupCollectEngine(h.deps).runBuildForAccount(1)
+  assert.equal(r.aborted, false, '读排序页失败不能把整轮判死')
+  assert.equal(r.list, 'ok')
+  assert.equal(r.registered, 2)
+  assert.deepEqual(h.ingested.map((p) => p.snapshot?.chatKey), ['g1@g.us', 'g2@g.us'])
+})
+
+test('问 stale 页的 size 与截断上限同一个小（不然前排之外的位置全是猜的）', async () => {
+  let seen = 0
+  const h = harness({ listGroups: ['g1@g.us'], staleSize: (s) => { seen = s } })
+  await new GroupCollectEngine(h.deps).runBuildForAccount(1)
+  assert.equal(seen, MAX_GROUPS_PER_BUILD)
 })
 
 test('快照失败重试一次：dispatch 两次、退避 RETRY_BACKOFF_MS，仍失败就跳过这个群', async () => {
@@ -196,4 +253,6 @@ test('指定单个 chatKey 时只建这一个，且不去问 group_list', async 
   assert.deepEqual(h.ingested.map((p) => p.snapshot?.chatKey), ['pick0@g.us'])
   // 指定群时不该再去问 group_list
   assert.equal(h.commands.filter((c) => c.kind === 'group_list').length, 0)
+  // 也不该去问 stale 页：用户点哪一个就补哪一个，排序页对这腿没有意义
+  assert.equal(h.staleCalls(), 0)
 })

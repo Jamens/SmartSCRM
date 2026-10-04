@@ -46,8 +46,25 @@ export interface IngestPayload {
   events?: unknown[]
 }
 
+/**
+ * 后端 `sort=stale` 那一页抽出来的排序原料（只关心键与总数）。
+ *
+ * `keys` = 已登记群按「未建档最前、已建档按上次成功快照从旧到新」的位置序；
+ * `total` = 该账号在 `chat_group` 里登记过的群总数。两者的差决定了 `keys` 之外的那些群
+ * 到底是「一行都没登记过」还是「登记了但没挤进这一页」——见 {@link GroupCollectEngine.orderByStale}。
+ */
+export interface StaleGroupPage {
+  keys: string[]
+  total: number
+}
+
 export interface GroupCollectApi {
   ingest(payload: IngestPayload): Promise<{ reason?: string; reconciled?: boolean }>
+  /**
+   * 取 `GET /api/group-members/groups?sort=stale` 的排序页（R28 / R41：位置即 rank）。
+   * 失败就抛——泵把它当"这一轮拿不到排序依据"，退化成保桥次序，绝不当成"这个账号没有群"。
+   */
+  staleGroups(accountId: number, size: number): Promise<StaleGroupPage>
 }
 
 export interface GroupCollectDeps {
@@ -57,11 +74,6 @@ export interface GroupCollectDeps {
   /** 注入时钟：测试给假时钟，host 给 () => Date.now()。 */
   now(): number
   log(where: string, e: unknown): void
-  /**
-   * 这个群上一次**成功**快照的时刻；null = 从没建过档。
-   * 只用于排序（从没建过档的优先），不参与任何判定——判定全在后端。
-   */
-  snapshotAtOf(chatKey: string): number | null
 }
 
 /**
@@ -99,7 +111,7 @@ export class GroupCollectEngine {
    * 给一个账号跑一轮建档。
    *
    * `chatKey` 给了就**只建这一个**（弹层「刷新成员」，R49 单数码）；
-   * 不给就按"从没建过档的优先"排全量，并截断到 MAX_GROUPS_PER_BUILD。
+   * 不给就按后端 `sort=stale` 那一页的位置排全量（未建档的优先），并截断到 MAX_GROUPS_PER_BUILD。
    *
    * 可预期失败都结进 outcome 的字段，不抛——调用方（host）据此广播一条 settled，
    * 界面不会永远灰在 running 那一格。
@@ -159,7 +171,7 @@ export class GroupCollectEngine {
           out.aborted = true
           return out
         }
-        queue = this.order(list.groups)
+        queue = await this.orderByStale(list.groups, accountId)
         // 只有全量建档才截断：超大账号一轮建不完，剩下的留给下一轮（truncated 为真即提示宿主再来一轮）。
         if (queue.length > MAX_GROUPS_PER_BUILD) {
           out.truncated = true
@@ -198,13 +210,39 @@ export class GroupCollectEngine {
     }
   }
 
-  /** 从没建过档的排前面（null 视作最早），其余按上次快照时间升序——越久没刷新的越该先刷。 */
-  private order(groups: Array<{ chatKey: string; title: string | null }>): Array<{ chatKey: string; title: string | null }> {
-    return [...groups].sort((a, b) => {
-      const ta = this.deps.snapshotAtOf(a.chatKey) ?? 0
-      const tb = this.deps.snapshotAtOf(b.chatKey) ?? 0
-      return ta - tb
-    })
+  /**
+   * 队列次序 = 后端 `sort=stale` 那一页的位置（R28 / R41：未建档最前、位置即 rank）。
+   *
+   * 为什么由后端排而不是泵自己猜：`chat_group.last_snapshot_at` 只在**成功快照入库**时才写，
+   * 主进程手里没有第二个可信来源（旧实现注入的 `snapshotAtOf` 恒给 null，等于没排序）。
+   *
+   * `keys` 之外的桥群分两种情形，靠 `total` 分开：
+   * - **`total <= keys.length`（这一页就是全集）**：不在页里 = `chat_group` 里一行都没有 = 从没建过档，
+   *   按 R28 排最前（它们缺的是"完全没有成员数据"，比"有数据但旧"更急）。
+   * - **`total > keys.length`（被 size 截过）**：分不清是"没登记"还是"登记了但没这旧"，
+   *   保守地把它们垫在整页之后、保桥次序——把一群可能已经很新的群顶到最前，
+   *   代价是把真正的旧群挤出这一轮，比反过来更糟。
+   *
+   * 读口失败（后端不可达 / 没登录 / 形状不对）就**保桥次序继续跑**并记一条日志：
+   * 排序只是优化，不是判定——为了它放弃整轮等于"补不了旧群"升级成"一个群都不补"。
+   */
+  private async orderByStale(
+    groups: Array<{ chatKey: string; title: string | null }>,
+    accountId: number
+  ): Promise<Array<{ chatKey: string; title: string | null }>> {
+    let page: StaleGroupPage
+    try {
+      page = await this.deps.api.staleGroups(accountId, MAX_GROUPS_PER_BUILD)
+    } catch (e) {
+      this.deps.log('groupCollect.stale', e)
+      return groups
+    }
+    const rank = new Map(page.keys.map((k, i) => [k, i]))
+    const ranked = groups.filter((g) => rank.has(g.chatKey))
+      .sort((a, b) => rank.get(a.chatKey)! - rank.get(b.chatKey)!)
+    const rest = groups.filter((g) => !rank.has(g.chatKey))
+    // 全集在手时未登记的排最前，否则垫后——两种情形的理由见上面那段。
+    return page.total <= page.keys.length ? [...rest, ...ranked] : [...ranked, ...rest]
   }
 
   /**

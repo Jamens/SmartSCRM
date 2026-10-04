@@ -68,3 +68,64 @@ test('token 为 null 时 ingest 直接抛（不发出必然 401 的请求）', a
   await assert.rejects(() => createGroupCollectApi({ token: () => null, fetchImpl: impl }).ingest(payload))
   assert.equal(calls.length, 0)
 })
+
+// ---------------------------------------------------------------------------
+// staleGroups：建档泵的 sort=stale 读口（R28 / R41 的位置优先）
+// ---------------------------------------------------------------------------
+
+test('staleGroups GET /api/group-members/groups 带 sort=stale 与 size，映射成 {keys,total}', async () => {
+  const { calls, impl } = fakeFetch({
+    body: {
+      code: 0,
+      data: {
+        records: [
+          { chatKey: 'never@g.us', title: '甲' },
+          { chatKey: 'old@g.us', title: '乙' }
+        ],
+        // total 刻意与 records 的条数**不等**：后端给的是筛选后的总行数，不是本页给回的条数。
+        // 取同一个小就等于把"total 从哪来"这条断言写成恒真——泵拿 total 判"这一页是不是全集"，
+        // 拿条数当总数会把截断页误判成全集，进而把没挤进页的群顶到最前。
+        total: 937,
+        page: 1,
+        pageSize: 200
+      }
+    }
+  })
+  const api = createGroupCollectApi({ token: () => 'T', fetchImpl: impl, apiBase: 'http://h:8180/' })
+  const out = await api.staleGroups(7, 200)
+  assert.deepEqual(out, { keys: ['never@g.us', 'old@g.us'], total: 937 },
+    '次序就是后端的次序，不许在客户端重排；total 取后端的筛选总数而非本页条数')
+  assert.equal(calls[0].url, 'http://h:8180/api/group-members/groups?accountId=7&sort=stale&page=1&size=200')
+  assert.equal(calls[0].init.method, 'GET')
+  assert.equal(calls[0].init.body, undefined, '读口不许带 body')
+  assert.equal((calls[0].init.headers as Record<string, string>).authorization, 'Bearer T')
+})
+
+test('staleGroups：非 2xx / 信封非 0 / 网络错 / 无 token 一律抛（泵会退化成保桥次序）', async () => {
+  const { impl: notOk } = fakeFetch({ ok: false, body: { code: 0, data: { records: [], total: 0 } } })
+  await assert.rejects(() => createGroupCollectApi({ token: () => 'T', fetchImpl: notOk }).staleGroups(7, 200))
+
+  const { impl: badCode } = fakeFetch({ body: { code: 40013, data: null } })
+  await assert.rejects(() => createGroupCollectApi({ token: () => 'T', fetchImpl: badCode }).staleGroups(7, 200))
+
+  const throwing = (async () => {
+    throw new Error('network')
+  }) as unknown as typeof fetch
+  await assert.rejects(() => createGroupCollectApi({ token: () => 'T', fetchImpl: throwing }).staleGroups(7, 200))
+
+  const { calls, impl } = fakeFetch({ body: { code: 0, data: { records: [], total: 0 } } })
+  await assert.rejects(() => createGroupCollectApi({ token: () => null, fetchImpl: impl }).staleGroups(7, 200))
+  assert.equal(calls.length, 0, '没 token 时这一跳根本不该发出去')
+})
+
+test('staleGroups 剔掉没有可用 chatKey 的行；total 缺失时按给回的条数算', async () => {
+  const { impl } = fakeFetch({
+    body: {
+      code: 0,
+      data: { records: [{ chatKey: 'a@g.us' }, { chatKey: '' }, { title: '缺键' }, null], page: 1 }
+    }
+  })
+  const out = await createGroupCollectApi({ token: () => 'T', fetchImpl: impl }).staleGroups(7, 200)
+  assert.deepEqual(out.keys, ['a@g.us'], '空串与缺键的行会冒充"这一群已登记"，必须剔掉')
+  assert.equal(out.total, 1, 'total 缺失时按条数算，泵会当成全集在手（宁可多补未建档的）')
+})
