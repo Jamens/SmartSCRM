@@ -46,7 +46,8 @@ export const zhTW: DeepString<typeof zhCN> = {
     signIn: '登 錄',
     heroTitle1: '讓每一次客戶對話',
     heroTitle2: '創造價值',
-    heroSub: '多平台客戶統一經營 · AI 訊息翻譯 · 智慧化群發與成長引擎，為跨境團隊提供一站式私域運營能力。',
+    heroSub:
+      '多平台客戶統一經營 · AI 訊息翻譯 · 智慧化群發與成長引擎，為跨境團隊提供一站式私域運營能力。',
     feature1: '全渠道訊息即時互譯，溝通零障礙',
     feature2: '群發與炒群引擎，成長自動化',
     feature3: '本地資料層，安全可控可重播',
@@ -118,7 +119,7 @@ export const zhTW: DeepString<typeof zhCN> = {
     languageDesc: '介面顯示語言。改動立即生效，並記到本機設定裡。',
     languageLabel: '介面語言',
     identityLine: '{{name}}（{{role}}）· 租戶 {{tenant}} · 邀請碼 {{code}}',
-    notSignedIn: '未登入',
+    notSignedIn: '未登入'
   },
   log: {
     browserNote: '當前是瀏覽器預覽，日誌由主程序產生，桌面端開啟才能檢視與匯出。',
@@ -158,10 +159,8 @@ export const zhTW: DeepString<typeof zhCN> = {
       loading: '載入會話中…',
       pickAccountFirst: '先在上面選擇一個平台帳號。',
       loadError: '無法載入會話，請確認後端已啟動。',
-      emptyFiltered:
-        '沒有符合當前篩選條件的會話，清空關鍵字或選回「全部平台」試試。',
-      emptyNoData:
-        '這個帳號還沒有採集到會話。登錄後會自動補底，也可以點上面的「同步歷史」。',
+      emptyFiltered: '沒有符合當前篩選條件的會話，清空關鍵字或選回「全部平台」試試。',
+      emptyNoData: '這個帳號還沒有採集到會話。登錄後會自動補底，也可以點上面的「同步歷史」。',
       badgeGroup: '群',
       badgeStranger: '陌生',
       noText: '（無文字內容）',
@@ -185,8 +184,7 @@ export const zhTW: DeepString<typeof zhCN> = {
     thread: {
       stranger: '陌生',
       count: '{{count}} 條',
-      located:
-        '已定位到 {{label}} 那條訊息：更早的記錄在下面，比它更新的訊息不在這個視窗裡。',
+      located: '已定位到 {{label}} 那條訊息：更早的記錄在下面，比它更新的訊息不在這個視窗裡。',
       backToLatest: '回到最新',
       loading: '載入訊息中…',
       loadError: '無法讀取歷史訊息，請確認後端已啟動。',
@@ -359,10 +357,12 @@ export const zhTW: DeepString<typeof zhCN> = {
       title: '所在群',
       exporting: '匯出中…',
       exportSelected: '匯出所選（{{count}}）',
-      noOnlineAccount: '沒有在線的 WhatsApp 帳號。群成員只在帳號上線時採集，連上之後這裡會自動出內容。',
+      noOnlineAccount:
+        '沒有在線的 WhatsApp 帳號。群成員只在帳號上線時採集，連上之後這裡會自動出內容。',
       loading: '讀取中…',
       loadError: '讀不到所在群：確認後端已啟動。',
-      empty: '這位客戶還沒有匹配到的群成員行。匹配是按手機號做的，所以沒存進通訊錄的陌生號群不會出現在這裡。',
+      empty:
+        '這位客戶還沒有匹配到的群成員行。匹配是按手機號做的，所以沒存進通訊錄的陌生號群不會出現在這裡。',
       disbanded: '已解散/已退出',
       inGroup: '在群 {{in}} · 上次快照 {{snapshot}} · 快照於 {{time}}',
       viewMembers: '檢視群成員',
@@ -393,12 +393,13 @@ export const zhTW: DeepString<typeof zhCN> = {
       membersLoading: '讀取中…',
       membersLoadError: '讀不到成員名單。',
       membersEmpty: '這個篩選條件下沒有任何人。',
-      memberHeader: '名稱 / 手機號 / 角色 / 是否在群 / 進群時間 / 進群數 / 退群時間 / 退出方式 / 最近發言 / 發言數',
+      memberHeader:
+        '名稱 / 手機號 / 角色 / 是否在群 / 進群時間 / 進群數 / 退群時間 / 退出方式 / 最近發言 / 發言數',
       eventsLoading: '讀取中…',
       eventsLoadError: '讀不到進退流水。',
       eventsEmpty: '還沒有加減人的流水。事件只在帳號上線且橋就緒時採集。',
       eventHeader: '時間 / 事件 / 目標人 / 操作人 / 來源'
-    },
+    }
   },
   broadcast: {
     title: '批量群發',
@@ -482,13 +483,16 @@ export const zhTW: DeepString<typeof zhCN> = {
       emptyFiltered: '這一頁沒有符合篩選條件的明細。',
       actionFailedNoReach: '「{{action}}」這一跳沒成：後端拒絕或宿主不可達，任務保持原狀。',
       actionFailedMessage: '「{{action}}」這一跳沒成：{{message}}',
-      retryFailedNoReach: '「重發」這一跳沒成：後端拒絕或宿主不可達，任務保持原狀，沒有復位任何列。',
+      retryFailedNoReach:
+        '「重發」這一跳沒成：後端拒絕或宿主不可達，任務保持原狀，沒有復位任何列。',
       retryFailedMessage: '「重發」這一跳沒成：{{message}}',
-      recallFailedNoResult: '撤回這一跳沒成：選中的 {{count}} 條既沒被接受也沒被擋下，後端的結果沒回來。',
+      recallFailedNoResult:
+        '撤回這一跳沒成：選中的 {{count}} 條既沒被接受也沒被擋下，後端的結果沒回來。',
       recallNote: '待撤 {{eligible}} 條，{{blocked}} 條不能撤',
       resumeViaStart: '（目前「{{status}}」的卡片上沒有「繼續」，點「開始」才會重跑。）',
       resumeNoEntry: '（目前「{{status}}」的卡片上沒有重跑入口：這一批要等任務回到可執行狀態。）',
-      resetRunning: '已復位 {{count}} 條，但正在跑的泵不會撿走它們（佇列在起泵時就定了）：先「暫停」再點「繼續」才會重跑這一批。',
+      resetRunning:
+        '已復位 {{count}} 條，但正在跑的泵不會撿走它們（佇列在起泵時就定了）：先「暫停」再點「繼續」才會重跑這一批。',
       resetGeneral: '已復位 {{count}} 條，點繼續重跑{{step}}',
       resetTargetedEmpty: '{{label}}：這幾條不是失敗狀態，沒有可重發的。',
       resetEmpty: '{{label}}：沒有可重發的失敗條目。',
@@ -574,7 +578,8 @@ export const zhTW: DeepString<typeof zhCN> = {
       lChatInterval: '換人間隔',
       lMode: '模式',
       overCapCreate: '超過 {{max}} 條上限——減幾個收件人或刪掉幾條內容才能建立。',
-      overRecipientCreate: '收件人超過上限 {{max}} 人——減到 {{max}} 人以內才能建立（建立按鈕已停用）。',
+      overRecipientCreate:
+        '收件人超過上限 {{max}} 人——減到 {{max}} 人以內才能建立（建立按鈕已停用）。',
       createError: '建立失敗：{{message}}',
       rejectedTitle: '這 {{count}} 個收件人被跳過（任務 #{{taskId}} 已建立，共 {{total}} 條）',
       rejectedItem: '{{chatKey}} — {{reason}}',
@@ -665,6 +670,16 @@ export const zhTW: DeepString<typeof zhCN> = {
     searchPlaceholder: '搜尋素材名稱 / 備註',
     allGroups: '全部分組',
     allTypes: '全部類型',
+    scope: {
+      label: '歸屬',
+      all: '全部歸屬',
+      public: '公共',
+      personal: '我的',
+      contact: '聯絡人',
+      contactTitle: '綁定客戶 #{{id}}',
+      customerIdPlaceholder: '客戶 id（數字）',
+      hint: '「我的」只有你自己能用到；「聯絡人」素材綁定某位客戶，在該客戶的會話裡出現。'
+    },
     loading: '載入素材中…',
     empty: '沒有符合條件的素材。',
     rename: '重新命名',
@@ -815,7 +830,8 @@ export const zhTW: DeepString<typeof zhCN> = {
     blockContainsChinese: '含中文時攔截發送',
     blockHint: '開啟後若訊息含中文將攔截發送並提示',
     nodeAndChannel: '節點與線路',
-    nodeChannelDesc: '節點只影響測速與自動選優；模擬線路譯文由本地引擎產生，線上線路（百度/騰訊）需配置金鑰',
+    nodeChannelDesc:
+      '節點只影響測速與自動選優；模擬線路譯文由本地引擎產生，線上線路（百度/騰訊）需配置金鑰',
     activeNode: '生效節點',
     reselectBySpeed: '按測速重選',
     unreachable: '不可達',
@@ -847,7 +863,8 @@ export const zhTW: DeepString<typeof zhCN> = {
     channelPrefix: '管道 {{channel}}',
     requestFailed: '翻譯請求失敗，請檢查後端是否運行。',
     keyConfig: '金鑰配置',
-    keyConfigDesc: '金鑰只保存在本地後端，寫入後不再回讀；留空金鑰儲存表示保留原值。未配置金鑰的線上線路自動回退本地模擬引擎並標降級。',
+    keyConfigDesc:
+      '金鑰只保存在本地後端，寫入後不再回讀；留空金鑰儲存表示保留原值。未配置金鑰的線上線路自動回退本地模擬引擎並標降級。',
     keyLoadFailed: '金鑰狀態讀取失敗，請確認後端已啟動。',
     providerBaidu: '百度翻譯',
     providerTencent: '騰訊雲 TMT',
@@ -871,6 +888,6 @@ export const zhTW: DeepString<typeof zhCN> = {
     tencentAppIdLabel: 'SecretId',
     tencentSecretLabel: 'SecretKey',
     appIdPlaceholderTencent: '例：AKID****************',
-    save: '保存',
+    save: '保存'
   }
 }

@@ -46,7 +46,8 @@ export const vi: DeepString<typeof zhCN> = {
     signIn: 'Đăng nhập',
     heroTitle1: 'Biến mọi cuộc hội thoại',
     heroTitle2: 'thành giá trị',
-    heroSub: 'Quản lý thống nhất khách hàng đa nền tảng · Dịch tin nhắn AI · Công cụ gửi và tăng trưởng thông minh, cung cấp năng lực vận hành riêng tư một cửa cho các đội ngũ xuyên biên giới.',
+    heroSub:
+      'Quản lý thống nhất khách hàng đa nền tảng · Dịch tin nhắn AI · Công cụ gửi và tăng trưởng thông minh, cung cấp năng lực vận hành riêng tư một cửa cho các đội ngũ xuyên biên giới.',
     feature1: 'Dịch realtime trên mọi kênh, giao tiếp không rào cản',
     feature2: 'Công cụ gửi và nuôi nhóm, tự động hóa tăng trưởng',
     feature3: 'Lớp dữ liệu cục bộ, an toàn, kiểm soát và phát lại được',
@@ -69,7 +70,8 @@ export const vi: DeepString<typeof zhCN> = {
     storedBrowser: 'Xem trước trình duyệt (không lưu)',
     statusLine: 'Đang áp dụng: {{effective}} · Hệ thống: {{system}} · Lưu tại {{host}}',
     notifications: 'Thông báo',
-    badgeDesc: 'Huy hiệu thanh tác vụ chỉ đếm chưa đọc của thuê bao tài khoản này, công tắc lưu trong tệp cài đặt cục bộ.',
+    badgeDesc:
+      'Huy hiệu thanh tác vụ chỉ đếm chưa đọc của thuê bao tài khoản này, công tắc lưu trong tệp cài đặt cục bộ.',
     badgeTitle: 'Huy hiệu chưa đọc thanh tác vụ',
     badgeDetail:
       'Khi cửa sổ không ở tiền cảnh, tổng tin chưa đọc được hiển thị trên biểu tượng thanh tác vụ: Windows là chấm đỏ góc dưới biểu tượng (API nền tảng đó không vẽ được số), macOS và Linux là huy hiệu số. Không hiển thị khi bạn đang dùng ứng dụng—lúc đó tin chưa đọc đang được đọc, số hiển thị sẽ cũ ngay sau đó.',
@@ -77,7 +79,8 @@ export const vi: DeepString<typeof zhCN> = {
     badgeStatusNow: 'Hiện tại: {{total}} chưa đọc, phân bố trên {{conversations}} cuộc hội thoại',
     badgeStatusLoading: 'Đang tải chưa đọc…',
     desktopNotify: 'Thông báo máy tính',
-    desktopNotifyDesc: 'Là công tắc độc lập với huy hiệu thanh tác vụ: tắt một cái không ảnh hưởng cái kia.',
+    desktopNotifyDesc:
+      'Là công tắc độc lập với huy hiệu thanh tác vụ: tắt một cái không ảnh hưởng cái kia.',
     desktopNotifyTitle: 'Hiện thông báo hệ thống khi có tin nhắn',
     desktopNotifyDetail:
       'Khi cửa sổ không ở tiền cảnh, tin nhận được hiện một thông báo hệ thống; bấm vào sẽ quay lại ứng dụng và mở cuộc hội thoại. Nhiều tin liên tiếp của cùng một cuộc sẽ gộp thành một (có số trong tiêu đề), không tràn màn hình. Không hiện khi bạn đang dùng ứng dụng.',
@@ -85,7 +88,8 @@ export const vi: DeepString<typeof zhCN> = {
     enabled: 'Đã bật',
     disabled: 'Đã tắt',
     accountSecurity: 'Bảo mật tài khoản',
-    accountSecurityDesc: 'Đổi mật khẩu đăng nhập. Sau khi đổi thành công, phiên hiện tại lập tức hết hạn, cần đăng nhập lại bằng mật khẩu mới.',
+    accountSecurityDesc:
+      'Đổi mật khẩu đăng nhập. Sau khi đổi thành công, phiên hiện tại lập tức hết hạn, cần đăng nhập lại bằng mật khẩu mới.',
     oldPassword: 'Mật khẩu hiện tại',
     newPassword: 'Mật khẩu mới',
     confirmPassword: 'Xác nhận mật khẩu mới',
@@ -106,8 +110,10 @@ export const vi: DeepString<typeof zhCN> = {
     accelOff: 'Đã tắt (dựng phần mềm)',
     accelBrowser: 'Host hiện tại (xem trước trình duyệt) không có backend GPU để chuyển',
     safeModeTitle: 'Đang ở chế độ đồ họa giảm cấp',
-    safeModeFatal: 'Ở chế độ giảm cấp GPU vẫn sập (lý do: {{reason}}), đa số là do driver GPU, nên cập nhật driver.',
-    safeModeRecover: 'Lần khởi động trước bị tự chuyển đây do tiến trình GPU sập. Có thể thử khôi phục chế độ chuẩn:',
+    safeModeFatal:
+      'Ở chế độ giảm cấp GPU vẫn sập (lý do: {{reason}}), đa số là do driver GPU, nên cập nhật driver.',
+    safeModeRecover:
+      'Lần khởi động trước bị tự chuyển đây do tiến trình GPU sập. Có thể thử khôi phục chế độ chuẩn:',
     retryStandard: 'Thử lại chế độ chuẩn',
     deviceInfo: 'Thông tin thiết bị',
     deviceInfoDesc:
@@ -115,15 +121,18 @@ export const vi: DeepString<typeof zhCN> = {
     deviceLoading: 'Đang tải…',
     deviceLogin: 'Đã đăng nhập: {{who}} · Địa chỉ dịch vụ {{api}}',
     language: 'Ngôn ngữ',
-    languageDesc: 'Ngôn ngữ hiển thị giao diện. Thay đổi có hiệu lực ngay và được ghi vào cài đặt cục bộ.',
+    languageDesc:
+      'Ngôn ngữ hiển thị giao diện. Thay đổi có hiệu lực ngay và được ghi vào cài đặt cục bộ.',
     languageLabel: 'Ngôn ngữ giao diện',
     identityLine: '{{name}} ({{role}}) · Tenant {{tenant}} · Mã mời {{code}}',
-    notSignedIn: 'Chưa đăng nhập',
+    notSignedIn: 'Chưa đăng nhập'
   },
   log: {
-    browserNote: 'Đang xem trước trình duyệt, nhật ký do tiến trình chính tạo, mở bản máy tính mới xem và xuất được.',
+    browserNote:
+      'Đang xem trước trình duyệt, nhật ký do tiến trình chính tạo, mở bản máy tính mới xem và xuất được.',
     loading: 'Đang tải nhật ký…',
-    empty: 'Không có nhật ký khớp. Khi gỡ lỗi, console có gắn [tag] do tiến trình chính in sẽ tự phân vào loại tương ứng.',
+    empty:
+      'Không có nhật ký khớp. Khi gỡ lỗi, console có gắn [tag] do tiến trình chính in sẽ tự phân vào loại tương ứng.',
     title: 'Trung tâm nhật ký',
     desc: 'Bốn loại nhật ký tiến trình chính (app / ipc / bridge / error) + Promise bị từ chối chưa xử lý, chỉ lưu cục bộ, không báo server.',
     allCategories: 'Tất cả loại',
@@ -260,7 +269,8 @@ export const vi: DeepString<typeof zhCN> = {
       createError: 'Tạo thất bại',
       duplicateHint:
         ' —— open_id này trên nền tảng đã có khách hàng. Hiện không có mục "tìm khách cũ bằng open_id" (từ khóa danh sách khách chỉ tìm biệt danh / điện thoại / email), hãy sang trang quản lý khách xác nhận là ai.',
-      linkFailed: 'Khách hàng #{{id}} đã tạo thành công nhưng liên kết lịch sử thất bại (đầu hội thoại chưa gắn).',
+      linkFailed:
+        'Khách hàng #{{id}} đã tạo thành công nhưng liên kết lịch sử thất bại (đầu hội thoại chưa gắn).',
       linkError: 'Liên kết thất bại',
       linkRetryHint:
         'Thử lại chỉ bù bước "liên kết", không tạo thêm khách trùng—open_id trùng sẽ bị backend chặn tại 40901.',
@@ -359,10 +369,12 @@ export const vi: DeepString<typeof zhCN> = {
       title: 'Nhóm thuộc về',
       exporting: 'Đang xuất…',
       exportSelected: 'Xuất mục đã chọn ({{count}})',
-      noOnlineAccount: 'Không có tài khoản WhatsApp online. Thành viên nhóm chỉ thu khi tài khoản online, sau khi kết nối sẽ tự hiện ở đây.',
+      noOnlineAccount:
+        'Không có tài khoản WhatsApp online. Thành viên nhóm chỉ thu khi tài khoản online, sau khi kết nối sẽ tự hiện ở đây.',
       loading: 'Đang tải…',
       loadError: 'Không đọc được nhóm thuộc về: xác nhận backend đã khởi động.',
-      empty: 'Chưa có hàng thành viên nhóm khớp khách này. So khớp theo số điện thoại nên các nhóm số lạ chưa lưu vào danh bạ sẽ không hiện ở đây.',
+      empty:
+        'Chưa có hàng thành viên nhóm khớp khách này. So khớp theo số điện thoại nên các nhóm số lạ chưa lưu vào danh bạ sẽ không hiện ở đây.',
       disbanded: 'Đã giải tán / rời',
       inGroup: 'Trong nhóm {{in}} · ảnh chụp trước {{snapshot}} · chụp lúc {{time}}',
       viewMembers: 'Xem thành viên',
@@ -393,16 +405,19 @@ export const vi: DeepString<typeof zhCN> = {
       membersLoading: 'Đang tải…',
       membersLoadError: 'Không đọc được danh sách thành viên.',
       membersEmpty: 'Không có thành viên nào khớp bộ lọc này.',
-      memberHeader: 'Tên / Điện thoại / Vai trò / Có trong nhóm / Ngày vào / Số lần vào / Ngày rời / Cách rời / Phát ngôn gần / Số phát ngôn',
+      memberHeader:
+        'Tên / Điện thoại / Vai trò / Có trong nhóm / Ngày vào / Số lần vào / Ngày rời / Cách rời / Phát ngôn gần / Số phát ngôn',
       eventsLoading: 'Đang tải…',
       eventsLoadError: 'Không đọc được nhật ký vào/rời.',
-      eventsEmpty: 'Chưa có sự kiện thêm/bớt. Sự kiện chỉ thu khi tài khoản online và cầu nối sẵn sàng.',
+      eventsEmpty:
+        'Chưa có sự kiện thêm/bớt. Sự kiện chỉ thu khi tài khoản online và cầu nối sẵn sàng.',
       eventHeader: 'Thời gian / Sự kiện / Đối tượng / Người thao tác / Nguồn'
-    },
+    }
   },
   broadcast: {
     title: 'Gửi hàng loạt',
-    subtitle: 'Tạo tác vụ theo tài khoản, chạy thử (dry-run) trước; gửi thật được kích hoạt bởi “Bắt đầu” trên tác vụ.',
+    subtitle:
+      'Tạo tác vụ theo tài khoản, chạy thử (dry-run) trước; gửi thật được kích hoạt bởi “Bắt đầu” trên tác vụ.',
     backToList: 'Quay lại danh sách',
     newTask: 'Tác vụ mới',
     action: {
@@ -443,7 +458,8 @@ export const vi: DeepString<typeof zhCN> = {
       loading: 'Đang tải danh sách tác vụ…',
       loadError: 'Không tải được danh sách tác vụ: {{message}}',
       empty: 'Chưa có tác vụ gửi hàng loạt. Nhấp “Tác vụ mới” ở góc trên bên phải.',
-      actionFailedNoReach: '“{{action}}” không thành: backend từ chối hoặc không thể kết nối máy chủ, danh sách giữ nguyên.',
+      actionFailedNoReach:
+        '“{{action}}” không thành: backend từ chối hoặc không thể kết nối máy chủ, danh sách giữ nguyên.',
       actionFailedMessage: '“{{action}}” không thành: {{message}}',
       col: {
         taskName: 'Tên tác vụ',
@@ -475,22 +491,29 @@ export const vi: DeepString<typeof zhCN> = {
       prevPage: 'Trước',
       nextPage: 'Sau',
       dryRunNote: 'Tác vụ chạy thử không gửi thật',
-      blockedSummary: '{{count}} mục này không thể thu hồi (các dòng bị chặn không được backend ghi; đây là nguồn duy nhất).',
+      blockedSummary:
+        '{{count}} mục này không thể thu hồi (các dòng bị chặn không được backend ghi; đây là nguồn duy nhất).',
       blockedItem: 'Chi tiết #{{id}} — {{reason}}',
       loadingDetails: 'Đang tải chi tiết…',
       loadDetailsError: 'Không tải được chi tiết: {{message}}',
       emptyFiltered: 'Trang này không có chi tiết nào khớp bộ lọc hiện tại.',
-      actionFailedNoReach: '“{{action}}” không thành: backend từ chối hoặc không thể kết nối máy chủ, tác vụ giữ nguyên.',
+      actionFailedNoReach:
+        '“{{action}}” không thành: backend từ chối hoặc không thể kết nối máy chủ, tác vụ giữ nguyên.',
       actionFailedMessage: '“{{action}}” không thành: {{message}}',
-      retryFailedNoReach: '“Gửi lại” không thành: backend từ chối hoặc không thể kết nối máy chủ, tác vụ giữ nguyên và không dòng nào được đặt lại.',
+      retryFailedNoReach:
+        '“Gửi lại” không thành: backend từ chối hoặc không thể kết nối máy chủ, tác vụ giữ nguyên và không dòng nào được đặt lại.',
       retryFailedMessage: '“Gửi lại” không thành: {{message}}',
-      recallFailedNoResult: 'Thu hồi không thành: {{count}} mục đã chọn không được chấp nhận cũng không bị chặn, backend không trả về kết quả.',
+      recallFailedNoResult:
+        'Thu hồi không thành: {{count}} mục đã chọn không được chấp nhận cũng không bị chặn, backend không trả về kết quả.',
       recallNote: '{{eligible}} chờ thu hồi, {{blocked}} không thể thu hồi',
       resumeViaStart: '(Thẻ “{{status}}” hiện không có “Tiếp tục”; nhấp “Bắt đầu” để chạy lại.)',
-      resumeNoEntry: '(Thẻ “{{status}}” hiện không có lối vào chạy lại: lô này phải đợi tác vụ trở về trạng thái có thể chạy.)',
-      resetRunning: 'Đã đặt lại {{count}} mục, nhưng bơm đang chạy sẽ không lấy chúng (hàng đợi được cố định khi bơm bắt đầu): tạm dừng trước, rồi nhấp “Tiếp tục” để chạy lại lô này.',
+      resumeNoEntry:
+        '(Thẻ “{{status}}” hiện không có lối vào chạy lại: lô này phải đợi tác vụ trở về trạng thái có thể chạy.)',
+      resetRunning:
+        'Đã đặt lại {{count}} mục, nhưng bơm đang chạy sẽ không lấy chúng (hàng đợi được cố định khi bơm bắt đầu): tạm dừng trước, rồi nhấp “Tiếp tục” để chạy lại lô này.',
       resetGeneral: 'Đã đặt lại {{count}} mục, nhấp Tiếp tục để chạy lại{{step}}',
-      resetTargetedEmpty: '{{label}}: các dòng này không ở trạng thái thất bại, không có gì để gửi lại.',
+      resetTargetedEmpty:
+        '{{label}}: các dòng này không ở trạng thái thất bại, không có gì để gửi lại.',
       resetEmpty: '{{label}}: không có dòng thất bại nào để gửi lại.',
       batch: 'Toàn bộ lô',
       detailOf: 'Chi tiết #{{id}}',
@@ -530,12 +553,14 @@ export const vi: DeepString<typeof zhCN> = {
       createDryRun: 'Tạo tác vụ (chạy thử)',
       createReal: 'Tạo tác vụ (gửi thật)',
       accountsLabel: 'Tài khoản WhatsApp trực tuyến (chọn nhiều)',
-      noOnlineAccounts: 'Không có tài khoản WhatsApp trực tuyến. Hãy quét mã QR trong thanh bên tài khoản để lên mạng trước.',
+      noOnlineAccounts:
+        'Không có tài khoản WhatsApp trực tuyến. Hãy quét mã QR trong thanh bên tài khoản để lên mạng trước.',
       recipientSearchPlaceholder: 'Lọc theo tiêu đề / khóa hội thoại',
       byAudience: 'Theo nhóm đối tượng',
       summary: 'Đã chọn {{recipients}} người nhận × {{contents}} nội dung = {{total}} mục',
       overCap: 'Vượt quá giới hạn {{max}} mục',
-      overRecipientCap: 'Người nhận vượt quá giới hạn {{max}} người — giảm xuống {{max}} người trở xuống để tiếp tục',
+      overRecipientCap:
+        'Người nhận vượt quá giới hạn {{max}} người — giảm xuống {{max}} người trở xuống để tiếp tục',
       onlyFirst: 'Chỉ hiển thị {{count}} mục đầu (còn hội thoại chưa tải)',
       loadingConversations: 'Đang tải hội thoại…',
       noConversations: 'Tài khoản này chưa có hội thoại.',
@@ -546,7 +571,8 @@ export const vi: DeepString<typeof zhCN> = {
       loadMoreError: 'Không tải thêm được: {{message}}',
       loadingMore: 'Đang tải…',
       loadMore: 'Tải thêm (đã tải {{loaded}} / {{max}})',
-      maxReached: 'Đã đến giới hạn {{max}} mục. Hãy thu hẹp bằng tìm kiếm hoặc nhóm đối tượng trước khi chọn.',
+      maxReached:
+        'Đã đến giới hạn {{max}} mục. Hãy thu hẹp bằng tìm kiếm hoặc nhóm đối tượng trước khi chọn.',
       contentLabel: 'Nội dung tin nhắn (tối đa {{max}} mục, hỗ trợ {tên khách} / {số})',
       addContent: 'Thêm một',
       contentPlaceholder: 'Nội dung gốc mục {{n}}',
@@ -554,7 +580,8 @@ export const vi: DeepString<typeof zhCN> = {
       previewing: 'Đang xem trước…',
       preview: 'Xem trước kết quả hiển thị',
       needRecipients: 'Hãy chọn ít nhất một người nhận ở bước người nhận trước.',
-      previewNote: 'Kết quả hiển thị cho {{count}} người nhận đầu (tái dùng bộ render backend, dấu ngoặc không nhận diện được giữ nguyên):',
+      previewNote:
+        'Kết quả hiển thị cho {{count}} người nhận đầu (tái dùng bộ render backend, dấu ngoặc không nhận diện được giữ nguyên):',
       previewRow: '{{chatKey}} · Mục {{n}}',
       previewTruncated: 'Xem trước đã đến giới hạn mục, các mục còn lại không được liệt kê.',
       msgMin: 'Khoảng cùng người min (giây)',
@@ -574,11 +601,14 @@ export const vi: DeepString<typeof zhCN> = {
       lChatInterval: 'Khoảng cách người',
       lMode: 'Chế độ',
       overCapCreate: 'Vượt quá giới hạn {{max}} mục — bớt người nhận hoặc xóa bớt nội dung để tạo.',
-      overRecipientCreate: 'Người nhận vượt quá giới hạn {{max}} người — giảm xuống {{max}} người trở xuống để tạo (nút tạo bị vô hiệu).',
+      overRecipientCreate:
+        'Người nhận vượt quá giới hạn {{max}} người — giảm xuống {{max}} người trở xuống để tạo (nút tạo bị vô hiệu).',
       createError: 'Tạo thất bại: {{message}}',
-      rejectedTitle: '{{count}} người nhận bị bỏ qua (tác vụ #{{taskId}} đã tạo, tổng {{total}} mục)',
+      rejectedTitle:
+        '{{count}} người nhận bị bỏ qua (tác vụ #{{taskId}} đã tạo, tổng {{total}} mục)',
       rejectedItem: '{{chatKey}} — {{reason}}',
-      rejectedNote: 'Người nhận bị bỏ qua sẽ không xuất hiện trong tác vụ; hãy kiểm tra danh sách này trước khi mở tác vụ.',
+      rejectedNote:
+        'Người nhận bị bỏ qua sẽ không xuất hiện trong tác vụ; hãy kiểm tra danh sách này trước khi mở tác vụ.',
       contentEmpty: 'Mục {{n}} trống',
       contentTooLong: 'Mục {{n}} vượt quá {{max}} ký tự'
     }
@@ -586,7 +616,8 @@ export const vi: DeepString<typeof zhCN> = {
   account: {
     stage: {
       emptyTitle: 'Chưa chọn tài khoản',
-      emptyDesc: 'Chọn một tài khoản nền tảng từ danh sách bên trái để đăng nhập nhúng và quản lý hội thoại tại đây.',
+      emptyDesc:
+        'Chọn một tài khoản nền tảng từ danh sách bên trái để đăng nhập nhúng và quản lý hội thoại tại đây.',
       online: 'Trực tuyến',
       offline: 'Ngoại tuyến',
       sessionOffline: 'Phiên chưa trực tuyến',
@@ -597,7 +628,8 @@ export const vi: DeepString<typeof zhCN> = {
       injectOn: 'bật',
       injectOff: 'tắt',
       reloadTitle: 'Tải lại trang',
-      browserPreviewOnly: 'Đang ở bản xem trước trình duyệt; khung nhúng chỉ khả dụng trên bản desktop.',
+      browserPreviewOnly:
+        'Đang ở bản xem trước trình duyệt; khung nhúng chỉ khả dụng trên bản desktop.',
       embedNotSupported: '{{label}} chưa hỗ trợ đăng nhập nhúng trên web.',
       loading: 'Đang tải trang…'
     },
@@ -658,13 +690,24 @@ export const vi: DeepString<typeof zhCN> = {
 
   materials: {
     title: 'Thư viện tài liệu',
-    subtitle: 'Tài liệu ảnh / video / tệp có thể tái sử dụng, được tham chiếu bởi phản hồi nhanh và gửi hàng loạt',
+    subtitle:
+      'Tài liệu ảnh / video / tệp có thể tái sử dụng, được tham chiếu bởi phản hồi nhanh và gửi hàng loạt',
     newGroup: 'Tạo nhóm',
     newMaterial: 'Tạo tài liệu',
     editMaterial: 'Sửa tài liệu',
     searchPlaceholder: 'Tìm theo tên tài liệu / ghi chú',
     allGroups: 'Tất cả nhóm',
     allTypes: 'Tất cả loại',
+    scope: {
+      label: 'Quyền sở hữu',
+      all: 'Tất cả',
+      public: 'Dùng chung',
+      personal: 'Của tôi',
+      contact: 'Liên hệ',
+      contactTitle: 'Gắn với khách hàng #{{id}}',
+      customerIdPlaceholder: 'id khách hàng (số)',
+      hint: '“Của tôi” chỉ bạn dùng được. “Liên hệ” gắn với một khách hàng và hiện trong cuộc hội thoại của người đó.'
+    },
     loading: 'Đang tải tài liệu…',
     empty: 'Không có tài liệu nào khớp với bộ lọc.',
     rename: 'Đổi tên',
@@ -719,7 +762,8 @@ export const vi: DeepString<typeof zhCN> = {
     delete: 'Xóa',
     deleteConfirm: 'Xóa nhóm khách hàng "{{name}}"?',
     editAudience: 'Sửa nhóm khách hàng',
-    dialogDesc: 'Điều kiện là "đồng thời thỏa mãn": tất cả nhãn đã chọn phải khớp, sau đó mới chồng thêm nền tảng và từ khóa.',
+    dialogDesc:
+      'Điều kiện là "đồng thời thỏa mãn": tất cả nhãn đã chọn phải khớp, sau đó mới chồng thêm nền tảng và từ khóa.',
     name: 'Tên',
     namePlaceholder: 'Ví dụ: Khách hàng giá trị cao đã chốt',
     platform: 'Nền tảng',
@@ -740,7 +784,8 @@ export const vi: DeepString<typeof zhCN> = {
 
   quickReplies: {
     title: 'Phản hồi nhanh',
-    subtitle: 'Kịch bản đa phần gồm văn bản / ảnh / danh thiếp, sao chép một cú nhấp vào cửa sổ trò chuyện',
+    subtitle:
+      'Kịch bản đa phần gồm văn bản / ảnh / danh thiếp, sao chép một cú nhấp vào cửa sổ trò chuyện',
     newGroup: 'Tạo nhóm',
     newReply: 'Tạo phản hồi nhanh',
     searchPlaceholder: 'Tìm theo tiêu đề / phím tắt',
@@ -790,7 +835,8 @@ export const vi: DeepString<typeof zhCN> = {
   },
   translation: {
     title: 'Trung tâm dịch',
-    subtitle: 'Hướng ngôn ngữ, kênh và nút hiệu lực được backend phân giải từ cài đặt tài khoản; trang này chỉ cấu hình',
+    subtitle:
+      'Hướng ngôn ngữ, kênh và nút hiệu lực được backend phân giải từ cài đặt tài khoản; trang này chỉ cấu hình',
     loading: 'Đang tải…',
     loadingSettings: 'Đang tải cài đặt dịch…',
     loadFailed: 'Đọc cài đặt dịch thất bại. Vui lòng xác nhận backend đã chạy.',
@@ -802,11 +848,13 @@ export const vi: DeepString<typeof zhCN> = {
     nodeSpeedTest: 'Đo tốc độ nút',
     speedTestDesc: 'Độ trễ mô phỏng; không tạo yêu cầu mạng nào',
     remeasure: 'Đo lại',
-    autoSelectResult: 'Kết quả tự chọn tối ưu: {{server}} (hiện tại {{current}} đã nhỏ nhất thì giữ nguyên)',
+    autoSelectResult:
+      'Kết quả tự chọn tối ưu: {{server}} (hiện tại {{current}} đã nhỏ nhất thì giữ nguyên)',
     receiveTitle: 'Dịch nhận',
     receiveDesc: 'Bản dịch dưới bong bóng phía đối tác gửi (R1)',
     sendTitle: 'Dịch gửi',
-    sendDesc: 'Hướng xem trước trước khi gửi từ ô nhập; bong bóng bạn tự gửi cũng dịch theo hướng này (R1)',
+    sendDesc:
+      'Hướng xem trước trước khi gửi từ ô nhập; bong bóng bạn tự gửi cũng dịch theo hướng này (R1)',
     voiceTranslation: 'Dịch giọng nói',
     notEffectiveYet: 'Chưa có hiệu lực trong bản này',
     realtimePreview: 'Xem trước thời gian thực',
@@ -815,7 +863,8 @@ export const vi: DeepString<typeof zhCN> = {
     blockContainsChinese: 'Chặn gửi khi có tiếng Trung',
     blockHint: 'Khi bật, tin nhắn chứa tiếng Trung sẽ bị chặn và cảnh báo',
     nodeAndChannel: 'Nút và kênh',
-    nodeChannelDesc: 'Nút chỉ ảnh hưởng đến đo tốc độ và tự chọn tối ưu; bản dịch kênh giả lập do engine cục bộ tạo, kênh trực tuyến (Baidu/Tencent) cần cấu hình khóa',
+    nodeChannelDesc:
+      'Nút chỉ ảnh hưởng đến đo tốc độ và tự chọn tối ưu; bản dịch kênh giả lập do engine cục bộ tạo, kênh trực tuyến (Baidu/Tencent) cần cấu hình khóa',
     activeNode: 'Nút hiệu lực',
     reselectBySpeed: 'Chọn lại theo tốc độ',
     unreachable: 'Không thể kết nối',
@@ -834,7 +883,8 @@ export const vi: DeepString<typeof zhCN> = {
     cacheEmpty: 'Chưa có mục bộ đệm nào.',
     hitCount: '{{count}} lượt',
     trialTitle: 'Dùng thử dịch',
-    trialDesc: 'Không cần đăng nhập WhatsApp vẫn xác minh được engine và bộ đệm; dùng hướng được phân giải từ cài đặt hiện tại',
+    trialDesc:
+      'Không cần đăng nhập WhatsApp vẫn xác minh được engine và bộ đệm; dùng hướng được phân giải từ cài đặt hiện tại',
     inputPlaceholder: 'Nhập văn bản cần dịch',
     sampleText: 'Xin chào, đơn hàng đã được gửi',
     receiveDirection: 'Hướng nhận',
@@ -847,14 +897,16 @@ export const vi: DeepString<typeof zhCN> = {
     channelPrefix: 'Kênh {{channel}}',
     requestFailed: 'Yêu cầu dịch thất bại. Vui lòng kiểm tra backend có chạy không.',
     keyConfig: 'Cấu hình khóa',
-    keyConfigDesc: 'Khóa chỉ lưu ở backend cục bộ, sau khi ghi không đọc lại; lưu khóa rỗng nghĩa là giữ nguyên giá trị cũ. Kênh trực tuyến chưa cấu hình khóa sẽ tự động quay về engine giả lập cục bộ và được đánh dấu giảm cấp.',
+    keyConfigDesc:
+      'Khóa chỉ lưu ở backend cục bộ, sau khi ghi không đọc lại; lưu khóa rỗng nghĩa là giữ nguyên giá trị cũ. Kênh trực tuyến chưa cấu hình khóa sẽ tự động quay về engine giả lập cục bộ và được đánh dấu giảm cấp.',
     keyLoadFailed: 'Đọc trạng thái khóa thất bại. Vui lòng xác nhận backend đã chạy.',
     providerBaidu: 'Baidu Dịch',
     providerTencent: 'Tencent Cloud TMT',
     appIdPlaceholderBaidu: 'Ví dụ: 20240101000000001',
     regionLabel: 'Vùng (tùy chọn)',
     regionPlaceholder: 'Mặc định ap-shanghai',
-    hintBaidu: 'Nền tảng mở dịch thuật · API dịch chung (Kênh 5) · Hạn mức miễn phí ~2 triệu ký tự/tháng',
+    hintBaidu:
+      'Nền tảng mở dịch thuật · API dịch chung (Kênh 5) · Hạn mức miễn phí ~2 triệu ký tự/tháng',
     hintTencent: 'Máy dịch TextTranslate (Kênh 7) · Hạn mức miễn phí ~5 triệu ký tự/tháng',
     secretPlaceholder: 'Đã lưu; để trống không đổi',
     configured: 'Đã cấu hình',
@@ -871,6 +923,6 @@ export const vi: DeepString<typeof zhCN> = {
     tencentAppIdLabel: 'SecretId',
     tencentSecretLabel: 'SecretKey',
     appIdPlaceholderTencent: 'Ví dụ: AKID****************',
-    save: 'Lưu',
+    save: 'Lưu'
   }
 }

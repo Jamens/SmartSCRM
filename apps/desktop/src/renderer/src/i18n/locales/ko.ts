@@ -46,7 +46,8 @@ export const ko: DeepString<typeof zhCN> = {
     signIn: '로그인',
     heroTitle1: '모든 고객 대화를',
     heroTitle2: '가치로 만들다',
-    heroSub: '다중 플랫폼 고객 통합 관리 · AI 메시지 번역 · 스마트 발송 및 성장 엔진으로跨境 팀에 올인원 프라이빗 운영 역량을 제공합니다.',
+    heroSub:
+      '다중 플랫폼 고객 통합 관리 · AI 메시지 번역 · 스마트 발송 및 성장 엔진으로跨境 팀에 올인원 프라이빗 운영 역량을 제공합니다.',
     feature1: '전 채널 메시지 실시간 번역, 소통의 장벽 없음',
     feature2: '발송 및 그룹 육성 엔진으로 성장 자동화',
     feature3: '로컬 데이터 레이어로 안전·관리·재생 가능',
@@ -69,7 +70,8 @@ export const ko: DeepString<typeof zhCN> = {
     storedBrowser: '브라우저 미리보기(저장 안 됨)',
     statusLine: '적용: {{effective}} · 시스템: {{system}} · 저장 위치: {{host}}',
     notifications: '알림',
-    badgeDesc: '작업 표시줄 배지는 이 계정 테넌트의 읽지 않음만 집계하며 토글은 로컬 설정 파일에 저장됩니다.',
+    badgeDesc:
+      '작업 표시줄 배지는 이 계정 테넌트의 읽지 않음만 집계하며 토글은 로컬 설정 파일에 저장됩니다.',
     badgeTitle: '작업 표시줄 읽지 않음 배지',
     badgeDetail:
       '창이 전면에 없을 때 읽지 않은 메시지 총수를 작업 표시줄 아이콘에 표시합니다: Windows는 아이콘 우측 하단의 빨간 점(해당 플랫폼 API는 숫자를 그릴 수 없음), macOS와 Linux는 숫자 배지입니다. 앱 사용 중에는 표시되지 않습니다—그 순간 읽지 않은 것은 이미 읽히고 있어 다음 순간에는 낡은 값이 됩니다.',
@@ -77,7 +79,8 @@ export const ko: DeepString<typeof zhCN> = {
     badgeStatusNow: '현재: 읽지 않음 {{total}}건, {{conversations}}개 대화에 분산',
     badgeStatusLoading: '읽지 않음 로드 중…',
     desktopNotify: '데스크톱 알림',
-    desktopNotifyDesc: '작업 표시줄 배지와는 독립된 토글입니다: 하나를 꺼도 다른 하나에 영향이 없습니다.',
+    desktopNotifyDesc:
+      '작업 표시줄 배지와는 독립된 토글입니다: 하나를 꺼도 다른 하나에 영향이 없습니다.',
     desktopNotifyTitle: '메시지 수신 시 시스템 알림 표시',
     desktopNotifyDetail:
       '창이 전면에 없을 때 수신 메시지는 시스템 알림으로 표시됩니다. 탭하면 앱으로 돌아가 해당 대화가 열립니다. 같은 대화의 연속된 여러 건은 하나로 합쳐지며(제목에 건수 표시) 알림이 넘치지 않습니다. 앱 사용 중에는 표시되지 않습니다.',
@@ -85,7 +88,8 @@ export const ko: DeepString<typeof zhCN> = {
     enabled: '활성화됨',
     disabled: '비활성화됨',
     accountSecurity: '계정 보안',
-    accountSecurityDesc: '로그인 비밀번호를 변경합니다. 변경 성공 후 현재 세션은 즉시 무효화되며 새 비밀번호로 다시 로그인해야 합니다.',
+    accountSecurityDesc:
+      '로그인 비밀번호를 변경합니다. 변경 성공 후 현재 세션은 즉시 무효화되며 새 비밀번호로 다시 로그인해야 합니다.',
     oldPassword: '현재 비밀번호',
     newPassword: '새 비밀번호',
     confirmPassword: '새 비밀번호 확인',
@@ -106,8 +110,10 @@ export const ko: DeepString<typeof zhCN> = {
     accelOff: '비활성화됨(소프트웨어 렌더링)',
     accelBrowser: '현재 호스트(브라우저 미리보기)에는 전환 가능한 GPU 백엔드가 없습니다',
     safeModeTitle: '현재 그래픽 축소 모드입니다',
-    safeModeFatal: '축소 모드에서도 GPU가 크래시합니다(이유: {{reason}}). 대개 GPU 드라이버 문제이므로 드라이버 업데이트를 권장합니다.',
-    safeModeRecover: '이전 시작은 GPU 프로세스 크래시로 자동으로 여기로 전환되었습니다. 일반 모드로 복구를 시도할 수 있습니다:',
+    safeModeFatal:
+      '축소 모드에서도 GPU가 크래시합니다(이유: {{reason}}). 대개 GPU 드라이버 문제이므로 드라이버 업데이트를 권장합니다.',
+    safeModeRecover:
+      '이전 시작은 GPU 프로세스 크래시로 자동으로 여기로 전환되었습니다. 일반 모드로 복구를 시도할 수 있습니다:',
     retryStandard: '표준 모드 재시도',
     deviceInfo: '기기 정보',
     deviceInfoDesc:
@@ -118,12 +124,14 @@ export const ko: DeepString<typeof zhCN> = {
     languageDesc: '인터페이스 표시 언어입니다. 변경은 즉시 적용되며 로컬 설정에 기록됩니다.',
     languageLabel: '인터페이스 언어',
     identityLine: '{{name}}（{{role}}）· 테넌트 {{tenant}} · 초대 코드 {{code}}',
-    notSignedIn: '로그인 안 됨',
+    notSignedIn: '로그인 안 됨'
   },
   log: {
-    browserNote: '현재 브라우저 미리보기입니다. 로그는 메인 프로세스가 생성하며 데스크톱 앱에서 열면 보거나 내보낼 수 있습니다.',
+    browserNote:
+      '현재 브라우저 미리보기입니다. 로그는 메인 프로세스가 생성하며 데스크톱 앱에서 열면 보거나 내보낼 수 있습니다.',
     loading: '로그 로드 중…',
-    empty: '일치하는 로그가 없습니다. 디버그 시 메인 프로세스가 [tag]와 함께 출력한 console은 자동으로 해당 범주에 분류됩니다.',
+    empty:
+      '일치하는 로그가 없습니다. 디버그 시 메인 프로세스가 [tag]와 함께 출력한 console은 자동으로 해당 범주에 분류됩니다.',
     title: '로그 센터',
     desc: '메인 프로세스의 4종 로그(app / ipc / bridge / error) + 처리되지 않은 Promise 거부. 로컬에만 저장, 서버로 전송하지 않음.',
     allCategories: '모든 범주',
@@ -260,7 +268,8 @@ export const ko: DeepString<typeof zhCN> = {
       createError: '생성 실패',
       duplicateHint:
         ' —— 이 플랫폼에서는 이 open_id에 이미 고객이 있습니다. 현재 "open_id로 기존 고객 검색" 진입점이 없으며(고객 목록 키워드는 닉네임 / 전화 / 이메일만), 고객 관리 페이지에서 누구인지 확인하세요.',
-      linkFailed: '고객 #{{id}}은(는) 생성되었으나 기록 메시지 연결에 실패했습니다(대화 헤더 미연결).',
+      linkFailed:
+        '고객 #{{id}}은(는) 생성되었으나 기록 메시지 연결에 실패했습니다(대화 헤더 미연결).',
       linkError: '연결 실패',
       linkRetryHint:
         '재시도는 "연결" 단계만 보충하며 중복 고객을 만들지 않습니다—중복 open_id는 백엔드에서 40901로 차단됩니다.',
@@ -353,16 +362,19 @@ export const ko: DeepString<typeof zhCN> = {
       empty: '이 고객의 메시지는 아직 수집되지 않았습니다.',
       group: '그룹',
       open: '열기',
-      noHeadTitle: '이 대화의 헤더가 아직 투영되지 않았습니다(메시지만 수집됨). 현재는 이동할 수 없습니다'
+      noHeadTitle:
+        '이 대화의 헤더가 아직 투영되지 않았습니다(메시지만 수집됨). 현재는 이동할 수 없습니다'
     },
     groups: {
       title: '소속 그룹',
       exporting: '내보내는 중…',
       exportSelected: '선택 항목 내보내기({{count}})',
-      noOnlineAccount: '온라인 WhatsApp 계정이 없습니다. 그룹 멤버는 계정이 온라인일 때만 수집되며 연결 후 여기에 자동으로 표시됩니다.',
+      noOnlineAccount:
+        '온라인 WhatsApp 계정이 없습니다. 그룹 멤버는 계정이 온라인일 때만 수집되며 연결 후 여기에 자동으로 표시됩니다.',
       loading: '로드 중…',
       loadError: '소속 그룹을 읽을 수 없습니다. 백엔드가 시작되었는지 확인하세요.',
-      empty: '이 고객과 일치하는 그룹 멤버 행이 아직 없습니다. 대조는 전화번호로 이루어지므로 연락처에 저장되지 않은陌生的 그룹은 여기에 나타나지 않습니다.',
+      empty:
+        '이 고객과 일치하는 그룹 멤버 행이 아직 없습니다. 대조는 전화번호로 이루어지므로 연락처에 저장되지 않은陌生的 그룹은 여기에 나타나지 않습니다.',
       disbanded: '해산 / 탈퇴',
       inGroup: '그룹 내 {{in}} · 이전 스냅샷 {{snapshot}} · 스냅샷 시각 {{time}}',
       viewMembers: '멤버 보기',
@@ -393,16 +405,19 @@ export const ko: DeepString<typeof zhCN> = {
       membersLoading: '로드 중…',
       membersLoadError: '멤버 명단을 읽을 수 없습니다.',
       membersEmpty: '이 필터 조건과 일치하는 멤버가 없습니다.',
-      memberHeader: '이름 / 전화 / 역할 / 소속 / 가입일 / 가입 횟수 / 탈퇴일 / 탈퇴 방식 / 최근 발언 / 발언 수',
+      memberHeader:
+        '이름 / 전화 / 역할 / 소속 / 가입일 / 가입 횟수 / 탈퇴일 / 탈퇴 방식 / 최근 발언 / 발언 수',
       eventsLoading: '로드 중…',
       eventsLoadError: '가입/탈퇴 기록을 읽을 수 없습니다.',
-      eventsEmpty: '추가/삭제 이벤트는 아직 없습니다. 이벤트는 계정이 온라인이고 브리지가 준비된 때만 수집됩니다.',
+      eventsEmpty:
+        '추가/삭제 이벤트는 아직 없습니다. 이벤트는 계정이 온라인이고 브리지가 준비된 때만 수집됩니다.',
       eventHeader: '시각 / 이벤트 / 대상 / 작업자 / 출처'
-    },
+    }
   },
   broadcast: {
     title: '대량 발송',
-    subtitle: '계정별로 작업을 만들고 먼저 연습 발송(드라이런)합니다. 실제 발송은 작업의 “시작”에서 시작됩니다.',
+    subtitle:
+      '계정별로 작업을 만들고 먼저 연습 발송(드라이런)합니다. 실제 발송은 작업의 “시작”에서 시작됩니다.',
     backToList: '목록으로 돌아가기',
     newTask: '새 작업',
     action: {
@@ -443,7 +458,8 @@ export const ko: DeepString<typeof zhCN> = {
       loading: '작업 목록을 불러오는 중…',
       loadError: '작업 목록을 불러오지 못했습니다: {{message}}',
       empty: '아직 대량 발송 작업이 없습니다. 오른쪽 위의 “새 작업”을 클릭하세요.',
-      actionFailedNoReach: '“{{action}}”이(가) 통하지 않았습니다: 백엔드가 거부했거나 호스트에 연결할 수 없어 목록은 그대로입니다.',
+      actionFailedNoReach:
+        '“{{action}}”이(가) 통하지 않았습니다: 백엔드가 거부했거나 호스트에 연결할 수 없어 목록은 그대로입니다.',
       actionFailedMessage: '“{{action}}”이(가) 통하지 않았습니다: {{message}}',
       col: {
         taskName: '작업명',
@@ -475,20 +491,26 @@ export const ko: DeepString<typeof zhCN> = {
       prevPage: '이전',
       nextPage: '다음',
       dryRunNote: '연습 작업은 실제로 발송하지 않았습니다',
-      blockedSummary: '이 {{count}}건은 철회할 수 없습니다(차단된 행은 백엔드에 기록되지 않으며 여기가 유일한 출처입니다).',
+      blockedSummary:
+        '이 {{count}}건은 철회할 수 없습니다(차단된 행은 백엔드에 기록되지 않으며 여기가 유일한 출처입니다).',
       blockedItem: '상세 #{{id}} — {{reason}}',
       loadingDetails: '상세를 불러오는 중…',
       loadDetailsError: '상세를 불러오지 못했습니다: {{message}}',
       emptyFiltered: '이 페이지에 현재 필터와 일치하는 상세가 없습니다.',
-      actionFailedNoReach: '“{{action}}”이(가) 통하지 않았습니다: 백엔드가 거부했거나 호스트에 연결할 수 없어 작업은 그대로입니다.',
+      actionFailedNoReach:
+        '“{{action}}”이(가) 통하지 않았습니다: 백엔드가 거부했거나 호스트에 연결할 수 없어 작업은 그대로입니다.',
       actionFailedMessage: '“{{action}}”이(가) 통하지 않았습니다: {{message}}',
-      retryFailedNoReach: '“재발송”이(가) 통하지 않았습니다: 백엔드가 거부했거나 호스트에 연결할 수 없어 작업은 그대로이고 행도 초기화되지 않았습니다.',
+      retryFailedNoReach:
+        '“재발송”이(가) 통하지 않았습니다: 백엔드가 거부했거나 호스트에 연결할 수 없어 작업은 그대로이고 행도 초기화되지 않았습니다.',
       retryFailedMessage: '“재발송”이(가) 통하지 않았습니다: {{message}}',
-      recallFailedNoResult: '철회가 통하지 않았습니다: 선택한 {{count}}건이 받아들여지지도, 차단되지도 않고 백엔드 결과가 돌아오지 않았습니다.',
+      recallFailedNoResult:
+        '철회가 통하지 않았습니다: 선택한 {{count}}건이 받아들여지지도, 차단되지도 않고 백엔드 결과가 돌아오지 않았습니다.',
       recallNote: '{{eligible}}건 철회 예정, {{blocked}}건 철회 불가',
       resumeViaStart: '(현재 “{{status}}” 카드에는 “재개”가 없고 “시작”을 클릭하면 재실행됩니다.)',
-      resumeNoEntry: '(현재 “{{status}}” 카드에는 재실행 진입점이 없습니다: 이 배치는 작업이 실행 가능한 상태로 돌아갈 때까지 기다려야 합니다.)',
-      resetRunning: '{{count}}건을 초기화했지만 실행 중인 펌프는 이를 가져가지 않습니다(큐는 펌프 시작 시 확정): 먼저 “일시중지”한 뒤 “재개”를 클릭하면 이 배치를 재실행합니다.',
+      resumeNoEntry:
+        '(현재 “{{status}}” 카드에는 재실행 진입점이 없습니다: 이 배치는 작업이 실행 가능한 상태로 돌아갈 때까지 기다려야 합니다.)',
+      resetRunning:
+        '{{count}}건을 초기화했지만 실행 중인 펌프는 이를 가져가지 않습니다(큐는 펌프 시작 시 확정): 먼저 “일시중지”한 뒤 “재개”를 클릭하면 이 배치를 재실행합니다.',
       resetGeneral: '{{count}}건을 초기화했습니다. “재개”로 재실행{{step}}',
       resetTargetedEmpty: '{{label}}: 이 행들은 실패 상태가 아니므로 재발송할 것이 없습니다.',
       resetEmpty: '{{label}}: 재발송할 실패 행이 없습니다.',
@@ -530,12 +552,14 @@ export const ko: DeepString<typeof zhCN> = {
       createDryRun: '작업 만들기(연습)',
       createReal: '작업 만들기(실발송)',
       accountsLabel: '온라인 WhatsApp 계정(복수 선택 가능)',
-      noOnlineAccounts: '온라인 WhatsApp 계정이 없습니다. 먼저 계정 사이드바에서 QR 코드를 스캔해 온라인 상태로 만드세요.',
+      noOnlineAccounts:
+        '온라인 WhatsApp 계정이 없습니다. 먼저 계정 사이드바에서 QR 코드를 스캔해 온라인 상태로 만드세요.',
       recipientSearchPlaceholder: '제목 / 대화 키로 필터',
       byAudience: '오디언스별',
       summary: '선택한 수신자 {{recipients}}명 × 내용 {{contents}}건 = 총 {{total}}건',
       overCap: '{{max}}건 한도 초과',
-      overRecipientCap: '수신자가 한도 {{max}}명을 초과했습니다 — {{max}}명 이하로 줄여야 다음으로 진행할 수 있습니다',
+      overRecipientCap:
+        '수신자가 한도 {{max}}명을 초과했습니다 — {{max}}명 이하로 줄여야 다음으로 진행할 수 있습니다',
       onlyFirst: '처음 {{count}}건만 표시(아직 불러오지 않은 대화 있음)',
       loadingConversations: '대화를 불러오는 중…',
       noConversations: '이 계정에는 아직 대화가 없습니다.',
@@ -554,7 +578,8 @@ export const ko: DeepString<typeof zhCN> = {
       previewing: '미리보는 중…',
       preview: '렌더링 결과 미리보기',
       needRecipients: '먼저 수신자 단계에서 최소 1명을 선택하세요.',
-      previewNote: '처음 {{count}}명 수신자의 렌더링 결과(백엔드 렌더러 재사용, 인식되지 않는 중괄호는 그대로 유지):',
+      previewNote:
+        '처음 {{count}}명 수신자의 렌더링 결과(백엔드 렌더러 재사용, 인식되지 않는 중괄호는 그대로 유지):',
       previewRow: '{{chatKey}} · {{n}}번째 항목',
       previewTruncated: '미리보기 건수가 한도에 도달해 나머지는 표시되지 않습니다.',
       msgMin: '동일인 간격 최소(초)',
@@ -574,11 +599,14 @@ export const ko: DeepString<typeof zhCN> = {
       lChatInterval: '교차인 간격',
       lMode: '모드',
       overCapCreate: '{{max}}건 한도 초과 — 수신자를 줄이거나 내용을 몇 개 삭제해야 만듭니다.',
-      overRecipientCreate: '수신자가 한도 {{max}}명을 초과했습니다 — {{max}}명 이하로 줄여야 만듭니다(만들기 버튼 비활성).',
+      overRecipientCreate:
+        '수신자가 한도 {{max}}명을 초과했습니다 — {{max}}명 이하로 줄여야 만듭니다(만들기 버튼 비활성).',
       createError: '만들기 실패: {{message}}',
-      rejectedTitle: '{{count}}명의 수신자가 건너뛰어졌습니다(작업 #{{taskId}} 생성, 총 {{total}}건)',
+      rejectedTitle:
+        '{{count}}명의 수신자가 건너뛰어졌습니다(작업 #{{taskId}} 생성, 총 {{total}}건)',
       rejectedItem: '{{chatKey}} — {{reason}}',
-      rejectedNote: '건너뛴 수신자는 작업에 나타나지 않습니다. 작업을 열기 전에 이 목록을 확인하세요.',
+      rejectedNote:
+        '건너뛴 수신자는 작업에 나타나지 않습니다. 작업을 열기 전에 이 목록을 확인하세요.',
       contentEmpty: '{{n}}번째 항목이 비어 있음',
       contentTooLong: '{{n}}번째 항목이 {{max}}자를 초과함'
     }
@@ -586,7 +614,8 @@ export const ko: DeepString<typeof zhCN> = {
   account: {
     stage: {
       emptyTitle: '선택된 계정 없음',
-      emptyDesc: '왼쪽 목록에서 플랫폼 계정을 선택하면 여기에 임베드 로그인하여 대화를 관리할 수 있습니다.',
+      emptyDesc:
+        '왼쪽 목록에서 플랫폼 계정을 선택하면 여기에 임베드 로그인하여 대화를 관리할 수 있습니다.',
       online: '온라인',
       offline: '오프라인',
       sessionOffline: '세션이 온라인이 아님',
@@ -597,7 +626,8 @@ export const ko: DeepString<typeof zhCN> = {
       injectOn: '켜짐',
       injectOff: '꺼짐',
       reloadTitle: '페이지 새로고침',
-      browserPreviewOnly: '현재 브라우저 미리보기입니다. 임베드 보기는 데스크톱에서만 사용할 수 있습니다.',
+      browserPreviewOnly:
+        '현재 브라우저 미리보기입니다. 임베드 보기는 데스크톱에서만 사용할 수 있습니다.',
       embedNotSupported: '{{label}}은(는) 웹 임베드 로그인을 아직 지원하지 않습니다.',
       loading: '페이지 로딩 중…'
     },
@@ -665,6 +695,16 @@ export const ko: DeepString<typeof zhCN> = {
     searchPlaceholder: '자료 이름 / 메모 검색',
     allGroups: '전체 그룹',
     allTypes: '전체 유형',
+    scope: {
+      label: '소유',
+      all: '전체 소유',
+      public: '공용',
+      personal: '내 것',
+      contact: '고객',
+      contactTitle: '고객 #{{id}} 에 연결됨',
+      customerIdPlaceholder: '고객 id (숫자)',
+      hint: '「내 것」은 본인만 사용할 수 있습니다. 「고객」 소재는 특정 고객에 연결되어 해당 고객과의 대화에 표시됩니다.'
+    },
     loading: '자료 불러오는 중…',
     empty: '조건에 맞는 자료가 없습니다.',
     rename: '이름 변경',
@@ -682,7 +722,8 @@ export const ko: DeepString<typeof zhCN> = {
     ungroup: '그룹 해제',
     contentLabel: '자료 내용 (이미지 URL / data URI)',
     urlPlaceholder: 'https 이미지/파일 주소를 붙여넣거나 아래에서 로컬 이미지를 선택하세요',
-    inlineNote: '로컬 이미지가 포함되었습니다. 다른 이미지를 선택하거나 지운 후 URL을 붙여넣으세요.',
+    inlineNote:
+      '로컬 이미지가 포함되었습니다. 다른 이미지를 선택하거나 지운 후 URL을 붙여넣으세요.',
     inlinePreview: ' (포함된 이미지)',
     noticeLargeImage: '이미지가 커서 자료 URL을 사용하세요 (로컬 제한 400KB).',
     noticeNonImage: '이미지가 아닌 자료는 자료 URL을 입력하세요.',
@@ -719,7 +760,8 @@ export const ko: DeepString<typeof zhCN> = {
     delete: '삭제',
     deleteConfirm: '오디언스 "{{name}}"을(를) 삭제할까요?',
     editAudience: '오디언스 편집',
-    dialogDesc: '조건은 "모두 만족"입니다. 선택한 태그가 모두 일치하고 플랫폼과 키워드가 추가됩니다.',
+    dialogDesc:
+      '조건은 "모두 만족"입니다. 선택한 태그가 모두 일치하고 플랫폼과 키워드가 추가됩니다.',
     name: '이름',
     namePlaceholder: '예: 고가치 성사 고객',
     platform: '플랫폼',
@@ -790,7 +832,8 @@ export const ko: DeepString<typeof zhCN> = {
   },
   translation: {
     title: '번역 센터',
-    subtitle: '언어 방향, 채널, 활성 노드는 백엔드가 계정 설정에서 결정하며 이 페이지는 구성만 합니다',
+    subtitle:
+      '언어 방향, 채널, 활성 노드는 백엔드가 계정 설정에서 결정하며 이 페이지는 구성만 합니다',
     loading: '불러오는 중…',
     loadingSettings: '번역 설정 불러오는 중…',
     loadFailed: '번역 설정을 읽지 못했습니다. 백엔드가 실행 중인지 확인하세요.',
@@ -815,7 +858,8 @@ export const ko: DeepString<typeof zhCN> = {
     blockContainsChinese: '중국어 포함 시 전송 차단',
     blockHint: '활성화하면 중국어가 포함된 메시지를 차단하고 경고합니다',
     nodeAndChannel: '노드와 채널',
-    nodeChannelDesc: '노드는 속도 테스트와 자동 최적화에만 영향을 줍니다. 모의 채널 번역문은 로컬 엔진에서 생성되며 온라인 채널(Baidu/Tencent)은 키 설정이 필요합니다',
+    nodeChannelDesc:
+      '노드는 속도 테스트와 자동 최적화에만 영향을 줍니다. 모의 채널 번역문은 로컬 엔진에서 생성되며 온라인 채널(Baidu/Tencent)은 키 설정이 필요합니다',
     activeNode: '활성 노드',
     reselectBySpeed: '속도 테스트로 재선택',
     unreachable: '도달 불가',
@@ -834,7 +878,8 @@ export const ko: DeepString<typeof zhCN> = {
     cacheEmpty: '아직 캐시 항목이 없습니다.',
     hitCount: '{{count}}회',
     trialTitle: '번역 시험',
-    trialDesc: 'WhatsApp에 로그인하지 않아도 엔진과 캐시를 검증할 수 있습니다. 현재 설정에서 결정된 방향을 사용합니다',
+    trialDesc:
+      'WhatsApp에 로그인하지 않아도 엔진과 캐시를 검증할 수 있습니다. 현재 설정에서 결정된 방향을 사용합니다',
     inputPlaceholder: '번역할 텍스트 입력',
     sampleText: '안녕하세요, 주문이 발송되었습니다',
     receiveDirection: '수신 방향',
@@ -847,7 +892,8 @@ export const ko: DeepString<typeof zhCN> = {
     channelPrefix: '채널 {{channel}}',
     requestFailed: '번역 요청에 실패했습니다. 백엔드가 실행 중인지 확인하세요.',
     keyConfig: '키 설정',
-    keyConfigDesc: '키는 로컬 백엔드에만 저장되며 쓰기 후 다시 읽지 않습니다. 빈 키로 저장하면 기존 값이 유지됩니다. 키가 설정되지 않은 온라인 채널은 자동으로 로컬 모의 엔진으로 폴백하고 성능 저하로 표시됩니다.',
+    keyConfigDesc:
+      '키는 로컬 백엔드에만 저장되며 쓰기 후 다시 읽지 않습니다. 빈 키로 저장하면 기존 값이 유지됩니다. 키가 설정되지 않은 온라인 채널은 자동으로 로컬 모의 엔진으로 폴백하고 성능 저하로 표시됩니다.',
     keyLoadFailed: '키 상태를 읽지 못했습니다. 백엔드가 실행 중인지 확인하세요.',
     providerBaidu: 'Baidu 번역',
     providerTencent: 'Tencent Cloud TMT',
@@ -871,6 +917,6 @@ export const ko: DeepString<typeof zhCN> = {
     tencentAppIdLabel: 'SecretId',
     tencentSecretLabel: 'SecretKey',
     appIdPlaceholderTencent: '예: AKID****************',
-    save: '저장',
+    save: '저장'
   }
 }

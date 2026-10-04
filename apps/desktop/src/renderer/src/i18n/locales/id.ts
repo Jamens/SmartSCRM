@@ -46,7 +46,8 @@ export const id: DeepString<typeof zhCN> = {
     signIn: 'Masuk',
     heroTitle1: 'Jadikan setiap percakapan pelanggan',
     heroTitle2: 'bernilai',
-    heroSub: 'Pengelolaan pelanggan lintas-platform terpadu · Terjemahan pesan AI · Mesin siaran dan budidaya grup yang cerdas, menyediakan kemampuan operasi privat sehenti bagi tim lintas batas.',
+    heroSub:
+      'Pengelolaan pelanggan lintas-platform terpadu · Terjemahan pesan AI · Mesin siaran dan budidaya grup yang cerdas, menyediakan kemampuan operasi privat sehenti bagi tim lintas batas.',
     feature1: 'Terjemahan pesan multikanal secara langsung, komunikasi tanpa hambatan',
     feature2: 'Mesin siaran dan budidaya grup, otomatisasi pertumbuhan',
     feature3: 'Lapisan data lokal, aman, terkendali, dan dapat diputar ulang',
@@ -69,23 +70,28 @@ export const id: DeepString<typeof zhCN> = {
     storedBrowser: 'Pratinjau browser (tidak disimpan)',
     statusLine: 'Berlaku: {{effective}} · Sistem: {{system}} · Pengaturan disimpan di {{host}}',
     notifications: 'Notifikasi',
-    badgeDesc: 'Lencana belum dibaca pada bilah tugas hanya menghitung milik penyewa akun ini; sakelar disimpan di berkas pengaturan lokal.',
+    badgeDesc:
+      'Lencana belum dibaca pada bilah tugas hanya menghitung milik penyewa akun ini; sakelar disimpan di berkas pengaturan lokal.',
     badgeTitle: 'Lencana belum dibaca pada bilah tugas',
     badgeDetail:
       'Saat jendela tidak di latar depan, total pesan belum dibaca ditandai pada ikon bilah tugas: Windows menampilkan titik merah di pojok kanan bawah ikon (API platform tersebut tidak dapat menggambar angka), macOS dan Linux menampilkan lencana angka. Tidak ditampilkan saat sedang menggunakan aplikasi ini—pada saat itu pesan belum dibaca sedang dibaca, angka yang ditampilkan akan kadaluarsa pada detik berikutnya.',
     badgeStatusBrowser: 'Host saat ini tidak menggambar lencana bilah tugas (pratinjau browser)',
-    badgeStatusNow: 'Sekarang: {{total}} pesan belum dibaca, tersebar di {{conversations}} percakapan',
+    badgeStatusNow:
+      'Sekarang: {{total}} pesan belum dibaca, tersebar di {{conversations}} percakapan',
     badgeStatusLoading: 'Membaca belum dibaca…',
     desktopNotify: 'Notifikasi pesan desktop',
-    desktopNotifyDesc: 'Ini adalah dua sakelar independen dengan lencana bilah tugas: mematikan satu tidak memengaruhi yang lain.',
+    desktopNotifyDesc:
+      'Ini adalah dua sakelar independen dengan lencana bilah tugas: mematikan satu tidak memengaruhi yang lain.',
     desktopNotifyTitle: 'Tampilkan notifikasi sistem saat menerima pesan',
     desktopNotifyDetail:
       'Saat jendela tidak di latar depan, pesan yang diterima akan memunculkan notifikasi sistem; mengkliknya akan kembali ke aplikasi ini dan membuka percakapan terkait. Beberapa pesan berurutan dari percakapan yang sama akan digabung menjadi satu (dengan jumlah di judul), sehingga tidak membanjiri layar. Tidak ditampilkan saat sedang menggunakan aplikasi ini—pada saat itu Anda sudah melihatnya.',
-    desktopNotifyBrowser: 'Host saat ini tidak dapat memunculkan notifikasi sistem (pratinjau browser)',
+    desktopNotifyBrowser:
+      'Host saat ini tidak dapat memunculkan notifikasi sistem (pratinjau browser)',
     enabled: 'Diaktifkan',
     disabled: 'Dinonaktifkan',
     accountSecurity: 'Keamanan akun',
-    accountSecurityDesc: 'Ubah kata sandi login. Setelah berhasil diubah, sesi login saat ini akan segera tidak valid dan perlu login ulang dengan kata sandi baru.',
+    accountSecurityDesc:
+      'Ubah kata sandi login. Setelah berhasil diubah, sesi login saat ini akan segera tidak valid dan perlu login ulang dengan kata sandi baru.',
     oldPassword: 'Kata sandi lama',
     newPassword: 'Kata sandi baru',
     confirmPassword: 'Konfirmasi kata sandi baru',
@@ -106,8 +112,10 @@ export const id: DeepString<typeof zhCN> = {
     accelOff: 'Dinonaktifkan (render perangkat lunak)',
     accelBrowser: 'Host saat ini (pratinjau browser) tidak memiliki backend GPU untuk dialihkan',
     safeModeTitle: 'Saat ini dalam mode degradasi grafis',
-    safeModeFatal: 'Dalam mode degradasi, GPU masih crash (alasan: {{reason}}), kemungkinan besar masalah driver kartu grafis, disarankan memperbarui driver.',
-    safeModeRecover: 'Peluncuran terakhir dialihkan ke sini secara otomatis karena proses GPU crash. Anda dapat mencoba memulihkan mode normal:',
+    safeModeFatal:
+      'Dalam mode degradasi, GPU masih crash (alasan: {{reason}}), kemungkinan besar masalah driver kartu grafis, disarankan memperbarui driver.',
+    safeModeRecover:
+      'Peluncuran terakhir dialihkan ke sini secara otomatis karena proses GPU crash. Anda dapat mencoba memulihkan mode normal:',
     retryStandard: 'Coba lagi mode standar',
     deviceInfo: 'Informasi perangkat',
     deviceInfoDesc:
@@ -115,15 +123,18 @@ export const id: DeepString<typeof zhCN> = {
     deviceLoading: 'Membaca…',
     deviceLogin: 'Login saat ini: {{who}} · Alamat layanan {{api}}',
     language: 'Bahasa',
-    languageDesc: 'Bahasa tampilan antarmuka. Perubahan berlaku segera dan dicatat di pengaturan lokal.',
+    languageDesc:
+      'Bahasa tampilan antarmuka. Perubahan berlaku segera dan dicatat di pengaturan lokal.',
     languageLabel: 'Bahasa antarmuka',
     identityLine: '{{name}} ({{role}}) · Tenant {{tenant}} · Kode undangan {{code}}',
-    notSignedIn: 'Belum masuk',
+    notSignedIn: 'Belum masuk'
   },
   log: {
-    browserNote: 'Ini adalah pratinjau browser, log dihasilkan oleh proses utama, buka aplikasi desktop untuk melihat dan mengekspor.',
+    browserNote:
+      'Ini adalah pratinjau browser, log dihasilkan oleh proses utama, buka aplikasi desktop untuk melihat dan mengekspor.',
     loading: 'Membaca log…',
-    empty: 'Tidak ada log yang cocok. Saat debug, console dengan [tag] yang dicetak oleh proses utama akan otomatis dikelompokkan ke kategori terkait.',
+    empty:
+      'Tidak ada log yang cocok. Saat debug, console dengan [tag] yang dicetak oleh proses utama akan otomatis dikelompokkan ke kategori terkait.',
     title: 'Pusat Log',
     desc: 'Empat jenis log proses utama (app / ipc / bridge / error) + penolakan Promise yang tidak ditangani, hanya disimpan lokal, tidak dilaporkan ke server.',
     allCategories: 'Semua kategori',
@@ -205,15 +216,18 @@ export const id: DeepString<typeof zhCN> = {
       to: 'hingga',
       currentCustomerOnly: 'Hanya pelanggan saat ini',
       clearFilters: 'Hapus filter',
-      customerFilterDisabled: 'Pilih percakapan yang sudah dikaitkan dengan pelanggan di kanan terlebih dahulu',
+      customerFilterDisabled:
+        'Pilih percakapan yang sudah dikaitkan dengan pelanggan di kanan terlebih dahulu',
       customerFilterHint:
         'Percakapan saat ini tidak memiliki pelanggan terkait, "Hanya pelanggan saat ini" dinonaktifkan sementara; beralih ke percakapan yang memiliki pelanggan terkait akan mengaktifkannya kembali secara otomatis.',
       searching: 'Mencari…',
-      minHint: 'Masukkan minimal {{min}} karakter untuk memulai pencarian. Pencarian memindai isi pesan yang sudah masuk database.',
+      minHint:
+        'Masukkan minimal {{min}} karakter untuk memulai pencarian. Pencarian memindai isi pesan yang sudah masuk database.',
       loadError: 'Permintaan pencarian gagal, pastikan backend sudah dimulai.',
       noHits: 'Tidak ada yang cocok. Coba kata kunci lain, atau perlebar jendela waktu.',
       media: '(pesan media)',
-      noConversationHead: 'Pesan ini tidak memiliki header percakapan terkait, tidak dapat melompat.',
+      noConversationHead:
+        'Pesan ini tidak memiliki header percakapan terkait, tidak dapat melompat.',
       loadMore: 'Muat lebih banyak',
       loadingMore: 'Memuat…',
       barTitle: '{{day}} terima {{in}} kirim {{out}}'
@@ -248,9 +262,11 @@ export const id: DeepString<typeof zhCN> = {
     createCustomer: {
       title: 'Buat sebagai pelanggan',
       desc: 'Buat pelanggan dari lawan percakapan ini, dan isikan kembali riwayat pesan percakapan yang sudah masuk database kepadanya.',
-      notAllowed: 'Percakapan ini tidak dapat dijadikan pelanggan (percakapan grup atau sudah dikaitkan dengan pelanggan).',
+      notAllowed:
+        'Percakapan ini tidak dapat dijadikan pelanggan (percakapan grup atau sudah dikaitkan dengan pelanggan).',
       conversationId: 'ID percakapan (open_id)',
-      conversationIdHint: 'Ini adalah chat_key percakapan ini; mengubahnya berarti membuat pelanggan untuk nomor lain.',
+      conversationIdHint:
+        'Ini adalah chat_key percakapan ini; mengubahnya berarti membuat pelanggan untuk nomor lain.',
       nickname: 'Nama panggilan',
       nicknamePlaceholder: 'Biarkan kosong jika tidak diisi',
       phone: 'Nomor ponsel',
@@ -260,7 +276,8 @@ export const id: DeepString<typeof zhCN> = {
       createError: 'Gagal membuat',
       duplicateHint:
         ' —— di platform ini open_id tersebut sudah memiliki pelanggan. Saat ini tidak ada entri "cari pelanggan existing berdasarkan open_id" (kata kunci daftar pelanggan hanya mencari nama panggilan / ponsel / email), silakan ke halaman manajemen pelanggan untuk memastikan siapa orangnya.',
-      linkFailed: 'Pelanggan #{{id}} berhasil dibuat, tetapi gagal mengaitkan riwayat pesan (header percakapan belum terpasang).',
+      linkFailed:
+        'Pelanggan #{{id}} berhasil dibuat, tetapi gagal mengaitkan riwayat pesan (header percakapan belum terpasang).',
       linkError: 'Gagal mengaitkan',
       linkRetryHint:
         'Coba lagi hanya akan melengkapi langkah "pengaitan", tidak membuat pelanggan duplikat—open_id duplikat akan diblokir backend dengan 40901.',
@@ -276,7 +293,8 @@ export const id: DeepString<typeof zhCN> = {
       desc: 'Hanya mengubah arah bahasa pelanggan ini. Balon di halaman dan kotak balas di halaman riwayat mengambil entri pertama yang cocok menurut urutan "percakapan → pelanggan → global", jadi cakupan penerapan override ini ke level mana dapat dilihat dari lencana di atas dan anotasi "khusus sesi ini" di samping kotak balas.',
       inherited: 'Ikuti global',
       owned: 'Khusus pelanggan ini',
-      inheritedHint: 'Setelah disimpan hanya membuat satu override untuk pelanggan ini, pengaturan global tidak berubah.',
+      inheritedHint:
+        'Setelah disimpan hanya membuat satu override untuk pelanggan ini, pengaturan global tidak berubah.',
       ownedHint: 'Baris override · Pelanggan #{{id}}',
       receive: 'Terima',
       send: 'Kirim',
@@ -353,16 +371,19 @@ export const id: DeepString<typeof zhCN> = {
       empty: 'Belum ada pesan pelanggan ini yang diambil.',
       group: 'Grup',
       open: 'Buka',
-      noHeadTitle: 'Header percakapan ini belum diproyeksikan (hanya pesan yang diambil), sementara tidak dapat dilompati'
+      noHeadTitle:
+        'Header percakapan ini belum diproyeksikan (hanya pesan yang diambil), sementara tidak dapat dilompati'
     },
     groups: {
       title: 'Grup yang diikuti',
       exporting: 'Mengekspor…',
       exportSelected: 'Ekspor terpilih ({{count}})',
-      noOnlineAccount: 'Tidak ada akun WhatsApp yang daring. Anggota grup hanya dikumpulkan saat akun daring, setelah terhubung konten akan muncul di sini secara otomatis.',
+      noOnlineAccount:
+        'Tidak ada akun WhatsApp yang daring. Anggota grup hanya dikumpulkan saat akun daring, setelah terhubung konten akan muncul di sini secara otomatis.',
       loading: 'Membaca…',
       loadError: 'Tidak dapat membaca grup yang diikuti: pastikan backend sudah dimulai.',
-      empty: 'Pelanggan ini belum memiliki baris anggota grup yang cocok. Pencocokan dilakukan berdasarkan nomor ponsel, jadi grup nomor asing yang tidak disimpan di kontak tidak akan muncul di sini.',
+      empty:
+        'Pelanggan ini belum memiliki baris anggota grup yang cocok. Pencocokan dilakukan berdasarkan nomor ponsel, jadi grup nomor asing yang tidak disimpan di kontak tidak akan muncul di sini.',
       disbanded: 'Dibubarkan/Keluar',
       inGroup: 'Di grup {{in}} · Snapshot terakhir {{snapshot}} · Snapshot pada {{time}}',
       viewMembers: 'Lihat anggota grup',
@@ -380,8 +401,10 @@ export const id: DeepString<typeof zhCN> = {
       exporting: 'Mengekspor…',
       refreshSkipFinal: 'Pompa akan melewati grup yang dibubarkan/keluar (spec §8)',
       refreshOneShot: 'Tarik ulang satu kali snapshot anggota hanya untuk grup ini',
-      exportNoSnapshot: 'Belum pernah diarsip, ekspor akan menghasilkan berkas kosong (no_rows dari spec §10)',
-      buildingNote: 'Membuat arsip: setelah putaran ini selesai, bacaan di sini akan disegarkan otomatis.',
+      exportNoSnapshot:
+        'Belum pernah diarsip, ekspor akan menghasilkan berkas kosong (no_rows dari spec §10)',
+      buildingNote:
+        'Membuat arsip: setelah putaran ini selesai, bacaan di sini akan disegarkan otomatis.',
       tabMembers: 'Daftar anggota',
       tabEvents: 'Riwayat masuk/keluar',
       filterAllMembers: 'Semua anggota',
@@ -393,16 +416,19 @@ export const id: DeepString<typeof zhCN> = {
       membersLoading: 'Membaca…',
       membersLoadError: 'Tidak dapat membaca daftar anggota.',
       membersEmpty: 'Tidak ada orang di bawah kondisi filter ini.',
-      memberHeader: 'Nama / Ponsel / Peran / Di grup / Waktu masuk / Jumlah masuk / Waktu keluar / Cara keluar / Percakapan terakhir / Jumlah percakapan',
+      memberHeader:
+        'Nama / Ponsel / Peran / Di grup / Waktu masuk / Jumlah masuk / Waktu keluar / Cara keluar / Percakapan terakhir / Jumlah percakapan',
       eventsLoading: 'Membaca…',
       eventsLoadError: 'Tidak dapat membaca riwayat masuk/keluar.',
-      eventsEmpty: 'Belum ada aliran penambahan/pengurangan orang. Peristiwa hanya dikumpulkan saat akun daring dan bridge siap.',
+      eventsEmpty:
+        'Belum ada aliran penambahan/pengurangan orang. Peristiwa hanya dikumpulkan saat akun daring dan bridge siap.',
       eventHeader: 'Waktu / Peristiwa / Target / Operator / Sumber'
-    },
+    }
   },
   broadcast: {
     title: 'Siaran Massal',
-    subtitle: 'Buat tugas per akun, coba dulu (dry-run); pengiriman nyata dipicu oleh “Mulai” pada tugas.',
+    subtitle:
+      'Buat tugas per akun, coba dulu (dry-run); pengiriman nyata dipicu oleh “Mulai” pada tugas.',
     backToList: 'Kembali ke daftar',
     newTask: 'Tugas baru',
     action: {
@@ -443,7 +469,8 @@ export const id: DeepString<typeof zhCN> = {
       loading: 'Memuat daftar tugas…',
       loadError: 'Gagal memuat daftar tugas: {{message}}',
       empty: 'Belum ada tugas siaran massal. Klik “Tugas baru” di kanan atas.',
-      actionFailedNoReach: '“{{action}}” tidak berhasil: backend menolak atau host tidak terjangkau, daftar tetap.',
+      actionFailedNoReach:
+        '“{{action}}” tidak berhasil: backend menolak atau host tidak terjangkau, daftar tetap.',
       actionFailedMessage: '“{{action}}” tidak berhasil: {{message}}',
       col: {
         taskName: 'Nama tugas',
@@ -475,22 +502,30 @@ export const id: DeepString<typeof zhCN> = {
       prevPage: 'Sebelumnya',
       nextPage: 'Berikutnya',
       dryRunNote: 'Tugas coba tidak benar-benar mengirim',
-      blockedSummary: '{{count}} entri ini tidak dapat ditarik (baris yang diblokir tidak ditulis backend; ini satu-satunya sumber).',
+      blockedSummary:
+        '{{count}} entri ini tidak dapat ditarik (baris yang diblokir tidak ditulis backend; ini satu-satunya sumber).',
       blockedItem: 'Detail #{{id}} — {{reason}}',
       loadingDetails: 'Memuat detail…',
       loadDetailsError: 'Gagal memuat detail: {{message}}',
       emptyFiltered: 'Halaman ini tidak memiliki detail yang cocok dengan filter saat ini.',
-      actionFailedNoReach: '“{{action}}” tidak berhasil: backend menolak atau host tidak terjangkau, tugas tetap.',
+      actionFailedNoReach:
+        '“{{action}}” tidak berhasil: backend menolak atau host tidak terjangkau, tugas tetap.',
       actionFailedMessage: '“{{action}}” tidak berhasil: {{message}}',
-      retryFailedNoReach: '“Kirim ulang” tidak berhasil: backend menolak atau host tidak terjangkau, tugas tetap dan tidak ada baris yang diatur ulang.',
+      retryFailedNoReach:
+        '“Kirim ulang” tidak berhasil: backend menolak atau host tidak terjangkau, tugas tetap dan tidak ada baris yang diatur ulang.',
       retryFailedMessage: '“Kirim ulang” tidak berhasil: {{message}}',
-      recallFailedNoResult: 'Penarikan tidak berhasil: {{count}} entri terpilih tidak diterima maupun diblokir, backend tidak mengembalikan hasil.',
+      recallFailedNoResult:
+        'Penarikan tidak berhasil: {{count}} entri terpilih tidak diterima maupun diblokir, backend tidak mengembalikan hasil.',
       recallNote: '{{eligible}} akan ditarik, {{blocked}} tidak dapat ditarik',
-      resumeViaStart: '(Kartu “{{status}}” saat ini tidak ada “Lanjut”; klik “Mulai” untuk menjalankan ulang.)',
-      resumeNoEntry: '(Kartu “{{status}}” saat ini tidak ada jalur menjalankan ulang: batch ini harus menunggu tugas kembali ke status dapat dijalankan.)',
-      resetRunning: 'Mengatur ulang {{count}} entri, tetapi pompa yang berjalan tidak akan mengambilnya (antrean ditetapkan saat pompa mulai): jeda dulu, lalu klik “Lanjut” untuk menjalankan ulang batch ini.',
+      resumeViaStart:
+        '(Kartu “{{status}}” saat ini tidak ada “Lanjut”; klik “Mulai” untuk menjalankan ulang.)',
+      resumeNoEntry:
+        '(Kartu “{{status}}” saat ini tidak ada jalur menjalankan ulang: batch ini harus menunggu tugas kembali ke status dapat dijalankan.)',
+      resetRunning:
+        'Mengatur ulang {{count}} entri, tetapi pompa yang berjalan tidak akan mengambilnya (antrean ditetapkan saat pompa mulai): jeda dulu, lalu klik “Lanjut” untuk menjalankan ulang batch ini.',
       resetGeneral: 'Mengatur ulang {{count}} entri, klik Lanjut untuk menjalankan ulang{{step}}',
-      resetTargetedEmpty: '{{label}}: baris ini tidak dalam status gagal, tidak ada yang dapat dikirim ulang.',
+      resetTargetedEmpty:
+        '{{label}}: baris ini tidak dalam status gagal, tidak ada yang dapat dikirim ulang.',
       resetEmpty: '{{label}}: tidak ada entri gagal untuk dikirim ulang.',
       batch: 'Seluruh batch',
       detailOf: 'Detail #{{id}}',
@@ -510,7 +545,8 @@ export const id: DeepString<typeof zhCN> = {
       },
       revokeAria: 'Tarik detail {{seq}}',
       contentIndex: 'Entri {{n}}',
-      unknownNoRetry: 'Hasil tidak diketahui (mungkin sudah terkirim), tidak dikirim ulang otomatis',
+      unknownNoRetry:
+        'Hasil tidak diketahui (mungkin sudah terkirim), tidak dikirim ulang otomatis',
       retryOne: 'Kirim ulang baris ini'
     },
     wizard: {
@@ -530,13 +566,16 @@ export const id: DeepString<typeof zhCN> = {
       createDryRun: 'Buat tugas (coba)',
       createReal: 'Buat tugas (kirim nyata)',
       accountsLabel: 'Akun WhatsApp daring (bisa pilih banyak)',
-      noOnlineAccounts: 'Tidak ada akun WhatsApp daring. Pindai kode QR di bilah sisi akun untuk daring terlebih dahulu.',
+      noOnlineAccounts:
+        'Tidak ada akun WhatsApp daring. Pindai kode QR di bilah sisi akun untuk daring terlebih dahulu.',
       recipientSearchPlaceholder: 'Filter berdasarkan judul / kunci percakapan',
       byAudience: 'Berdasarkan audiens',
       summary: 'Terpilih {{recipients}} penerima × {{contents}} konten = {{total}} entri',
       overCap: 'Melebihi batas {{max}} entri',
-      overRecipientCap: 'Penerima melebihi batas {{max}} orang — kurangi ke {{max}} atau kurang untuk lanjut',
-      onlyFirst: 'Hanya menampilkan {{count}} entri pertama (masih ada percakapan yang belum dimuat)',
+      overRecipientCap:
+        'Penerima melebihi batas {{max}} orang — kurangi ke {{max}} atau kurang untuk lanjut',
+      onlyFirst:
+        'Hanya menampilkan {{count}} entri pertama (masih ada percakapan yang belum dimuat)',
       loadingConversations: 'Memuat percakapan…',
       noConversations: 'Akun ini belum memiliki percakapan.',
       audienceNoHit: 'Dari {{count}} entri yang dimuat, audiens tidak cocok satupun{{more}}',
@@ -546,7 +585,8 @@ export const id: DeepString<typeof zhCN> = {
       loadMoreError: 'Gagal memuat lebih: {{message}}',
       loadingMore: 'Memuat…',
       loadMore: 'Muat lebih (dimuat {{loaded}} / {{max}})',
-      maxReached: 'Mencapai batas {{max}} entri. Persempit dengan pencarian atau audiens sebelum memilih.',
+      maxReached:
+        'Mencapai batas {{max}} entri. Persempit dengan pencarian atau audiens sebelum memilih.',
       contentLabel: 'Konten pesan (maks {{max}} entri, mendukung {nama pelanggan} / {nomor})',
       addContent: 'Tambah satu',
       contentPlaceholder: 'Isi entri {{n}}',
@@ -554,7 +594,8 @@ export const id: DeepString<typeof zhCN> = {
       previewing: 'Melihat pratinjau…',
       preview: 'Pratinjau hasil render',
       needRecipients: 'Pilih setidaknya satu penerima di langkah penerima dulu.',
-      previewNote: 'Hasil render untuk {{count}} penerima pertama (menggunakan ulang renderer backend, kurung tidak dikenali dibiarkan apa adanya):',
+      previewNote:
+        'Hasil render untuk {{count}} penerima pertama (menggunakan ulang renderer backend, kurung tidak dikenali dibiarkan apa adanya):',
       previewRow: '{{chatKey}} · Entri {{n}}',
       previewTruncated: 'Pratinjau mencapai batas entri, sisanya tidak ditampilkan.',
       msgMin: 'Interval orang sama min (detik)',
@@ -573,12 +614,16 @@ export const id: DeepString<typeof zhCN> = {
       lMsgInterval: 'Interval orang sama',
       lChatInterval: 'Interval antar orang',
       lMode: 'Mode',
-      overCapCreate: 'Melebihi batas {{max}} entri — kurangi penerima atau hapus beberapa konten untuk membuat.',
-      overRecipientCreate: 'Penerima melebihi batas {{max}} orang — kurangi ke {{max}} atau kurang untuk membuat (tombol buat dinonaktifkan).',
+      overCapCreate:
+        'Melebihi batas {{max}} entri — kurangi penerima atau hapus beberapa konten untuk membuat.',
+      overRecipientCreate:
+        'Penerima melebihi batas {{max}} orang — kurangi ke {{max}} atau kurang untuk membuat (tombol buat dinonaktifkan).',
       createError: 'Pembuatan gagal: {{message}}',
-      rejectedTitle: '{{count}} penerima dilewati (tugas #{{taskId}} dibuat, total {{total}} entri)',
+      rejectedTitle:
+        '{{count}} penerima dilewati (tugas #{{taskId}} dibuat, total {{total}} entri)',
       rejectedItem: '{{chatKey}} — {{reason}}',
-      rejectedNote: 'Penerima yang dilewati tidak akan muncul di tugas; periksa daftar ini sebelum membuka tugas.',
+      rejectedNote:
+        'Penerima yang dilewati tidak akan muncul di tugas; periksa daftar ini sebelum membuka tugas.',
       contentEmpty: 'Entri {{n}} kosong',
       contentTooLong: 'Entri {{n}} melebihi {{max}} karakter'
     }
@@ -586,7 +631,8 @@ export const id: DeepString<typeof zhCN> = {
   account: {
     stage: {
       emptyTitle: 'Belum ada akun dipilih',
-      emptyDesc: 'Pilih akun platform dari daftar di kiri untuk login tertanam dan kelola percakapan di sini.',
+      emptyDesc:
+        'Pilih akun platform dari daftar di kiri untuk login tertanam dan kelola percakapan di sini.',
       online: 'Online',
       offline: 'Offline',
       sessionOffline: 'Sesi tidak online',
@@ -597,7 +643,8 @@ export const id: DeepString<typeof zhCN> = {
       injectOn: 'nyala',
       injectOff: 'mati',
       reloadTitle: 'Muat ulang halaman',
-      browserPreviewOnly: 'Sedang dalam pratinjau browser; tampilan tertanam hanya tersedia di desktop.',
+      browserPreviewOnly:
+        'Sedang dalam pratinjau browser; tampilan tertanam hanya tersedia di desktop.',
       embedNotSupported: '{{label}} belum mendukung login tertanam web.',
       loading: 'Memuat halaman…'
     },
@@ -658,20 +705,32 @@ export const id: DeepString<typeof zhCN> = {
 
   materials: {
     title: 'Pustaka Materi',
-    subtitle: 'Aset gambar / video / file yang dapat digunakan ulang, dirujuk oleh balasan cepat dan siaran',
+    subtitle:
+      'Aset gambar / video / file yang dapat digunakan ulang, dirujuk oleh balasan cepat dan siaran',
     newGroup: 'Buat grup',
     newMaterial: 'Buat materi',
     editMaterial: 'Edit materi',
     searchPlaceholder: 'Cari nama materi / catatan',
     allGroups: 'Semua grup',
     allTypes: 'Semua tipe',
+    scope: {
+      label: 'Kepemilikan',
+      all: 'Semua kepemilikan',
+      public: 'Bersama',
+      personal: 'Milik saya',
+      contact: 'Kontak',
+      contactTitle: 'Terikat ke pelanggan #{{id}}',
+      customerIdPlaceholder: 'id pelanggan (angka)',
+      hint: '“Milik saya” hanya bisa dipakai oleh Anda. “Kontak” terikat ke satu pelanggan dan muncul di percakapan pelanggan itu.'
+    },
     loading: 'Memuat materi…',
     empty: 'Tidak ada materi yang cocok dengan filter.',
     rename: 'Ganti nama',
     renameGroup: 'Ganti nama grup',
     deleteGroup: 'Hapus grup',
     delete: 'Hapus',
-    dialogDesc: 'Gambar kecil disimpan lokal sebagai data URI dan dapat dipratinjau sepenuhnya luring.',
+    dialogDesc:
+      'Gambar kecil disimpan lokal sebagai data URI dan dapat dipratinjau sepenuhnya luring.',
     groupNameLabel: 'Nama grup',
     groupNamePlaceholder: 'Mis. Gambar produk',
     ungrouped: 'Tidak ada grup',
@@ -719,7 +778,8 @@ export const id: DeepString<typeof zhCN> = {
     delete: 'Hapus',
     deleteConfirm: 'Hapus audiens "{{name}}"?',
     editAudience: 'Edit audiens',
-    dialogDesc: 'Kondisinya "harus memenuhi semua": semua label terpilih harus cocok, lalu platform dan kata kunci ditambahkan.',
+    dialogDesc:
+      'Kondisinya "harus memenuhi semua": semua label terpilih harus cocok, lalu platform dan kata kunci ditambahkan.',
     name: 'Nama',
     namePlaceholder: 'Mis. Pelanggan bernilai tinggi yang menutup',
     platform: 'Platform',
@@ -740,7 +800,8 @@ export const id: DeepString<typeof zhCN> = {
 
   quickReplies: {
     title: 'Balasan Cepat',
-    subtitle: 'Skrip multi-bagian berupa teks / gambar / kartu nama, disalin ke jendela chat dalam satu klik',
+    subtitle:
+      'Skrip multi-bagian berupa teks / gambar / kartu nama, disalin ke jendela chat dalam satu klik',
     newGroup: 'Buat grup',
     newReply: 'Buat balasan cepat',
     searchPlaceholder: 'Cari judul / pintasan',
@@ -761,7 +822,8 @@ export const id: DeepString<typeof zhCN> = {
     group: 'Grup',
     ungrouped: 'Tanpa grup',
     itemLabel: 'Bagian ({{count}})',
-    emptyItemsHint: 'Belum ada bagian, klik tombol di atas untuk menambah teks / gambar / kartu nama.',
+    emptyItemsHint:
+      'Belum ada bagian, klik tombol di atas untuk menambah teks / gambar / kartu nama.',
     groupNameLabel: 'Nama grup',
     groupNamePlaceholder: 'Mis. Pra-penjualan',
     cardMeta: '{{group}} · {{count}} bagian · digunakan {{uses}} kali',
@@ -790,7 +852,8 @@ export const id: DeepString<typeof zhCN> = {
   },
   translation: {
     title: 'Pusat Terjemahan',
-    subtitle: 'Arah bahasa, saluran, dan node aktif diselesaikan oleh backend dari pengaturan akun; halaman ini hanya mengonfigurasi',
+    subtitle:
+      'Arah bahasa, saluran, dan node aktif diselesaikan oleh backend dari pengaturan akun; halaman ini hanya mengonfigurasi',
     loading: 'Memuat…',
     loadingSettings: 'Memuat pengaturan terjemahan…',
     loadFailed: 'Gagal membaca pengaturan terjemahan. Pastikan backend sudah berjalan.',
@@ -798,15 +861,18 @@ export const id: DeepString<typeof zhCN> = {
     onlineWithChannel: 'Daring · {{channel}}',
     onlineNotReady: 'Daring belum siap · fallback tiruan',
     riskControl: 'Kontrol risiko',
-    riskControlDesc: 'Lapisan injeksi memperingatkan atau memblokir berdasarkan sakelar yang dikirim',
+    riskControlDesc:
+      'Lapisan injeksi memperingatkan atau memblokir berdasarkan sakelar yang dikirim',
     nodeSpeedTest: 'Tes kecepatan node',
     speedTestDesc: 'Penundaan simulasi; tidak membuat permintaan jaringan apa pun',
     remeasure: 'Ukur ulang',
-    autoSelectResult: 'Hasil auto-terbaik: {{server}} (saat ini {{current}} sudah minimal maka dipertahankan)',
+    autoSelectResult:
+      'Hasil auto-terbaik: {{server}} (saat ini {{current}} sudah minimal maka dipertahankan)',
     receiveTitle: 'Terjemahan masuk',
     receiveDesc: 'Terjemahan di bawah gelembung yang dikirim pihak lain (R1)',
     sendTitle: 'Terjemahan keluar',
-    sendDesc: 'Arah pratinjau sebelum mengirim dari kotak input; gelembung yang Anda kirim juga diterjemahkan ke arah ini (R1)',
+    sendDesc:
+      'Arah pratinjau sebelum mengirim dari kotak input; gelembung yang Anda kirim juga diterjemahkan ke arah ini (R1)',
     voiceTranslation: 'Terjemahan suara',
     notEffectiveYet: 'Belum berlaku di versi ini',
     realtimePreview: 'Pratinjau waktu nyata',
@@ -815,7 +881,8 @@ export const id: DeepString<typeof zhCN> = {
     blockContainsChinese: 'Blokir kirim bila ada Mandarin',
     blockHint: 'Jika diaktifkan, pesan yang mengandung Mandarin akan diblokir dan diperingatkan',
     nodeAndChannel: 'Node dan saluran',
-    nodeChannelDesc: 'Node hanya memengaruhi tes kecepatan dan auto-terbaik; terjemahan saluran tiruan dihasilkan oleh engine lokal, saluran daring (Baidu/Tencent) memerlukan konfigurasi kunci',
+    nodeChannelDesc:
+      'Node hanya memengaruhi tes kecepatan dan auto-terbaik; terjemahan saluran tiruan dihasilkan oleh engine lokal, saluran daring (Baidu/Tencent) memerlukan konfigurasi kunci',
     activeNode: 'Node aktif',
     reselectBySpeed: 'Pilih ulang berdasarkan kecepatan',
     unreachable: 'Tidak dapat dijangkau',
@@ -834,7 +901,8 @@ export const id: DeepString<typeof zhCN> = {
     cacheEmpty: 'Belum ada entri cache.',
     hitCount: '{{count}} kali',
     trialTitle: 'Uji coba terjemahan',
-    trialDesc: 'Verifikasi engine dan cache tanpa login WhatsApp; menggunakan arah yang diselesaikan dari pengaturan saat ini',
+    trialDesc:
+      'Verifikasi engine dan cache tanpa login WhatsApp; menggunakan arah yang diselesaikan dari pengaturan saat ini',
     inputPlaceholder: 'Masukkan teks untuk diterjemahkan',
     sampleText: 'Halo, pesanan telah dikirim',
     receiveDirection: 'Arah masuk',
@@ -847,14 +915,16 @@ export const id: DeepString<typeof zhCN> = {
     channelPrefix: 'Saluran {{channel}}',
     requestFailed: 'Permintaan terjemahan gagal. Periksa apakah backend berjalan.',
     keyConfig: 'Konfigurasi kunci',
-    keyConfigDesc: 'Kunci hanya disimpan di backend lokal dan tidak dibaca kembali setelah ditulis; menyimpan kunci kosong berarti mempertahankan nilai asli. Saluran daring tanpa kunci terkonfigurasi akan otomatis fallback ke engine tiruan lokal dan ditandai terdegradasi.',
+    keyConfigDesc:
+      'Kunci hanya disimpan di backend lokal dan tidak dibaca kembali setelah ditulis; menyimpan kunci kosong berarti mempertahankan nilai asli. Saluran daring tanpa kunci terkonfigurasi akan otomatis fallback ke engine tiruan lokal dan ditandai terdegradasi.',
     keyLoadFailed: 'Gagal membaca status kunci. Pastikan backend sudah berjalan.',
     providerBaidu: 'Baidu Terjemahan',
     providerTencent: 'Tencent Cloud TMT',
     appIdPlaceholderBaidu: 'Mis. 20240101000000001',
     regionLabel: 'Region (opsional)',
     regionPlaceholder: 'Default ap-shanghai',
-    hintBaidu: 'Platform terbuka terjemahan · API Terjemahan Umum (Saluran 5) · Kuota gratis ~2 juta karakter/bulan',
+    hintBaidu:
+      'Platform terbuka terjemahan · API Terjemahan Umum (Saluran 5) · Kuota gratis ~2 juta karakter/bulan',
     hintTencent: 'Mesin terjemahan TextTranslate (Saluran 7) · Kuota gratis ~5 juta karakter/bulan',
     secretPlaceholder: 'Tersimpan; biarkan kosong untuk tidak mengubah',
     configured: 'Terkonfigurasi',
@@ -871,6 +941,6 @@ export const id: DeepString<typeof zhCN> = {
     tencentAppIdLabel: 'SecretId',
     tencentSecretLabel: 'SecretKey',
     appIdPlaceholderTencent: 'Mis. AKID****************',
-    save: 'Simpan',
+    save: 'Simpan'
   }
 }

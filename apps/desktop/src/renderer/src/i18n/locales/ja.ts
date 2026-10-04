@@ -46,7 +46,8 @@ export const ja: DeepString<typeof zhCN> = {
     signIn: 'ログイン',
     heroTitle1: 'すべての顧客との対話を',
     heroTitle2: '価値に変える',
-    heroSub: '複数プラットフォームの顧客を一元管理 · AI メッセージ翻訳 · スマート配信とグロースエンジンにより、越境チームにワンストップのプライベート運用能力を提供します。',
+    heroSub:
+      '複数プラットフォームの顧客を一元管理 · AI メッセージ翻訳 · スマート配信とグロースエンジンにより、越境チームにワンストップのプライベート運用能力を提供します。',
     feature1: '全チャネルのメッセージをリアルタイム翻訳、コミュニケーションの壁なし',
     feature2: '配信・グループ育成エンジンで成長を自動化',
     feature3: 'ローカルデータ層で安全・管理可能・再生可能',
@@ -69,7 +70,8 @@ export const ja: DeepString<typeof zhCN> = {
     storedBrowser: 'ブラウザプレビュー（保存されない）',
     statusLine: '適用中：{{effective}} · システム：{{system}} · 保存先：{{host}}',
     notifications: '通知',
-    badgeDesc: 'タスクバーのバッジはこのアカウントのテナントの未読のみを集計し、トグルはローカル設定ファイルに保存されます。',
+    badgeDesc:
+      'タスクバーのバッジはこのアカウントのテナントの未読のみを集計し、トグルはローカル設定ファイルに保存されます。',
     badgeTitle: 'タスクバー未読バッジ',
     badgeDetail:
       'ウィンドウが前面にないとき、未読メッセージの総数をタスクバーアイコンに表示します：Windows はアイコン右下の赤い点（そのプラットフォームの API は数字を描けません）、macOS と Linux は数字のバッジです。アプリ使用中は表示されません——その時点の未読は既に読まれており、表示しても次の瞬間には古くなります。',
@@ -77,7 +79,8 @@ export const ja: DeepString<typeof zhCN> = {
     badgeStatusNow: '現在：未読 {{total}} 件、{{conversations}} 件の会話に分散',
     badgeStatusLoading: '未読を読み込み中…',
     desktopNotify: 'デスクトップ通知',
-    desktopNotifyDesc: 'タスクバーバッジとは独立したトグルです：一方を切ってももう一方には影響しません。',
+    desktopNotifyDesc:
+      'タスクバーバッジとは独立したトグルです：一方を切ってももう一方には影響しません。',
     desktopNotifyTitle: 'メッセージ受信時にシステム通知を表示',
     desktopNotifyDetail:
       'ウィンドウが前面にないとき、受信メッセージはシステム通知として表示されます。タップするとアプリに戻り、該当の会話が開きます。同じ会話の連続した複数件は1件にまとめられ（タイトルに件数）、通知が溢れることはありません。アプリ使用中は表示されません。',
@@ -85,7 +88,8 @@ export const ja: DeepString<typeof zhCN> = {
     enabled: '有効',
     disabled: '無効',
     accountSecurity: 'アカウントセキュリティ',
-    accountSecurityDesc: 'ログインパスワードを変更します。変更成功後、現在のセッションは直ちに無効になり、新しいパスワードで再ログインが必要です。',
+    accountSecurityDesc:
+      'ログインパスワードを変更します。変更成功後、現在のセッションは直ちに無効になり、新しいパスワードで再ログインが必要です。',
     oldPassword: '現在のパスワード',
     newPassword: '新しいパスワード',
     confirmPassword: '新しいパスワード（確認）',
@@ -104,10 +108,13 @@ export const ja: DeepString<typeof zhCN> = {
       'オフにするとソフトウェア（CPU）描画になります——より安定しますが電力消費が増えます。一部の古い GPU ドライバは GPU プロセスをクラッシュさせ、その際アプリは自動的にこのモードに切り替え、お知らせします。',
     accelOn: '有効（GPU 使用）',
     accelOff: '無効（ソフトウェア描画）',
-    accelBrowser: '現在のホスト（ブラウザプレビュー）には切り替え可能な GPU バックエンドがありません',
+    accelBrowser:
+      '現在のホスト（ブラウザプレビュー）には切り替え可能な GPU バックエンドがありません',
     safeModeTitle: '現在はグラフィックス省略モードです',
-    safeModeFatal: '省略モードでも GPU がクラッシュします（理由：{{reason}}）。大半は GPU ドライバの問題です。ドライバの更新をお勧めします。',
-    safeModeRecover: '前回の起動は GPU プロセスのクラッシュにより自動的にここへ切り替わりました。通常モードへの復帰を試せます：',
+    safeModeFatal:
+      '省略モードでも GPU がクラッシュします（理由：{{reason}}）。大半は GPU ドライバの問題です。ドライバの更新をお勧めします。',
+    safeModeRecover:
+      '前回の起動は GPU プロセスのクラッシュにより自動的にここへ切り替わりました。通常モードへの復帰を試せます：',
     retryStandard: '標準モードを再試行',
     deviceInfo: 'デバイス情報',
     deviceInfoDesc:
@@ -115,15 +122,18 @@ export const ja: DeepString<typeof zhCN> = {
     deviceLoading: '読み込み中…',
     deviceLogin: 'ログイン中：{{who}} · サービスアドレス {{api}}',
     language: '言語',
-    languageDesc: 'インターフェースの表示言語です。変更は直ちに反映され、ローカル設定に記録されます。',
+    languageDesc:
+      'インターフェースの表示言語です。変更は直ちに反映され、ローカル設定に記録されます。',
     languageLabel: 'インターフェースの言語',
     identityLine: '{{name}}（{{role}}）· テナント {{tenant}} · 招待コード {{code}}',
-    notSignedIn: '未ログイン',
+    notSignedIn: '未ログイン'
   },
   log: {
-    browserNote: '現在はブラウザプレビューです。ログはメインプロセスが生成し、デスクトップアプリで開くと閲覧・エクスポートできます。',
+    browserNote:
+      '現在はブラウザプレビューです。ログはメインプロセスが生成し、デスクトップアプリで開くと閲覧・エクスポートできます。',
     loading: 'ログを読み込み中…',
-    empty: '一致するログがありません。デバッグ時、メインプロセスが [tag] 付きで出力した console は自動的に該当カテゴリに分類されます。',
+    empty:
+      '一致するログがありません。デバッグ時、メインプロセスが [tag] 付きで出力した console は自動的に該当カテゴリに分類されます。',
     title: 'ログセンター',
     desc: 'メインプロセスの4種類のログ（app / ipc / bridge / error）＋ 未処理の Promise 拒否。ローカルのみ保存、サーバーには送信しません。',
     allCategories: 'すべてのカテゴリ',
@@ -209,7 +219,8 @@ export const ja: DeepString<typeof zhCN> = {
       customerFilterHint:
         '現在の会話に関連顧客がないため「現在の顧客のみ」は一時停止されています。関連顧客の会話に切り替えると自動的に復帰します。',
       searching: '検索中…',
-      minHint: '検索するには最低 {{min}} 文字入力してください。検索対象は保存済みのメッセージ本文です。',
+      minHint:
+        '検索するには最低 {{min}} 文字入力してください。検索対象は保存済みのメッセージ本文です。',
       loadError: '検索リクエストに失敗しました。バックエンドが起動しているか確認してください。',
       noHits: '該当がありません。別のキーワードをお試しいただくか、時間幅を広げてください。',
       media: '（メディアメッセージ）',
@@ -250,7 +261,8 @@ export const ja: DeepString<typeof zhCN> = {
       desc: 'この会話の相手を顧客として作成し、その会話に保存済みの履歴メッセージを紐付けて入力します。',
       notAllowed: 'この会話は顧客にできません（グループ会話、または既に関連付いています）。',
       conversationId: '会話 ID（open_id）',
-      conversationIdHint: 'この会話の chat_key そのものです。変更すると別の番号の顧客を作成することになります。',
+      conversationIdHint:
+        'この会話の chat_key そのものです。変更すると別の番号の顧客を作成することになります。',
       nickname: 'ニックネーム',
       nicknamePlaceholder: '空欄の場合は入力なし',
       phone: '電話番号',
@@ -260,7 +272,8 @@ export const ja: DeepString<typeof zhCN> = {
       createError: '作成に失敗しました',
       duplicateHint:
         ' —— このプラットフォームではこの open_id に既に顧客が存在します。現在「open_id で既存顧客を検索」する入口はなく（顧客リストのキーワードはニックネーム / 電話 / メールのみ）、顧客管理ページでどなたかを確認してください。',
-      linkFailed: '顧客 #{{id}} は作成されましたが、履歴メッセージの紐付けに失敗しました（会話ヘッダが未接続）。',
+      linkFailed:
+        '顧客 #{{id}} は作成されましたが、履歴メッセージの紐付けに失敗しました（会話ヘッダが未接続）。',
       linkError: '紐付けに失敗',
       linkRetryHint:
         '再試行は「紐付け」のステップのみを補い、重複する顧客は作りません——重複する open_id はバックエンドで 40901 によりブロックされます。',
@@ -353,18 +366,22 @@ export const ja: DeepString<typeof zhCN> = {
       empty: 'この顧客のメッセージはまだ収集されていません。',
       group: 'グループ',
       open: '開く',
-      noHeadTitle: 'この会話のヘッダはまだ投影されていません（メッセージのみ収集）。現時点ではジャンプできません'
+      noHeadTitle:
+        'この会話のヘッダはまだ投影されていません（メッセージのみ収集）。現時点ではジャンプできません'
     },
     groups: {
       title: '所属グループ',
       exporting: 'エクスポート中…',
       exportSelected: '選択した項目をエクスポート（{{count}}）',
-      noOnlineAccount: 'オンラインの WhatsApp アカウントがありません。グループメンバーはアカウントがオンラインのときのみ収集され、接続後にここに自動的に表示されます。',
+      noOnlineAccount:
+        'オンラインの WhatsApp アカウントがありません。グループメンバーはアカウントがオンラインのときのみ収集され、接続後にここに自動的に表示されます。',
       loading: '読み込み中…',
       loadError: '所属グループを読み取れません。バックエンドが起動しているか確認してください。',
-      empty: 'この顧客に一致するグループメンバー行はまだありません。照合は電話番号で行われるため、連絡先に未保存の未知のグループはここには表示されません。',
+      empty:
+        'この顧客に一致するグループメンバー行はまだありません。照合は電話番号で行われるため、連絡先に未保存の未知のグループはここには表示されません。',
       disbanded: '解散 / 脱退',
-      inGroup: 'グループ内 {{in}} · 前回スナップショット {{snapshot}} · スナップショット日時 {{time}}',
+      inGroup:
+        'グループ内 {{in}} · 前回スナップショット {{snapshot}} · スナップショット日時 {{time}}',
       viewMembers: 'メンバーを表示',
       selectAria: '{{name}} を選択',
       unitPeople: '人',
@@ -380,8 +397,10 @@ export const ja: DeepString<typeof zhCN> = {
       exporting: 'エクスポート中…',
       refreshSkipFinal: 'ポンプは解散 / 脱退したグループをスキップします（spec §8）',
       refreshOneShot: 'このグループのメンバースナップショットを1回だけ再取得',
-      exportNoSnapshot: 'まだアーカイブされていないため、エクスポートすると空ファイルになります（spec §10 の no_rows）',
-      buildingNote: 'アーカイブ中：このラウンドが完了するとここへの読み取りは自動的に更新されます。',
+      exportNoSnapshot:
+        'まだアーカイブされていないため、エクスポートすると空ファイルになります（spec §10 の no_rows）',
+      buildingNote:
+        'アーカイブ中：このラウンドが完了するとここへの読み取りは自動的に更新されます。',
       tabMembers: 'メンバー名簿',
       tabEvents: '入退履歴',
       filterAllMembers: 'すべてのメンバー',
@@ -393,16 +412,19 @@ export const ja: DeepString<typeof zhCN> = {
       membersLoading: '読み込み中…',
       membersLoadError: 'メンバー名簿を読み取れません。',
       membersEmpty: 'このフィルタ条件に一致するメンバーはいません。',
-      memberHeader: '名前 / 電話 / 役割 / 在籍 / 加入日 / 加入回数 / 脱退日 / 脱退方法 / 最終発言 / 発言数',
+      memberHeader:
+        '名前 / 電話 / 役割 / 在籍 / 加入日 / 加入回数 / 脱退日 / 脱退方法 / 最終発言 / 発言数',
       eventsLoading: '読み込み中…',
       eventsLoadError: '入退履歴を読み取れません。',
-      eventsEmpty: '追加・削除のイベントはまだありません。イベントはアカウントがオンラインでブリッジが準備できたときのみ収集されます。',
+      eventsEmpty:
+        '追加・削除のイベントはまだありません。イベントはアカウントがオンラインでブリッジが準備できたときのみ収集されます。',
       eventHeader: '時刻 / イベント / 対象 / 操作者 / ソース'
-    },
+    }
   },
   broadcast: {
     title: '一括送信',
-    subtitle: 'アカウントごとにタスクを作成、まずは練習送信（ドライラン）；実際の送信はタスクの「開始」で始まります。',
+    subtitle:
+      'アカウントごとにタスクを作成、まずは練習送信（ドライラン）；実際の送信はタスクの「開始」で始まります。',
     backToList: 'リストに戻る',
     newTask: '新規タスク',
     action: {
@@ -443,7 +465,8 @@ export const ja: DeepString<typeof zhCN> = {
       loading: 'タスク一覧を読み込み中…',
       loadError: 'タスク一覧の読み込みに失敗しました：{{message}}',
       empty: 'まだ一括送信タスクはありません。右上の「新規タスク」をクリックしてください。',
-      actionFailedNoReach: '「{{action}}」が通りませんでした：バックエンドが拒否、またはホストに到達できず、一覧は変更なし。',
+      actionFailedNoReach:
+        '「{{action}}」が通りませんでした：バックエンドが拒否、またはホストに到達できず、一覧は変更なし。',
       actionFailedMessage: '「{{action}}」が通りませんでした：{{message}}',
       col: {
         taskName: 'タスク名',
@@ -475,22 +498,30 @@ export const ja: DeepString<typeof zhCN> = {
       prevPage: '前へ',
       nextPage: '次へ',
       dryRunNote: '練習タスクは実際には送信していません',
-      blockedSummary: 'この {{count}} 件は撤回できません（ブロックされた行はバックエンドに書き込まれません。ここが唯一の情報元です）。',
+      blockedSummary:
+        'この {{count}} 件は撤回できません（ブロックされた行はバックエンドに書き込まれません。ここが唯一の情報元です）。',
       blockedItem: '明細 #{{id}} — {{reason}}',
       loadingDetails: '明細を読み込み中…',
       loadDetailsError: '明細の読み込みに失敗しました：{{message}}',
       emptyFiltered: 'このページに現在のフィルタに一致する明細はありません。',
-      actionFailedNoReach: '「{{action}}」が通りませんでした：バックエンドが拒否、またはホストに到達できず、タスクは変更なし。',
+      actionFailedNoReach:
+        '「{{action}}」が通りませんでした：バックエンドが拒否、またはホストに到達できず、タスクは変更なし。',
       actionFailedMessage: '「{{action}}」が通りませんでした：{{message}}',
-      retryFailedNoReach: '「再送」が通りませんでした：バックエンドが拒否、またはホストに到達できず、タスクは変更なしで行はリセットされていません。',
+      retryFailedNoReach:
+        '「再送」が通りませんでした：バックエンドが拒否、またはホストに到達できず、タスクは変更なしで行はリセットされていません。',
       retryFailedMessage: '「再送」が通りませんでした：{{message}}',
-      recallFailedNoResult: '撤回が通りませんでした：選択した {{count}} 件は受け付けられず、ブロックもされず、バックエンドから結果が返りませんでした。',
+      recallFailedNoResult:
+        '撤回が通りませんでした：選択した {{count}} 件は受け付けられず、ブロックもされず、バックエンドから結果が返りませんでした。',
       recallNote: '{{eligible}} 件を撤回予定、{{blocked}} 件は撤回不可',
-      resumeViaStart: '（現在の「{{status}}」カードには「再開」がなく、「開始」をクリックすると再実行されます。）',
-      resumeNoEntry: '（現在の「{{status}}」カードには再実行の入口がありません：このバッチはタスクが実行可能な状態に戻るのを待つ必要があります。）',
-      resetRunning: '{{count}} 件をリセットしましたが、実行中のポンプはそれらを拾いません（キューはポンプ起動時に確定）：まず「一時停止」し、次に「再開」をクリックするとこのバッチを再実行します。',
+      resumeViaStart:
+        '（現在の「{{status}}」カードには「再開」がなく、「開始」をクリックすると再実行されます。）',
+      resumeNoEntry:
+        '（現在の「{{status}}」カードには再実行の入口がありません：このバッチはタスクが実行可能な状態に戻るのを待つ必要があります。）',
+      resetRunning:
+        '{{count}} 件をリセットしましたが、実行中のポンプはそれらを拾いません（キューはポンプ起動時に確定）：まず「一時停止」し、次に「再開」をクリックするとこのバッチを再実行します。',
       resetGeneral: '{{count}} 件をリセットしました。「再開」で再実行{{step}}',
-      resetTargetedEmpty: '{{label}}：これらの行は失敗状態ではないため、再送できるものはありません。',
+      resetTargetedEmpty:
+        '{{label}}：これらの行は失敗状態ではないため、再送できるものはありません。',
       resetEmpty: '{{label}}：再送できる失敗行はありません。',
       batch: '全体',
       detailOf: '明細 #{{id}}',
@@ -530,23 +561,27 @@ export const ja: DeepString<typeof zhCN> = {
       createDryRun: 'タスクを作成（練習）',
       createReal: 'タスクを作成（本番）',
       accountsLabel: 'オンラインの WhatsApp アカウント（複数選択可）',
-      noOnlineAccounts: 'オンラインの WhatsApp アカウントがありません。まずアカウントサイドバーで QR コードをスキャンしてオンラインにしてください。',
+      noOnlineAccounts:
+        'オンラインの WhatsApp アカウントがありません。まずアカウントサイドバーで QR コードをスキャンしてオンラインにしてください。',
       recipientSearchPlaceholder: 'タイトル / 会話キーで絞り込み',
       byAudience: 'オーディエンス別',
       summary: '選択済み {{recipients}} 人 × {{contents}} 件の内容 = {{total}} 件',
       overCap: '{{max}} 件の上限を超えています',
-      overRecipientCap: '受信者が上限 {{max}} 人を超えています——{{max}} 人以下に減らして次へ進んでください',
+      overRecipientCap:
+        '受信者が上限 {{max}} 人を超えています——{{max}} 人以下に減らして次へ進んでください',
       onlyFirst: '最初の {{count}} 件のみ表示（未読み込みの会話があります）',
       loadingConversations: '会話を読み込み中…',
       noConversations: 'このアカウントにはまだ会話がありません。',
-      audienceNoHit: '読み込まれた {{count}} 件のうち、オーディエンスに該当するものはありませんでした{{more}}',
+      audienceNoHit:
+        '読み込まれた {{count}} 件のうち、オーディエンスに該当するものはありませんでした{{more}}',
       noMatch: '読み込まれた {{count}} 件のうち、一致するものはありませんでした{{more}}',
       loadMoreHint: '、「さらに読み込む」をクリックして再度絞り込めます。',
       allLoadedHint: '、これがすべての会話です。',
       loadMoreError: 'さらに読み込みに失敗しました：{{message}}',
       loadingMore: '読み込み中…',
       loadMore: 'さらに読み込む（{{loaded}} / {{max}} 件読み込み済み）',
-      maxReached: '{{max}} 件の上限に達しました。検索またはオーディエンスで絞り込んでから選択してください。',
+      maxReached:
+        '{{max}} 件の上限に達しました。検索またはオーディエンスで絞り込んでから選択してください。',
       contentLabel: 'メッセージ内容（最大 {{max}} 件、{顧客名} / {番号} をサポート）',
       addContent: '1 件追加',
       contentPlaceholder: '{{n}} 件目の本文',
@@ -554,7 +589,8 @@ export const ja: DeepString<typeof zhCN> = {
       previewing: 'プレビュー中…',
       preview: 'レンダリング結果をプレビュー',
       needRecipients: 'まず受信者ステップで少なくとも 1 人を選択してください。',
-      previewNote: '最初の {{count}} 人の受信者のレンダリング結果（バックエンドのレンダラーを再利用、認識されない中括弧はそのまま保持）：',
+      previewNote:
+        '最初の {{count}} 人の受信者のレンダリング結果（バックエンドのレンダラーを再利用、認識されない中括弧はそのまま保持）：',
       previewRow: '{{chatKey}} · {{n}} 件目',
       previewTruncated: 'プレビューの件数が上限に達し、残りは表示されません。',
       msgMin: '同一人物間隔 最小（秒）',
@@ -573,12 +609,16 @@ export const ja: DeepString<typeof zhCN> = {
       lMsgInterval: '同一人物間隔',
       lChatInterval: '人物間隔',
       lMode: 'モード',
-      overCapCreate: '{{max}} 件の上限を超えています——受信者を減らすか内容をいくつか削除して作成してください。',
-      overRecipientCreate: '受信者が上限 {{max}} 人を超えています——{{max}} 人以下に減らして作成してください（作成ボタンは無効）。',
+      overCapCreate:
+        '{{max}} 件の上限を超えています——受信者を減らすか内容をいくつか削除して作成してください。',
+      overRecipientCreate:
+        '受信者が上限 {{max}} 人を超えています——{{max}} 人以下に減らして作成してください（作成ボタンは無効）。',
       createError: '作成に失敗しました：{{message}}',
-      rejectedTitle: '{{count}} 件の受信者がスキップされました（タスク #{{taskId}} を作成、合計 {{total}} 件）',
+      rejectedTitle:
+        '{{count}} 件の受信者がスキップされました（タスク #{{taskId}} を作成、合計 {{total}} 件）',
       rejectedItem: '{{chatKey}} — {{reason}}',
-      rejectedNote: 'スキップされた受信者はタスクに表示されません。タスクを開く前にこの一覧を確認してください。',
+      rejectedNote:
+        'スキップされた受信者はタスクに表示されません。タスクを開く前にこの一覧を確認してください。',
       contentEmpty: '{{n}} 件目が空です',
       contentTooLong: '{{n}} 件目が {{max}} 文字を超えています'
     }
@@ -586,7 +626,8 @@ export const ja: DeepString<typeof zhCN> = {
   account: {
     stage: {
       emptyTitle: 'アカウントが選択されていません',
-      emptyDesc: '左のリストからプラットフォームアカウントを選ぶと、ここに埋め込みログインして会話を管理できます。',
+      emptyDesc:
+        '左のリストからプラットフォームアカウントを選ぶと、ここに埋め込みログインして会話を管理できます。',
       online: 'オンライン',
       offline: 'オフライン',
       sessionOffline: 'セッションはオフラインです',
@@ -597,7 +638,8 @@ export const ja: DeepString<typeof zhCN> = {
       injectOn: 'オン',
       injectOff: 'オフ',
       reloadTitle: 'ページを再読み込み',
-      browserPreviewOnly: '現在はブラウザプレビューです。埋め込みビューはデスクトップ版のみ利用できます。',
+      browserPreviewOnly:
+        '現在はブラウザプレビューです。埋め込みビューはデスクトップ版のみ利用できます。',
       embedNotSupported: '{{label}} はウェブ埋め込みログインに対応していません。',
       loading: 'ページ読み込み中…'
     },
@@ -665,13 +707,24 @@ export const ja: DeepString<typeof zhCN> = {
     searchPlaceholder: '素材名 / 備考で検索',
     allGroups: 'すべてのグループ',
     allTypes: 'すべての種類',
+    scope: {
+      label: '所有者',
+      all: 'すべての所有者',
+      public: '共有',
+      personal: '自分のみ',
+      contact: '顧客',
+      contactTitle: '顧客 #{{id}} に紐づく',
+      customerIdPlaceholder: '顧客 id（数値）',
+      hint: '「自分のみ」はあなただけが使えます。「顧客」素材は特定の顧客に紐づき、その顧客との会話に表示されます。'
+    },
     loading: '素材を読み込み中…',
     empty: '条件に一致する素材がありません。',
     rename: '名前を変更',
     renameGroup: 'グループ名を変更',
     deleteGroup: 'グループを削除',
     delete: '削除',
-    dialogDesc: '小さな画像はローカルの data URI として保存され、オフラインでもプレビューできます。',
+    dialogDesc:
+      '小さな画像はローカルの data URI として保存され、オフラインでもプレビューできます。',
     groupNameLabel: 'グループ名',
     groupNamePlaceholder: '例：製品画像',
     ungrouped: 'グループなし',
@@ -682,7 +735,8 @@ export const ja: DeepString<typeof zhCN> = {
     ungroup: 'グループ解除',
     contentLabel: '素材内容（画像 URL / data URI）',
     urlPlaceholder: 'https の画像/ファイル URL を貼り付けるか、下のボタンでローカル画像を選択',
-    inlineNote: 'ローカル画像を埋め込み済み。別の画像を選ぶかクリアしてから URL を貼り付けてください。',
+    inlineNote:
+      'ローカル画像を埋め込み済み。別の画像を選ぶかクリアしてから URL を貼り付けてください。',
     inlinePreview: '（埋め込み画像）',
     noticeLargeImage: '画像が大きいため素材 URL をご利用ください（ローカル上限 400KB）。',
     noticeNonImage: '画像以外の素材は素材 URL を入力してください。',
@@ -719,7 +773,8 @@ export const ja: DeepString<typeof zhCN> = {
     delete: '削除',
     deleteConfirm: 'オーディエンス "{{name}}" を削除しますか？',
     editAudience: 'オーディエンスを編集',
-    dialogDesc: '条件は「すべて満たす」です。選択したタグがすべて一致し、さらにプラットフォームとキーワードが重なります。',
+    dialogDesc:
+      '条件は「すべて満たす」です。選択したタグがすべて一致し、さらにプラットフォームとキーワードが重なります。',
     name: '名前',
     namePlaceholder: '例：高価値成約顧客',
     platform: 'プラットフォーム',
@@ -790,7 +845,8 @@ export const ja: DeepString<typeof zhCN> = {
   },
   translation: {
     title: '翻訳センター',
-    subtitle: '言語方向・チャネル・有効ノードはバックエンドがアカウント設定から解決し、この画面は設定のみを行います',
+    subtitle:
+      '言語方向・チャネル・有効ノードはバックエンドがアカウント設定から解決し、この画面は設定のみを行います',
     loading: '読み込み中…',
     loadingSettings: '翻訳設定を読み込み中…',
     loadFailed: '翻訳設定の読み込みに失敗しました。バックエンドが起動しているか確認してください。',
@@ -806,7 +862,8 @@ export const ja: DeepString<typeof zhCN> = {
     receiveTitle: '受信翻訳',
     receiveDesc: '相手から送られた吹き出しの下の訳文（R1）',
     sendTitle: '送信翻訳',
-    sendDesc: '入力欄の送信前プレビューの言語方向。自分が送った吹き出しもこの方向で翻訳されます（R1）',
+    sendDesc:
+      '入力欄の送信前プレビューの言語方向。自分が送った吹き出しもこの方向で翻訳されます（R1）',
     voiceTranslation: '音声翻訳',
     notEffectiveYet: '今回のバージョンでは無効',
     realtimePreview: 'リアルタイムプレビュー',
@@ -815,7 +872,8 @@ export const ja: DeepString<typeof zhCN> = {
     blockContainsChinese: '中国語含む場合は送信をブロック',
     blockHint: '有効にすると、中国語を含むメッセージはブロックして警告されます',
     nodeAndChannel: 'ノードとチャネル',
-    nodeChannelDesc: 'ノードは速度テストと自動最適化のみに影響します。モックチャネルの訳文はローカルエンジンで生成され、オンラインチャネル（Baidu/Tencent）はキー設定が必要です',
+    nodeChannelDesc:
+      'ノードは速度テストと自動最適化のみに影響します。モックチャネルの訳文はローカルエンジンで生成され、オンラインチャネル（Baidu/Tencent）はキー設定が必要です',
     activeNode: '有効ノード',
     reselectBySpeed: '速度テストで再選択',
     unreachable: '到達不能',
@@ -834,7 +892,8 @@ export const ja: DeepString<typeof zhCN> = {
     cacheEmpty: 'キャッシュ項目はまだありません。',
     hitCount: '{{count}} 回',
     trialTitle: '翻訳お試し',
-    trialDesc: 'WhatsApp にログインせずにエンジンとキャッシュを検証できます。現在の設定から解決された方向を使用します',
+    trialDesc:
+      'WhatsApp にログインせずにエンジンとキャッシュを検証できます。現在の設定から解決された方向を使用します',
     inputPlaceholder: '翻訳するテキストを入力',
     sampleText: 'こんにちは、注文は発送されました',
     receiveDirection: '受信方向',
@@ -847,8 +906,10 @@ export const ja: DeepString<typeof zhCN> = {
     channelPrefix: 'チャネル {{channel}}',
     requestFailed: '翻訳リクエストに失敗しました。バックエンドが起動しているか確認してください。',
     keyConfig: 'キー設定',
-    keyConfigDesc: 'キーはローカルバックエンドのみに保存され、書き込み後に再読み取りされることはありません。空のキーを保存すると元の値が維持されます。キーが未設定のオンラインチャネルは自動的にローカルモックエンジンにフォールバックし、劣化としてマークされます。',
-    keyLoadFailed: 'キー状態の読み込みに失敗しました。バックエンドが起動しているか確認してください。',
+    keyConfigDesc:
+      'キーはローカルバックエンドのみに保存され、書き込み後に再読み取りされることはありません。空のキーを保存すると元の値が維持されます。キーが未設定のオンラインチャネルは自動的にローカルモックエンジンにフォールバックし、劣化としてマークされます。',
+    keyLoadFailed:
+      'キー状態の読み込みに失敗しました。バックエンドが起動しているか確認してください。',
     providerBaidu: 'Baidu 翻訳',
     providerTencent: 'Tencent Cloud TMT',
     appIdPlaceholderBaidu: '例：20240101000000001',
@@ -863,7 +924,8 @@ export const ja: DeepString<typeof zhCN> = {
     test: 'テスト',
     saved: '保存しました',
     saveFailed: '保存に失敗',
-    testRequestFailed: 'テストリクエストに失敗しました。バックエンドが起動しているか確認してください',
+    testRequestFailed:
+      'テストリクエストに失敗しました。バックエンドが起動しているか確認してください',
     testOk: '利用可能 · {{ms}}ms',
     testUnavailable: '利用不可：{{message}}',
     baiduAppIdLabel: 'App ID',
@@ -871,6 +933,6 @@ export const ja: DeepString<typeof zhCN> = {
     tencentAppIdLabel: 'SecretId',
     tencentSecretLabel: 'SecretKey',
     appIdPlaceholderTencent: '例：AKID****************',
-    save: '保存',
+    save: '保存'
   }
 }

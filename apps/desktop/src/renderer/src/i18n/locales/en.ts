@@ -71,7 +71,8 @@ export const en: DeepString<typeof zhCN> = {
     storedBrowser: 'browser preview (not persisted)',
     statusLine: 'Active: {{effective}} · System: {{system}} · Stored in {{host}}',
     notifications: 'Notifications',
-    badgeDesc: 'The taskbar badge counts unread for this account’s tenant only; the toggle lives in the local settings file.',
+    badgeDesc:
+      'The taskbar badge counts unread for this account’s tenant only; the toggle lives in the local settings file.',
     badgeTitle: 'Taskbar unread badge',
     badgeDetail:
       'When the window is not in front, the total unread is shown on the taskbar icon: Windows uses a red dot at the corner (that platform’s API can’t draw a number), macOS and Linux use a numeric badge. It is hidden while you are actively using the app — the count would be stale the next second.',
@@ -79,7 +80,8 @@ export const en: DeepString<typeof zhCN> = {
     badgeStatusNow: 'Now: {{total}} unread across {{conversations}} conversations',
     badgeStatusLoading: 'Reading unread…',
     desktopNotify: 'Desktop notifications',
-    desktopNotifyDesc: 'Independent toggle from the taskbar badge: turning one off does not affect the other.',
+    desktopNotifyDesc:
+      'Independent toggle from the taskbar badge: turning one off does not affect the other.',
     desktopNotifyTitle: 'Show a system notification on new messages',
     desktopNotifyDetail:
       'When the window is not in front, a new message raises a system notification; clicking it returns to the app and opens the conversation. Several messages from the same conversation are merged into one (with a count in the title), no spam. Not shown while you are actively using the app.',
@@ -87,7 +89,8 @@ export const en: DeepString<typeof zhCN> = {
     enabled: 'Enabled',
     disabled: 'Disabled',
     accountSecurity: 'Account security',
-    accountSecurityDesc: 'Change your login password. After a successful change, the current session expires immediately and you must sign in again.',
+    accountSecurityDesc:
+      'Change your login password. After a successful change, the current session expires immediately and you must sign in again.',
     oldPassword: 'Current password',
     newPassword: 'New password',
     confirmPassword: 'Confirm new password',
@@ -110,7 +113,8 @@ export const en: DeepString<typeof zhCN> = {
     safeModeTitle: 'Graphics fallback mode is active',
     safeModeFatal:
       'The GPU still crashes in fallback mode (reason: {{reason}}); likely a GPU driver issue — update your driver.',
-    safeModeRecover: 'Last launch was auto-switched here after a GPU crash. You can try restoring normal mode:',
+    safeModeRecover:
+      'Last launch was auto-switched here after a GPU crash. You can try restoring normal mode:',
     retryStandard: 'Retry standard mode',
     deviceInfo: 'Device info',
     deviceInfoDesc:
@@ -118,15 +122,18 @@ export const en: DeepString<typeof zhCN> = {
     deviceLoading: 'Reading…',
     deviceLogin: 'Signed in: {{who}} · Service at {{api}}',
     language: 'Language',
-    languageDesc: 'Interface display language. Changes apply immediately and are saved to local settings.',
+    languageDesc:
+      'Interface display language. Changes apply immediately and are saved to local settings.',
     languageLabel: 'Interface language',
     identityLine: '{{name}} ({{role}}) · Tenant {{tenant}} · Invite code {{code}}',
-    notSignedIn: 'Not signed in',
+    notSignedIn: 'Not signed in'
   },
   log: {
-    browserNote: 'You are in browser preview; logs are produced by the main process and require the desktop app to view or export.',
+    browserNote:
+      'You are in browser preview; logs are produced by the main process and require the desktop app to view or export.',
     loading: 'Reading logs…',
-    empty: 'No matching logs. Console output tagged with [tag] in the main process is auto-categorized while debugging.',
+    empty:
+      'No matching logs. Console output tagged with [tag] in the main process is auto-categorized while debugging.',
     title: 'Log center',
     desc: 'Four main-process log categories (app / ipc / bridge / error) + unhandled Promise rejections. Local only, never uploaded.',
     allCategories: 'All categories',
@@ -282,7 +289,8 @@ export const en: DeepString<typeof zhCN> = {
       desc: 'Only changes this customer’s translation direction. In-page bubbles and the history reply box pick the first matching scope in “conversation → customer → global”, so this override’s effective layer is shown by the badge above and the “session-only” tag next to the reply box.',
       inherited: 'Inherited from global',
       owned: 'This customer’s own',
-      inheritedHint: 'Saving creates an override for this customer only; global settings stay unchanged.',
+      inheritedHint:
+        'Saving creates an override for this customer only; global settings stay unchanged.',
       ownedHint: 'Override row · Customer #{{id}}',
       receive: 'Receive',
       send: 'Send',
@@ -359,16 +367,19 @@ export const en: DeepString<typeof zhCN> = {
       empty: 'No messages collected for this customer yet.',
       group: 'Group',
       open: 'Open',
-      noHeadTitle: 'This conversation’s head is not projected yet (only messages were collected), jump is disabled for now'
+      noHeadTitle:
+        'This conversation’s head is not projected yet (only messages were collected), jump is disabled for now'
     },
     groups: {
       title: 'Groups',
       exporting: 'Exporting…',
       exportSelected: 'Export selected ({{count}})',
-      noOnlineAccount: 'No online WhatsApp account. Group members are only collected while the account is online; content appears here automatically once connected.',
+      noOnlineAccount:
+        'No online WhatsApp account. Group members are only collected while the account is online; content appears here automatically once connected.',
       loading: 'Loading…',
       loadError: 'Cannot read groups. Make sure the backend is running.',
-      empty: 'No matched group-member rows for this customer yet. Matching is by phone number, so stranger groups not saved to contacts will not appear here.',
+      empty:
+        'No matched group-member rows for this customer yet. Matching is by phone number, so stranger groups not saved to contacts will not appear here.',
       disbanded: 'Disbanded / left',
       inGroup: 'In group {{in}} · last snapshot {{snapshot}} · snapshot at {{time}}',
       viewMembers: 'View members',
@@ -399,16 +410,19 @@ export const en: DeepString<typeof zhCN> = {
       membersLoading: 'Loading…',
       membersLoadError: 'Cannot read member roster.',
       membersEmpty: 'No one matches this filter.',
-      memberHeader: 'Name / Phone / Role / In group / Joined / Join count / Left / Leave method / Last message / Message count',
+      memberHeader:
+        'Name / Phone / Role / In group / Joined / Join count / Left / Leave method / Last message / Message count',
       eventsLoading: 'Loading…',
       eventsLoadError: 'Cannot read join/leave log.',
-      eventsEmpty: 'No join/leave events yet. Events are collected only while the account is online and the bridge is ready.',
+      eventsEmpty:
+        'No join/leave events yet. Events are collected only while the account is online and the bridge is ready.',
       eventHeader: 'Time / Event / Target / Actor / Source'
-    },
+    }
   },
   broadcast: {
     title: 'Broadcast',
-    subtitle: 'Create a task per account, dry-run first; real sending is triggered by “Start” on the task.',
+    subtitle:
+      'Create a task per account, dry-run first; real sending is triggered by “Start” on the task.',
     backToList: 'Back to list',
     newTask: 'New task',
     action: {
@@ -449,7 +463,8 @@ export const en: DeepString<typeof zhCN> = {
       loading: 'Loading task list…',
       loadError: 'Failed to load task list: {{message}}',
       empty: 'No broadcast tasks yet. Click “New task” at the top right.',
-      actionFailedNoReach: '“{{action}}” did not go through: backend rejected it or host unreachable; the list is unchanged.',
+      actionFailedNoReach:
+        '“{{action}}” did not go through: backend rejected it or host unreachable; the list is unchanged.',
       actionFailedMessage: '“{{action}}” did not go through: {{message}}',
       col: {
         taskName: 'Task',
@@ -481,20 +496,26 @@ export const en: DeepString<typeof zhCN> = {
       prevPage: 'Previous',
       nextPage: 'Next',
       dryRunNote: 'Dry-run task did not actually send',
-      blockedSummary: 'These {{count}} entries cannot be recalled (blocked rows are not written by the backend; this is the only source).',
+      blockedSummary:
+        'These {{count}} entries cannot be recalled (blocked rows are not written by the backend; this is the only source).',
       blockedItem: 'Detail #{{id}} — {{reason}}',
       loadingDetails: 'Loading details…',
       loadDetailsError: 'Failed to load details: {{message}}',
       emptyFiltered: 'No details match the current filter on this page.',
-      actionFailedNoReach: '“{{action}}” did not go through: backend rejected it or host unreachable; the task is unchanged.',
+      actionFailedNoReach:
+        '“{{action}}” did not go through: backend rejected it or host unreachable; the task is unchanged.',
       actionFailedMessage: '“{{action}}” did not go through: {{message}}',
-      retryFailedNoReach: '“Retry” did not go through: backend rejected it or host unreachable; the task is unchanged and no rows were reset.',
+      retryFailedNoReach:
+        '“Retry” did not go through: backend rejected it or host unreachable; the task is unchanged and no rows were reset.',
       retryFailedMessage: '“Retry” did not go through: {{message}}',
-      recallFailedNoResult: 'Recall did not go through: none of the {{count}} selected entries were accepted or blocked; the backend returned no result.',
+      recallFailedNoResult:
+        'Recall did not go through: none of the {{count}} selected entries were accepted or blocked; the backend returned no result.',
       recallNote: '{{eligible}} to recall, {{blocked}} cannot be recalled',
       resumeViaStart: '(The “{{status}}” card has no “Resume”; click “Start” to re-run.)',
-      resumeNoEntry: '(The “{{status}}” card has no re-run entry: this batch must wait until the task returns to an executable state.)',
-      resetRunning: 'Reset {{count}} entries, but the running pump will not pick them up (the queue was fixed at pump start): pause first, then click “Resume” to re-run this batch.',
+      resumeNoEntry:
+        '(The “{{status}}” card has no re-run entry: this batch must wait until the task returns to an executable state.)',
+      resetRunning:
+        'Reset {{count}} entries, but the running pump will not pick them up (the queue was fixed at pump start): pause first, then click “Resume” to re-run this batch.',
       resetGeneral: 'Reset {{count}} entries, click Resume to re-run{{step}}',
       resetTargetedEmpty: '{{label}}: these entries are not in a failed state, nothing to retry.',
       resetEmpty: '{{label}}: no failed entries to retry.',
@@ -536,7 +557,8 @@ export const en: DeepString<typeof zhCN> = {
       createDryRun: 'Create task (dry-run)',
       createReal: 'Create task (real)',
       accountsLabel: 'Online WhatsApp accounts (multi-select)',
-      noOnlineAccounts: 'No online WhatsApp accounts. Scan the QR code in the account sidebar to go online first.',
+      noOnlineAccounts:
+        'No online WhatsApp accounts. Scan the QR code in the account sidebar to go online first.',
       recipientSearchPlaceholder: 'Filter by title / conversation key',
       byAudience: 'By audience',
       summary: 'Selected {{recipients}} recipients × {{contents}} contents = {{total}} entries',
@@ -552,7 +574,8 @@ export const en: DeepString<typeof zhCN> = {
       loadMoreError: 'Failed to load more: {{message}}',
       loadingMore: 'Loading…',
       loadMore: 'Load more (loaded {{loaded}} / {{max}})',
-      maxReached: 'Reached the {{max}} entry limit. Narrow with search or audience before selecting.',
+      maxReached:
+        'Reached the {{max}} entry limit. Narrow with search or audience before selecting.',
       contentLabel: 'Message content (up to {{max}} entries, supports {customer name} / {number})',
       addContent: 'Add one',
       contentPlaceholder: 'Entry {{n}} body',
@@ -560,7 +583,8 @@ export const en: DeepString<typeof zhCN> = {
       previewing: 'Previewing…',
       preview: 'Preview render result',
       needRecipients: 'Select at least one recipient in the recipient step first.',
-      previewNote: 'Render result for the first {{count}} recipients (reuses the backend renderer; unrecognized braces kept as-is):',
+      previewNote:
+        'Render result for the first {{count}} recipients (reuses the backend renderer; unrecognized braces kept as-is):',
       previewRow: '{{chatKey}} · Entry {{n}}',
       previewTruncated: 'Preview hit the entry limit; the rest are not listed.',
       msgMin: 'Same-person interval min (s)',
@@ -579,12 +603,16 @@ export const en: DeepString<typeof zhCN> = {
       lMsgInterval: 'Same-person interval',
       lChatInterval: 'Cross-person interval',
       lMode: 'Mode',
-      overCapCreate: 'Over the {{max}} entry limit — remove some recipients or delete some contents to create.',
-      overRecipientCreate: 'Over {{max}} recipients — reduce to {{max}} or fewer to create (create button disabled).',
+      overCapCreate:
+        'Over the {{max}} entry limit — remove some recipients or delete some contents to create.',
+      overRecipientCreate:
+        'Over {{max}} recipients — reduce to {{max}} or fewer to create (create button disabled).',
       createError: 'Create failed: {{message}}',
-      rejectedTitle: '{{count}} recipients were skipped (task #{{taskId}} created, {{total}} entries total)',
+      rejectedTitle:
+        '{{count}} recipients were skipped (task #{{taskId}} created, {{total}} entries total)',
       rejectedItem: '{{chatKey}} — {{reason}}',
-      rejectedNote: 'Skipped recipients will not appear in the task; review this list before opening the task.',
+      rejectedNote:
+        'Skipped recipients will not appear in the task; review this list before opening the task.',
       contentEmpty: 'Entry {{n}} is empty',
       contentTooLong: 'Entry {{n}} exceeds {{max}} characters'
     }
@@ -592,7 +620,8 @@ export const en: DeepString<typeof zhCN> = {
   account: {
     stage: {
       emptyTitle: 'No account selected',
-      emptyDesc: 'Pick a platform account from the left list to embed its login and manage conversations here.',
+      emptyDesc:
+        'Pick a platform account from the left list to embed its login and manage conversations here.',
       online: 'Online',
       offline: 'Offline',
       sessionOffline: 'Session not online',
@@ -603,7 +632,8 @@ export const en: DeepString<typeof zhCN> = {
       injectOn: 'on',
       injectOff: 'off',
       reloadTitle: 'Reload page',
-      browserPreviewOnly: 'You are in browser preview; the embedded view is only available on desktop.',
+      browserPreviewOnly:
+        'You are in browser preview; the embedded view is only available on desktop.',
       embedNotSupported: '{{label}} does not support in-page login yet.',
       loading: 'Page loading…'
     },
@@ -671,6 +701,16 @@ export const en: DeepString<typeof zhCN> = {
     searchPlaceholder: 'Search material name / remark',
     allGroups: 'All groups',
     allTypes: 'All types',
+    scope: {
+      label: 'Ownership',
+      all: 'All ownership',
+      public: 'Shared',
+      personal: 'Mine',
+      contact: 'Contact',
+      contactTitle: 'Bound to customer #{{id}}',
+      customerIdPlaceholder: 'Customer id (number)',
+      hint: '“Mine” is usable only by you. “Contact” materials are bound to one customer and appear in that customer\u2019s conversation.'
+    },
     loading: 'Loading materials…',
     empty: 'No materials match the filters.',
     rename: 'Rename',
@@ -725,7 +765,8 @@ export const en: DeepString<typeof zhCN> = {
     delete: 'Delete',
     deleteConfirm: 'Delete audience "{{name}}"?',
     editAudience: 'Edit audience',
-    dialogDesc: 'Conditions are AND: all selected tags must match, then platform and keyword are layered on top.',
+    dialogDesc:
+      'Conditions are AND: all selected tags must match, then platform and keyword are layered on top.',
     name: 'Name',
     namePlaceholder: 'e.g. High-value closed customers',
     platform: 'Platform',
@@ -759,7 +800,8 @@ export const en: DeepString<typeof zhCN> = {
     deleteGroupConfirm: 'Delete group "{{name}}"{{warning}}?',
     deleteGroupWarning: ' (its {{count}} replies will be deleted too)',
     editReply: 'Edit quick reply',
-    dialogDesc: 'Components are concatenated in order and copied to the clipboard as a whole when sent.',
+    dialogDesc:
+      'Components are concatenated in order and copied to the clipboard as a whole when sent.',
     titleLabel: 'Title',
     titlePlaceholder: 'e.g. Shipping inquiry script',
     shortcutLabel: 'Shortcut (optional)',
@@ -796,7 +838,8 @@ export const en: DeepString<typeof zhCN> = {
   },
   translation: {
     title: 'Translation Center',
-    subtitle: 'Language direction, channel, and active node are resolved by the backend from account settings; this page only configures them.',
+    subtitle:
+      'Language direction, channel, and active node are resolved by the backend from account settings; this page only configures them.',
     loading: 'Loading…',
     loadingSettings: 'Loading translation settings…',
     loadFailed: 'Failed to read translation settings. Please confirm the backend is running.',
@@ -808,11 +851,13 @@ export const en: DeepString<typeof zhCN> = {
     nodeSpeedTest: 'Node speed test',
     speedTestDesc: 'Simulated latency; no network requests are made',
     remeasure: 'Re-measure',
-    autoSelectResult: 'Auto-best result: {{server}} (current {{current}} kept unchanged when already minimal)',
+    autoSelectResult:
+      'Auto-best result: {{server}} (current {{current}} kept unchanged when already minimal)',
     receiveTitle: 'Incoming translation',
     receiveDesc: 'Translation under bubbles the other party sent (R1)',
     sendTitle: 'Outgoing translation',
-    sendDesc: 'Preview direction before sending from the input box; your own sent bubbles are also translated in this direction (R1)',
+    sendDesc:
+      'Preview direction before sending from the input box; your own sent bubbles are also translated in this direction (R1)',
     voiceTranslation: 'Voice translation',
     notEffectiveYet: 'Not effective in this version',
     realtimePreview: 'Real-time preview',
@@ -821,7 +866,8 @@ export const en: DeepString<typeof zhCN> = {
     blockContainsChinese: 'Block sending when Chinese is present',
     blockHint: 'When enabled, messages containing Chinese will be blocked and warned',
     nodeAndChannel: 'Node and channel',
-    nodeChannelDesc: 'Nodes only affect speed test and auto-best; mock channel translations are generated by the local engine, online channels (Baidu/Tencent) require key configuration',
+    nodeChannelDesc:
+      'Nodes only affect speed test and auto-best; mock channel translations are generated by the local engine, online channels (Baidu/Tencent) require key configuration',
     activeNode: 'Active node',
     reselectBySpeed: 'Reselect by speed test',
     unreachable: 'Unreachable',
@@ -840,7 +886,8 @@ export const en: DeepString<typeof zhCN> = {
     cacheEmpty: 'No cache entries yet.',
     hitCount: '{{count}} hits',
     trialTitle: 'Translation trial',
-    trialDesc: 'Verify the engine and cache without logging into WhatsApp; uses the direction resolved from current settings',
+    trialDesc:
+      'Verify the engine and cache without logging into WhatsApp; uses the direction resolved from current settings',
     inputPlaceholder: 'Enter text to translate',
     sampleText: 'Hello, your order has shipped',
     receiveDirection: 'Receive direction',
@@ -853,14 +900,16 @@ export const en: DeepString<typeof zhCN> = {
     channelPrefix: 'Channel {{channel}}',
     requestFailed: 'Translation request failed. Please check the backend is running.',
     keyConfig: 'Key configuration',
-    keyConfigDesc: 'Keys are only stored in the local backend and never read back after writing; saving with an empty key keeps the original value. Online channels without a configured key automatically fall back to the local mock engine and are marked degraded.',
+    keyConfigDesc:
+      'Keys are only stored in the local backend and never read back after writing; saving with an empty key keeps the original value. Online channels without a configured key automatically fall back to the local mock engine and are marked degraded.',
     keyLoadFailed: 'Failed to read key status. Please confirm the backend is running.',
     providerBaidu: 'Baidu Translate',
     providerTencent: 'Tencent Cloud TMT',
     appIdPlaceholderBaidu: 'e.g. 20240101000000001',
     regionLabel: 'Region (optional)',
     regionPlaceholder: 'Default ap-shanghai',
-    hintBaidu: 'Translation Open Platform · General Translation API (Channel 5) · Free quota ~2M chars/month',
+    hintBaidu:
+      'Translation Open Platform · General Translation API (Channel 5) · Free quota ~2M chars/month',
     hintTencent: 'Machine Translation TextTranslate (Channel 7) · Free quota ~5M chars/month',
     secretPlaceholder: 'Saved; leave empty to keep unchanged',
     configured: 'Configured',
@@ -877,6 +926,6 @@ export const en: DeepString<typeof zhCN> = {
     tencentAppIdLabel: 'SecretId',
     tencentSecretLabel: 'SecretKey',
     appIdPlaceholderTencent: 'e.g. AKID****************',
-    save: 'Save',
+    save: 'Save'
   }
 }

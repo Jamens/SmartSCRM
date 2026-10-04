@@ -50,7 +50,8 @@ export const zhCN = {
     signIn: '登 录',
     heroTitle1: '让每一次客户对话',
     heroTitle2: '创造价值',
-    heroSub: '多平台客户统一经营 · AI 消息翻译 · 智能化群发与增长引擎，为跨境团队提供一站式私域运营能力。',
+    heroSub:
+      '多平台客户统一经营 · AI 消息翻译 · 智能化群发与增长引擎，为跨境团队提供一站式私域运营能力。',
     feature1: '全渠道消息实时互译，沟通零障碍',
     feature2: '群发与炒群引擎，增长自动化',
     feature3: '本地数据层，安全可控可回放',
@@ -128,7 +129,7 @@ export const zhCN = {
     languageDesc: '界面显示语言。改动立即生效，并记到本机设置里。',
     languageLabel: '界面语言',
     identityLine: '{{name}}（{{role}}）· 租户 {{tenant}} · 邀请码 {{code}}',
-    notSignedIn: '未登录',
+    notSignedIn: '未登录'
   },
   log: {
     browserNote: '当前是浏览器预览，日志由主进程产生，桌面端打开才能查看与导出。',
@@ -168,10 +169,8 @@ export const zhCN = {
       loading: '加载会话中…',
       pickAccountFirst: '先在上面选择一个平台账号。',
       loadError: '无法加载会话，请确认后端已启动。',
-      emptyFiltered:
-        '没有匹配当前筛选条件的会话，清空关键字或选回「全部平台」试试。',
-      emptyNoData:
-        '这个账号还没有采集到会话。登录后会自动补底，也可以点上面的「同步历史」。',
+      emptyFiltered: '没有匹配当前筛选条件的会话，清空关键字或选回「全部平台」试试。',
+      emptyNoData: '这个账号还没有采集到会话。登录后会自动补底，也可以点上面的「同步历史」。',
       badgeGroup: '群',
       badgeStranger: '陌生',
       noText: '（无文字内容）',
@@ -195,8 +194,7 @@ export const zhCN = {
     thread: {
       stranger: '陌生',
       count: '{{count}} 条',
-      located:
-        '已定位到 {{label}} 那条消息：更早的记录在下面，比它更新的消息不在这个窗口里。',
+      located: '已定位到 {{label}} 那条消息：更早的记录在下面，比它更新的消息不在这个窗口里。',
       backToLatest: '回到最新',
       loading: '加载消息中…',
       loadError: '无法读取历史消息，请确认后端已启动。',
@@ -369,10 +367,12 @@ export const zhCN = {
       title: '所在群',
       exporting: '导出中…',
       exportSelected: '导出所选（{{count}}）',
-      noOnlineAccount: '没有在线的 WhatsApp 账号。群成员只在账号上线时采集，连上之后这里会自动出内容。',
+      noOnlineAccount:
+        '没有在线的 WhatsApp 账号。群成员只在账号上线时采集，连上之后这里会自动出内容。',
       loading: '读取中…',
       loadError: '读不到所在群：确认后端已启动。',
-      empty: '这位客户还没有匹配到的群成员行。匹配是按手机号做的，所以没存进通讯录的陌生号群不会出现在这里。',
+      empty:
+        '这位客户还没有匹配到的群成员行。匹配是按手机号做的，所以没存进通讯录的陌生号群不会出现在这里。',
       disbanded: '已解散/已退出',
       inGroup: '在群 {{in}} · 上次快照 {{snapshot}} · 快照于 {{time}}',
       viewMembers: '查看群成员',
@@ -403,12 +403,13 @@ export const zhCN = {
       membersLoading: '读取中…',
       membersLoadError: '读不到成员名单。',
       membersEmpty: '这个筛选条件下没有人。',
-      memberHeader: '名称 / 手机号 / 角色 / 是否在群 / 进群时间 / 进群数 / 退群时间 / 退出方式 / 最近发言 / 发言数',
+      memberHeader:
+        '名称 / 手机号 / 角色 / 是否在群 / 进群时间 / 进群数 / 退群时间 / 退出方式 / 最近发言 / 发言数',
       eventsLoading: '读取中…',
       eventsLoadError: '读不到进退流水。',
       eventsEmpty: '还没有加减人的流水。事件只在账号上线且桥就绪时采集。',
       eventHeader: '时间 / 事件 / 目标人 / 操作人 / 来源'
-    },
+    }
   },
   broadcast: {
     title: '批量群发',
@@ -492,13 +493,16 @@ export const zhCN = {
       emptyFiltered: '这一页没有符合筛选条件的明细。',
       actionFailedNoReach: '「{{action}}」这一跳没成：后端拒绝或宿主不可达，任务保持原状。',
       actionFailedMessage: '「{{action}}」这一跳没成：{{message}}',
-      retryFailedNoReach: '「重发」这一跳没成：后端拒绝或宿主不可达，任务保持原状，没有复位任何行。',
+      retryFailedNoReach:
+        '「重发」这一跳没成：后端拒绝或宿主不可达，任务保持原状，没有复位任何行。',
       retryFailedMessage: '「重发」这一跳没成：{{message}}',
-      recallFailedNoResult: '撤回这一跳没成：选中的 {{count}} 条既没被接受也没被挡下，后端的结果没回来。',
+      recallFailedNoResult:
+        '撤回这一跳没成：选中的 {{count}} 条既没被接受也没被挡下，后端的结果没回来。',
       recallNote: '待撤 {{eligible}} 条，{{blocked}} 条不能撤',
       resumeViaStart: '（当前「{{status}}」的卡片上没有「继续」，点「开始」才会重跑。）',
       resumeNoEntry: '（当前「{{status}}」的卡片上没有重跑入口：这一批要等任务回到可执行状态。）',
-      resetRunning: '已复位 {{count}} 条，但正在跑的泵不会捡走它们（队列在起泵时就定了）：先「暂停」再点「继续」才会重跑这一批。',
+      resetRunning:
+        '已复位 {{count}} 条，但正在跑的泵不会捡走它们（队列在起泵时就定了）：先「暂停」再点「继续」才会重跑这一批。',
       resetGeneral: '已复位 {{count}} 条，点继续重跑{{step}}',
       resetTargetedEmpty: '{{label}}：这几条不是失败状态，没有可重发的。',
       resetEmpty: '{{label}}：没有可重发的失败条目。',
@@ -584,7 +588,8 @@ export const zhCN = {
       lChatInterval: '换人间隔',
       lMode: '模式',
       overCapCreate: '超过 {{max}} 条上限——减几个收件人或删掉几条内容才能创建。',
-      overRecipientCreate: '收件人超过上限 {{max}} 人——减到 {{max}} 人以内才能创建（创建按钮已禁用）。',
+      overRecipientCreate:
+        '收件人超过上限 {{max}} 人——减到 {{max}} 人以内才能创建（创建按钮已禁用）。',
       createError: '创建失败：{{message}}',
       rejectedTitle: '这 {{count}} 个收件人被跳过（任务 #{{taskId}} 已创建，共 {{total}} 条）',
       rejectedItem: '{{chatKey}} — {{reason}}',
@@ -675,6 +680,16 @@ export const zhCN = {
     searchPlaceholder: '搜索素材名称 / 备注',
     allGroups: '全部分组',
     allTypes: '全部类型',
+    scope: {
+      label: '归属',
+      all: '全部归属',
+      public: '公共',
+      personal: '我的',
+      contact: '联系人',
+      contactTitle: '绑定客户 #{{id}}',
+      customerIdPlaceholder: '客户 id（数字）',
+      hint: '「我的」只有你自己能用到；「联系人」素材绑定某位客户，在该客户的会话里出现。'
+    },
     loading: '加载素材中…',
     empty: '没有符合条件的素材。',
     rename: '重命名',
@@ -825,7 +840,8 @@ export const zhCN = {
     blockContainsChinese: '含中文时拦截发送',
     blockHint: '开启后若消息含中文将拦截发送并提示',
     nodeAndChannel: '节点与线路',
-    nodeChannelDesc: '节点只影响测速与自动选优；模拟线路译文由本地引擎生成，线上线路（百度/腾讯）需配置密钥',
+    nodeChannelDesc:
+      '节点只影响测速与自动选优；模拟线路译文由本地引擎生成，线上线路（百度/腾讯）需配置密钥',
     activeNode: '生效节点',
     reselectBySpeed: '按测速重选',
     unreachable: '不可达',
@@ -857,7 +873,8 @@ export const zhCN = {
     channelPrefix: '渠道 {{channel}}',
     requestFailed: '翻译请求失败，请检查后端是否运行。',
     keyConfig: '密钥配置',
-    keyConfigDesc: '密钥只保存在本地后端，写入后不再回读；留空密钥保存表示保留原值。未配置密钥的线上线路自动回退本地模拟引擎并标降级。',
+    keyConfigDesc:
+      '密钥只保存在本地后端，写入后不再回读；留空密钥保存表示保留原值。未配置密钥的线上线路自动回退本地模拟引擎并标降级。',
     keyLoadFailed: '密钥状态读取失败，请确认后端已启动。',
     providerBaidu: '百度翻译',
     providerTencent: '腾讯云 TMT',
@@ -881,7 +898,7 @@ export const zhCN = {
     tencentAppIdLabel: 'SecretId',
     tencentSecretLabel: 'SecretKey',
     appIdPlaceholderTencent: '例：AKID****************',
-    save: '保存',
+    save: '保存'
   }
 } as const
 
