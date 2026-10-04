@@ -26,6 +26,11 @@ public class Material {
      * B17 P1 归属：public（租户内共享，owner_key 为 NULL）/ personal（owner_key = app_user.id）
      * / contact（owner_key = customer.id）。取值与键的成形只在 {@link com.smartscrm.server.service.MaterialScope} 里。
      */
+    /**
+     * B17 P3：type=5（按钮）时的按钮载荷 JSON `{body,title,footer,buttons:[...]}`，其余类型为 null。
+     * 校验规则见 {@link com.smartscrm.server.service.MaterialButtons}。
+     */
+    private String buttonPayload;
     private String ownerScope;
     private String ownerKey;
     private LocalDateTime createdAt;

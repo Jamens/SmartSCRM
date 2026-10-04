@@ -108,7 +108,7 @@ class MaterialServiceTest {
         when(materialMapper.selectById(any())).thenReturn(saved);
 
         service.create(7L, 42L, new MaterialRequest(null, 1, "n", "http://x", null, null, null,
-            "personal", "999"));
+            null, "personal", "999"));
 
         ArgumentCaptor<Material> cap = ArgumentCaptor.forClass(Material.class);
         verify(materialMapper).insert(cap.capture());
@@ -117,13 +117,62 @@ class MaterialServiceTest {
         assertEquals("42", cap.getValue().getOwnerKey());
     }
 
+    /** 按钮素材：载荷入库、url 置空——它本来就没有 URL。 */
+    @Test
+    void create_buttonMaterial_storesPayloadAndClearsUrl() {
+        when(materialMapper.insert(any(Material.class))).thenReturn(1);
+        when(materialMapper.selectById(any())).thenReturn(new Material());
+
+        service.create(7L, 42L, new MaterialRequest(null, MaterialButtons.TYPE_BUTTON, "b", null,
+            "{\"body\":\"选\",\"buttons\":[{\"type\":\"reply\",\"text\":\"是\",\"id\":\"y\"}]}",
+            null, null, null, null, null));
+
+        ArgumentCaptor<Material> cap = ArgumentCaptor.forClass(Material.class);
+        verify(materialMapper).insert(cap.capture());
+        assertEquals(null, cap.getValue().getUrl());
+        assertEquals(1, MaterialButtons.countOf(cap.getValue().getButtonPayload()));
+    }
+
+    @Test
+    void create_buttonMaterial_rejectsInvalidPayload() {
+        BizException ex = assertThrows(BizException.class, () -> service.create(7L, 42L,
+            new MaterialRequest(null, MaterialButtons.TYPE_BUTTON, "b", null,
+                "{\"buttons\":[]}", null, null, null, null, null)));
+        assertEquals(40000, ex.getCode());
+        verify(materialMapper, never()).insert(any(Material.class));
+    }
+
+    /** 媒体素材必须有 url：现在 url 列可空了，这道校验从 DB 约束上移到服务层。 */
+    @Test
+    void create_mediaMaterial_requiresUrl() {
+        BizException ex = assertThrows(BizException.class, () -> service.create(7L, 42L,
+            new MaterialRequest(null, 1, "n", null, null, null, null, null, null, null)));
+        assertEquals(40000, ex.getCode());
+        verify(materialMapper, never()).insert(any(Material.class));
+    }
+
+    /** 反过来：媒体素材不该留下按钮载荷，否则这行就变成"既有 url 又有按钮"的畸形素材。 */
+    @Test
+    void create_mediaMaterial_clearsButtonPayload() {
+        when(materialMapper.insert(any(Material.class))).thenReturn(1);
+        when(materialMapper.selectById(any())).thenReturn(new Material());
+
+        service.create(7L, 42L, new MaterialRequest(null, 1, "n", "http://x",
+            "{\"buttons\":[{\"type\":\"reply\",\"text\":\"是\",\"id\":\"y\"}]}",
+            null, null, null, null, null));
+
+        ArgumentCaptor<Material> cap = ArgumentCaptor.forClass(Material.class);
+        verify(materialMapper).insert(cap.capture());
+        assertEquals(null, cap.getValue().getButtonPayload());
+    }
+
     @Test
     void create_defaultsToPublicWithNullKey() {
         when(materialMapper.insert(any(Material.class))).thenReturn(1);
         when(materialMapper.selectById(any())).thenReturn(new Material());
 
         service.create(7L, 42L, new MaterialRequest(null, 1, "n", "http://x", null, null, null,
-            null, null));
+            null, null, null));
 
         ArgumentCaptor<Material> cap = ArgumentCaptor.forClass(Material.class);
         verify(materialMapper).insert(cap.capture());

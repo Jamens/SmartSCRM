@@ -12,6 +12,8 @@ public record MaterialVO(
     String mimeType,
     Long sizeBytes,
     String remark,
+    /** B17 P3：type=5（按钮）时的按钮载荷 JSON；其余类型为 null。 */
+    String buttonPayload,
     /** B17 P1：public / personal / contact。 */
     String ownerScope,
     /** personal 时是拥有者 app_user.id，contact 时是 customer.id，public 时为 null。 */
@@ -22,6 +24,6 @@ public record MaterialVO(
     public static MaterialVO of(Material m) {
         return new MaterialVO(m.getId(), m.getGroupId(), m.getType(), m.getName(), m.getUrl(),
             m.getMimeType(), m.getSizeBytes(), m.getRemark(),
-            m.getOwnerScope(), m.getOwnerKey(), m.getCreatedAt());
+            m.getButtonPayload(), m.getOwnerScope(), m.getOwnerKey(), m.getCreatedAt());
     }
 }

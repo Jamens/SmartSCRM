@@ -1,21 +1,25 @@
 package com.smartscrm.server.web.dto;
 
-import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
 
 /**
- * B17 P1 — material create/update payload.
+ * B17 P3 — material create/update payload.
  *
- * <p>{@code ownerKey} is honoured only for {@code contact} scope (it is the customer id).
- * For {@code personal} the backend stamps the caller's own user id regardless of what is
- * sent here, and for {@code public} the key is cleared — see
- * {@code MaterialScope#keyFor}.
+ * <p>{@code url} and {@code buttonPayload} are mutually exclusive by type:
+ * types 1–4 (media) require a non-blank {@code url}; type 5 (button) requires a valid
+ * {@code buttonPayload} and carries no url. The service enforces this rather than bean
+ * validation, because "which field is required" depends on another field's value.
+ *
+ * <p>{@code ownerKey} is honoured only for {@code contact} scope (customer id). For
+ * {@code personal} the backend stamps the caller's own user id; see {@code MaterialScope#keyFor}.
  */
 public record MaterialRequest(
     Long groupId,
     @NotNull Integer type,
-    @NotBlank String name,
-    @NotBlank String url,
+    String name,
+    String url,
+    /** type=5 时的按钮载荷 JSON；其它类型忽略。 */
+    String buttonPayload,
     String mimeType,
     Long sizeBytes,
     String remark,

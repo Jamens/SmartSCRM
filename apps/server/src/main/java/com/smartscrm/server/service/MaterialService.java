@@ -130,8 +130,12 @@ public class MaterialService {
         apply(material, tenantId, userId, req);
         materialMapper.updateById(material);
         // updateById skips null fields, so clear the optional columns explicitly.
+        // url 与 buttonPayload 必须一起清：改类型（图片→按钮、按钮→图片）时留下另一档的
+        // 旧值，落库后这行就是"既有 url 又有按钮载荷"的畸形素材。
         materialMapper.update(null, new LambdaUpdateWrapper<Material>()
             .eq(Material::getId, id)
+            .set(Material::getUrl, material.getUrl())
+            .set(Material::getButtonPayload, material.getButtonPayload())
             .set(Material::getGroupId, material.getGroupId())
             .set(Material::getMimeType, material.getMimeType())
             .set(Material::getSizeBytes, material.getSizeBytes())
@@ -151,7 +155,19 @@ public class MaterialService {
         material.setGroupId(req.groupId());
         material.setType(req.type());
         material.setName(req.name().trim());
-        material.setUrl(req.url().trim());
+        // 媒体素材必须有 url，按钮素材（type=5）没有 url——两档互斥，按 type 判定而不是
+        // 让两个字段都可选（都可选就会出现"两个都空"的素材，落库后谁也不知道它是什么）。
+        if (isButton(req.type())) {
+            MaterialButtons.requireValid(req.buttonPayload());
+            material.setUrl(null);
+            material.setButtonPayload(req.buttonPayload().trim());
+        } else {
+            if (req.url() == null || req.url().isBlank()) {
+                throw new BizException(40000, "素材 url 不能为空");
+            }
+            material.setUrl(req.url().trim());
+            material.setButtonPayload(null);
+        }
         material.setMimeType(StringUtils.hasText(req.mimeType()) ? req.mimeType().trim() : null);
         material.setSizeBytes(req.sizeBytes());
         material.setRemark(StringUtils.hasText(req.remark()) ? req.remark().trim() : null);
@@ -160,6 +176,10 @@ public class MaterialService {
         MaterialScope.requireValid(scope);
         material.setOwnerScope(scope);
         material.setOwnerKey(MaterialScope.keyFor(scope, userId, req.ownerKey()));
+    }
+
+    private static boolean isButton(Integer type) {
+        return type != null && type == MaterialButtons.TYPE_BUTTON;
     }
 
     private MaterialGroup requireGroup(Long tenantId, Long id) {
