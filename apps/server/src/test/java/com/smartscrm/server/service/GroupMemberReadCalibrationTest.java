@@ -3,6 +3,7 @@ package com.smartscrm.server.service;
 import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -35,6 +36,7 @@ import com.smartscrm.server.web.vo.MemberPageVO;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Set;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
@@ -58,6 +60,12 @@ class GroupMemberReadCalibrationTest {
 
     private static final long TENANT = 1L;
     private static final long ACCOUNT = 9L;
+    /**
+     * 被查客户的 id **不许取 1L**：那等于 {@code TENANT}，于是"参数值里有一个 1L"这类断言会被租户条件自己满足，
+     * 服务把租户值当客户 id 传进去也不会红（2026-10-05 用该变异实测过：11 条全绿）。
+     * 取一个和租户、账号都不相撞的值，并把参数值**整体**比掉。
+     */
+    private static final long CUSTOMER = 45L;
     private static final String GROUP = "120363111@g.us";
     private static final String MEMBER = "8613800000000@c.us";
 
@@ -153,6 +161,10 @@ class GroupMemberReadCalibrationTest {
 
         MemberPageVO page = query.pageMembers(TENANT, ACCOUNT, "whatsapp", GROUP, null, null, null, 1, 50);
 
+        // 先判空再比数值：{@code coverage} 是可空 {@code Double}（首次可判定快照前就没有读数），
+        // 直接喂进 delta 版 assertEquals 会先拆箱——2026-10-05 变异实测：读侧返回 null 时这里报的是
+        // NullPointerException（Errors 而不是 Failures），下面那条中文说明永远读不到。
+        assertNotNull(page.coverage(), "coverage 没带出来（是 null）⇒ 读侧没把群行上的闸读数交给界面");
         assertEquals(0.9333, page.coverage(), 1e-9, "coverage 不是群行上存着的那个数 ⇒ 读侧还在现场算");
         assertEquals("ok", page.reason(), "reason 不是群行上存着那个结论 ⇒ 读侧还在现场算");
     }
@@ -161,14 +173,14 @@ class GroupMemberReadCalibrationTest {
     @Test
     void customerGroupsAreScopedToTheAccount() {
         Customer c = new Customer();
-        c.setId(1L);
+        c.setId(CUSTOMER);
         c.setTenantId(TENANT);
         c.setPhone("8613800000000");
-        when(customerMapper.selectById(1L)).thenReturn(c);
+        when(customerMapper.selectById(CUSTOMER)).thenReturn(c);
         ArgumentCaptor<LambdaQueryWrapper<GroupMemberState>> cap = ArgumentCaptor.forClass(LambdaQueryWrapper.class);
         when(stateMapper.selectList(cap.capture())).thenReturn(List.of());
 
-        query.customerGroups(TENANT, ACCOUNT, "whatsapp", 1L);
+        query.customerGroups(TENANT, ACCOUNT, "whatsapp", CUSTOMER);
 
         // 两路反查（按 customer_id、按 phone）都得发，且都得带上收窄的那几列——
         // 少发一条意味着某一路不再按账号收窄，测试却照样绿，所以先数 wrapper 的条数。
@@ -184,18 +196,45 @@ class GroupMemberReadCalibrationTest {
             // 收窄只由「租户 + 账号 + 平台 + 各自的匹配列」四条件构成：冒出第五个条件就不是这一句要说的收窄了。
             assertEquals(4, w.getParamNameValuePairs().size(),
                 () -> "条件数多于标题所声称的四个: " + seg + " " + w.getParamNameValuePairs());
-            // 断的是**这一账号的值**真的进了条件，不是"存在一个叫 account_id 的条件"。
-            assertTrue(w.getParamNameValuePairs().containsValue(ACCOUNT),
-                () -> "account_id 的值不是这个账号: " + w.getParamNameValuePairs());
-            assertTrue(w.getParamNameValuePairs().containsValue("whatsapp"),
-                () -> "platform 的值不是这个平台: " + w.getParamNameValuePairs());
         }
         assertTrue(byCustomer.getSqlSegment().contains("customer_id"), byCustomer.getSqlSegment());
-        assertTrue(byCustomer.getParamNameValuePairs().containsValue(1L),
-            () -> "按 customer_id 那一路没带上被查的客户: " + byCustomer.getParamNameValuePairs());
         assertTrue(byPhone.getSqlSegment().contains("phone"), byPhone.getSqlSegment());
-        assertTrue(byPhone.getParamNameValuePairs().containsValue("8613800000000"),
-            () -> "按号码那一路没带上归一后的号码: " + byPhone.getParamNameValuePairs());
+        // 值**整体**比掉，不用 containsValue 逐个探：租户条件恒带 1L、账号条件恒带 9L，
+        // "参数里有一个 1L" 这种断言在"把租户值当客户 id 传进去"时仍然为真（2026-10-05 变异实测：11 条全绿）。
+        assertEquals(Set.of(TENANT, ACCOUNT, "whatsapp", CUSTOMER),
+            Set.copyOf(byCustomer.getParamNameValuePairs().values()),
+            () -> "按 customer_id 那一路的参数值不是「租户+账号+平台+被查客户」这四个: "
+                + byCustomer.getParamNameValuePairs());
+        assertEquals(Set.of(TENANT, ACCOUNT, "whatsapp", "8613800000000"),
+            Set.copyOf(byPhone.getParamNameValuePairs().values()),
+            () -> "按号码那一路的参数值不是「租户+账号+平台+归一后号码」这四个: "
+                + byPhone.getParamNameValuePairs());
+        // 集合相等还看不出**谁绑在哪一列**：两路把客户 id 与手机号对调，值集合一模一样、两路却都查错东西。
+        // 所以再按列取一次绑定值——这一维是上一段拿不到的。
+        assertEquals(CUSTOMER, boundValue(byCustomer, "customer_id"),
+            () -> "customer_id 那一列没绑到被查客户: " + byCustomer.getParamNameValuePairs());
+        assertEquals("8613800000000", boundValue(byPhone, "phone"),
+            () -> "phone 那一列没绑到归一后的号码: " + byPhone.getParamNameValuePairs());
+    }
+
+    /**
+     * 取 {@code getSqlSegment()} 里 {@code column} 之后第一个 {@code MPGENVALn} 占位符绑定的参数值，
+     * 列或占位符找不到就返回 {@code null}（断言随即红，不会静默放过）。
+     * MP 按条件追加顺序编号占位符，所以"列名之后的那一个"就是这一列的匹配值；本文件的 wrapper 没有 ORDER BY，
+     * 不存在列名第二次出现抢位的情形。
+     */
+    private static Object boundValue(LambdaQueryWrapper<GroupMemberState> w, String column) {
+        String seg = w.getSqlSegment();
+        int at = seg.indexOf(column);
+        if (at < 0) {
+            return null;
+        }
+        int ph = seg.indexOf("MPGENVAL", at);
+        if (ph < 0) {
+            return null;
+        }
+        int end = seg.indexOf('}', ph);
+        return w.getParamNameValuePairs().get(seg.substring(ph, end < 0 ? seg.length() : end));
     }
 
     /** ⑤：同一群勾两遍不许出一遍成员，也不许绕过 50 群上限（拦的是工作量）。 */
@@ -342,6 +381,8 @@ class GroupMemberReadCalibrationTest {
 
         assertEquals(2, res.records().size(), "非空群行没流到 VO: " + res);
         GroupVO first = res.records().get(0);
+        // 同 :162 那条纪律：先判空再比 delta，否则读侧给 null 时这里炸 NullPointerException、说明读不到。
+        assertNotNull(first.lastCoverage(), "lastCoverage 是 null ⇒ 群列表没把闸读数带出来");
         assertEquals(0.9333, first.lastCoverage(), 1e-9, "群列表没把闸读数带出来");
         assertEquals("ok", first.lastReconcileReason());
         GroupVO second = res.records().get(1);
