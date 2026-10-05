@@ -728,6 +728,11 @@ export const en: DeepString<typeof zhCN> = {
     ungroup: 'Ungroup',
     contentLabel: 'Material content (image URL / data URI)',
     urlPlaceholder: 'Paste an https image/file URL, or click below to choose a local image',
+    buttonLabel: 'Button content (JSON)',
+    buttonHint:
+      '1 to 3 buttons, each label up to 20 characters; quick-reply buttons cannot be mixed with link/phone buttons. A violating payload is rejected by the backend, which says which rule failed.',
+    buttonCount: '{{n}} buttons',
+    saveFailed: 'Save failed',
     inlineNote: 'Local image embedded; choose another image or clear, then paste a URL.',
     inlinePreview: ' (embedded image)',
     noticeLargeImage: 'Image is large — use a material URL instead (local cap 400KB).',
@@ -746,7 +751,8 @@ export const en: DeepString<typeof zhCN> = {
       image: 'Image',
       video: 'Video',
       audio: 'Audio',
-      file: 'File'
+      file: 'File',
+      button: 'Button'
     }
   },
 

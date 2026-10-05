@@ -707,6 +707,11 @@ export const zhCN = {
     ungroup: '取消分组',
     contentLabel: '素材内容（图片 URL / data URI）',
     urlPlaceholder: '粘贴 https 图片/文件地址，或点击下方选择本地图片',
+    buttonLabel: '按钮内容（JSON）',
+    buttonHint:
+      '1 到 3 个按钮，文案不超过 20 字；快捷回复（reply）不能与链接/拨号按钮混用。不合规后端会拒收并说明哪一条不对。',
+    buttonCount: '{{n}} 个按钮',
+    saveFailed: '保存失败',
     inlineNote: '已内嵌本地图片，可继续选择其它图片或清空后粘贴 URL。',
     inlinePreview: '（内嵌图片）',
     noticeLargeImage: '图片较大，请改用素材 URL（本地暂存限制 400KB）。',
@@ -725,7 +730,8 @@ export const zhCN = {
       image: '图片',
       video: '视频',
       audio: '音频',
-      file: '文件'
+      file: '文件',
+      button: '按钮'
     }
   },
 

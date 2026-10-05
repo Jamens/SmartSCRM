@@ -24,6 +24,8 @@ import { cn } from '@/lib/utils'
 import {
   MATERIAL_SCOPE_LABELS,
   MATERIAL_TYPE_LABELS,
+  buttonCountOf,
+  isButtonMaterial,
   useCreateMaterial,
   useCreateMaterialGroup,
   useDeleteMaterial,
@@ -39,7 +41,7 @@ import {
 } from '@/api/materials'
 
 const ALL = 'all'
-const TYPES: MaterialType[] = [1, 2, 3, 4]
+const TYPES: MaterialType[] = [1, 2, 3, 4, 5]
 /**
  * 筛选条只给「全部 / 公共 / 我的」三档：**没有「联系人」**——contact 档素材必须带客户 id
  * 才查得到，而管理页没有客户上下文，放一个永远返回空的筛选项只会让人以为功能坏了。
@@ -48,11 +50,25 @@ const TYPES: MaterialType[] = [1, 2, 3, 4]
 const SCOPE_FILTERS: MaterialOwnerScope[] = ['public', 'personal']
 const MAX_INLINE_BYTES = 400 * 1024 // store small images inline as data URIs
 
+/**
+ * 按钮载荷的形状示例（与后端 `MaterialButtons.requireValid` 同一套规则）。
+ *
+ * 放在组件常量而不是 locale 键里：JSON 不是界面文案，翻 8 份只会让同一份示例各写一边；
+ * 且 i18next 把 `{{` 当插值起始，把 JSON 塞进文案里是没必要的地雷。
+ */
+const BUTTON_PAYLOAD_EXAMPLE = `{
+  "buttons": [
+    { "type": "reply", "text": "咨询报价", "id": "quote" }
+  ]
+}`
+
 interface MaterialDraft {
   id?: number
   name: string
   type: MaterialType
   url: string
+  /** type=5（按钮）时的载荷 JSON；其余类型不用。 */
+  buttonPayload: string
   groupId: number | null
   remark: string
   ownerScope: MaterialOwnerScope
@@ -69,6 +85,7 @@ export default function MaterialsPage(): React.JSX.Element {
   const [keyword, setKeyword] = useState('')
   const [draft, setDraft] = useState<MaterialDraft | null>(null)
   const [groupDraft, setGroupDraft] = useState<{ id?: number; name: string } | null>(null)
+  const [error, setError] = useState<string | null>(null)
 
   const materials = useMaterials({
     groupId: groupId === ALL ? null : Number(groupId),
@@ -91,6 +108,7 @@ export default function MaterialsPage(): React.JSX.Element {
       name: '',
       type: 1,
       url: '',
+      buttonPayload: '',
       groupId: filteredGroupId,
       remark: '',
       ownerScope: 'public',
@@ -102,33 +120,55 @@ export default function MaterialsPage(): React.JSX.Element {
       id: material.id,
       name: material.name,
       type: material.type,
-      url: material.url,
+      url: material.url ?? '',
+      buttonPayload: material.buttonPayload ?? '',
       groupId: material.groupId,
       remark: material.remark ?? '',
       ownerScope: material.ownerScope,
       ownerKey: material.ownerScope === 'contact' ? (material.ownerKey ?? '') : ''
     })
 
+  /**
+   * 关弹层要连报错一起清：上一条 40000 的红字留在 state 里，下次打开「新建素材」时
+   * 看着像新素材也失败了——而它其实属于上一次那次保存。
+   */
+  const closeDraft = (): void => {
+    setDraft(null)
+    setError(null)
+  }
+
+  /**
+   * 保存失败必须看得见：后端会在按钮载荷违规时回 40000，而调用处是 `void saveMaterial()`，
+   * 没有 catch 就成了未处理的 rejection——点了保存什么也不发生，是最难查的那种故障。
+   */
   const saveMaterial = async (): Promise<void> => {
-    if (!draft || !draft.name.trim() || !draft.url.trim()) return
+    if (!draft || !draft.name.trim()) return
+    const isButton = draft.type === 5
+    if (isButton ? !draft.buttonPayload.trim() : !draft.url.trim()) return
     // contact 档缺客户 id 后端会 40000，这里先挡住，别让人填完表单才收到一句报错。
     if (draft.ownerScope === 'contact' && !draft.ownerKey.trim()) return
     const input = {
       name: draft.name.trim(),
       type: draft.type,
-      url: draft.url.trim(),
+      // 两档互斥：按钮素材没有 url，媒体素材没有载荷。两边都送会造出"两个都有"的畸形行。
+      url: isButton ? null : draft.url.trim(),
+      buttonPayload: isButton ? draft.buttonPayload.trim() : null,
       groupId: draft.groupId,
       remark: draft.remark.trim() || null,
       ownerScope: draft.ownerScope,
       // personal 档后端强制盖成调用者自己，前端不送；contact 档送客户 id。
       ownerKey: draft.ownerScope === 'contact' ? draft.ownerKey.trim() : null
     }
-    if (draft.id != null) {
-      await updateMaterial.mutateAsync({ id: draft.id, input })
-    } else {
-      await createMaterial.mutateAsync(input)
+    try {
+      if (draft.id != null) {
+        await updateMaterial.mutateAsync({ id: draft.id, input })
+      } else {
+        await createMaterial.mutateAsync(input)
+      }
+      closeDraft()
+    } catch (e) {
+      setError((e as Error).message || t('materials.saveFailed'))
     }
-    setDraft(null)
   }
 
   const saveGroup = async (): Promise<void> => {
@@ -276,7 +316,7 @@ export default function MaterialsPage(): React.JSX.Element {
       </div>
 
       {/* Material dialog */}
-      <Dialog open={draft !== null} onOpenChange={(open) => !open && setDraft(null)}>
+      <Dialog open={draft !== null} onOpenChange={(open) => !open && closeDraft()}>
         <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>
@@ -284,17 +324,19 @@ export default function MaterialsPage(): React.JSX.Element {
             </DialogTitle>
             <DialogDescription>{t('materials.dialogDesc')}</DialogDescription>
           </DialogHeader>
+          {error && <p className="text-xs text-destructive">{error}</p>}
           {draft && <MaterialForm draft={draft} groups={groups} onChange={setDraft} />}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setDraft(null)}>
+            <Button variant="outline" onClick={closeDraft}>
               {t('common.cancel')}
             </Button>
             <Button
               onClick={() => void saveMaterial()}
               disabled={
                 !draft?.name.trim() ||
-                !draft?.url.trim() ||
-                // 与 saveMaterial 里的守卫同一条规则：按钮先置灰，比填完表单收到一句 40000 好。
+                // 与 saveMaterial 里同一条规则：按钮缺载荷 / 媒体缺 url，先置灰而不是填完报错。
+                (draft?.type === 5 ? !draft.buttonPayload.trim() : !draft?.url.trim()) ||
+                // contact 档缺客户 id 后端会 40000，这里先挡住。
                 (draft?.ownerScope === 'contact' && !draft.ownerKey.trim()) ||
                 createMaterial.isPending ||
                 updateMaterial.isPending
@@ -355,24 +397,31 @@ function MaterialCard({
   onDelete: () => void
 }): React.JSX.Element {
   const { t } = useTranslation()
-  const isImage = material.type === 1 && material.url.startsWith('data:')
+  // url 是可空列（type=5 的按钮素材按后端规则必定没有 url）。收成局部 const 再逐处判空：
+  // `material.url ?? ''` 会把「没有地址」冒充成「有地址但是空串」，于是复制链接能复制成功、
+  // 复制到一句空，图片格也会渲染一张 src="" 的破图。展示层不该给空值编一个值。
+  const url = material.url
+  const isButton = isButtonMaterial(material)
   return (
     <div className="group overflow-hidden rounded-xl border border-border/60 bg-card">
       <div className="flex aspect-square items-center justify-center overflow-hidden bg-muted/40">
-        {isImage ? (
-          <img src={material.url} alt={material.name} className="size-full object-cover" />
+        {material.type === 1 && url !== null ? (
+          <img
+            src={url}
+            alt={material.name}
+            className="size-full object-cover"
+            onError={(e) => (e.currentTarget.style.display = 'none')}
+          />
         ) : (
           <div className="flex flex-col items-center gap-2 text-muted-foreground">
-            {material.type === 1 ? (
-              <img
-                src={material.url}
-                alt={material.name}
-                className="size-full object-cover"
-                onError={(e) => (e.currentTarget.style.display = 'none')}
-              />
-            ) : // 直接引用已导入的稳定 lucide 组件，避免在渲染期把 typeIcon 返回的组件赋给变量再当 JSX 用
-            // （react-hooks/static-components：渲染期创建组件会让其 state 每帧重置）。
-            material.type === 2 ? (
+            {/* 直接引用已导入的稳定 lucide 组件，避免在渲染期把 typeIcon 返回的组件赋给变量再当 JSX 用
+                （react-hooks/static-components：渲染期创建组件会让其 state 每帧重置）。 */}
+            {isButton ? (
+              // 按钮素材没有可视内容，能给的是"它有几个按钮"——载荷坏掉时 buttonCountOf 给 0，不崩。
+              <span className="px-4 text-center text-xs">
+                {t('materials.buttonCount', { n: buttonCountOf(material.buttonPayload) })}
+              </span>
+            ) : material.type === 2 ? (
               <Film className="size-10" />
             ) : material.type === 3 ? (
               <Music className="size-10" />
@@ -417,13 +466,16 @@ function MaterialCard({
         </p>
         <div className="mt-2 flex items-center justify-between opacity-0 transition-opacity group-hover:opacity-100">
           <div className="flex gap-1">
-            <button
-              className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
-              title={t('materials.copyLink')}
-              onClick={() => void navigator.clipboard.writeText(material.url)}
-            >
-              <Link2 className="size-3.5" />
-            </button>
+            {/* 没有地址就没有可复制的东西：整颗按钮收起来，而不是复制出一句空。 */}
+            {url !== null && (
+              <button
+                className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
+                title={t('materials.copyLink')}
+                onClick={() => void navigator.clipboard.writeText(url)}
+              >
+                <Link2 className="size-3.5" />
+              </button>
+            )}
             <button
               className="rounded p-1 text-muted-foreground hover:bg-muted hover:text-foreground"
               title={t('materials.edit')}
@@ -582,43 +634,67 @@ function MaterialForm({
         )}
       </div>
 
-      <div className="space-y-1.5">
-        <Label>{t('materials.contentLabel')}</Label>
-        <div className="flex items-start gap-2">
-          {draft.type === 1 && draft.url.startsWith('data:') && (
-            <img
-              src={draft.url}
-              alt={t('materials.preview')}
-              className="size-16 shrink-0 rounded-md border border-border object-cover"
-            />
-          )}
+      {/* 内容一档一格：按钮素材（type=5）没有 url，内容在 buttonPayload。
+          合成一格会让选了「按钮」的人仍被要求填 URL，而保存按钮按「按钮必须有载荷」置灰——
+          那条路是死的：存不了，也看不出为什么存不了。 */}
+      {isButtonMaterial(draft) ? (
+        <div className="space-y-1.5">
+          <Label>{t('materials.buttonLabel')}</Label>
           <textarea
-            className="h-16 min-w-0 flex-1 resize-none rounded-md border border-border bg-transparent px-3 py-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
-            value={
-              draft.url.startsWith('data:')
-                ? `${draft.url.slice(0, 40)}…${t('materials.inlinePreview')}`
-                : draft.url
-            }
-            onChange={(e) => onChange({ ...draft, url: e.target.value })}
-            placeholder={t('materials.urlPlaceholder')}
+            className="h-28 min-w-0 resize-y rounded-md border border-border bg-transparent px-3 py-2 font-mono text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            value={draft.buttonPayload}
+            onChange={(e) => onChange({ ...draft, buttonPayload: e.target.value })}
+            placeholder={BUTTON_PAYLOAD_EXAMPLE}
           />
+          {/* 规则写给肉眼，违规由后端判：requireValid 逐条回 40000 并说明哪一条不对，
+              前端不重复实现一遍校验（两份规则迟早各说各话）。 */}
+          <p className="text-[11px] text-muted-foreground">{t('materials.buttonHint')}</p>
         </div>
-        {draft.url.startsWith('data:') && (
-          <p className="text-[11px] text-muted-foreground">{t('materials.inlineNote')}</p>
-        )}
-        <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm" onClick={pickImage} disabled={draft.type !== 1}>
-            {t('materials.pickLocalImage')}
-          </Button>
+      ) : (
+        <div className="space-y-1.5">
+          <Label>{t('materials.contentLabel')}</Label>
+          <div className="flex items-start gap-2">
+            {draft.type === 1 && draft.url.startsWith('data:') && (
+              <img
+                src={draft.url}
+                alt={t('materials.preview')}
+                className="size-16 shrink-0 rounded-md border border-border object-cover"
+              />
+            )}
+            <textarea
+              className="h-16 min-w-0 flex-1 resize-none rounded-md border border-border bg-transparent px-3 py-2 text-xs outline-none focus-visible:ring-2 focus-visible:ring-ring"
+              value={
+                draft.url.startsWith('data:')
+                  ? `${draft.url.slice(0, 40)}…${t('materials.inlinePreview')}`
+                  : draft.url
+              }
+              onChange={(e) => onChange({ ...draft, url: e.target.value })}
+              placeholder={t('materials.urlPlaceholder')}
+            />
+          </div>
           {draft.url.startsWith('data:') && (
-            <Button variant="ghost" size="sm" onClick={() => onChange({ ...draft, url: '' })}>
-              {t('materials.clearImage')}
-            </Button>
+            <p className="text-[11px] text-muted-foreground">{t('materials.inlineNote')}</p>
           )}
-          <input ref={fileRef} type="file" accept="image/*" className="hidden" onChange={onFile} />
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" onClick={pickImage} disabled={draft.type !== 1}>
+              {t('materials.pickLocalImage')}
+            </Button>
+            {draft.url.startsWith('data:') && (
+              <Button variant="ghost" size="sm" onClick={() => onChange({ ...draft, url: '' })}>
+                {t('materials.clearImage')}
+              </Button>
+            )}
+            <input
+              ref={fileRef}
+              type="file"
+              accept="image/*"
+              className="hidden"
+              onChange={onFile}
+            />
+          </div>
+          {notice && <p className="text-[11px] text-amber-600">{notice}</p>}
         </div>
-        {notice && <p className="text-[11px] text-amber-600">{notice}</p>}
-      </div>
+      )}
 
       <div className="space-y-1.5">
         <Label>{t('materials.remarkLabel')}</Label>

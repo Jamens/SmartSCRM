@@ -722,6 +722,11 @@ export const ko: DeepString<typeof zhCN> = {
     ungroup: '그룹 해제',
     contentLabel: '자료 내용 (이미지 URL / data URI)',
     urlPlaceholder: 'https 이미지/파일 주소를 붙여넣거나 아래에서 로컬 이미지를 선택하세요',
+    buttonLabel: '버튼 내용(JSON)',
+    buttonHint:
+      '버튼은 1~3개, 문구는 20자 이내. 빠른 답변(reply) 버튼은 링크/전화 버튼과 섞어 쓸 수 없습니다. 규칙 위반은 백엔드가 거부하며 어느 규칙인지 알려줍니다.',
+    buttonCount: '버튼 {{n}}개',
+    saveFailed: '저장 실패',
     inlineNote:
       '로컬 이미지가 포함되었습니다. 다른 이미지를 선택하거나 지운 후 URL을 붙여넣으세요.',
     inlinePreview: ' (포함된 이미지)',
@@ -741,7 +746,8 @@ export const ko: DeepString<typeof zhCN> = {
       image: '이미지',
       video: '동영상',
       audio: '오디오',
-      file: '파일'
+      file: '파일',
+      button: '버튼'
     }
   },
 

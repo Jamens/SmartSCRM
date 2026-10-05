@@ -725,6 +725,11 @@ export const vi: DeepString<typeof zhCN> = {
     ungroup: 'Bỏ nhóm',
     contentLabel: 'Nội dung tài liệu (URL ảnh / data URI)',
     urlPlaceholder: 'Dán URL ảnh/tệp https, hoặc nhấn bên dưới để chọn ảnh cục bộ',
+    buttonLabel: 'Nội dung nút (JSON)',
+    buttonHint:
+      '1 đến 3 nút, nhãn mỗi nút tối đa 20 ký tự; nút trả lời nhanh (reply) không dùng lẫn với nút liên kết/gọi. Payload sai quy tắc bị backend từ chối và nêu quy tắc nào sai.',
+    buttonCount: '{{n}} nút',
+    saveFailed: 'Lưu thất bại',
     inlineNote: 'Đã nhúng ảnh cục bộ; hãy chọn ảnh khác hoặc xóa rồi dán URL.',
     inlinePreview: ' (ảnh đã nhúng)',
     noticeLargeImage: 'Ảnh quá lớn, hãy dùng URL tài liệu (giới hạn cục bộ 400KB).',
@@ -743,7 +748,8 @@ export const vi: DeepString<typeof zhCN> = {
       image: 'Ảnh',
       video: 'Video',
       audio: 'Âm thanh',
-      file: 'Tệp'
+      file: 'Tệp',
+      button: 'Nút'
     }
   },
 

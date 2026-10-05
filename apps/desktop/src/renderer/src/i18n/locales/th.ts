@@ -722,6 +722,11 @@ export const th: DeepString<typeof zhCN> = {
     ungroup: 'ยกเลิกกลุ่ม',
     contentLabel: 'เนื้อหาสื่อ (URL รูปภาพ / data URI)',
     urlPlaceholder: 'วาง URL รูปภาพ/ไฟล์ https หรือคลิกด้านล่างเพื่อเลือกรูปภาพในเครื่อง',
+    buttonLabel: 'เนื้อหาปุ่ม (JSON)',
+    buttonHint:
+      'ปุ่ม 1–3 ปุ่ม ข้อความแต่ละปุ่มไม่เกิน 20 ตัวอักษร ปุ่มตอบกลับด่วนใช้ปนกับปุ่มลิงก์/โทรไม่ได้ หากผิดข้อกำหนด แบ็กเอนด์จะปฏิเสธและบอกว่าผิดข้อไหน',
+    buttonCount: '{{n}} ปุ่ม',
+    saveFailed: 'บันทึกล้มเหลว',
     inlineNote: 'แทรกรูปภาพในเครื่องแล้ว สามารถเลือกรูปอื่นหรือลบแล้ววาง URL',
     inlinePreview: ' (รูปที่ฝังแล้ว)',
     noticeLargeImage: 'รูปภาพใหญ่เกินไป กรุณาใช้ URL สื่อแทน (จำกัดในเครื่อง 400KB)',
@@ -740,7 +745,8 @@ export const th: DeepString<typeof zhCN> = {
       image: 'รูปภาพ',
       video: 'วิดีโอ',
       audio: 'เสียง',
-      file: 'ไฟล์'
+      file: 'ไฟล์',
+      button: 'ปุ่ม'
     }
   },
 

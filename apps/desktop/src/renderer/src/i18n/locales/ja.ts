@@ -735,6 +735,11 @@ export const ja: DeepString<typeof zhCN> = {
     ungroup: 'グループ解除',
     contentLabel: '素材内容（画像 URL / data URI）',
     urlPlaceholder: 'https の画像/ファイル URL を貼り付けるか、下のボタンでローカル画像を選択',
+    buttonLabel: 'ボタン内容（JSON）',
+    buttonHint:
+      'ボタンは 1〜3 個、ラベルは 20 文字以内。クイック返信ボタンはリンク／電話ボタンと併用できません。規則違反はバックエンドが拒否し、どの規則に違反したか返します。',
+    buttonCount: '{{n}} 個のボタン',
+    saveFailed: '保存に失敗',
     inlineNote:
       'ローカル画像を埋め込み済み。別の画像を選ぶかクリアしてから URL を貼り付けてください。',
     inlinePreview: '（埋め込み画像）',
@@ -754,7 +759,8 @@ export const ja: DeepString<typeof zhCN> = {
       image: '画像',
       video: '動画',
       audio: '音声',
-      file: 'ファイル'
+      file: 'ファイル',
+      button: 'ボタン'
     }
   },
 

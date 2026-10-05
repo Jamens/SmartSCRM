@@ -1,7 +1,8 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
 
-export type MaterialType = 1 | 2 | 3 | 4 // image | video | audio | file
+/** 5 = button（B17 P3 交互按钮素材，载荷在 buttonPayload，没有 url）。 */
+export type MaterialType = 1 | 2 | 3 | 4 | 5 // image | video | audio | file | button
 
 /**
  * B17 P2 素材归属。与后端 `MaterialScope` 同一套词表：
@@ -18,7 +19,10 @@ export interface MaterialVO {
   groupId: number | null
   type: MaterialType
   name: string
-  url: string
+  /** type=5（按钮）时为 null——按钮素材没有 URL。 */
+  url: string | null
+  /** type=5（按钮）时的按钮载荷 JSON；其余类型为 null。 */
+  buttonPayload: string | null
   mimeType: string | null
   sizeBytes: number | null
   remark: string | null
@@ -39,7 +43,10 @@ export interface MaterialInput {
   groupId?: number | null
   type: MaterialType
   name: string
-  url: string
+  /** type 1–4 必填；type=5 不传。 */
+  url?: string | null
+  /** type=5 必填的按钮载荷 JSON；其余类型忽略。 */
+  buttonPayload?: string | null
   mimeType?: string | null
   sizeBytes?: number | null
   remark?: string | null
@@ -184,7 +191,24 @@ export const MATERIAL_TYPE_LABELS: Record<MaterialType, string> = {
   1: 'materials.type.image',
   2: 'materials.type.video',
   3: 'materials.type.audio',
-  4: 'materials.type.file'
+  4: 'materials.type.file',
+  5: 'materials.type.button'
+}
+
+/** type=5 是按钮素材：没有 url，内容在 buttonPayload。 */
+export function isButtonMaterial(m: { type: MaterialType }): boolean {
+  return m.type === 5
+}
+
+/** 按钮个数，用于卡片角标；载荷解不出来时返回 0（不抛，展示层不该因为一行坏数据崩）。 */
+export function buttonCountOf(payload: string | null): number {
+  if (!payload) return 0
+  try {
+    const parsed = JSON.parse(payload) as { buttons?: unknown }
+    return Array.isArray(parsed.buttons) ? parsed.buttons.length : 0
+  } catch {
+    return 0
+  }
 }
 
 export const MATERIAL_SCOPE_LABELS: Record<MaterialOwnerScope, string> = {

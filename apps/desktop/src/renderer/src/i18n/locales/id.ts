@@ -741,6 +741,11 @@ export const id: DeepString<typeof zhCN> = {
     ungroup: 'Batal grup',
     contentLabel: 'Konten materi (URL gambar / data URI)',
     urlPlaceholder: 'Tempel URL gambar/file https, atau klik di bawah untuk memilih gambar lokal',
+    buttonLabel: 'Konten tombol (JSON)',
+    buttonHint:
+      '1–3 tombol, teks tiap tombol maksimal 20 karakter; tombol balasan cepat tidak boleh dicampur dengan tombol tautan/panggilan. Muatan yang melanggar ditolak backend dengan penjelasan aturannya.',
+    buttonCount: '{{n}} tombol',
+    saveFailed: 'Gagal menyimpan',
     inlineNote: 'Gambar lokal telah disematkan; pilih gambar lain atau hapus lalu tempel URL.',
     inlinePreview: ' (gambar tertanam)',
     noticeLargeImage: 'Gambar terlalu besar, gunakan URL materi (batas lokal 400KB).',
@@ -759,7 +764,8 @@ export const id: DeepString<typeof zhCN> = {
       image: 'Gambar',
       video: 'Video',
       audio: 'Audio',
-      file: 'File'
+      file: 'File',
+      button: 'Tombol'
     }
   },
 

@@ -697,6 +697,11 @@ export const zhTW: DeepString<typeof zhCN> = {
     ungroup: '取消分組',
     contentLabel: '素材內容（圖片 URL / data URI）',
     urlPlaceholder: '貼上 https 圖片/檔案網址，或點下方選擇本機圖片',
+    buttonLabel: '按鈕內容（JSON）',
+    buttonHint:
+      '1 到 3 個按鈕，文案不超過 20 字；快捷回覆（reply）不能與連結/撥號按鈕混用。不合規時後端會拒收並說明哪一條不對。',
+    buttonCount: '{{n}} 個按鈕',
+    saveFailed: '儲存失敗',
     inlineNote: '已內嵌本機圖片，可繼續選擇其他圖片或清空後貼上網址。',
     inlinePreview: '（內嵌圖片）',
     noticeLargeImage: '圖片較大，請改用素材 URL（本機暫存限制 400KB）。',
@@ -715,7 +720,8 @@ export const zhTW: DeepString<typeof zhCN> = {
       image: '圖片',
       video: '影片',
       audio: '音訊',
-      file: '檔案'
+      file: '檔案',
+      button: '按鈕'
     }
   },
 
