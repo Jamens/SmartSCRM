@@ -20,7 +20,7 @@
 | A13 | 主题切换开关（light / dark / 跟随系统 + 持久化） | P6 收尾 |
 | A14 | 设备信息（机器码与设备绑定状态、应用与运行时版本、本地存储占用） | P6 收尾 |
 | A15 | 设置页（导航新入口；A13 主题开关与 A14 设备信息各占其中一行，后续 A4/A6/A8/A9、A17/A18、B13/B14 的落点也以它为准） | P6 收尾 |
-| A16 | 角色 RBAC + 菜单权限树（角色 CRUD / 启停 / 排序 + 菜单树勾选与父子半选回传；**与 B22 同支，排在 B22 之后**——先有部门与子账号，角色才有分配对象） | P13 |
+| A16 | 角色 RBAC + 菜单权限树（角色 CRUD / 启停 / 排序 + 菜单树勾选与父子半选回传） | 🟡 **管理端侧已交付（2026-10-04）**：V14 建 `sys_menu`(type 1=dir/2=menu/3=button 隐藏)/`sys_role`/`sys_role_menu`；`AdminRoleController`（分页 / 创建 / `PUT {id}/menus` 授权 / 删除）；`AdminPermissionInterceptor` 对 `/api/admin/**` **每次请求查库**填 `menuCodes` 并 publish 成 authority（权限不进 JWT，撤权即时生效）；`SecurityConfig` 开 `@EnableMethodSecurity`；管理端 `RoleList` + `RoleEdit` 权限树（父子半选 + BUTTON 隐藏节点）。**仍缺**：桌面端（租户侧业务接口）没有任何授权判定——`/api/materials`、`/api/messages` 等一律只认 `tenant_id`，`role` 只签发不参与判定（README §7 第 7 条） |
 | A17 | 桌面系统通知（OS 通知弹窗 + 同会话合并去抖 + 点击直达会话；**不是** A10 的站内通知列表） | ✅ 已交付（2026-10-03，commit `27062f2`） |
 | A18 | GPU 崩溃降级与图形开关（`--gpu-safe-mode` 自动重启降级 + 持久化 + 一键重试标准模式；硬件加速开关；DPI 缩放到全部 WebContentsView） | ✅ 已交付（2026-10-03） |
 | A19 | 分类日志落盘 + 日志中心（主进程四类日志 + 未处理 Promise 拒绝 + 批量刷盘；**只落本地，不上报服务端**） | ✅ 已交付（2026-10-03） |
@@ -49,7 +49,7 @@
 | B19 | 群自动踢人（规则表单 + 执行链） | P9 |
 | B20 | 本地自动化任务面板（批量关闭 / 批量删除 / 状态总览） | P10 |
 | B21 | 云账号池（分组 / 统计卡 / 批量转移 / 筛选 / 同步到本地） | P12 |
-| B22 | 团队 / 部门 / 子账号 + 客户绑定客服（坐席归属） | P13 |
+| B22 | 团队 / 部门 / 子账号 + 客户绑定客服（坐席归属） | 🟡 **管理端部分交付（2026-10-04）**：V14 建 `sys_team`/`sys_user_team`；`AdminTeamController` + `AdminUserController`（团队树 CRUD、用户 CRUD、`{id}/roles` 与 `{id}/teams` 分配、`{id}/status` 启停、删除）+ 管理端 `TeamList`/`UserList`。**仍缺**：部门三字段 `type`(NORMAL/DC)/`isPushTicket`/`powers`——`SysTeam` 现只有 `parentId`/`name`/`leaderId`/`scope`/`status`；子账号**端口上限**（现只有租户级 `tenant.seat_limit`，V15）；**重置密码**（`AdminUserController` 无该端点）。客户绑定客服已由 B28 的 `chat_conversation.assignee_id` 部分覆盖 |
 | B23 | 客户跟进记录 + 标签变更记录 + 客户统计卡 / 批量操作条 | P13 |
 | B24 | 首页套餐信息卡 + 快捷入口网格 | P13 |
 | B25 | 图片 / 语音翻译（OCR 与 ASR 线路，本地模拟优先） | P15 |
