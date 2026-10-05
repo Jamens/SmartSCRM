@@ -1,16 +1,24 @@
 // src/renderer/src/components/messages/ReplyComposer.tsx
 import { useState } from 'react'
-import { LoaderCircle, Send } from 'lucide-react'
+import { LoaderCircle, MousePointerClick, Send } from 'lucide-react'
 import { useTranslation } from 'react-i18next'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { Switch } from '@/components/ui/switch'
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle
+} from '@/components/ui/dialog'
 import {
   settingsInputOf,
   useTranslationSettings,
   useTrialTranslate,
   useUpdateTranslationSettings
 } from '@/api/translation'
+import { buttonCountOf, parseButtonPayload, useMaterials, type MaterialVO } from '@/api/materials'
 import { decideDraft, MAX_DRAFT_LEN, TOO_LONG_HINT } from '@/lib/sendDraft'
 import { directionSummary } from '@/lib/directionDraft'
 import {
@@ -35,6 +43,8 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
   const [hint, setHint] = useState<string | null>(null)
   const [busy, setBusy] = useState(false)
   const [sentScope, setSentScope] = useState<string | null>(null)
+  // B17 P4 按钮素材发送入口：弹层列出 type=5 素材，选中即按按钮链发出。
+  const [pickerOpen, setPickerOpen] = useState(false)
   const bridge = useBridgeOf(accountId)
   // 会话档优先（spec §3.2 / §4②）：这里的 `settings` 是"这一条会话的生效行"，
   // 它同时决定「先译再发」的初值、`decideDraft` 的中文拦截、以及旁边那枚摘要与徽标。
@@ -52,6 +62,8 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
   const translate = useTrialTranslate()
   const { send } = useSendText(accountId, conversation.chatKey)
   const offline = !bridge || !settings
+  // 按钮素材库（type=5）。空列表就别弹了——弹出来也是空的，反而让人以为坏了。
+  const buttonMaterials = useMaterials({ type: 5 })
 
   const sendNow = async (): Promise<void> => {
     if (!settings) return
@@ -152,6 +164,24 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
       })
   }
 
+  /**
+   * 选中一条按钮素材即发送：把后端 `buttonPayload` 解析成 `{ body, buttons }`，
+   * 走与文本同一条 `useSendText.send`（按钮经 IPC→主进程→桥→wa-js 渲染原生按钮）。
+   * body 为空时退化用素材名当正文——wa-js 文本消息必须有 body，空 body 会被平台拒。
+   * 解析失败不抛：那条素材的载荷坏了就跳过，别让一次点击把整个回复框卡死。
+   */
+  const sendButtonMaterial = async (material: MaterialVO): Promise<void> => {
+    const parsed = parseButtonPayload(material.buttonPayload)
+    if (!parsed || parsed.buttons.length === 0) {
+      setHint(t('messages.composer.buttonMaterialBroken'))
+      return
+    }
+    const body = parsed.body?.trim() || material.name
+    setPickerOpen(false)
+    const outcome = await send(body, parsed.buttons)
+    if (!outcome.ok) setHint(outcome.message)
+  }
+
   return (
     <div className="border-t border-border/60 px-6 py-3">
       <div
@@ -219,7 +249,49 @@ export default function ReplyComposer({ accountId, conversation }: Props): React
           {busy ? <LoaderCircle className="size-4 animate-spin" /> : <Send className="size-4" />}
           {t('messages.composer.send')}
         </Button>
+        <Button
+          size="icon"
+          variant="outline"
+          disabled={offline}
+          title={t('messages.composer.buttonMaterial')}
+          onClick={() => setPickerOpen(true)}
+        >
+          <MousePointerClick className="size-4" />
+        </Button>
       </div>
+      <Dialog open={pickerOpen} onOpenChange={setPickerOpen}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{t('messages.composer.buttonMaterial')}</DialogTitle>
+            <DialogDescription>{t('messages.composer.buttonMaterialDesc')}</DialogDescription>
+          </DialogHeader>
+          {buttonMaterials.isPending ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">{t('materials.loading')}</p>
+          ) : (buttonMaterials.data ?? []).length === 0 ? (
+            <p className="py-8 text-center text-sm text-muted-foreground">
+              {t('messages.composer.buttonMaterialEmpty')}
+            </p>
+          ) : (
+            <ul className="max-h-72 space-y-1 overflow-y-auto">
+              {(buttonMaterials.data ?? []).map((m) => (
+                <li key={m.id}>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void sendButtonMaterial(m)}
+                    className="flex w-full items-center justify-between gap-2 rounded-md border border-border px-3 py-2 text-left text-sm hover:bg-accent disabled:opacity-50"
+                  >
+                    <span className="min-w-0 flex-1 truncate">{m.name}</span>
+                    <Badge variant="outline" className="shrink-0">
+                      {t('materials.buttonCount', { n: buttonCountOf(m.buttonPayload) })}
+                    </Badge>
+                  </button>
+                </li>
+              ))}
+            </ul>
+          )}
+        </DialogContent>
+      </Dialog>
       {hint && (
         <p className="pt-1.5 text-xs text-destructive" data-p7-composer-hint="">
           {hint}

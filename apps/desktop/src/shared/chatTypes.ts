@@ -91,11 +91,29 @@ export interface BridgeState {
  */
 export type BridgeStateCore = Omit<BridgeState, 'activeChatKey'>
 
+/** 按钮类型，与后端 `MaterialButtons` 同一套词表（reply/url/call/copy）。 */
+export type ButtonType = 'reply' | 'url' | 'call' | 'copy'
+
+/**
+ * B17 P4 按钮素材发送链的归一化按钮。
+ * `value` 依类型取不同语义：reply→id、url→url、call→phone、copy→code。
+ * 这是渲染层解析后端 `buttonPayload` 之后、穿过主进程与桥、最终交给 wa-js 的中间形状。
+ */
+export interface ButtonSpec {
+  type: ButtonType
+  /** 可见文案，≤20 字符（后端 requireValid 已校验）。 */
+  text: string
+  /** reply→id；url→url；call→phone；copy→code。 */
+  value?: string
+}
+
 export interface SendRequest {
   accountId: number
   chatKey: string
   text: string
   localId: string
+  /** B17 P4：按钮素材发送链携带的按钮载荷；普通文本消息不带。 */
+  buttons?: ButtonSpec[]
 }
 
 export type SendError = 'BRIDGE_OFFLINE' | 'SEND_FAILED' | 'CHAT_NOT_FOUND' | 'TIMEOUT'
@@ -171,7 +189,7 @@ export type BridgeReport =
 /** 主 → 页，走既有的 `view:host:msg-cmd` 推送通道。 */
 export type BridgeCommand =
   | { kind: 'ping' }
-  | { kind: 'send'; localId: string; chatKey: string; text: string }
+  | { kind: 'send'; localId: string; chatKey: string; text: string; buttons?: ButtonSpec[] }
   | { kind: 'recall'; localId: string; chatKey: string; msgKey: string }
   | { kind: 'backfill'; limit: number }
   | { kind: 'open_chat'; chatKey: string }

@@ -158,6 +158,31 @@ test('send 命令交给 sendViaWa：回执异步单独一帧，命令回路不�
   })
 })
 
+test('send 命令带 buttons：透传给 sendViaWa 的 wa-js options', async (t) => {
+  const { wpp, calls, release } = gatedSend()
+  const host = fakeHost(wpp)
+  t.after(() => {
+    destroy()
+    delete (globalThis as unknown as { window?: unknown }).window
+  })
+  install(CONFIG)
+  host.out.length = 0
+  host.deliver({
+    kind: 'send',
+    localId: 'L2',
+    chatKey: '861380001001@c.us',
+    text: '请选择',
+    buttons: [{ type: 'reply', text: '咨询报价', value: 'quote' }]
+  })
+  release()
+  await idle(0)
+  assert.deepEqual(calls[0], [
+    '861380001001@c.us',
+    '请选择',
+    { createChat: true, waitForAck: false, buttons: [{ id: 'quote', text: '咨询报价' }] }
+  ])
+})
+
 /** 带 `deleteMessage` 的假 WPP，回执卡在 await 里：证明 recall 支与 send 支同样不排命令回路。 */
 function gatedRecall(): { wpp: unknown; calls: unknown[][]; release: () => void } {
   let release: () => void = () => undefined

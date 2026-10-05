@@ -251,7 +251,11 @@ export const zhCN = {
       flagsSavedNoSync: '开关已保存，但没能同步到内嵌页',
       flagsSaveFailed: '开关保存失败：{{error}}',
       translateFailed: '译文获取失败：{{error}}',
-      sentScope: '这一条按{{scope}}译出'
+      sentScope: '这一条按{{scope}}译出',
+      buttonMaterial: '按钮素材',
+      buttonMaterialDesc: '选择一条交互按钮素材，直接向客户发送带按钮的消息',
+      buttonMaterialEmpty: '还没有按钮素材，请先到「素材库」添加',
+      buttonMaterialBroken: '该按钮素材内容已损坏，无法发送'
     },
     createCustomer: {
       title: '建为客户',

@@ -252,7 +252,11 @@ export const th: DeepString<typeof zhCN> = {
       flagsSavedNoSync: 'บันทึกสวิตช์แล้ว แต่ซิงก์ไปหน้าที่ฝังอยู่ไม่ได้',
       flagsSaveFailed: 'บันทึกสวิตช์ล้มเหลว: {{error}}',
       translateFailed: 'ดึงคำแปลล้มเหลว: {{error}}',
-      sentScope: 'ข้อความนี้แปลเป็น {{scope}}'
+      sentScope: 'ข้อความนี้แปลเป็น {{scope}}',
+      buttonMaterial: 'วัสดุปุ่ม',
+      buttonMaterialDesc: 'เลือกวัสดุปุ่มโต้ตอบเพื่อส่งข้อความพร้อมปุ่ม',
+      buttonMaterialEmpty: 'ยังไม่มีวัสดุปุ่ม — เพิ่มในคลังก่อน',
+      buttonMaterialBroken: 'วัสดุปุ่มนี้เสียหาย ส่งไม่ได้'
     },
     createCustomer: {
       title: 'สร้างเป็นลูกค้า',

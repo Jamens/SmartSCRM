@@ -254,7 +254,11 @@ export const en: DeepString<typeof zhCN> = {
       flagsSavedNoSync: 'Settings saved, but failed to sync to embedded pages',
       flagsSaveFailed: 'Failed to save toggle: {{error}}',
       translateFailed: 'Translation failed: {{error}}',
-      sentScope: 'This message was sent as {{scope}}'
+      sentScope: 'This message was sent as {{scope}}',
+      buttonMaterial: 'Button material',
+      buttonMaterialDesc: 'Pick an interactive button material to send a message with buttons',
+      buttonMaterialEmpty: 'No button materials yet — add one in the library first',
+      buttonMaterialBroken: 'This button material is corrupted and cannot be sent'
     },
     createCustomer: {
       title: 'Create customer',

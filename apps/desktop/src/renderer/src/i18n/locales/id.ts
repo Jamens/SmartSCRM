@@ -257,7 +257,11 @@ export const id: DeepString<typeof zhCN> = {
       flagsSavedNoSync: 'Sakelar disimpan, tetapi gagal disinkronkan ke halaman yang disematkan',
       flagsSaveFailed: 'Gagal menyimpan sakelar: {{error}}',
       translateFailed: 'Gagal mendapatkan terjemahan: {{error}}',
-      sentScope: 'Pesan ini diterjemahkan sebagai {{scope}}'
+      sentScope: 'Pesan ini diterjemahkan sebagai {{scope}}',
+      buttonMaterial: 'Materi tombol',
+      buttonMaterialDesc: 'Pilih materi tombol interaktif untuk mengirim pesan berikut tombol',
+      buttonMaterialEmpty: 'Belum ada materi tombol — tambahkan di pustaka dulu',
+      buttonMaterialBroken: 'Materi tombol ini rusak dan tidak dapat dikirim'
     },
     createCustomer: {
       title: 'Buat sebagai pelanggan',

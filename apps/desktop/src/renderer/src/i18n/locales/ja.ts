@@ -254,7 +254,11 @@ export const ja: DeepString<typeof zhCN> = {
       flagsSavedNoSync: '設定は保存されましたが、埋め込みページへ同期できませんでした',
       flagsSaveFailed: '設定の保存に失敗しました：{{error}}',
       translateFailed: '翻訳の取得に失敗しました：{{error}}',
-      sentScope: 'この1件は{{scope}}で送信されました'
+      sentScope: 'この1件は{{scope}}で送信されました',
+      buttonMaterial: 'ボタン素材',
+      buttonMaterialDesc: '対話型ボタン素材を選ぶと、ボタン付きメッセージを送信します',
+      buttonMaterialEmpty: 'ボタン素材がありません。「素材ライブラリ」で先に追加してください',
+      buttonMaterialBroken: 'このボタン素材は壊れていて送信できません'
     },
     createCustomer: {
       title: '顧客として登録',

@@ -252,7 +252,11 @@ export const vi: DeepString<typeof zhCN> = {
       flagsSavedNoSync: 'Đã lưu công tắc nhưng không đồng bộ được vào trang nhúng',
       flagsSaveFailed: 'Lưu công tắc thất bại: {{error}}',
       translateFailed: 'Lấy bản dịch thất bại: {{error}}',
-      sentScope: 'Tin này được dịch theo {{scope}}'
+      sentScope: 'Tin này được dịch theo {{scope}}',
+      buttonMaterial: 'Vật phẩm nút',
+      buttonMaterialDesc: 'Chọn một vật phẩm nút tương tác để gửi tin nhắn kèm nút',
+      buttonMaterialEmpty: 'Chưa có vật phẩm nút — hãy thêm trong thư viện trước',
+      buttonMaterialBroken: 'Vật phẩm nút này bị hỏng, không thể gửi'
     },
     createCustomer: {
       title: 'Tạo thành khách hàng',

@@ -409,7 +409,9 @@ async function sendTextUnlocked(req: SendRequest, viewId: string): Promise<SendR
   if (!mount || !mount.ready) return { localId, ok: false, error: 'BRIDGE_OFFLINE', detail: '会话未在线' }
   const wait = registry.add(localId, viewId)
   attribution.claim(viewId, localId, req.chatKey, req.text)
-  mount.push({ kind: 'send', localId, chatKey: req.chatKey, text: req.text })
+  // B17 P4：按钮素材发送链——`req.buttons` 来自渲染层解析后的 `ButtonSpec[]`，
+  // 原样透传给桥；普通文本消息 `req.buttons` 为 undefined，桥侧按"无按钮"处理。
+  mount.push({ kind: 'send', localId, chatKey: req.chatKey, text: req.text, buttons: req.buttons })
   return wait.then((receipt) => {
     if (!receipt.ok) attribution.abandon(localId)
     return receipt

@@ -251,7 +251,11 @@ export const ko: DeepString<typeof zhCN> = {
       flagsSavedNoSync: '설정은 저장되었지만 임베드 페이지에 동기화하지 못했습니다',
       flagsSaveFailed: '설정 저장 실패: {{error}}',
       translateFailed: '번역 가져오기 실패: {{error}}',
-      sentScope: '이 항목은 {{scope}}로 전송되었습니다'
+      sentScope: '이 항목은 {{scope}}로 전송되었습니다',
+      buttonMaterial: '버튼 소재',
+      buttonMaterialDesc: '대화형 버튼 소재를 선택하면 버튼이 포함된 메시지를 보냅니다',
+      buttonMaterialEmpty: '버튼 소재가 없습니다. 먼저 「소재 라이브러리」에서 추가하세요',
+      buttonMaterialBroken: '이 버튼 소재는 손상되어 전송할 수 없습니다'
     },
     createCustomer: {
       title: '고객으로 등록',

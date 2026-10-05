@@ -1,6 +1,7 @@
 import { useEffect, useMemo } from 'react'
 import { useQuery, useQueryClient, type QueryClient } from '@tanstack/react-query'
 import { msgService } from '@/services/msgService'
+import type { ButtonSpec } from '@shared/chatTypes'
 import {
   flattenRows,
   invalidateUnreadTotal,
@@ -346,18 +347,25 @@ export function useBridgeOf(accountId: number | null): BridgeState | null {
 export function useSendText(
   accountId: number | null,
   chatKey: string | null
-): { send: (text: string) => Promise<{ ok: true } | { ok: false; message: string }> } {
+): {
+  send: (
+    text: string,
+    buttons?: ButtonSpec[]
+  ) => Promise<{ ok: true } | { ok: false; message: string }>
+} {
   const qc = useQueryClient()
   // 渲染期读取账号列表（已全局缓存，同一份 query key，不会额外请求）：仅用于判定该账号是否走协议号通道。
   const { data: accounts } = useAccounts()
   return {
-    async send(text) {
+    async send(text, buttons) {
       if (accountId === null || chatKey === null) return { ok: false, message: '还没选中会话' }
       const localId = crypto.randomUUID()
       appendPending(qc, { accountId, chatKey, text, localId })
       // 出站分流（B27 出站腿）：type-7（WA 协议号）账号无 WebContentsView、不绑 viewId，
       // 必须走渲染层协议网关直连，不能走主进程 msgBridge.sendText（那条会因 viewId 空返 BRIDGE_OFFLINE）。
       // 其余平台维持原 IPC 路径不变。
+      // B17 P4：按钮素材发送链——`buttons` 只在 IPC 分支透传；协议号通道（B27 真发）属外部阻塞项，
+      // 暂不携带按钮，避免把未验证的载荷送进外部网关。
       const isProtocol = accounts?.some(
         (a) => a.id === accountId && a.platformType === PlatformType.WhatsAppProtocol
       )
@@ -365,7 +373,7 @@ export function useSendText(
       try {
         receipt = isProtocol
           ? await sendViaProtocol(accountId, chatKey, text)
-          : await msgService.send({ accountId, chatKey, text, localId })
+          : await msgService.send({ accountId, chatKey, text, localId, buttons })
       } catch (e) {
         // 见上面那段契约：异常在这里就按失败结清（键留 `~localId`、状态翻 failed），
         // 人能看到并且能重试，并且**不往外抛**，调用方那句"译文获取失败"才只可能是翻译给的。

@@ -241,7 +241,11 @@ export const zhTW: DeepString<typeof zhCN> = {
       flagsSavedNoSync: '開關已儲存，但沒能同步到內嵌頁',
       flagsSaveFailed: '開關儲存失敗：{{error}}',
       translateFailed: '譯文獲取失敗：{{error}}',
-      sentScope: '這一條按{{scope}}譯出'
+      sentScope: '這一條按{{scope}}譯出',
+      buttonMaterial: '按鈕素材',
+      buttonMaterialDesc: '選擇一條互動按鈕素材，直接向客戶發送帶按鈕的訊息',
+      buttonMaterialEmpty: '還沒有按鈕素材，請先到「素材庫」新增',
+      buttonMaterialBroken: '該按鈕素材內容已損壞，無法發送'
     },
     createCustomer: {
       title: '建為客戶',

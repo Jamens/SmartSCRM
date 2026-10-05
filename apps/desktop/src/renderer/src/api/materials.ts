@@ -1,5 +1,6 @@
 import { useMutation, useQuery, useQueryClient, type UseMutationResult } from '@tanstack/react-query'
 import { API_BASE, http } from '@/lib/http'
+import type { ButtonSpec } from '@shared/chatTypes'
 
 /** 5 = button（B17 P3 交互按钮素材，载荷在 buttonPayload，没有 url）。 */
 export type MaterialType = 1 | 2 | 3 | 4 | 5 // image | video | audio | file | button
@@ -234,6 +235,52 @@ export function buttonCountOf(payload: string | null): number {
     return Array.isArray(parsed.buttons) ? parsed.buttons.length : 0
   } catch {
     return 0
+  }
+}
+
+/**
+ * B17 P4 把后端 `buttonPayload`（`{ body?, title?, footer?, buttons:[{type,text,...}] }`）
+ * 翻成发送链用的归一化形状 `{ body, buttons: ButtonSpec[] }`。
+ * - 后端 `MaterialButtons.requireValid` 已保证结构合法，这里只做"字段搬移"，不重复校验；
+- 解析失败（坏 JSON / 非数组 / 缺文案）返回 null，调用方据此静默跳过而不是崩。
+- `value` 按按钮类型取语义：reply→id、url→url、call→phone、copy→code。
+ */
+export interface ParsedButtonPayload {
+  body?: string
+  title?: string
+  footer?: string
+  buttons: ButtonSpec[]
+}
+
+export function parseButtonPayload(payload: string | null): ParsedButtonPayload | null {
+  if (!payload) return null
+  try {
+    const root = JSON.parse(payload) as { body?: unknown; title?: unknown; footer?: unknown; buttons?: unknown }
+    if (!Array.isArray(root.buttons)) return null
+    const buttons: ButtonSpec[] = []
+    for (const b of root.buttons) {
+      if (typeof b !== 'object' || b === null) continue
+      const o = b as Record<string, unknown>
+      const text = typeof o.text === 'string' ? o.text : ''
+      if (!text) continue
+      const type = typeof o.type === 'string' ? o.type : 'reply'
+      let value: string | undefined
+      if (type === 'url') value = typeof o.url === 'string' ? o.url : undefined
+      else if (type === 'call') value = typeof o.phone === 'string' ? o.phone : undefined
+      else if (type === 'copy') value = typeof o.code === 'string' ? o.code : undefined
+      else value = typeof o.id === 'string' ? o.id : undefined
+      const buttonType = type === 'url' || type === 'call' || type === 'copy' ? type : 'reply'
+      buttons.push({ type: buttonType, text, value })
+    }
+    if (buttons.length === 0) return null
+    return {
+      body: typeof root.body === 'string' ? root.body : undefined,
+      title: typeof root.title === 'string' ? root.title : undefined,
+      footer: typeof root.footer === 'string' ? root.footer : undefined,
+      buttons
+    }
+  } catch {
+    return null
   }
 }
 
