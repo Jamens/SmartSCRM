@@ -476,7 +476,7 @@ export function BatchTaskDetail({ taskId }: { taskId: number }): React.JSX.Eleme
           ) : (
             <table className="w-full border-separate border-spacing-0 text-xs">
               <thead>
-              <tr className="text-left text-[11px] text-muted-foreground">
+              <tr className="text-left text-[11px] text-muted-foreground whitespace-nowrap">
                 <Th className="w-8">{t('broadcast.detail.col.revoke')}</Th>
                 <Th className="w-12">{t('broadcast.detail.col.seq')}</Th>
                 <Th className="w-14">{t('broadcast.detail.col.account')}</Th>
@@ -550,13 +550,13 @@ function DetailRow({
       <Td className="max-w-[14rem] truncate" title={row.chatKey}>
         {row.chatKey}
       </Td>
-      <Td className="w-16" title={`contentIndex=${row.contentIndex}`}>
+      <Td className="w-16 whitespace-nowrap" title={`contentIndex=${row.contentIndex}`}>
         {t('broadcast.detail.contentIndex', { n: row.contentIndex + 1 })}
       </Td>
       <Td className="max-w-[22rem] break-words" title={row.body}>
         {truncate(row.body, BODY_MAX)}
       </Td>
-      <Td className="w-20">
+      <Td className="w-20 whitespace-nowrap">
         <Badge variant={detailVariant(row.sendStatus)} className="text-[11px]">
           {t(SEND_STATUS_LABEL[row.sendStatus])}
         </Badge>
@@ -570,7 +570,7 @@ function DetailRow({
       <Td className="max-w-[14rem] break-all text-muted-foreground" title={row.msgKey ?? ''}>
         {row.msgKey ? truncate(row.msgKey, KEY_MAX) : '—'}
       </Td>
-      <Td className="w-28 text-muted-foreground">
+      <Td className="w-28 whitespace-nowrap text-muted-foreground">
         {t(RECALL_STATUS_LABEL[row.recallStatus])}
         {row.recallDetail && (
           <span className="block truncate" title={row.recallDetail}>
@@ -578,7 +578,7 @@ function DetailRow({
           </span>
         )}
       </Td>
-      <Td className="w-16 tabular-nums text-muted-foreground">{clockOf(row.sentAt)}</Td>
+      <Td className="w-16 whitespace-nowrap tabular-nums text-muted-foreground">{clockOf(row.sentAt)}</Td>
       <Td className="w-28">
         {/* 这一颗只认 failed，不读上面那条收口判据：两条判据一合并，按钮就永远点不动。 */}
         {row.sendStatus === 'failed' ? (
