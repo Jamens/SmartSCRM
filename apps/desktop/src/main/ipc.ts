@@ -27,6 +27,7 @@ import {
   showIncoming
 } from './services/desktopNotify'
 import { readMachineProfile, readStorageUsage } from './services/machineProfile'
+import { readPerfMetrics } from './services/perfMetrics'
 import { getMainWindow, showMainWindow } from './window/mainWindow'
 import { setUnreadBadge } from './window/badge'
 import { registerViewIpc } from './webContentsView/ipc'
@@ -63,6 +64,9 @@ export function registerIpcHandlers(): void {
   // 目录占用要遍历磁盘，可能上百毫秒，让它单独转，别把前半张卡片一起拖住。
   ipcMain.handle('app:get-machine-profile', () => readMachineProfile())
   ipcMain.handle('app:get-storage-usage', () => readStorageUsage())
+
+  // 内存/性能监控（A7）。主进程自己的运行时指标，纯内存读取，瞬时回执。
+  ipcMain.handle('app:get-perf-metrics', () => readPerfMetrics())
 
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', (_event, patch: Partial<AppSettings>) => {

@@ -154,6 +154,8 @@ export const id: DeepString<typeof zhCN> = {
     sensitiveWordRunCheck: 'Uji',
     sensitiveWordHit: 'Cocok: {{words}}',
     sensitiveWordNoHit: 'Tidak cocok',
+    perf: 'Pemantauan',
+    perfDesc: 'Metrik runtime proses utama (memori / waktu jalan / CPU kumulatif), disegarkan tiap 3 detik.',
   },
   log: {
     browserNote:

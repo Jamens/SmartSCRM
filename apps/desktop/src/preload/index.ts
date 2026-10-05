@@ -16,6 +16,7 @@ import type {
   GroupStateEvent
 } from '@shared/groupMembers'
 import type { MachineProfile, StorageUsage } from '@shared/machine'
+import type { PerfMetrics } from '@shared/perf'
 import type {
   NotifyClickTarget,
   NotifyShowRequest,
@@ -57,7 +58,9 @@ const scrm = {
      * 占用单独一条，理由见主进程 `services/machineProfile.ts` 的头注释。
      */
     getMachineProfile: (): Promise<MachineProfile> => ipcRenderer.invoke('app:get-machine-profile'),
-    getStorageUsage: (): Promise<StorageUsage> => ipcRenderer.invoke('app:get-storage-usage')
+    getStorageUsage: (): Promise<StorageUsage> => ipcRenderer.invoke('app:get-storage-usage'),
+    /** 内存/性能监控（A7）：主进程自己的运行时指标，纯内存读取。 */
+    getPerfMetrics: (): Promise<PerfMetrics> => ipcRenderer.invoke('app:get-perf-metrics')
   },
   session: {
     save: (session: StoredSession): Promise<boolean> => ipcRenderer.invoke('session:save', session),

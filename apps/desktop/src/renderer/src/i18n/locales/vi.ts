@@ -152,6 +152,8 @@ export const vi: DeepString<typeof zhCN> = {
     sensitiveWordRunCheck: 'Kiểm tra',
     sensitiveWordHit: 'Trúng: {{words}}',
     sensitiveWordNoHit: 'Không trúng',
+    perf: 'Hiệu năng',
+    perfDesc: 'Số liệu runtime của tiến trình chính (bộ nhớ / thời gian chạy / CPU tích lũy), làm mới mỗi 3 giây.',
   },
   log: {
     browserNote:

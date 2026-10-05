@@ -151,6 +151,8 @@ export const ko: DeepString<typeof zhCN> = {
     sensitiveWordRunCheck: '테스트',
     sensitiveWordHit: '히트: {{words}}',
     sensitiveWordNoHit: '히트 없음',
+    perf: '성능 모니터링',
+    perfDesc: '메인 프로세스 런타임 지표(메모리 / 가동 시간 / 누적 CPU). 3초마다 갱신.',
   },
   log: {
     browserNote:

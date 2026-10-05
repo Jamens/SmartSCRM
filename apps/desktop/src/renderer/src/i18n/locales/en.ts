@@ -153,6 +153,8 @@ export const en: DeepString<typeof zhCN> = {
     sensitiveWordRunCheck: 'Test',
     sensitiveWordHit: 'Hit: {{words}}',
     sensitiveWordNoHit: 'No hit',
+    perf: 'Performance',
+    perfDesc: 'Main-process runtime metrics (memory / uptime / cumulative CPU), refreshed every 3s.',
   },
   log: {
     browserNote:

@@ -153,6 +153,8 @@ export const ja: DeepString<typeof zhCN> = {
     sensitiveWordRunCheck: '検査',
     sensitiveWordHit: 'ヒット：{{words}}',
     sensitiveWordNoHit: 'ヒットなし',
+    perf: 'パフォーマンス',
+    perfDesc: 'メインプロセスの実行時指標（メモリ / 稼働時間 / 累積 CPU）。3 秒ごとに更新。',
   },
   log: {
     browserNote:

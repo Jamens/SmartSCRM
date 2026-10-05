@@ -146,6 +146,8 @@ export const zhTW: DeepString<typeof zhCN> = {
     sensitiveWordRunCheck: '試檢',
     sensitiveWordHit: '命中：{{words}}',
     sensitiveWordNoHit: '未命中',
+    perf: '效能監控',
+    perfDesc: '主進程執行階段指標（記憶體 / 執行時長 / 累計 CPU），每 3 秒重新整理。',
   },
   log: {
     browserNote: '當前是瀏覽器預覽，日誌由主程序產生，桌面端開啟才能檢視與匯出。',

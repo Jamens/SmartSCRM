@@ -35,6 +35,7 @@ import { useNotifyEnabled } from '@/lib/desktopNotify'
 import { useGpuFatal, useGpuSettings } from '@/lib/gpu'
 import { useLanguage } from '@/lib/language'
 import SensitiveWordsCard from '@/components/SensitiveWordsCard'
+import PerfMetricsCard from '@/components/PerfMetricsCard'
 import { changePassword } from '@/api/auth'
 import { API_BASE, ApiError } from '@/lib/http'
 import { cn } from '@/lib/utils'
@@ -362,6 +363,9 @@ export default function SettingsPage(): React.JSX.Element {
 
           {/* 敏感词风控（A8）：本地词库维护 + 命中试检。放在账户安全之后、图形之前。 */}
           <SensitiveWordsCard />
+
+          {/* 内存/性能监控（A7）：主进程运行时指标，3s 轮询。放在敏感词卡之后。 */}
+          <PerfMetricsCard />
 
           <Card>
             <CardHeader>

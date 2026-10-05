@@ -156,6 +156,8 @@ export const zhCN = {
     sensitiveWordRunCheck: '试检',
     sensitiveWordHit: '命中：{{words}}',
     sensitiveWordNoHit: '未命中',
+    perf: '性能监控',
+    perfDesc: '主进程运行时指标（内存 / 运行时长 / 累计 CPU），每 3 秒刷新。',
   },
   log: {
     browserNote: '当前是浏览器预览，日志由主进程产生，桌面端打开才能查看与导出。',

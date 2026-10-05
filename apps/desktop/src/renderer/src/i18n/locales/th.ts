@@ -151,6 +151,8 @@ export const th: DeepString<typeof zhCN> = {
     sensitiveWordRunCheck: 'ทดสอบ',
     sensitiveWordHit: 'พบคำ: {{words}}',
     sensitiveWordNoHit: 'ไม่พบคำ',
+    perf: 'การตรวจสมรรถนะ',
+    perfDesc: 'ตัวชี้วัดระหว่างรันของกระบวนการหลัก (หน่วยความจำ / เวลาทำงาน / CPU สะสม) อัปเดตทุก 3 วินาที',
   },
   log: {
     browserNote:
