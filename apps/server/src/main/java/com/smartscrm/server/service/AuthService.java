@@ -71,6 +71,15 @@ public class AuthService {
             throw BizException.unauthorized("账号不可用");
         }
         Tenant tenant = tenantMapper.selectById(user.getTenantId());
+        /**
+         * 与 `login` 同一道闸：租户停用后，已登录会话不能靠旧 refresh token 无限续期——
+         * 少了这一句，"停用租户"这个动作对正握着 refresh token 的人完全不生效。
+         * 比较刻意用 null-safe 写法：租户行缺失、或 `status` 是 NULL 都按"未启用"处理，
+         * 否则库里一行脏数据就会把一个本该挡住的人放进来（且 `!= 1` 在 NULL 上会直接 NPE）。
+         */
+        if (tenant == null || !Integer.valueOf(1).equals(tenant.getStatus())) {
+            throw BizException.unauthorized("租户已被停用");
+        }
         String access = jwtService.issueAccessToken(user.getId(), tenant.getId(), tenant.getInviteCode(), user.getRole());
         String refresh = jwtService.issueRefreshToken(user.getId(), tenant.getId(), tenant.getInviteCode(), user.getRole());
         return new LoginResponse(access, refresh, jwtService.getAccessTtlSeconds(), toUserInfo(user, tenant));
