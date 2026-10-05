@@ -9,7 +9,9 @@ export const ja: DeepString<typeof zhCN> = {
     reading: '設定を読み込み中…',
     close: '閉じる',
     unknownError: '不明なエラー',
-    cancel: 'キャンセル'
+    cancel: 'キャンセル',
+    prevPage: '前へ',
+    nextPage: '次へ'
   },
   nav: {
     workspace: 'ワークスペース',
@@ -21,8 +23,20 @@ export const ja: DeepString<typeof zhCN> = {
     quickReplies: 'クイック返信',
     materials: '素材ライブラリ',
     translation: '翻訳センター',
+    notifications: '通知センター',
     logs: 'ログセンター',
     settings: '設定'
+  },
+  notifications: {
+    title: '通知センター',
+    unreadCount: '未読 {{count}} 件',
+    allRead: 'すべて既読',
+    unreadOnly: '未読のみ',
+    markAllRead: 'すべて既読にする',
+    system: 'システム',
+    loadError: '通知の読み込みに失敗しました',
+    empty: '通知はありません',
+    total: '全 {{count}} 件'
   },
   titleBar: {
     logout: 'ログアウト'

@@ -9,7 +9,9 @@ export const ko: DeepString<typeof zhCN> = {
     reading: '설정 로드 중…',
     close: '닫기',
     unknownError: '알 수 없는 오류',
-    cancel: '취소'
+    cancel: '취소',
+    prevPage: '이전',
+    nextPage: '다음'
   },
   nav: {
     workspace: '작업 공간',
@@ -21,8 +23,20 @@ export const ko: DeepString<typeof zhCN> = {
     quickReplies: '빠른 응답',
     materials: '자료 라이브러리',
     translation: '번역 센터',
+    notifications: '알림 센터',
     logs: '로그 센터',
     settings: '설정'
+  },
+  notifications: {
+    title: '알림 센터',
+    unreadCount: '읽지 않음 {{count}}개',
+    allRead: '모두 읽음',
+    unreadOnly: '읽지 않은 항목만',
+    markAllRead: '모두 읽음으로 표시',
+    system: '시스템',
+    loadError: '알림을 불러오지 못했습니다',
+    empty: '알림 없음',
+    total: '총 {{count}}개'
   },
   titleBar: {
     logout: '로그아웃'

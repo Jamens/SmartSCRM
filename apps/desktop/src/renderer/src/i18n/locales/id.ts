@@ -9,7 +9,9 @@ export const id: DeepString<typeof zhCN> = {
     reading: 'Membaca pengaturan…',
     close: 'Tutup',
     unknownError: 'Kesalahan tidak dikenal',
-    cancel: 'Batal'
+    cancel: 'Batal',
+    prevPage: 'Sebelumnya',
+    nextPage: 'Berikutnya'
   },
   nav: {
     workspace: 'Ruang Kerja',
@@ -21,8 +23,20 @@ export const id: DeepString<typeof zhCN> = {
     quickReplies: 'Balasan Cepat',
     materials: 'Pustaka Materi',
     translation: 'Pusat Terjemahan',
+    notifications: 'Pusat Notifikasi',
     logs: 'Pusat Log',
     settings: 'Pengaturan'
+  },
+  notifications: {
+    title: 'Pusat Notifikasi',
+    unreadCount: '{{count}} belum dibaca',
+    allRead: 'Semua dibaca',
+    unreadOnly: 'Belum dibaca saja',
+    markAllRead: 'Tandai semua sudah dibaca',
+    system: 'Sistem',
+    loadError: 'Gagal memuat notifikasi',
+    empty: 'Tidak ada notifikasi',
+    total: 'Total {{count}}'
   },
   titleBar: {
     logout: 'Keluar'

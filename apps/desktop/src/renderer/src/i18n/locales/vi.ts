@@ -9,7 +9,9 @@ export const vi: DeepString<typeof zhCN> = {
     reading: 'Đang tải cài đặt…',
     close: 'Đóng',
     unknownError: 'Lỗi không xác định',
-    cancel: 'Hủy'
+    cancel: 'Hủy',
+    prevPage: 'Trước',
+    nextPage: 'Sau'
   },
   nav: {
     workspace: 'Không gian làm việc',
@@ -21,8 +23,20 @@ export const vi: DeepString<typeof zhCN> = {
     quickReplies: 'Phản hồi nhanh',
     materials: 'Thư viện tài liệu',
     translation: 'Trung tâm dịch',
+    notifications: 'Trung tâm thông báo',
     logs: 'Trung tâm nhật ký',
     settings: 'Cài đặt'
+  },
+  notifications: {
+    title: 'Trung tâm thông báo',
+    unreadCount: '{{count}} chưa đọc',
+    allRead: 'Đã đọc tất cả',
+    unreadOnly: 'Chỉ chưa đọc',
+    markAllRead: 'Đánh dấu đã đọc tất cả',
+    system: 'Hệ thống',
+    loadError: 'Không tải được thông báo',
+    empty: 'Không có thông báo',
+    total: 'Tổng {{count}}'
   },
   titleBar: {
     logout: 'Đăng xuất'

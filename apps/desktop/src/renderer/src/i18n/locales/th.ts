@@ -9,7 +9,9 @@ export const th: DeepString<typeof zhCN> = {
     reading: 'กำลังอ่านการตั้งค่า…',
     close: 'ปิด',
     unknownError: 'ข้อผิดพลาดที่ไม่ทราบสาเหตุ',
-    cancel: 'ยกเลิก'
+    cancel: 'ยกเลิก',
+    prevPage: 'ก่อนหน้า',
+    nextPage: 'ถัดไป'
   },
   nav: {
     workspace: 'พื้นที่ทำงาน',
@@ -21,8 +23,20 @@ export const th: DeepString<typeof zhCN> = {
     quickReplies: 'คำตอบด่วน',
     materials: 'คลังสื่อ',
     translation: 'ศูนย์แปลภาษา',
+    notifications: 'ศูนย์การแจ้งเตือน',
     logs: 'ศูนย์บันทึก',
     settings: 'การตั้งค่า'
+  },
+  notifications: {
+    title: 'ศูนย์การแจ้งเตือน',
+    unreadCount: 'ยังไม่ได้อ่าน {{count}} รายการ',
+    allRead: 'อ่านทั้งหมดแล้ว',
+    unreadOnly: 'เฉพาะที่ยังไม่อ่าน',
+    markAllRead: 'ทำเครื่องหมายว่าอ่านทั้งหมด',
+    system: 'ระบบ',
+    loadError: 'โหลดการแจ้งเตือนไม่สำเร็จ',
+    empty: 'ไม่มีการแจ้งเตือน',
+    total: 'ทั้งหมด {{count}} รายการ'
   },
   titleBar: {
     logout: 'ออกจากระบบ'

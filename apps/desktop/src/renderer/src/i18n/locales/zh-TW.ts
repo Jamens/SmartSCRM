@@ -9,7 +9,9 @@ export const zhTW: DeepString<typeof zhCN> = {
     reading: '讀取設定中…',
     close: '關閉',
     unknownError: '未知錯誤',
-    cancel: '取消'
+    cancel: '取消',
+    prevPage: '上一頁',
+    nextPage: '下一頁'
   },
   nav: {
     workspace: '工作台',
@@ -21,8 +23,20 @@ export const zhTW: DeepString<typeof zhCN> = {
     quickReplies: '快捷回覆',
     materials: '素材庫',
     translation: '翻譯中心',
+    notifications: '訊息中心',
     logs: '日誌中心',
     settings: '設定'
+  },
+  notifications: {
+    title: '訊息中心',
+    unreadCount: '未讀 {{count}} 則',
+    allRead: '全部已讀',
+    unreadOnly: '只看未讀',
+    markAllRead: '全部標記已讀',
+    system: '系統',
+    loadError: '載入通知失敗',
+    empty: '尚無通知',
+    total: '共 {{count}} 則'
   },
   titleBar: {
     logout: '退出登錄'

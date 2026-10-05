@@ -10,7 +10,9 @@ export const en: DeepString<typeof zhCN> = {
     reading: 'Reading settings…',
     close: 'Close',
     unknownError: 'Unknown error',
-    cancel: 'Cancel'
+    cancel: 'Cancel',
+    prevPage: 'Previous',
+    nextPage: 'Next'
   },
   nav: {
     workspace: 'Workspace',
@@ -22,8 +24,20 @@ export const en: DeepString<typeof zhCN> = {
     quickReplies: 'Quick Replies',
     materials: 'Materials',
     translation: 'Translation',
+    notifications: 'Notifications',
     logs: 'Logs',
     settings: 'Settings'
+  },
+  notifications: {
+    title: 'Notifications',
+    unreadCount: '{{count}} unread',
+    allRead: 'All read',
+    unreadOnly: 'Unread only',
+    markAllRead: 'Mark all as read',
+    system: 'System',
+    loadError: 'Failed to load notifications',
+    empty: 'No notifications',
+    total: '{{count}} total'
   },
   titleBar: {
     logout: 'Sign out'

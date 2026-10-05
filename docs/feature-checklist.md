@@ -14,7 +14,7 @@
 | A7 | 内存/性能监控 | P14 |
 | A8 | 敏感词风控（本地库） | P14 |
 | A9 | 修改密码（改密后强制重新登录） | ✅ 已交付（2026-10-03） |
-| A10 | 消息中心 / 站内通知（列表 + 未读 + 系统通知投递） | P14 |
+| A10 | 消息中心 / 站内通知（列表 + 未读 + 系统通知投递） | 🟡 **主体已交付（2026-10-06）**：V21 建 `notification` + `notification_read`（`uk(notification_id,user_id)`，**已读按用户记**，故一条全员广播对不同子账号各读各的，兼容 B22 多子账号）；`NotificationService`（租户隔离 + 可见性 `user_id=我 OR NULL`，未读=可见−我已读）+ `NotificationController`（`GET /api/notifications` 分页带 `read` 标记 / `GET /api/notifications/unread-count` / `PUT /{id}/read` / `PUT /read-all`）；前端 `api/notifications.ts`（列表/未读数/已读 hooks，30s 轮询）+ `/notifications` 页（未读高亮、点开即已读并跳 `link`、只看未读、全部已读）+ 侧栏铃铛入口 + 8 语文案（`DeepString` 编译期对齐）。**投递入口** `NotificationService.publish(...)` 已就绪（`userId=null` 即广播），**各业务事件的真实触发点随该功能接入时调用**（本轮未绑具体事件，故暂无自动产生的通知） |
 | A11 | 帮助文档与 FAQ 模板下载 | P14 |
 | A12 | 任务栏未读角标（数字 + Windows 叠加图标，值来自会话未读投影） | P6 收尾 |
 | A13 | 主题切换开关（light / dark / 跟随系统 + 持久化） | P6 收尾 |

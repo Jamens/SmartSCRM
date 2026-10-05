@@ -12,7 +12,9 @@ export const zhCN = {
     reading: '读取设置中…',
     close: '关闭',
     unknownError: '未知错误',
-    cancel: '取消'
+    cancel: '取消',
+    prevPage: '上一页',
+    nextPage: '下一页'
   },
   nav: {
     workspace: '工作台',
@@ -24,8 +26,20 @@ export const zhCN = {
     quickReplies: '快捷回复',
     materials: '素材库',
     translation: '翻译中心',
+    notifications: '消息中心',
     logs: '日志中心',
     settings: '设置'
+  },
+  notifications: {
+    title: '消息中心',
+    unreadCount: '未读 {{count}} 条',
+    allRead: '全部已读',
+    unreadOnly: '只看未读',
+    markAllRead: '全部标记已读',
+    system: '系统',
+    loadError: '通知加载失败',
+    empty: '暂无通知',
+    total: '共 {{count}} 条'
   },
   titleBar: {
     logout: '退出登录'
