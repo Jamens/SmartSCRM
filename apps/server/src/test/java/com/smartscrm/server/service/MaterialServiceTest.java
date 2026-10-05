@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
@@ -15,6 +16,7 @@ import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.Material;
 import com.smartscrm.server.mapper.MaterialGroupMapper;
 import com.smartscrm.server.mapper.MaterialMapper;
+import com.smartscrm.server.service.MediaStorageService;
 import com.smartscrm.server.web.dto.MaterialRequest;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.apache.ibatis.session.Configuration;
@@ -27,6 +29,7 @@ class MaterialServiceTest {
 
     private MaterialMapper materialMapper;
     private MaterialGroupMapper groupMapper;
+    private MediaStorageService mediaStorage;
     private MaterialService service;
 
     @BeforeEach
@@ -36,7 +39,8 @@ class MaterialServiceTest {
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new Configuration(), ""), Material.class);
         materialMapper = mock(MaterialMapper.class);
         groupMapper = mock(MaterialGroupMapper.class);
-        service = new MaterialService(materialMapper, groupMapper);
+        mediaStorage = mock(MediaStorageService.class);
+        service = new MaterialService(materialMapper, groupMapper, mediaStorage);
     }
 
     @SuppressWarnings("unchecked")
@@ -212,6 +216,54 @@ class MaterialServiceTest {
         assertThrows(BizException.class, () -> service.delete(7L, 8L, 1L));
         // deleteById 有 (Serializable) 与 (T) 两个重载，any() 会歧义；显式转 Serializable。
         verify(materialMapper, never()).deleteById((java.io.Serializable) any());
+    }
+
+    /** 删除素材时，若它指向本站上传的文件，落库前先让存储层把文件删掉。 */
+    @Test
+    void delete_removesBackingMediaFileWhenOwned() {
+        Material owned = material("public", null);
+        owned.setUrl(MediaStorageService.MEDIA_URL_PREFIX + "abc.jpg");
+        when(materialMapper.selectById(1L)).thenReturn(owned);
+
+        service.delete(7L, 42L, 1L);
+
+        verify(mediaStorage).deleteIfMedia(MediaStorageService.MEDIA_URL_PREFIX + "abc.jpg");
+        verify(materialMapper).deleteById((java.io.Serializable) any());
+    }
+
+    /** 更新把 url 从本站文件改成外链时，旧文件要清掉，否则磁盘留孤儿。 */
+    @Test
+    void update_clearsOldMediaFileWhenUrlChanges() {
+        Material owned = material("public", null);
+        owned.setUrl(MediaStorageService.MEDIA_URL_PREFIX + "old.jpg");
+        // requireOwned 与最终的 VO 取数都走 selectById，且返回的是被 apply 原地改写的同一实例。
+        when(materialMapper.selectById(1L)).thenReturn(owned);
+        when(materialMapper.updateById(any(Material.class))).thenReturn(1);
+        when(materialMapper.update(any(), any())).thenReturn(1);
+        // mediaStorage 是 mock，isMediaUrl 默认回 false，会跳过清理；按真实语义桩成 true。
+        when(mediaStorage.isMediaUrl(anyString())).thenReturn(true);
+
+        service.update(7L, 42L, 1L, new MaterialRequest(null, 1, "n", "https://other.com/x.png",
+            null, "image/png", 10L, null, null, null));
+
+        // 旧 url 是本站 media，新 url 是外链 → 按文件名删旧文件（不是整段 URL）。
+        verify(mediaStorage).delete("old.jpg");
+    }
+
+    /** 改了别的字段但 url 没变（仍是本站文件），不该重复删文件。 */
+    @Test
+    void update_keepsMediaFileWhenUrlUnchanged() {
+        Material owned = material("public", null);
+        owned.setUrl(MediaStorageService.MEDIA_URL_PREFIX + "keep.jpg");
+        when(materialMapper.selectById(1L)).thenReturn(owned);
+        when(materialMapper.updateById(any(Material.class))).thenReturn(1);
+        when(materialMapper.update(any(), any())).thenReturn(1);
+        when(mediaStorage.isMediaUrl(anyString())).thenReturn(true);
+
+        service.update(7L, 42L, 1L, new MaterialRequest(null, 1, "renamed", MediaStorageService.MEDIA_URL_PREFIX + "keep.jpg",
+            null, "image/jpeg", 10L, null, null, null));
+
+        verify(mediaStorage, never()).delete(any());
     }
 
     private static Material material(String scope, String key) {

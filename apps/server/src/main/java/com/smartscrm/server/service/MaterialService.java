@@ -23,10 +23,13 @@ public class MaterialService {
 
     private final MaterialMapper materialMapper;
     private final MaterialGroupMapper groupMapper;
+    private final MediaStorageService mediaStorage;
 
-    public MaterialService(MaterialMapper materialMapper, MaterialGroupMapper groupMapper) {
+    public MaterialService(MaterialMapper materialMapper, MaterialGroupMapper groupMapper,
+                           MediaStorageService mediaStorage) {
         this.materialMapper = materialMapper;
         this.groupMapper = groupMapper;
+        this.mediaStorage = mediaStorage;
     }
 
     public List<MaterialGroupVO> listGroups(Long tenantId) {
@@ -127,6 +130,9 @@ public class MaterialService {
 
     public MaterialVO update(Long tenantId, Long userId, Long id, MaterialRequest req) {
         Material material = requireOwned(tenantId, userId, id);
+        // 记下旧 url：若它指向本站 media 且保存后 url 变了（改外链 / 改类型 / 换了文件），
+        // 就该把旧文件删掉，否则磁盘上会留下永远访问不到的孤儿文件。
+        String oldUrl = material.getUrl();
         apply(material, tenantId, userId, req);
         materialMapper.updateById(material);
         // updateById skips null fields, so clear the optional columns explicitly.
@@ -140,11 +146,16 @@ public class MaterialService {
             .set(Material::getMimeType, material.getMimeType())
             .set(Material::getSizeBytes, material.getSizeBytes())
             .set(Material::getRemark, material.getRemark()));
+        if (mediaStorage.isMediaUrl(oldUrl) && !oldUrl.equals(material.getUrl())) {
+            mediaStorage.delete(oldUrl.substring(MediaStorageService.MEDIA_URL_PREFIX.length()));
+        }
         return MaterialVO.of(materialMapper.selectById(id));
     }
 
     public void delete(Long tenantId, Long userId, Long id) {
-        requireOwned(tenantId, userId, id);
+        Material material = requireOwned(tenantId, userId, id);
+        // 先删文件再删行：文件删除失败也不该让行留着（否则下次还能取到坏链接）。
+        mediaStorage.deleteIfMedia(material.getUrl());
         materialMapper.deleteById(id);
     }
 

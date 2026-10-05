@@ -1,5 +1,5 @@
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
-import { http } from '@/lib/http'
+import { useMutation, useQuery, useQueryClient, type UseMutationResult } from '@tanstack/react-query'
+import { API_BASE, http } from '@/lib/http'
 
 /** 5 = button（B17 P3 交互按钮素材，载荷在 buttonPayload，没有 url）。 */
 export type MaterialType = 1 | 2 | 3 | 4 | 5 // image | video | audio | file | button
@@ -184,6 +184,32 @@ export function useDeleteMaterial(): import('@tanstack/react-query').UseMutation
   return useMutation({
     mutationFn: (id: number) => http.del(`/api/materials/${id}`),
     onSuccess: invalidate
+  })
+}
+
+/** Result of `POST /api/materials/media`: the URL to store on the material + self-describing metadata. */
+export interface MaterialMediaUpload {
+  url: string
+  mimeType: string
+  sizeBytes: number
+}
+
+/**
+ * Turns the relative media URL returned by the backend (`/api/materials/media/...`) into a URL the
+ * browser can actually fetch. The backend stores a host-relative path; the renderer knows the API
+ * origin via {@link API_BASE}, so we prefix it here. External http(s) links and inline `data:` URIs
+ * are returned unchanged.
+ */
+export function toAbsoluteMediaUrl(url: string | null): string | null {
+  if (!url) return null
+  if (url.startsWith('/api/materials/media/')) return `${API_BASE}${url}`
+  return url
+}
+
+/** Uploads a file to the media store and resolves to the URL + metadata to assign to a material. */
+export function useUploadMaterialMedia(): UseMutationResult<MaterialMediaUpload, Error, File, unknown> {
+  return useMutation({
+    mutationFn: (file: File) => http.upload<MaterialMediaUpload>('/api/materials/media', file)
   })
 }
 

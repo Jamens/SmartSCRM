@@ -26,12 +26,14 @@ import {
   MATERIAL_TYPE_LABELS,
   buttonCountOf,
   isButtonMaterial,
+  toAbsoluteMediaUrl,
   useCreateMaterial,
   useCreateMaterialGroup,
   useDeleteMaterial,
   useDeleteMaterialGroup,
   useMaterialGroups,
   useMaterials,
+  useUploadMaterialMedia,
   useUpdateMaterial,
   useUpdateMaterialGroup,
   type MaterialGroupVO,
@@ -48,7 +50,6 @@ const TYPES: MaterialType[] = [1, 2, 3, 4, 5]
  * 联系人素材在创建表单里选，展示在该客户的会话里。
  */
 const SCOPE_FILTERS: MaterialOwnerScope[] = ['public', 'personal']
-const MAX_INLINE_BYTES = 400 * 1024 // store small images inline as data URIs
 
 /**
  * 按钮载荷的形状示例（与后端 `MaterialButtons.requireValid` 同一套规则）。
@@ -74,6 +75,9 @@ interface MaterialDraft {
   ownerScope: MaterialOwnerScope
   /** 仅 contact 档使用：客户 id。personal 档由后端取调用者自己，前端不存。 */
   ownerKey: string
+  /** 上传文件时回填：MIME 类型与字节数，随素材存库，便于展示与下载。 */
+  mimeType: string
+  sizeBytes: number | null
 }
 
 export default function MaterialsPage(): React.JSX.Element {
@@ -112,7 +116,9 @@ export default function MaterialsPage(): React.JSX.Element {
       groupId: filteredGroupId,
       remark: '',
       ownerScope: 'public',
-      ownerKey: ''
+      ownerKey: '',
+      mimeType: '',
+      sizeBytes: null
     })
 
   const openEdit = (material: MaterialVO): void =>
@@ -125,7 +131,9 @@ export default function MaterialsPage(): React.JSX.Element {
       groupId: material.groupId,
       remark: material.remark ?? '',
       ownerScope: material.ownerScope,
-      ownerKey: material.ownerScope === 'contact' ? (material.ownerKey ?? '') : ''
+      ownerKey: material.ownerScope === 'contact' ? (material.ownerKey ?? '') : '',
+      mimeType: material.mimeType ?? '',
+      sizeBytes: material.sizeBytes
     })
 
   /**
@@ -157,7 +165,10 @@ export default function MaterialsPage(): React.JSX.Element {
       remark: draft.remark.trim() || null,
       ownerScope: draft.ownerScope,
       // personal 档后端强制盖成调用者自己，前端不送；contact 档送客户 id。
-      ownerKey: draft.ownerScope === 'contact' ? draft.ownerKey.trim() : null
+      ownerKey: draft.ownerScope === 'contact' ? draft.ownerKey.trim() : null,
+      // 上传文件时回填的元数据；手贴外链时前端没有这两项，留空让后端存 null。
+      mimeType: !isButton && draft.mimeType ? draft.mimeType : null,
+      sizeBytes: !isButton ? draft.sizeBytes : null
     }
     try {
       if (draft.id != null) {
@@ -400,7 +411,8 @@ function MaterialCard({
   // url 是可空列（type=5 的按钮素材按后端规则必定没有 url）。收成局部 const 再逐处判空：
   // `material.url ?? ''` 会把「没有地址」冒充成「有地址但是空串」，于是复制链接能复制成功、
   // 复制到一句空，图片格也会渲染一张 src="" 的破图。展示层不该给空值编一个值。
-  const url = material.url
+  // 后端存的是站点相对路径 `/api/materials/media/...`，这里拼回可访问的绝对地址。
+  const url = toAbsoluteMediaUrl(material.url)
   const isButton = isButtonMaterial(material)
   return (
     <div className="group overflow-hidden rounded-xl border border-border/60 bg-card">
@@ -509,14 +521,19 @@ function MaterialForm({
   const { t } = useTranslation()
   const fileRef = useRef<HTMLInputElement>(null)
   const [notice, setNotice] = useState('')
+  // 上传走后端 MediaStorage：选中文件即上传，回填 url + 元数据，而不是内联成 data URI。
+  const uploadMedia = useUploadMaterialMedia()
 
   const pickImage = (): void => {
     fileRef.current?.click()
   }
 
-  const onFile = (e: React.ChangeEvent<HTMLInputElement>): void => {
+  const onFile = async (e: React.ChangeEvent<HTMLInputElement>): Promise<void> => {
     const file = e.target.files?.[0]
+    // 立刻清空，方便同一文件二次选择仍能触发 onChange。
+    e.target.value = ''
     if (!file) return
+    // 按 MIME 推断素材类型，选完文件顺手把类型切对，省一步手动选。
     const type: MaterialType = file.type.startsWith('video')
       ? 2
       : file.type.startsWith('audio')
@@ -525,20 +542,22 @@ function MaterialForm({
           ? 1
           : 4
     const name = draft.name || file.name.replace(/\.[^.]+$/, '')
-    if (type === 1 && file.size <= MAX_INLINE_BYTES) {
-      const reader = new FileReader()
-      reader.onload = () =>
-        onChange({ ...draft, type, name, url: String(reader.result), remark: draft.remark })
-      reader.readAsDataURL(file)
+    try {
+      const res = await uploadMedia.mutateAsync(file)
+      onChange({
+        ...draft,
+        type,
+        name,
+        url: res.url,
+        mimeType: res.mimeType,
+        sizeBytes: res.sizeBytes,
+        remark: draft.remark
+      })
       setNotice('')
-    } else if (type === 1) {
-      onChange({ ...draft, type, name })
-      setNotice(t('materials.noticeLargeImage'))
-    } else {
-      onChange({ ...draft, type, name })
-      setNotice(t('materials.noticeNonImage'))
+    } catch (err) {
+      // 上传失败要看得见：403/413/类型不支持等后端报错直接落到提示行。
+      setNotice((err as Error).message || t('materials.uploadFailed'))
     }
-    e.target.value = ''
   }
 
   return (
@@ -654,9 +673,9 @@ function MaterialForm({
         <div className="space-y-1.5">
           <Label>{t('materials.contentLabel')}</Label>
           <div className="flex items-start gap-2">
-            {draft.type === 1 && draft.url.startsWith('data:') && (
+            {draft.type === 1 && draft.url && (
               <img
-                src={draft.url}
+                src={toAbsoluteMediaUrl(draft.url) ?? ''}
                 alt={t('materials.preview')}
                 className="size-16 shrink-0 rounded-md border border-border object-cover"
               />
@@ -672,24 +691,29 @@ function MaterialForm({
               placeholder={t('materials.urlPlaceholder')}
             />
           </div>
-          {draft.url.startsWith('data:') && (
-            <p className="text-[11px] text-muted-foreground">{t('materials.inlineNote')}</p>
+          {/* 选了文件会触发上传，回填的 url 是本站 media 地址；这里提示"已上传"让状态可见。 */}
+          {draft.url.startsWith('/api/materials/media/') && (
+            <p className="text-[11px] text-muted-foreground">{t('materials.uploadedNote')}</p>
           )}
           <div className="flex items-center gap-2">
-            <Button variant="outline" size="sm" onClick={pickImage} disabled={draft.type !== 1}>
-              {t('materials.pickLocalImage')}
+            <Button variant="outline" size="sm" onClick={pickImage} disabled={draft.type === 5}>
+              {t('materials.pickLocalFile')}
             </Button>
-            {draft.url.startsWith('data:') && (
-              <Button variant="ghost" size="sm" onClick={() => onChange({ ...draft, url: '' })}>
+            {draft.url && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onChange({ ...draft, url: '', mimeType: '', sizeBytes: null })}
+              >
                 {t('materials.clearImage')}
               </Button>
             )}
             <input
               ref={fileRef}
               type="file"
-              accept="image/*"
+              accept="*/*"
               className="hidden"
-              onChange={onFile}
+              onChange={(e) => void onFile(e)}
             />
           </div>
           {notice && <p className="text-[11px] text-amber-600">{notice}</p>}

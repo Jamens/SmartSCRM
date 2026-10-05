@@ -42,7 +42,10 @@ public class SecurityConfig {
             .cors(withDefaults())
             .sessionManagement(s -> s.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers("/api/auth/login", "/api/auth/refresh", "/api/health").permitAll()
+                .requestMatchers("/api/auth/login", "/api/auth/refresh", "/api/health",
+                    // Media files are served to <img>/<video> tags that send no Bearer token;
+                    // access control is the un-guessable UUID filename, not auth.
+                    "/api/materials/media/**").permitAll()
                 .anyRequest().authenticated())
             .exceptionHandling(e -> e.authenticationEntryPoint((request, response, ex) -> {
                 response.setStatus(HttpServletResponse.SC_UNAUTHORIZED);

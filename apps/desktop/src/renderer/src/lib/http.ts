@@ -88,11 +88,47 @@ function post<T>(path: string, body: unknown, auth: boolean): Promise<T> {
   return request<T>('POST', path, body, auth)
 }
 
+/**
+ * Multipart upload. Unlike {@link request}, this does NOT set a JSON Content-Type: the browser
+ * must choose the multipart boundary itself. The auth header still goes on, and a single 401
+ * refresh-retry is attempted (rebuilding the FormData, since the stream is single-use).
+ */
+async function uploadFile<T>(path: string, file: File): Promise<T> {
+  const doFetch = async (retried: boolean): Promise<T> => {
+    const headers: Record<string, string> = {}
+    const access = tokens.getAccessToken()
+    if (access) headers.Authorization = `Bearer ${access}`
+    const form = new FormData()
+    form.append('file', file)
+    let response: Response
+    try {
+      response = await fetch(`${API_BASE}${path}`, { method: 'POST', headers, body: form })
+    } catch {
+      throw new ApiError('无法连接服务器，请确认后端已启动', 50001)
+    }
+    if (response.status === 401 && !retried && !path.startsWith('/api/auth/')) {
+      const renewed = await tokens.refresh()
+      if (renewed) return doFetch(true)
+      throw new ApiError('未登录或登录已过期', 40100, 401)
+    }
+    const json = (await response.json().catch(() => null)) as ApiResp<T> | null
+    if (!json) {
+      throw new ApiError(`响应解析失败 (HTTP ${response.status})`, 50002, response.status)
+    }
+    if (json.code !== 0) {
+      throw new ApiError(json.message, json.code, response.status)
+    }
+    return json.data
+  }
+  return doFetch(false)
+}
+
 export const http = {
   get: <T>(path: string): Promise<T> => request<T>('GET', path),
   post: <T>(path: string, body?: unknown): Promise<T> => request<T>('POST', path, body ?? {}),
   put: <T>(path: string, body?: unknown): Promise<T> => request<T>('PUT', path, body ?? {}),
   patch: <T>(path: string, body?: unknown): Promise<T> => request<T>('PATCH', path, body ?? {}),
   del: <T>(path: string): Promise<T> => request<T>('DELETE', path),
+  upload: <T>(path: string, file: File): Promise<T> => uploadFile<T>(path, file),
   refreshOnce
 }
