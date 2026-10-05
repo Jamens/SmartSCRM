@@ -60,7 +60,15 @@ const dryDispatch: Dispatch = async (d: BatchDetail): Promise<SendOutcome> => {
 
 /** 真发：localId 用引擎给的那一个——回执要靠它与明细行对齐（Task 9 的归属登记）。 */
 const realDispatch: Dispatch = async (d: BatchDetail, _viewId: string, localId: string): Promise<SendOutcome> => {
-  const receipt = await sendText({ accountId: d.accountId, chatKey: d.chatKey, text: d.body, localId })
+  // B17 P5：按钮素材群发链——明细行带的 `buttons` 原样透传给 `sendText`，
+  // 后者经主进程→桥→wa-js 渲染原生按钮。普通文本群发 `d.buttons` 为 undefined，不影响原路径。
+  const receipt = await sendText({
+    accountId: d.accountId,
+    chatKey: d.chatKey,
+    text: d.body,
+    localId,
+    buttons: d.buttons
+  })
   return { ok: receipt.ok, msgKey: receipt.msgKey, error: receipt.error, detail: receipt.detail }
 }
 

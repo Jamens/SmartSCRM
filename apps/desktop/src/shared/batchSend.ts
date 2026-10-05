@@ -1,4 +1,5 @@
 // src/shared/batchSend.ts
+import type { ButtonSpec } from './chatTypes.ts'
 export type BatchTaskStatus = 'pending' | 'running' | 'paused' | 'done' | 'error' | 'cancelled'
 export type BatchDetailStatus = 'pending' | 'sending' | 'success' | 'failed' | 'unknown' | 'skipped'
 export type RecallStatus = 'none' | 'recalling' | 'recalled' | 'recall_failed'
@@ -19,6 +20,8 @@ export interface BatchDetail {
   customerId?: number | null
   contentIndex: number
   body: string
+  /** B17 P5：按钮素材群发链。明细行带按钮时，经 `realDispatch` → `sendText` 透传给 wa-js。普通文本群发不带。 */
+  buttons?: ButtonSpec[]
   localId?: string | null
   sendStatus: BatchDetailStatus
   errorCode?: string | null

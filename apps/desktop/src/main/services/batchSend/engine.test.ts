@@ -4,6 +4,7 @@ import { test } from 'node:test'
 import { BatchEngine } from './engine.ts'
 import type { BatchApi, ReportItem } from './batchApi.ts'
 import type { BatchDetail, BatchTask } from '../../../shared/batchSend.ts'
+import type { ButtonSpec } from '../../../shared/chatTypes.ts'
 import type { EngineDeps, SendOutcome } from './engine.ts'
 
 const task = (over: Partial<BatchTask> = {}): BatchTask => ({
@@ -86,6 +87,20 @@ test('账号并行、账号内串行：每条明细都被投料一次', async ()
   }
   await engine.flushBacklog()
   assert.equal(replayed.length, 0, '正常路径不该有任何上报落到积压里等重报')
+})
+
+test('群发透传按钮素材：明细带的 buttons 原样交给 dispatch（B17 P5）', async () => {
+  const { api } = fakeApi()
+  const got: BatchDetail[] = []
+  const engine = new BatchEngine(fakeDeps(api, {
+    dispatch: async (d) => { got.push(d); return { ok: true, msgKey: `k${d.id}` } }
+  }))
+  const buttons: ButtonSpec[] = [{ type: 'reply', text: '咨询报价', value: 'quote' }]
+  // 直接摊开 row() 再补 buttons：row() 不产 buttons 字段，这里验证引擎不丢它。
+  const withButtons = { ...row(1, 1, 1, 'a'), buttons }
+  await engine.start(task(), [withButtons])
+  assert.equal(got.length, 1, '该明细被投料一次')
+  assert.deepEqual(got[0].buttons, buttons, '按钮载荷经引擎→dispatch 透传未被吞掉')
 })
 
 test('同账号串行：一条在飞时不会有第二条从同一账号出去', async () => {
