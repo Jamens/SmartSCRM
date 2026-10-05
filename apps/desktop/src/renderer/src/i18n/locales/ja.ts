@@ -140,7 +140,19 @@ export const ja: DeepString<typeof zhCN> = {
       'インターフェースの表示言語です。変更は直ちに反映され、ローカル設定に記録されます。',
     languageLabel: 'インターフェースの言語',
     identityLine: '{{name}}（{{role}}）· テナント {{tenant}} · 招待コード {{code}}',
-    notSignedIn: '未ログイン'
+    notSignedIn: '未ログイン',
+    sensitiveWords: 'センシティブワード',
+    sensitiveWordsDesc: 'ローカルなセンシティブワード一覧を管理。送信/受信の経路が自動判定iasi、ここでは手動で検査できます。',
+    sensitiveWordPlaceholder: 'キーワード',
+    sensitiveWordCategoryPlaceholder: 'カテゴリ（任意）',
+    sensitiveWordAdd: '追加',
+    sensitiveWordsEmpty: 'まだキーワードがありません。追加してください。',
+    sensitiveWordDelete: '削除',
+    sensitiveWordCheck: 'ヒット検査',
+    sensitiveWordCheckPlaceholder: '検査するテキストを貼り付け',
+    sensitiveWordRunCheck: '検査',
+    sensitiveWordHit: 'ヒット：{{words}}',
+    sensitiveWordNoHit: 'ヒットなし',
   },
   log: {
     browserNote:

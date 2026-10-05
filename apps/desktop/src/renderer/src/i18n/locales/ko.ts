@@ -138,7 +138,19 @@ export const ko: DeepString<typeof zhCN> = {
     languageDesc: '인터페이스 표시 언어입니다. 변경은 즉시 적용되며 로컬 설정에 기록됩니다.',
     languageLabel: '인터페이스 언어',
     identityLine: '{{name}}（{{role}}）· 테넌트 {{tenant}} · 초대 코드 {{code}}',
-    notSignedIn: '로그인 안 됨'
+    notSignedIn: '로그인 안 됨',
+    sensitiveWords: '민감어 라이브러리',
+    sensitiveWordsDesc: '로컬 민감어 목록을 관리합니다. 발송/수신 경로가 자동 판정하며, 여기서 직접 테스트할 수 있습니다.',
+    sensitiveWordPlaceholder: '단어',
+    sensitiveWordCategoryPlaceholder: '분류(선택)',
+    sensitiveWordAdd: '추가',
+    sensitiveWordsEmpty: '아직 민감어가 없습니다. 몇 개 추가하세요.',
+    sensitiveWordDelete: '삭제',
+    sensitiveWordCheck: '히트 테스트',
+    sensitiveWordCheckPlaceholder: '검사할 텍스트를 붙여넣기',
+    sensitiveWordRunCheck: '테스트',
+    sensitiveWordHit: '히트: {{words}}',
+    sensitiveWordNoHit: '히트 없음',
   },
   log: {
     browserNote:

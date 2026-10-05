@@ -141,7 +141,19 @@ export const id: DeepString<typeof zhCN> = {
       'Bahasa tampilan antarmuka. Perubahan berlaku segera dan dicatat di pengaturan lokal.',
     languageLabel: 'Bahasa antarmuka',
     identityLine: '{{name}} ({{role}}) · Tenant {{tenant}} · Kode undangan {{code}}',
-    notSignedIn: 'Belum masuk'
+    notSignedIn: 'Belum masuk',
+    sensitiveWords: 'Daftar Kata Sensitif',
+    sensitiveWordsDesc: 'Kelola daftar kata sensitif lokal; jalur kirim/terima akan memeriksa otomatis, dan Anda bisa menguji di sini.',
+    sensitiveWordPlaceholder: 'Kata',
+    sensitiveWordCategoryPlaceholder: 'Kategori (opsional)',
+    sensitiveWordAdd: 'Tambah',
+    sensitiveWordsEmpty: 'Belum ada kata sensitif — tambahkan beberapa.',
+    sensitiveWordDelete: 'Hapus',
+    sensitiveWordCheck: 'Uji cocok',
+    sensitiveWordCheckPlaceholder: 'Tempel teks untuk diuji',
+    sensitiveWordRunCheck: 'Uji',
+    sensitiveWordHit: 'Cocok: {{words}}',
+    sensitiveWordNoHit: 'Tidak cocok',
   },
   log: {
     browserNote:

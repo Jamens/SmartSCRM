@@ -140,7 +140,19 @@ export const en: DeepString<typeof zhCN> = {
       'Interface display language. Changes apply immediately and are saved to local settings.',
     languageLabel: 'Interface language',
     identityLine: '{{name}} ({{role}}) · Tenant {{tenant}} · Invite code {{code}}',
-    notSignedIn: 'Not signed in'
+    notSignedIn: 'Not signed in',
+    sensitiveWords: 'Sensitive words',
+    sensitiveWordsDesc: 'Maintain a local sensitive-word list; the send/inbound path will use it, and you can test a snippet here.',
+    sensitiveWordPlaceholder: 'Word',
+    sensitiveWordCategoryPlaceholder: 'Category (optional)',
+    sensitiveWordAdd: 'Add',
+    sensitiveWordsEmpty: 'No sensitive words yet — add a few.',
+    sensitiveWordDelete: 'Delete',
+    sensitiveWordCheck: 'Hit test',
+    sensitiveWordCheckPlaceholder: 'Paste text to test',
+    sensitiveWordRunCheck: 'Test',
+    sensitiveWordHit: 'Hit: {{words}}',
+    sensitiveWordNoHit: 'No hit',
   },
   log: {
     browserNote:

@@ -139,7 +139,19 @@ export const vi: DeepString<typeof zhCN> = {
       'Ngôn ngữ hiển thị giao diện. Thay đổi có hiệu lực ngay và được ghi vào cài đặt cục bộ.',
     languageLabel: 'Ngôn ngữ giao diện',
     identityLine: '{{name}} ({{role}}) · Tenant {{tenant}} · Mã mời {{code}}',
-    notSignedIn: 'Chưa đăng nhập'
+    notSignedIn: 'Chưa đăng nhập',
+    sensitiveWords: 'Từ nhạy cảm',
+    sensitiveWordsDesc: 'Quản lý danh sách từ nhạy cảm cục bộ; luồng gửi/nhận sẽ tự động kiểm tra, và bạn có thể thử tại đây.',
+    sensitiveWordPlaceholder: 'Từ',
+    sensitiveWordCategoryPlaceholder: 'Nhóm (tùy chọn)',
+    sensitiveWordAdd: 'Thêm',
+    sensitiveWordsEmpty: 'Chưa có từ nhạy cảm nào — thêm vài từ.',
+    sensitiveWordDelete: 'Xóa',
+    sensitiveWordCheck: 'Kiểm tra trúng',
+    sensitiveWordCheckPlaceholder: 'Dán văn bản để kiểm tra',
+    sensitiveWordRunCheck: 'Kiểm tra',
+    sensitiveWordHit: 'Trúng: {{words}}',
+    sensitiveWordNoHit: 'Không trúng',
   },
   log: {
     browserNote:

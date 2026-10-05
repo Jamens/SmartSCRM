@@ -12,7 +12,7 @@
 | A5 | 主题色板：宝蓝主色 + 金色点缀（light/dark 两套变量层） | P1 |
 | A6 | 自动更新框架（本地源） | P14 |
 | A7 | 内存/性能监控 | P14 |
-| A8 | 敏感词风控（本地库） | P14 |
+| A8 | 敏感词风控（本地库） | 🟡 **已交付（2026-10-06）**：V22 建 `sensitive_word`（`uk(tenant_id,word)` 租户内去重，`enabled` 控是否参与命中，`category` 仅分组标签不参与匹配）；`SensitiveWordService` 租户隔离 + CRUD + `match()`（不区分大小写子串、忽略停用词、去重、保留原样便于高亮，做成可单测纯函数）+ `POST /api/sensitive-words/check` 命中检测端点；前端 `api/sensitiveWords.ts` + 设置页「敏感词库」卡（增删/启停/文本试检）。后端 12 条单测。**发送/入站链接入自动判定**属各业务功能后续范围（本轮提供 `check` 入口 + 设置页手动试检） |
 | A9 | 修改密码（改密后强制重新登录） | ✅ 已交付（2026-10-03） |
 | A10 | 消息中心 / 站内通知（列表 + 未读 + 系统通知投递） | 🟡 **主体已交付（2026-10-06）**：V21 建 `notification` + `notification_read`（`uk(notification_id,user_id)`，**已读按用户记**，故一条全员广播对不同子账号各读各的，兼容 B22 多子账号）；`NotificationService`（租户隔离 + 可见性 `user_id=我 OR NULL`，未读=可见−我已读）+ `NotificationController`（`GET /api/notifications` 分页带 `read` 标记 / `GET /api/notifications/unread-count` / `PUT /{id}/read` / `PUT /read-all`）；前端 `api/notifications.ts`（列表/未读数/已读 hooks，30s 轮询）+ `/notifications` 页（未读高亮、点开即已读并跳 `link`、只看未读、全部已读）+ 侧栏铃铛入口 + 8 语文案（`DeepString` 编译期对齐）。**投递入口** `NotificationService.publish(...)` 已就绪（`userId=null` 即广播），**各业务事件的真实触发点随该功能接入时调用**（本轮未绑具体事件，故暂无自动产生的通知） |
 | A11 | 帮助文档与 FAQ 模板下载 | P14 |

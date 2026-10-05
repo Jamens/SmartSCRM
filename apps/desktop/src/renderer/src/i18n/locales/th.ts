@@ -138,7 +138,19 @@ export const th: DeepString<typeof zhCN> = {
     languageDesc: 'ภาษาแสดงผลของอินเทอร์เฟซ การเปลี่ยนมีผลทันที และบันทึกลงในการตั้งค่าในเครื่อง',
     languageLabel: 'ภาษาอินเทอร์เฟซ',
     identityLine: '{{name}} ({{role}}) · เทนันต์ {{tenant}} · รหัสเชิญ {{code}}',
-    notSignedIn: 'ยังไม่ได้เข้าสู่ระบบ'
+    notSignedIn: 'ยังไม่ได้เข้าสู่ระบบ',
+    sensitiveWords: 'คลังคำอ่อนโยค',
+    sensitiveWordsDesc: 'จัดการคลังคำอ่อนโยคในเครื่อง; เส้นทางส่ง/รับจะตรวจอัตโนมัติ และทดสอบได้ที่นี่',
+    sensitiveWordPlaceholder: 'คำ',
+    sensitiveWordCategoryPlaceholder: 'หมวดหมู่ (ไม่บังคับ)',
+    sensitiveWordAdd: 'เพิ่ม',
+    sensitiveWordsEmpty: 'ยังไม่มีคำอ่อนโยค — เพิ่มบางคำ',
+    sensitiveWordDelete: 'ลบ',
+    sensitiveWordCheck: 'ทดสอบการตรวจ',
+    sensitiveWordCheckPlaceholder: 'วางข้อความเพื่อทดสอบ',
+    sensitiveWordRunCheck: 'ทดสอบ',
+    sensitiveWordHit: 'พบคำ: {{words}}',
+    sensitiveWordNoHit: 'ไม่พบคำ',
   },
   log: {
     browserNote:
