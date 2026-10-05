@@ -2,6 +2,7 @@ import {
   Bell,
   FileText,
   FolderOpen,
+  HelpCircle,
   History,
   Languages,
   LayoutDashboard,
@@ -36,6 +37,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/translation', i18nKey: 'nav.translation', icon: Languages },
   // 消息中心（A10）：站内通知列表，独立内容页，排在业务模块之后、宿主能力之前。
   { path: '/notifications', i18nKey: 'nav.notifications', icon: Bell },
+  // 帮助中心（A11）：FAQ + 模板下载，独立内容页。
+  { path: '/help', i18nKey: 'nav.help', icon: HelpCircle },
   // 日志中心（A19）：排查用的宿主能力，排在业务模块之后、设置之前。
   { path: '/logs', i18nKey: 'nav.logs', icon: FileText },
   // 设置排在最后：它是宿主能力，不是业务模块。

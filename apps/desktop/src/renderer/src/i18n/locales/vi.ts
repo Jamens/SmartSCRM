@@ -24,6 +24,7 @@ export const vi: DeepString<typeof zhCN> = {
     materials: 'Thư viện tài liệu',
     translation: 'Trung tâm dịch',
     notifications: 'Trung tâm thông báo',
+    help: 'Trợ giúp',
     logs: 'Trung tâm nhật ký',
     settings: 'Cài đặt'
   },
@@ -154,6 +155,18 @@ export const vi: DeepString<typeof zhCN> = {
     sensitiveWordNoHit: 'Không trúng',
     perf: 'Hiệu năng',
     perfDesc: 'Số liệu runtime của tiến trình chính (bộ nhớ / thời gian chạy / CPU tích lũy), làm mới mỗi 3 giây.',
+  },
+  help: {
+    title: 'Trung tâm trợ giúp',
+    desc: 'Câu hỏi thường gặp và tải mẫu.',
+    faq1Q: 'Làm sao thêm tài khoản nền tảng?',
+    faq1A: 'Ở không gian làm việc, bấm "Thêm tài khoản" và đăng nhập nền tảng; view sẽ được gắn để nhắn tin.',
+    faq2Q: 'Danh sách "Nhóm" của khách đến từ đâu?',
+    faq2A: 'Sau khi thu thập thành viên nhóm, các nhóm liên quan tới khách sẽ hiện trong mục "Nhóm" của ngăn kéo.',
+    faq3Q: 'Trung tâm thông báo ở đâu?',
+    faq3A: 'Biểu tượng chuông "Thông báo" trên thanh bên; mục chưa đọc được làm nổi bật và mở ra là đã đọc.',
+    downloadTemplate: 'Tải mẫu FAQ',
+    downloadTemplateDesc: 'Tải một mẫu CSV và điền FAQ của bạn.',
   },
   log: {
     browserNote:

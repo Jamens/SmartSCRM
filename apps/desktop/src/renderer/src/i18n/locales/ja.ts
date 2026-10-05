@@ -24,6 +24,7 @@ export const ja: DeepString<typeof zhCN> = {
     materials: '素材ライブラリ',
     translation: '翻訳センター',
     notifications: '通知センター',
+    help: 'ヘルプ',
     logs: 'ログセンター',
     settings: '設定'
   },
@@ -155,6 +156,18 @@ export const ja: DeepString<typeof zhCN> = {
     sensitiveWordNoHit: 'ヒットなし',
     perf: 'パフォーマンス',
     perfDesc: 'メインプロセスの実行時指標（メモリ / 稼働時間 / 累積 CPU）。3 秒ごとに更新。',
+  },
+  help: {
+    title: 'ヘルプセンター',
+    desc: 'よくある質問とテンプレートのダウンロード。',
+    faq1Q: 'プラットフォームアカウントの追加方法は？',
+    faq1A: 'ワークスペースで「アカウント追加」を押し、プラットフォームにサインインするとビューがマウントされます。',
+    faq2Q: '顧客の「所属グループ」はどこから？',
+    faq2A: 'グループメンバー収集の記録後、その顧客に関連するグループがドロワーの「所属グループ」に並びます。',
+    faq3Q: '通知センターはどこ？',
+    faq3A: 'サイドバーのベル「メッセージセンター」。未読は強調され、開くと既読になります。',
+    downloadTemplate: 'FAQ テンプレートをダウンロード',
+    downloadTemplateDesc: 'CSV テンプレートをダウンロードして独自の FAQ を記入できます。',
   },
   log: {
     browserNote:

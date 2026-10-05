@@ -24,6 +24,7 @@ export const id: DeepString<typeof zhCN> = {
     materials: 'Pustaka Materi',
     translation: 'Pusat Terjemahan',
     notifications: 'Pusat Notifikasi',
+    help: 'Bantuan',
     logs: 'Pusat Log',
     settings: 'Pengaturan'
   },
@@ -156,6 +157,18 @@ export const id: DeepString<typeof zhCN> = {
     sensitiveWordNoHit: 'Tidak cocok',
     perf: 'Pemantauan',
     perfDesc: 'Metrik runtime proses utama (memori / waktu jalan / CPU kumulatif), disegarkan tiap 3 detik.',
+  },
+  help: {
+    title: 'Pusat bantuan',
+    desc: 'Pertanyaan umum dan unduhan templat.',
+    faq1Q: 'Cara menambahkan akun platform?',
+    faq1A: 'Di Ruang Kerja, klik "Tambah akun" lalu masuk; tampilan akan dipasang untuk mengirim pesan.',
+    faq2Q: 'Dari mana daftar "Grup" pelanggan?',
+    faq2A: 'Setelah pengumpulan anggota grup, grup terkait pelanggan itu muncul di bagian "Grup" pada laci.',
+    faq3Q: 'Di mana pusat notifikasi?',
+    faq3A: 'Lonceng "Notifikasi" di bilah samping; yang belum dibaca disorot dan terbuka berarti terbaca.',
+    downloadTemplate: 'Unduh templat FAQ',
+    downloadTemplateDesc: 'Unduh templat CSV lalu isi FAQ Anda.',
   },
   log: {
     browserNote:

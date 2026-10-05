@@ -24,6 +24,7 @@ export const zhTW: DeepString<typeof zhCN> = {
     materials: '素材庫',
     translation: '翻譯中心',
     notifications: '訊息中心',
+    help: '說明',
     logs: '日誌中心',
     settings: '設定'
   },
@@ -148,6 +149,18 @@ export const zhTW: DeepString<typeof zhCN> = {
     sensitiveWordNoHit: '未命中',
     perf: '效能監控',
     perfDesc: '主進程執行階段指標（記憶體 / 執行時長 / 累計 CPU），每 3 秒重新整理。',
+  },
+  help: {
+    title: '說明中心',
+    desc: '常見問題與範本下載。',
+    faq1Q: '如何加入平台帳號？',
+    faq1A: '在工作台點「加入帳號」，依平台登入後即可掛載檢視收發訊息。',
+    faq2Q: '客戶「所在群」怎麼來的？',
+    faq2A: '群成員採集建檔後，與該客戶相關的群會列在客戶抽屜的「所在群」一節。',
+    faq3Q: '訊息中心在哪看？',
+    faq3A: '側欄鈴鐺「訊息中心」，未讀會高亮，點開即已讀。',
+    downloadTemplate: '下載 FAQ 範本',
+    downloadTemplateDesc: '下載一個 CSV 範本，把你的 FAQ 填進去。',
   },
   log: {
     browserNote: '當前是瀏覽器預覽，日誌由主程序產生，桌面端開啟才能檢視與匯出。',

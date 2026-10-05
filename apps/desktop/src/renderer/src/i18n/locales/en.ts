@@ -25,6 +25,7 @@ export const en: DeepString<typeof zhCN> = {
     materials: 'Materials',
     translation: 'Translation',
     notifications: 'Notifications',
+    help: 'Help',
     logs: 'Logs',
     settings: 'Settings'
   },
@@ -155,6 +156,18 @@ export const en: DeepString<typeof zhCN> = {
     sensitiveWordNoHit: 'No hit',
     perf: 'Performance',
     perfDesc: 'Main-process runtime metrics (memory / uptime / cumulative CPU), refreshed every 3s.',
+  },
+  help: {
+    title: 'Help center',
+    desc: 'FAQ and template downloads.',
+    faq1Q: 'How do I add a platform account?',
+    faq1A: 'On the workspace click "Add account" and sign in; the view is then mounted for messaging.',
+    faq2Q: 'Where does a customer\'s "Groups" list come from?',
+    faq2A: 'After group-member collection is built, groups related to that customer appear in the drawer\'s "Groups" section.',
+    faq3Q: 'Where is the notification center?',
+    faq3A: 'The bell "Notifications" in the sidebar; unread items are highlighted and open as read.',
+    downloadTemplate: 'Download FAQ template',
+    downloadTemplateDesc: 'Download a CSV template and fill in your own FAQ.',
   },
   log: {
     browserNote:

@@ -24,6 +24,7 @@ export const ko: DeepString<typeof zhCN> = {
     materials: '자료 라이브러리',
     translation: '번역 센터',
     notifications: '알림 센터',
+    help: '도움말',
     logs: '로그 센터',
     settings: '설정'
   },
@@ -153,6 +154,18 @@ export const ko: DeepString<typeof zhCN> = {
     sensitiveWordNoHit: '히트 없음',
     perf: '성능 모니터링',
     perfDesc: '메인 프로세스 런타임 지표(메모리 / 가동 시간 / 누적 CPU). 3초마다 갱신.',
+  },
+  help: {
+    title: '도움말 센터',
+    desc: '자주 묻는 질문과 템플릿 다운로드.',
+    faq1Q: '플랫폼 계정을 추가하려면?',
+    faq1A: '작업 공간에서 "계정 추가"를 누르고 플랫폼에 로그인하면 뷰가 마운트됩니다.',
+    faq2Q: '고객의 "소속 그룹"은 어디서 오나요?',
+    faq2A: '그룹 멤버 수집이 기록되면 해당 고객과 관련된 그룹이 서랍의 "소속 그룹"에 표시됩니다.',
+    faq3Q: '알림 센터는 어디에?',
+    faq3A: '사이드벨의 "알림 센터". 읽지 않은 항목은 강조되며 열면 읽음 처리됩니다.',
+    downloadTemplate: 'FAQ 템플릿 다운로드',
+    downloadTemplateDesc: 'CSV 템플릿을 내려받아 나만의 FAQ를 작성하세요.',
   },
   log: {
     browserNote:

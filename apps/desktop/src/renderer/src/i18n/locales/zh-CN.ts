@@ -27,6 +27,7 @@ export const zhCN = {
     materials: '素材库',
     translation: '翻译中心',
     notifications: '消息中心',
+    help: '帮助',
     logs: '日志中心',
     settings: '设置'
   },
@@ -158,6 +159,18 @@ export const zhCN = {
     sensitiveWordNoHit: '未命中',
     perf: '性能监控',
     perfDesc: '主进程运行时指标（内存 / 运行时长 / 累计 CPU），每 3 秒刷新。',
+  },
+  help: {
+    title: '帮助中心',
+    desc: '常见问题与模板下载。',
+    faq1Q: '如何添加平台账号？',
+    faq1A: '在工作台点「添加账号」，按平台登录后即可挂载视图收发消息。',
+    faq2Q: '客户「所在群」怎么来的？',
+    faq2A: '群成员采集建档后，与该客户相关的群会列在客户抽屉的「所在群」一节。',
+    faq3Q: '消息中心在哪看？',
+    faq3A: '侧栏铃铛「消息中心」，未读会高亮，点开即已读。',
+    downloadTemplate: '下载 FAQ 模板',
+    downloadTemplateDesc: '下载一个 CSV 模板，把你的 FAQ 填进去。',
   },
   log: {
     browserNote: '当前是浏览器预览，日志由主进程产生，桌面端打开才能查看与导出。',
