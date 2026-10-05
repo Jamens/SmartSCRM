@@ -39,6 +39,11 @@ export interface AppSettings {
    * 渲染层在首帧前读它来初始化 i18next，改动即时生效并落盘。
    */
   language: LocaleCode
+  /**
+   * A6 自动更新的**自托管**更新清单 URL。默认空串 = 不检查、不外连（本仓是开源项目，
+   * 绝不硬编码任何商业云端点）。由部署方/用户填自己的地址，填了才拉清单比版本。
+   */
+  updateManifestUrl: string
 }
 
 /** 交给渲染层的完整快照：`effective` 由主进程解析，页面只负责挂类名。 */
@@ -54,7 +59,8 @@ const DEFAULTS: AppSettings = {
   notificationEnabled: true,
   hardwareAcceleration: true,
   gpuSafeMode: false,
-  language: FALLBACK_LOCALE
+  language: FALLBACK_LOCALE,
+  updateManifestUrl: ''
 }
 
 const settingsFile = (): string => join(app.getPath('userData'), 'scrm-settings.json')
@@ -85,6 +91,10 @@ function mergeKnown(base: AppSettings, raw: unknown): AppSettings {
     }
     // 语言只认清单里的代码：把任意字符串写进设置既没用，还会让回退逻辑失准。
     if (isLocaleCode(patch.language)) next.language = patch.language
+    // 更新源只存字符串（默认空=不外连）；非字符串一律不采信。trim 掉首尾空白与换行。
+    if (typeof patch.updateManifestUrl === 'string') {
+      next.updateManifestUrl = patch.updateManifestUrl.trim()
+    }
   }
   return next
 }

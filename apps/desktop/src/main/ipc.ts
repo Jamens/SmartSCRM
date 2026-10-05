@@ -1,4 +1,4 @@
-import { BrowserWindow, ipcMain, nativeTheme, Notification } from 'electron'
+import { app, BrowserWindow, ipcMain, nativeTheme, Notification } from 'electron'
 import { windowBackgroundOf } from '@shared/theme'
 import type { BadgeEcho } from '@shared/badge'
 import type { NotifyShowRequest, NotifyVerdict } from '@shared/notification'
@@ -28,6 +28,8 @@ import {
 } from './services/desktopNotify'
 import { readMachineProfile, readStorageUsage } from './services/machineProfile'
 import { readPerfMetrics } from './services/perfMetrics'
+import { checkForUpdate, downloadUpdate } from './services/updateChecker'
+import type { UpdateVerdict } from '@shared/update'
 import { getMainWindow, showMainWindow } from './window/mainWindow'
 import { setUnreadBadge } from './window/badge'
 import { registerViewIpc } from './webContentsView/ipc'
@@ -67,6 +69,12 @@ export function registerIpcHandlers(): void {
 
   // 内存/性能监控（A7）。主进程自己的运行时指标，纯内存读取，瞬时回执。
   ipcMain.handle('app:get-perf-metrics', () => readPerfMetrics())
+
+  // 自动更新（A6）。更新源为空（默认）⇒ disabled，不发任何网络请求；下载只落本地目录，不安装。
+  ipcMain.handle('update:check', (): Promise<UpdateVerdict> =>
+    checkForUpdate(getSettings().updateManifestUrl, app.getVersion())
+  )
+  ipcMain.handle('update:download', (_event, downloadUrl: string): Promise<string> => downloadUpdate(downloadUrl))
 
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', (_event, patch: Partial<AppSettings>) => {

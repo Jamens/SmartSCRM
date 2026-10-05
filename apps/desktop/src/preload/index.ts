@@ -17,6 +17,7 @@ import type {
 } from '@shared/groupMembers'
 import type { MachineProfile, StorageUsage } from '@shared/machine'
 import type { PerfMetrics } from '@shared/perf'
+import type { UpdateVerdict } from '@shared/update'
 import type {
   NotifyClickTarget,
   NotifyShowRequest,
@@ -60,7 +61,10 @@ const scrm = {
     getMachineProfile: (): Promise<MachineProfile> => ipcRenderer.invoke('app:get-machine-profile'),
     getStorageUsage: (): Promise<StorageUsage> => ipcRenderer.invoke('app:get-storage-usage'),
     /** 内存/性能监控（A7）：主进程自己的运行时指标，纯内存读取。 */
-    getPerfMetrics: (): Promise<PerfMetrics> => ipcRenderer.invoke('app:get-perf-metrics')
+    getPerfMetrics: (): Promise<PerfMetrics> => ipcRenderer.invoke('app:get-perf-metrics'),
+    /** 自动更新（A6）：检查自托管更新源（未配置=disabled，不外连）/ 下载更新包到本地目录（不安装）。 */
+    checkForUpdate: (): Promise<UpdateVerdict> => ipcRenderer.invoke('update:check'),
+    downloadUpdate: (downloadUrl: string): Promise<string> => ipcRenderer.invoke('update:download', downloadUrl)
   },
   session: {
     save: (session: StoredSession): Promise<boolean> => ipcRenderer.invoke('session:save', session),

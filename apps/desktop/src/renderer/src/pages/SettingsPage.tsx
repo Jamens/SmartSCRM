@@ -36,6 +36,7 @@ import { useGpuFatal, useGpuSettings } from '@/lib/gpu'
 import { useLanguage } from '@/lib/language'
 import SensitiveWordsCard from '@/components/SensitiveWordsCard'
 import PerfMetricsCard from '@/components/PerfMetricsCard'
+import UpdateCard from '@/components/UpdateCard'
 import { changePassword } from '@/api/auth'
 import { API_BASE, ApiError } from '@/lib/http'
 import { cn } from '@/lib/utils'
@@ -366,6 +367,9 @@ export default function SettingsPage(): React.JSX.Element {
 
           {/* 内存/性能监控（A7）：主进程运行时指标，3s 轮询。放在敏感词卡之后。 */}
           <PerfMetricsCard />
+
+          {/* 自动更新（A6）：自托管更新源 + 检查 + 下载到本地（不安装）。放在性能卡之后。 */}
+          <UpdateCard />
 
           <Card>
             <CardHeader>
