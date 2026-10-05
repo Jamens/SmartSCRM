@@ -652,6 +652,16 @@ function ItemEditor({
   )
 }
 
+/**
+ * 这个选择器里可选的一行：`url` 一定有值。
+ *
+ * `MaterialVO.url` 从 B17（按钮素材 type=5 没有 URL）起是可空的，而类型系统给不出
+ * "type=1 就必然带 url" 这条只在库里成立的约束。与其在这里 `?? ''` 把一个坏行咽下去，
+ * 不如按"真有图片地址"筛一遍：筛掉的行既不会被渲染成破图，也不会被选成一条只能靠
+ * materialId 存活的快捷回复。
+ */
+type PickableImage = MaterialVO & { url: string }
+
 function MaterialPicker({
   open,
   onOpenChange,
@@ -659,11 +669,13 @@ function MaterialPicker({
 }: {
   open: boolean
   onOpenChange: (open: boolean) => void
-  onPick: (material: MaterialVO) => void
+  onPick: (material: PickableImage) => void
 }): React.JSX.Element {
   const { t } = useTranslation()
   const materials = useMaterials({ type: 1 })
-  const images = materials.data ?? []
+  const images = (materials.data ?? []).filter(
+    (m): m is PickableImage => typeof m.url === 'string' && m.url.length > 0
+  )
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-xl">
