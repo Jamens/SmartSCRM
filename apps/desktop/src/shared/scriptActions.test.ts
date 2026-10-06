@@ -1,7 +1,13 @@
 // src/shared/scriptActions.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ACTION_TYPES, SCRIPT_ACTIONS, failoverAccount, isDelegatedAction, nextStep } from './scriptActions.ts'
+import {
+  ACTION_TYPES,
+  SCRIPT_ACTIONS,
+  failoverAccount,
+  isDelegatedAction,
+  nextStep
+} from './scriptActions.ts'
 
 test('动作词表：五类齐全、post_message 作用于群', () => {
   assert.ok(ACTION_TYPES.includes('post_message'))
@@ -22,8 +28,16 @@ test('nextStep：跳过 sending（正在跑不算待补）', () => {
 })
 
 test('nextStep：failed 不自动重试、全成功返 null', () => {
-  assert.equal(nextStep(['success', 'failed', 'pending']), 2, 'failed 不被当待补，跳过到下一个 pending')
-  assert.equal(nextStep(['success', 'failed']), null, 'failed 不自动重试，也无 pending → 返 null 交人工')
+  assert.equal(
+    nextStep(['success', 'failed', 'pending']),
+    2,
+    'failed 不被当待补，跳过到下一个 pending'
+  )
+  assert.equal(
+    nextStep(['success', 'failed']),
+    null,
+    'failed 不自动重试，也无 pending → 返 null 交人工'
+  )
   assert.equal(nextStep(['success', 'skipped']), null, '全成功/跳过=一轮跑完')
   assert.equal(nextStep([]), null)
 })

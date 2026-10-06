@@ -16,7 +16,12 @@ export interface ScriptActionDef {
 }
 
 export const SCRIPT_ACTIONS: Record<string, ScriptActionDef> = {
-  post_message: { type: 'post_message', label: '群发言', onGroup: true, defaults: { materialId: null } },
+  post_message: {
+    type: 'post_message',
+    label: '群发言',
+    onGroup: true,
+    defaults: { materialId: null }
+  },
   dm_member: { type: 'dm_member', label: '私聊成员', onGroup: false, defaults: { maxPerRound: 5 } },
   react: { type: 'react', label: '表情回应', onGroup: true, defaults: { emoji: '👍' } },
   join_group: { type: 'join_group', label: '进群（接 B18）', onGroup: true, defaults: {} },
@@ -39,7 +44,9 @@ export type DelegatedAction = 'join_group' | 'kick_member'
 export const DELEGATED_ACTIONS: DelegatedAction[] = ['join_group', 'kick_member']
 
 /** 该动作是否属于「委托类」（是→转 B18/B19 任务；否→剧本自己派发）。 */
-export function isDelegatedAction(actionType: string | null | undefined): actionType is DelegatedAction {
+export function isDelegatedAction(
+  actionType: string | null | undefined
+): actionType is DelegatedAction {
   return actionType === 'join_group' || actionType === 'kick_member'
 }
 
@@ -68,7 +75,10 @@ export function nextStep(statuses: (StepStatus | null | undefined)[]): number | 
  * failover：当前账号在 ordered 里，失败切下一个；用尽返回 null（task 判 error）。
  * 切号**不重置断点**——这里只给下一个账号，断点由调用方保留。
  */
-export function failoverAccount(accountIds: (number | null | undefined)[], currentIdx: number): number | null {
+export function failoverAccount(
+  accountIds: (number | null | undefined)[],
+  currentIdx: number
+): number | null {
   for (let i = Math.max(0, currentIdx) + 1; i < accountIds.length; i++) {
     const id = accountIds[i]
     if (id != null) return id
