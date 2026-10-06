@@ -10,6 +10,7 @@ import com.smartscrm.server.web.vo.LabelGroupVO;
 import com.smartscrm.server.web.vo.LabelVO;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,17 +32,20 @@ public class LabelController {
     }
 
     @GetMapping("/label-groups")
+    @PreAuthorize("hasAuthority('label:read')")
     public ApiResponse<List<LabelGroupVO>> tree(@AuthenticationPrincipal AuthPrincipal principal) {
         return ApiResponse.ok(service.tree(principal.tenantId()));
     }
 
     @PostMapping("/label-groups")
+    @PreAuthorize("hasAuthority('label:write')")
     public ApiResponse<LabelGroup> createGroup(@AuthenticationPrincipal AuthPrincipal principal,
                                                @Valid @RequestBody LabelGroupRequest req) {
         return ApiResponse.ok(service.createGroup(principal.tenantId(), req));
     }
 
     @PutMapping("/label-groups/{id}")
+    @PreAuthorize("hasAuthority('label:write')")
     public ApiResponse<LabelGroup> updateGroup(@AuthenticationPrincipal AuthPrincipal principal,
                                                @PathVariable Long id,
                                                @Valid @RequestBody LabelGroupRequest req) {
@@ -49,12 +53,14 @@ public class LabelController {
     }
 
     @DeleteMapping("/label-groups/{id}")
+    @PreAuthorize("hasAuthority('label:write')")
     public ApiResponse<Void> deleteGroup(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         service.deleteGroup(principal.tenantId(), id);
         return ApiResponse.ok(null);
     }
 
     @PostMapping("/label-groups/{groupId}/labels")
+    @PreAuthorize("hasAuthority('label:write')")
     public ApiResponse<LabelVO> createLabel(@AuthenticationPrincipal AuthPrincipal principal,
                                             @PathVariable Long groupId,
                                             @Valid @RequestBody LabelRequest req) {
@@ -62,6 +68,7 @@ public class LabelController {
     }
 
     @PutMapping("/labels/{id}")
+    @PreAuthorize("hasAuthority('label:write')")
     public ApiResponse<LabelVO> updateLabel(@AuthenticationPrincipal AuthPrincipal principal,
                                             @PathVariable Long id,
                                             @Valid @RequestBody LabelRequest req) {
@@ -69,6 +76,7 @@ public class LabelController {
     }
 
     @DeleteMapping("/labels/{id}")
+    @PreAuthorize("hasAuthority('label:write')")
     public ApiResponse<Void> deleteLabel(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         service.deleteLabel(principal.tenantId(), id);
         return ApiResponse.ok(null);
