@@ -35,6 +35,7 @@ export const ja: DeepString<typeof zhCN> = {
     cloudphone: "クラウドフォン",
     proxypool: "プロキシブール",
     fingerprint: "ブラウザフィンガープリント",
+    cloudaccount: "クラウドアカウントプール",
     settings: '設定'
   },
   notifications: {
@@ -418,6 +419,79 @@ export const ja: DeepString<typeof zhCN> = {
       yes: "削除する",
       no: "キャンセル",
     },
+  },
+
+  cloudaccount: {
+    title: "クラウドアカウントプール",
+    desc: "グループ + 統計 + 一括転送 + 絞り込み + ローカル同期（同期はローカルアカウント記録を書くだけ。オープンソース赤線準拠）",
+    newGroup: "新規グループ",
+    newAccount: "新規クラウドアカウント",
+    stats: {
+      total: "合計",
+      online: "オンライン",
+      warming: "育成中",
+      offline: "オフライン",
+      banned: "BAN済み",
+    },
+    filter: {
+      group: "グループ",
+      status: "ステータス",
+      keyword: "キーワード",
+      all: "すべて",
+    },
+    batch: {
+      selected: "{{count}} 件選択中",
+      transfer: "一括転送",
+      ungrouped: "グループから除外",
+    },
+    table: {
+      title: "クラウドアカウント",
+      desc: "行を選択して一括転送；ローカル同期はローカルアカウント記録を作成します",
+      name: "名前",
+      phone: "番号",
+      platform: "プラットフォーム",
+      status: "ステータス",
+      group: "グループ",
+      synced: "同期",
+      syncedAt: "同期済み {{at}}",
+      ungrouped: "未分類",
+      empty: "アカウントはまだありません。右上の新規をクリック",
+      noMatch: "現在の絞り込みに一致するアカウントはありません",
+      sync: "ローカル同期",
+      edit: "編集",
+    },
+    group: {
+      title: "グループ管理",
+      name: "グループ名",
+    },
+    form: {
+      name: "アカウント名",
+      phone: "番号",
+      remark: "備考",
+      submit: "保存",
+      cancel: "キャンセル",
+      createTitle: "新規クラウドアカウント",
+      editTitle: "クラウドアカウント編集",
+    },
+    platform: {
+      whatsapp: "WhatsApp",
+      telegram: "Telegram",
+      line: "Line",
+    },
+    status: {
+      online: "オンライン",
+      offline: "オフライン",
+      warming: "育成中",
+      banned: "BAN済み",
+    },
+    confirm: {
+      title: "削除しますか？",
+      desc: "このテナントから記録を削除します（元に戻せません）。グループ削除時は配下のアカウントが未分類になります。",
+      yes: "削除する",
+      no: "キャンセル",
+    },
+    loading: "読み込み中…",
+    loadFailed: "読み込み失敗",
   },
 
   groupOps: {

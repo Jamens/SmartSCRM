@@ -35,6 +35,7 @@ export const th: DeepString<typeof zhCN> = {
     cloudphone: "โทรศัพท์คลาวด์",
     proxypool: "พูลพร็อกซี",
     fingerprint: "ลายนิ้วมือเบราว์เซอร์",
+    cloudaccount: "พูลบัญชีคลาวด์",
     settings: 'การตั้งค่า'
   },
   notifications: {
@@ -416,6 +417,79 @@ export const th: DeepString<typeof zhCN> = {
       yes: "ยืนยันลบ",
       no: "ยกเลิก",
     },
+  },
+
+  cloudaccount: {
+    title: "พูลบัญชีคลาวด์",
+    desc: "จัดกลุ่ม + สถิติ + โอนย้ายเป็นชุด + กรอง + ซิงก์ไปโลคอล (ซิงก์เขียนเรคคอร์ดบัญชีโลคอลเท่านั้น ตามข้อจำกัดโอเพนซอร์ส)",
+    newGroup: "กลุ่มใหม่",
+    newAccount: "บัญชีคลาวด์ใหม่",
+    stats: {
+      total: "ทั้งหมด",
+      online: "ออนไลน์",
+      warming: "กำลังอุ่น",
+      offline: "ออฟไลน์",
+      banned: "ถูกแบน",
+    },
+    filter: {
+      group: "กลุ่ม",
+      status: "สถานะ",
+      keyword: "คำค้น",
+      all: "ทั้งหมด",
+    },
+    batch: {
+      selected: "เลือก {{count}} รายการ",
+      transfer: "โอนย้ายเป็นชุด",
+      ungrouped: "นำออกจากกลุ่ม",
+    },
+    table: {
+      title: "บัญชีคลาวด์",
+      desc: "เลือกแถวเพื่อโอนย้ายเป็นชุด; ซิงก์ไปโลคอลจะสร้างเรคคอร์ดบัญชีโลคอล",
+      name: "ชื่อ",
+      phone: "เบอร์",
+      platform: "แพลตฟอร์ม",
+      status: "สถานะ",
+      group: "กลุ่ม",
+      synced: "ซิงก์",
+      syncedAt: "ซิงก์แล้ว {{at}}",
+      ungrouped: "ไม่มีกลุ่ม",
+      empty: "ยังไม่มีบัญชี คลิกบัญชีคลาวด์ใหม่มุมขวาบน",
+      noMatch: "ไม่มีบัญชีที่ตรงกับตัวกรอง",
+      sync: "ซิงก์ไปโลคอล",
+      edit: "แก้ไข",
+    },
+    group: {
+      title: "จัดการกลุ่ม",
+      name: "ชื่อกลุ่ม",
+    },
+    form: {
+      name: "ชื่อบัญชี",
+      phone: "เบอร์",
+      remark: "หมายเหตุ",
+      submit: "บันทึก",
+      cancel: "ยกเลิก",
+      createTitle: "บัญชีคลาวด์ใหม่",
+      editTitle: "แก้ไขบัญชีคลาวด์",
+    },
+    platform: {
+      whatsapp: "WhatsApp",
+      telegram: "Telegram",
+      line: "Line",
+    },
+    status: {
+      online: "ออนไลน์",
+      offline: "ออฟไลน์",
+      warming: "กำลังอุ่น",
+      banned: "ถูกแบน",
+    },
+    confirm: {
+      title: "ยืนยันการลบ?",
+      desc: "ลบเรคคอร์ดออกจากเทนแอนต์นี้ (ไม่สามารถย้อนกลับได้) การลบกลุ่มจะถอดบัญชีในกลุ่มออกเป็นไม่มีกลุ่ม",
+      yes: "ยืนยันลบ",
+      no: "ยกเลิก",
+    },
+    loading: "กำลังโหลด…",
+    loadFailed: "โหลดไม่สำเร็จ",
   },
 
   groupOps: {

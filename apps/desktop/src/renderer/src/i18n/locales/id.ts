@@ -35,6 +35,7 @@ export const id: DeepString<typeof zhCN> = {
     cloudphone: "Cloud Phone",
     proxypool: "Pool Proxy",
     fingerprint: "Sidik Jari Browser",
+    cloudaccount: "Pool Akun Cloud",
     settings: 'Pengaturan'
   },
   notifications: {
@@ -419,6 +420,79 @@ export const id: DeepString<typeof zhCN> = {
       yes: "Konfirmasi hapus",
       no: "Batal",
     },
+  },
+
+  cloudaccount: {
+    title: "Pool Akun Cloud",
+    desc: "Pengelompokan + statistik + transfer massal + filter + sinkron ke lokal (sinkron hanya menulis rekaman akun lokal, sesuai batas merah open-source)",
+    newGroup: "Grup Baru",
+    newAccount: "Akun Cloud Baru",
+    stats: {
+      total: "Total",
+      online: "Online",
+      warming: "Pemanasan",
+      offline: "Offline",
+      banned: "Diblokir",
+    },
+    filter: {
+      group: "Grup",
+      status: "Status",
+      keyword: "Kata kunci",
+      all: "Semua",
+    },
+    batch: {
+      selected: "{{count}} dipilih",
+      transfer: "Transfer massal",
+      ungrouped: "Keluarkan dari grup",
+    },
+    table: {
+      title: "Akun Cloud",
+      desc: "Pilih baris untuk transfer massal; sinkron ke lokal membuat rekaman akun lokal",
+      name: "Nama",
+      phone: "Nomor",
+      platform: "Platform",
+      status: "Status",
+      group: "Grup",
+      synced: "Sinkron",
+      syncedAt: "Disinkron {{at}}",
+      ungrouped: "Tanpa grup",
+      empty: "Belum ada akun cloud, klik Akun Cloud Baru di kanan atas",
+      noMatch: "Tidak ada akun cloud yang cocok dengan filter",
+      sync: "Sinkron ke lokal",
+      edit: "Edit",
+    },
+    group: {
+      title: "Manajemen Grup",
+      name: "Nama grup",
+    },
+    form: {
+      name: "Nama akun",
+      phone: "Nomor",
+      remark: "Catatan",
+      submit: "Simpan",
+      cancel: "Batal",
+      createTitle: "Akun Cloud Baru",
+      editTitle: "Edit Akun Cloud",
+    },
+    platform: {
+      whatsapp: "WhatsApp",
+      telegram: "Telegram",
+      line: "Line",
+    },
+    status: {
+      online: "Online",
+      offline: "Offline",
+      warming: "Pemanasan",
+      banned: "Diblokir",
+    },
+    confirm: {
+      title: "Konfirmasi hapus?",
+      desc: "Menghapus rekaman dari tenant ini (tidak bisa dibatalkan). Menghapus grup akan melepas akun di dalamnya.",
+      yes: "Konfirmasi hapus",
+      no: "Batal",
+    },
+    loading: "Memuat…",
+    loadFailed: "Gagal memuat",
   },
 
   groupOps: {

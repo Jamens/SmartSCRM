@@ -38,6 +38,7 @@ export const zhCN = {
     cloudphone: "云手机",
     proxypool: "代理池",
     fingerprint: "浏览器指纹",
+    cloudaccount: "云账号池",
     settings: '设置'
   },
   notifications: {
@@ -421,6 +422,79 @@ export const zhCN = {
       yes: "确认删除",
       no: "取消",
     },
+  },
+
+  cloudaccount: {
+    title: "云账号池",
+    desc: "云号分组 + 统计 + 批量转移 + 筛选 + 同步到本地（同步只写本地账号记录，符合开源红线）",
+    newGroup: "新建分组",
+    newAccount: "新建云号",
+    stats: {
+      total: "总数",
+      online: "在线",
+      warming: "养号中",
+      offline: "离线",
+      banned: "已封禁",
+    },
+    filter: {
+      group: "分组",
+      status: "状态",
+      keyword: "关键字",
+      all: "全部",
+    },
+    batch: {
+      selected: "已选 {{count}} 个",
+      transfer: "批量转移",
+      ungrouped: "移出分组",
+    },
+    table: {
+      title: "云号列表",
+      desc: "勾选多行可批量转移；同步到本地会把云号落成一条本地账号记录",
+      name: "名称",
+      phone: "号码",
+      platform: "平台",
+      status: "状态",
+      group: "分组",
+      synced: "同步",
+      syncedAt: "已同步 {{at}}",
+      ungrouped: "未分组",
+      empty: "暂无云号，点右上角新建",
+      noMatch: "当前筛选条件下没有云号",
+      sync: "同步到本地",
+      edit: "编辑",
+    },
+    group: {
+      title: "分组管理",
+      name: "分组名",
+    },
+    form: {
+      name: "云号名称",
+      phone: "绑定号码",
+      remark: "备注",
+      submit: "保存",
+      cancel: "取消",
+      createTitle: "新建云号",
+      editTitle: "编辑云号",
+    },
+    platform: {
+      whatsapp: "WhatsApp",
+      telegram: "Telegram",
+      line: "Line",
+    },
+    status: {
+      online: "在线",
+      offline: "离线",
+      warming: "养号中",
+      banned: "已封禁",
+    },
+    confirm: {
+      title: "确认删除？",
+      desc: "将从本租户移除该记录（不可逆）。删分组时挂靠的云号会被置为未分组。",
+      yes: "确认删除",
+      no: "取消",
+    },
+    loading: "加载中…",
+    loadFailed: "加载失败",
   },
 
   groupOps: {

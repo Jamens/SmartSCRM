@@ -2,6 +2,7 @@ import {
   BarChart3,
   Bell,
   Bot,
+  Cloud,
   FileText,
   Fingerprint,
   Layers,
@@ -66,6 +67,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/proxy-pool', i18nKey: 'nav.proxypool', icon: Globe },
   // 浏览器指纹配置（B14）：指纹档案 CRUD + 模拟生成（开源红线：生成不探测真实设备）。
   { path: '/fingerprint-profiles', i18nKey: 'nav.fingerprint', icon: Fingerprint },
+  // 云账号池（B21）：分组 / 统计卡 / 批量转移 / 筛选 / 同步到本地（开源红线：同步只写本地账号记录）。
+  { path: '/cloud-accounts', i18nKey: 'nav.cloudaccount', icon: Cloud },
   // 日志中心（A19）：排查用的宿主能力，排在业务模块之后、设置之前。
   { path: '/logs', i18nKey: 'nav.logs', icon: FileText },
   // 设置排在最后：它是宿主能力，不是业务模块。

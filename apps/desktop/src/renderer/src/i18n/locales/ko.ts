@@ -35,6 +35,7 @@ export const ko: DeepString<typeof zhCN> = {
     cloudphone: "클라우드 폰",
     proxypool: "프록시 풀",
     fingerprint: "브라우저 지문",
+    cloudaccount: "클라우드 계정 풀",
     settings: '설정'
   },
   notifications: {
@@ -416,6 +417,79 @@ export const ko: DeepString<typeof zhCN> = {
       yes: "삭제",
       no: "취소",
     },
+  },
+
+  cloudaccount: {
+    title: "클라우드 계정 풀",
+    desc: "그룹 + 통계 + 일괄 이동 + 필터 + 로컬 동기화(동기화는 로컬 계정 기록만 씁니다. 오픈소스 레드라인 준수)",
+    newGroup: "새 그룹",
+    newAccount: "새 클라우드 계정",
+    stats: {
+      total: "전체",
+      online: "온라인",
+      warming: "온칭 중",
+      offline: "오프라인",
+      banned: "차단됨",
+    },
+    filter: {
+      group: "그룹",
+      status: "상태",
+      keyword: "키워드",
+      all: "전체",
+    },
+    batch: {
+      selected: "{{count}}개 선택",
+      transfer: "일괄 이동",
+      ungrouped: "그룹에서 제외",
+    },
+    table: {
+      title: "클라우드 계정",
+      desc: "행을 선택해 일괄 이동; 로컬 동기화는 로컬 계정 기록을 만듭니다",
+      name: "이름",
+      phone: "번호",
+      platform: "플랫폼",
+      status: "상태",
+      group: "그룹",
+      synced: "동기화",
+      syncedAt: "동기화 {{at}}",
+      ungrouped: "미분류",
+      empty: "계정이 없습니다. 오른쪽 위의 새 계정을 클릭",
+      noMatch: "현재 필터에 맞는 계정이 없습니다",
+      sync: "로컬 동기화",
+      edit: "편집",
+    },
+    group: {
+      title: "그룹 관리",
+      name: "그룹 이름",
+    },
+    form: {
+      name: "계정 이름",
+      phone: "번호",
+      remark: "비고",
+      submit: "저장",
+      cancel: "취소",
+      createTitle: "새 클라우드 계정",
+      editTitle: "클라우드 계정 편집",
+    },
+    platform: {
+      whatsapp: "WhatsApp",
+      telegram: "Telegram",
+      line: "Line",
+    },
+    status: {
+      online: "온라인",
+      offline: "오프라인",
+      warming: "온칭 중",
+      banned: "차단됨",
+    },
+    confirm: {
+      title: "삭제할까요?",
+      desc: "이 테넌트에서 기록을 삭제합니다(되돌릴 수 없음). 그룹을 삭제하면 소속 계정은 미분류가 됩니다.",
+      yes: "삭제",
+      no: "취소",
+    },
+    loading: "불러오는 중…",
+    loadFailed: "불러오기 실패",
   },
 
   groupOps: {

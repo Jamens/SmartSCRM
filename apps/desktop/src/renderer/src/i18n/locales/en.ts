@@ -36,6 +36,7 @@ export const en: DeepString<typeof zhCN> = {
     cloudphone: "Cloud Phone",
     proxypool: "Proxy Pool",
     fingerprint: "Browser Fingerprint",
+    cloudaccount: "Cloud Account Pool",
     settings: 'Settings'
   },
   notifications: {
@@ -418,6 +419,79 @@ export const en: DeepString<typeof zhCN> = {
       yes: "Confirm delete",
       no: "Cancel",
     },
+  },
+
+  cloudaccount: {
+    title: "Cloud Account Pool",
+    desc: "Grouping + stats + batch transfer + filter + sync to local (sync only writes a local account record, per open-source red line)",
+    newGroup: "New Group",
+    newAccount: "New Cloud Account",
+    stats: {
+      total: "Total",
+      online: "Online",
+      warming: "Warming",
+      offline: "Offline",
+      banned: "Banned",
+    },
+    filter: {
+      group: "Group",
+      status: "Status",
+      keyword: "Keyword",
+      all: "All",
+    },
+    batch: {
+      selected: "{{count}} selected",
+      transfer: "Batch transfer",
+      ungrouped: "Remove from group",
+    },
+    table: {
+      title: "Cloud Accounts",
+      desc: "Select rows to batch transfer; sync to local creates a local account record",
+      name: "Name",
+      phone: "Phone",
+      platform: "Platform",
+      status: "Status",
+      group: "Group",
+      synced: "Synced",
+      syncedAt: "Synced {{at}}",
+      ungrouped: "Ungrouped",
+      empty: "No cloud accounts yet, click New Cloud Account on the top right",
+      noMatch: "No cloud accounts match the current filters",
+      sync: "Sync to local",
+      edit: "Edit",
+    },
+    group: {
+      title: "Groups",
+      name: "Group name",
+    },
+    form: {
+      name: "Account name",
+      phone: "Phone",
+      remark: "Remark",
+      submit: "Save",
+      cancel: "Cancel",
+      createTitle: "New Cloud Account",
+      editTitle: "Edit Cloud Account",
+    },
+    platform: {
+      whatsapp: "WhatsApp",
+      telegram: "Telegram",
+      line: "Line",
+    },
+    status: {
+      online: "Online",
+      offline: "Offline",
+      warming: "Warming",
+      banned: "Banned",
+    },
+    confirm: {
+      title: "Confirm delete?",
+      desc: "Removes the record from this tenant (irreversible). Deleting a group unassigns its accounts.",
+      yes: "Confirm delete",
+      no: "Cancel",
+    },
+    loading: "Loading…",
+    loadFailed: "Load failed",
   },
 
   groupOps: {

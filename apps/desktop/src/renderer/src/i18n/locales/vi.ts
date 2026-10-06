@@ -35,6 +35,7 @@ export const vi: DeepString<typeof zhCN> = {
     cloudphone: "Điện thoại đám mây",
     proxypool: "Nhóm Proxy",
     fingerprint: "Vân tay trình duyệt",
+    cloudaccount: "Nhóm tài khoản cloud",
     settings: 'Cài đặt'
   },
   notifications: {
@@ -417,6 +418,79 @@ export const vi: DeepString<typeof zhCN> = {
       yes: "Xác nhận xóa",
       no: "Hủy",
     },
+  },
+
+  cloudaccount: {
+    title: "Nhóm tài khoản cloud",
+    desc: "Nhóm + thống kê + chuyển hàng loạt + lọc + đồng bộ về local (đồng bộ chỉ ghi bản ghi tài khoản local, tuân thủ ranh giới mã nguồn mở)",
+    newGroup: "Nhóm mới",
+    newAccount: "Tài khoản cloud mới",
+    stats: {
+      total: "Tổng",
+      online: "Trực tuyến",
+      warming: "Đang nuôi",
+      offline: "Ngoại tuyến",
+      banned: "Bị khóa",
+    },
+    filter: {
+      group: "Nhóm",
+      status: "Trạng thái",
+      keyword: "Từ khóa",
+      all: "Tất cả",
+    },
+    batch: {
+      selected: "Đã chọn {{count}}",
+      transfer: "Chuyển hàng loạt",
+      ungrouped: "Gỡ khỏi nhóm",
+    },
+    table: {
+      title: "Tài khoản cloud",
+      desc: "Chọn nhiều dòng để chuyển hàng loạt; đồng bộ về local tạo bản ghi tài khoản local",
+      name: "Tên",
+      phone: "Số",
+      platform: "Nền tảng",
+      status: "Trạng thái",
+      group: "Nhóm",
+      synced: "Đồng bộ",
+      syncedAt: "Đã đồng bộ {{at}}",
+      ungrouped: "Chưa có nhóm",
+      empty: "Chưa có tài khoản, bấm Tài khoản cloud mới góc trên bên phải",
+      noMatch: "Không có tài khoản nào khớp bộ lọc",
+      sync: "Đồng bộ về local",
+      edit: "Sửa",
+    },
+    group: {
+      title: "Quản lý nhóm",
+      name: "Tên nhóm",
+    },
+    form: {
+      name: "Tên tài khoản",
+      phone: "Số",
+      remark: "Ghi chú",
+      submit: "Lưu",
+      cancel: "Hủy",
+      createTitle: "Tài khoản cloud mới",
+      editTitle: "Sửa tài khoản cloud",
+    },
+    platform: {
+      whatsapp: "WhatsApp",
+      telegram: "Telegram",
+      line: "Line",
+    },
+    status: {
+      online: "Trực tuyến",
+      offline: "Ngoại tuyến",
+      warming: "Đang nuôi",
+      banned: "Bị khóa",
+    },
+    confirm: {
+      title: "Xác nhận xóa?",
+      desc: "Xóa bản ghi khỏi tenant này (không thể hoàn tác). Xóa nhóm sẽ gỡ các tài khoản trong nhóm thành chưa có nhóm.",
+      yes: "Xác nhận xóa",
+      no: "Hủy",
+    },
+    loading: "Đang tải…",
+    loadFailed: "Tải thất bại",
   },
 
   groupOps: {

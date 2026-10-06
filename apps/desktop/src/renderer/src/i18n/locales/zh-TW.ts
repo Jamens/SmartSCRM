@@ -35,6 +35,7 @@ export const zhTW: DeepString<typeof zhCN> = {
     cloudphone: "雲手機",
     proxypool: "代理池",
     fingerprint: "瀏覽器指紋",
+    cloudaccount: "雲帳號池",
     settings: '設定'
   },
   notifications: {
@@ -411,6 +412,79 @@ export const zhTW: DeepString<typeof zhCN> = {
       yes: "確認刪除",
       no: "取消",
     },
+  },
+
+  cloudaccount: {
+    title: "雲帳號池",
+    desc: "雲號分組 + 統計 + 批次轉移 + 篩選 + 同步到本地（同步只寫本地帳號記錄，符合開源紅線）",
+    newGroup: "新建分組",
+    newAccount: "新建雲號",
+    stats: {
+      total: "總數",
+      online: "線上",
+      warming: "養號中",
+      offline: "離線",
+      banned: "已封禁",
+    },
+    filter: {
+      group: "分組",
+      status: "狀態",
+      keyword: "關鍵字",
+      all: "全部",
+    },
+    batch: {
+      selected: "已選 {{count}} 個",
+      transfer: "批次轉移",
+      ungrouped: "移出分組",
+    },
+    table: {
+      title: "雲號列表",
+      desc: "勾選多列可批次轉移；同步到本地會把雲號落成一条本地帳號記錄",
+      name: "名稱",
+      phone: "號碼",
+      platform: "平台",
+      status: "狀態",
+      group: "分組",
+      synced: "同步",
+      syncedAt: "已同步 {{at}}",
+      ungrouped: "未分組",
+      empty: "暫無雲號，點右上角新建",
+      noMatch: "目前篩選條件下沒有雲號",
+      sync: "同步到本地",
+      edit: "編輯",
+    },
+    group: {
+      title: "分組管理",
+      name: "分組名",
+    },
+    form: {
+      name: "雲號名稱",
+      phone: "綁定號碼",
+      remark: "備註",
+      submit: "儲存",
+      cancel: "取消",
+      createTitle: "新建雲號",
+      editTitle: "編輯雲號",
+    },
+    platform: {
+      whatsapp: "WhatsApp",
+      telegram: "Telegram",
+      line: "Line",
+    },
+    status: {
+      online: "線上",
+      offline: "離線",
+      warming: "養號中",
+      banned: "已封禁",
+    },
+    confirm: {
+      title: "確認刪除？",
+      desc: "將從本租戶移除該記錄（不可逆）。刪分組時掛靠的雲號會被設為未分組。",
+      yes: "確認刪除",
+      no: "取消",
+    },
+    loading: "載入中…",
+    loadFailed: "載入失敗",
   },
 
   groupOps: {
