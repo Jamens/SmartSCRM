@@ -30,6 +30,7 @@ export const ja: DeepString<typeof zhCN> = {
     ai: 'AI ワークスペース',
     script: 'スクリプトエンジン',
     groupOps: '参加/退出',
+    nurture: '相互チャット',
     settings: '設定'
   },
   notifications: {
@@ -185,6 +186,31 @@ export const ja: DeepString<typeof zhCN> = {
     faq3A: 'サイドバーのベル「メッセージセンター」。未読は強調され、開くと既読になります。',
     downloadTemplate: 'FAQ テンプレートをダウンロード',
     downloadTemplateDesc: 'CSV テンプレートをダウンロードして独自の FAQ を記入できます。',
+  },
+  nurture: {
+    title: '相互チャット',
+    desc: '複数アカウントが同じグループで再現可能なスケジュール順に発言',
+    empty: 'データなし',
+    confirm: '実行確認',
+    form: {
+      title: '新しいプラン',
+      desc: 'アカウントはプラットフォームで分割。確認後に実行',
+      name: 'プラン名',
+      createGroup: '先にグループを作成（B18 の手動ゲート経由）',
+      accounts: 'アカウント id（カンマ区切り）',
+      atPoints: '毎日の時刻（カンマ区切り）',
+      rounds: '各時刻のラウンド数',
+      perGroup: 'グループあたりアカウント数',
+      summary: 'アカウント {{accounts}} · 時刻 {{points}} · 各 {{rounds}} ラウンド',
+      create: '作成（確認待ち）',
+    },
+    list: {
+      title: 'プラン一覧',
+      desc: '確認済みのプランのみ実行されます',
+    },
+    runs: {
+      title: '発言ログ',
+    },
   },
   groupOps: {
     title: 'グループ自動参加 / 退出',

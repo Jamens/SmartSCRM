@@ -30,6 +30,7 @@ export const id: DeepString<typeof zhCN> = {
     ai: 'Ruang AI',
     script: 'Mesin Skrip',
     groupOps: 'Gabung/Kick',
+    nurture: 'Obrolan Silang',
     settings: 'Pengaturan'
   },
   notifications: {
@@ -186,6 +187,31 @@ export const id: DeepString<typeof zhCN> = {
     faq3A: 'Lonceng "Notifikasi" di bilah samping; yang belum dibaca disorot dan terbuka berarti terbaca.',
     downloadTemplate: 'Unduh templat FAQ',
     downloadTemplateDesc: 'Unduh templat CSV lalu isi FAQ Anda.',
+  },
+  nurture: {
+    title: 'Obrolan Silang',
+    desc: 'Banyak akun bergabung ke satu grup dan bicara sesuai jadwal yang dapat diulang',
+    empty: 'Belum ada data',
+    confirm: 'Konfirmasi jalan',
+    form: {
+      title: 'Rencana baru',
+      desc: 'Akun dikelompokkan per platform; jalan setelah dikonfirmasi',
+      name: 'Nama rencana',
+      createGroup: 'Buat grup dulu (via gerbang B18)',
+      accounts: 'id akun (pisah koma)',
+      atPoints: 'Waktu harian (pisah koma)',
+      rounds: 'Putaran per waktu',
+      perGroup: 'Akun per grup',
+      summary: '{{accounts}} akun · {{points}} waktu · {{rounds}} putaran per waktu',
+      create: 'Buat (menunggu konfirmasi)',
+    },
+    list: {
+      title: 'Rencana',
+      desc: 'Rencana menunggu konfirmasi tidak jalan',
+    },
+    runs: {
+      title: 'Log bicara',
+    },
   },
   groupOps: {
     title: 'Gabung / Kick Otomatis',

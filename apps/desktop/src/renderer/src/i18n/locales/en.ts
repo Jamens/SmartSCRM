@@ -31,6 +31,7 @@ export const en: DeepString<typeof zhCN> = {
     ai: 'AI Workspace',
     script: 'Script Engine',
     groupOps: 'Join/Kick',
+    nurture: 'Nurture',
     settings: 'Settings'
   },
   notifications: {
@@ -185,6 +186,31 @@ export const en: DeepString<typeof zhCN> = {
     faq3A: 'The bell "Notifications" in the sidebar; unread items are highlighted and open as read.',
     downloadTemplate: 'Download FAQ template',
     downloadTemplateDesc: 'Download a CSV template and fill in your own FAQ.',
+  },
+  nurture: {
+    title: 'Chat Nurture',
+    desc: 'Multiple accounts join one group and speak on a reproducible schedule',
+    empty: 'No data',
+    confirm: 'Confirm',
+    form: {
+      title: 'New nurture plan',
+      desc: 'Accounts are packed by platform; runs only after you confirm',
+      name: 'Plan name',
+      createGroup: 'Create the group first (via B18 manual gate)',
+      accounts: 'Account ids (comma-separated)',
+      atPoints: 'Daily time points (comma-separated)',
+      rounds: 'Rounds per point',
+      perGroup: 'Accounts per group',
+      summary: '{{accounts}} accounts · {{points}} time points · {{rounds}} round(s) each',
+      create: 'Create (pending confirm)',
+    },
+    list: {
+      title: 'Nurture plans',
+      desc: 'Pending plans need confirmation',
+    },
+    runs: {
+      title: 'Speaking log',
+    },
   },
   groupOps: {
     title: 'Auto Join / Kick',

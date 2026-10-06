@@ -30,6 +30,7 @@ export const ko: DeepString<typeof zhCN> = {
     ai: 'AI 워크스페이스',
     script: '스크립트 엔진',
     groupOps: '참여/퇴출',
+    nurture: '상호 채팅',
     settings: '설정'
   },
   notifications: {
@@ -183,6 +184,31 @@ export const ko: DeepString<typeof zhCN> = {
     faq3A: '사이드벨의 "알림 센터". 읽지 않은 항목은 강조되며 열면 읽음 처리됩니다.',
     downloadTemplate: 'FAQ 템플릿 다운로드',
     downloadTemplateDesc: 'CSV 템플릿을 내려받아 나만의 FAQ를 작성하세요.',
+  },
+  nurture: {
+    title: '상호 채팅',
+    desc: '여러 계정이 한 그룹에서 재현 가능한 일정대로 발언',
+    empty: '데이터 없음',
+    confirm: '실행 확인',
+    form: {
+      title: '새 계획',
+      desc: '계정은 플랫폼별로 묶이며, 확인 후 실행',
+      name: '계획명',
+      createGroup: '먼저 그룹 생성 (B18 수동 게이트)',
+      accounts: '계정 id (쉼표 구분)',
+      atPoints: '매일 시간 (쉼표 구분)',
+      rounds: '시간당 라운드',
+      perGroup: '그룹당 계정 수',
+      summary: '계정 {{accounts}} · 시간 {{points}} · 각 {{rounds}} 라운드',
+      create: '생성 (확인 대기)',
+    },
+    list: {
+      title: '계획 목록',
+      desc: '확인된 계획만 실행됩니다',
+    },
+    runs: {
+      title: '발언 기록',
+    },
   },
   groupOps: {
     title: '그룹 자동 참여 / 퇴출',

@@ -30,6 +30,7 @@ export const vi: DeepString<typeof zhCN> = {
     ai: 'Không gian AI',
     script: 'Động cơ kịch bản',
     groupOps: 'Tham gia/Loại',
+    nurture: 'Trò chuyện đan',
     settings: 'Cài đặt'
   },
   notifications: {
@@ -184,6 +185,31 @@ export const vi: DeepString<typeof zhCN> = {
     faq3A: 'Biểu tượng chuông "Thông báo" trên thanh bên; mục chưa đọc được làm nổi bật và mở ra là đã đọc.',
     downloadTemplate: 'Tải mẫu FAQ',
     downloadTemplateDesc: 'Tải một mẫu CSV và điền FAQ của bạn.',
+  },
+  nurture: {
+    title: 'Trò chuyện đan',
+    desc: 'Nhiều tài khoản vào cùng một nhóm và phát biểu theo lịch tái lập được',
+    empty: 'Chưa có dữ liệu',
+    confirm: 'Xác nhận chạy',
+    form: {
+      title: 'Kế hoạch mới',
+      desc: 'Tài khoản được đóng hộp theo nền tảng; chạy sau khi xác nhận',
+      name: 'Tên kế hoạch',
+      createGroup: 'Tạo nhóm trước (qua cổng B18)',
+      accounts: 'id tài khoản (phân tách bởi dấu phẩy)',
+      atPoints: 'Thời điểm hằng ngày (phân tách bởi dấu phẩy)',
+      rounds: 'Số vòng mỗi thời điểm',
+      perGroup: 'Số tài khoản mỗi nhóm',
+      summary: '{{accounts}} tài khoản · {{points}} thời điểm · {{rounds}} vòng mỗi thời điểm',
+      create: 'Tạo (chờ xác nhận)',
+    },
+    list: {
+      title: 'Kế hoạch',
+      desc: 'Kế hoạch chờ xác nhận sẽ không chạy',
+    },
+    runs: {
+      title: 'Nhật ký phát biểu',
+    },
   },
   groupOps: {
     title: 'Tự động tham gia / loại nhóm',

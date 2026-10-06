@@ -5,6 +5,7 @@ import {
   FileText,
   Layers,
   ShieldAlert,
+  Sprout,
   FolderOpen,
   HelpCircle,
   History,
@@ -51,6 +52,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/script', i18nKey: 'nav.script', icon: Layers },
   // 群自动加群/踢人（B18/B19）：带人工门，独立内容页，紧随炒群引擎。
   { path: '/group-ops', i18nKey: 'nav.groupOps', icon: ShieldAlert },
+  // 互聊养号（B9）：多账号进群按可复现日程轮流发言，带人工门。
+  { path: '/nurture', i18nKey: 'nav.nurture', icon: Sprout },
   // 日志中心（A19）：排查用的宿主能力，排在业务模块之后、设置之前。
   { path: '/logs', i18nKey: 'nav.logs', icon: FileText },
   // 设置排在最后：它是宿主能力，不是业务模块。

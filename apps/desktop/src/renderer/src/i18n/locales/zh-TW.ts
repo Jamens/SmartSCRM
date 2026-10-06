@@ -30,6 +30,7 @@ export const zhTW: DeepString<typeof zhCN> = {
     ai: 'AI 工作區',
     script: '炒群引擎',
     groupOps: '加群/踢人',
+    nurture: '互聊養號',
     settings: '設定'
   },
   notifications: {
@@ -178,6 +179,31 @@ export const zhTW: DeepString<typeof zhCN> = {
     faq3A: '側欄鈴鐺「訊息中心」，未讀會高亮，點開即已讀。',
     downloadTemplate: '下載 FAQ 範本',
     downloadTemplateDesc: '下載一個 CSV 範本，把你的 FAQ 填進去。',
+  },
+  nurture: {
+    title: '互聊養號',
+    desc: '多個帳號進同一個群，依可重現日程輪流發言',
+    empty: '暫無資料',
+    confirm: '確認執行',
+    form: {
+      title: '新建養號計畫',
+      desc: '帳號按平台裝箱；確認後才執行',
+      name: '計畫名',
+      createGroup: '需先建群（走 B18 人工門）',
+      accounts: '參與帳號 id（逗號分隔）',
+      atPoints: '每天時間點（逗號分隔）',
+      rounds: '每點輪數',
+      perGroup: '每群帳號數',
+      summary: '{{accounts}} 個帳號 · {{points}} 個時間點 · 每點 {{rounds}} 輪',
+      create: '建立計畫（待確認）',
+    },
+    list: {
+      title: '養號計畫',
+      desc: '待確認的計畫需確認後才執行',
+    },
+    runs: {
+      title: '發言記錄',
+    },
   },
   groupOps: {
     title: '群自動加群 / 踢人',

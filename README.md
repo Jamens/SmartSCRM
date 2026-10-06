@@ -184,7 +184,7 @@ HTTP 请求
 |---|---|
 | `App.tsx` | `HashRouter` + 路由表；未登录跳 `LoginPage` |
 | `layouts/AppLayout.tsx` | 整体框架：`TitleBar` + `ModuleRail` + `AccountSidebar` + 内容区 |
-| `pages/` | 业务页面：`HomePage`(工作台)、`MessagesPage`(聊天记录)、`CustomersPage`、`LabelsPage`、`AudiencesPage`、`QuickRepliesPage`、`MaterialsPage`、`TranslationPage`、`DashboardPage`(B11 报表仪表盘)、`AiWorkspacePage`(B28 AI 工作区)、`ScriptPage`(B8 炒群引擎)、`GroupOpsPage`(B18/B19 加群踢人)、`LoginPage` 等 |
+| `pages/` | 业务页面：`HomePage`(工作台)、`MessagesPage`(聊天记录)、`CustomersPage`、`LabelsPage`、`AudiencesPage`、`QuickRepliesPage`、`MaterialsPage`、`TranslationPage`、`DashboardPage`(B11 报表仪表盘)、`AiWorkspacePage`(B28 AI 工作区)、`ScriptPage`(B8 炒群引擎)、`GroupOpsPage`(B18/B19 加群踢人)、`NurturePlanPage`(B9 互聊养号)、`LoginPage` 等 |
 | `components/AccountSidebar.tsx` | 账号列表 + 增删（删除即销毁视图） |
 | `components/AccountStage.tsx` | 内嵌视图舞台：量测容器 bounds，向主进程传 `injectConfig`（含 `apiBase`） |
 | `components/AddAccountDialog.tsx` / `ModuleRail.tsx` / `TitleBar.tsx` / `ModulePlaceholder.tsx` | 新建账号弹窗 / 左侧模块导航 / 自绘标题栏 / 未实现模块占位 |

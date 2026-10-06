@@ -33,6 +33,7 @@ export const zhCN = {
     ai: 'AI 工作区',
     script: '炒群引擎',
     groupOps: '加群/踢人',
+    nurture: '互聊养号',
     settings: '设置'
   },
   notifications: {
@@ -188,6 +189,31 @@ export const zhCN = {
     faq3A: '侧栏铃铛「消息中心」，未读会高亮，点开即已读。',
     downloadTemplate: '下载 FAQ 模板',
     downloadTemplateDesc: '下载一个 CSV 模板，把你的 FAQ 填进去。',
+  },
+  nurture: {
+    title: '互聊养号',
+    desc: '多个账号进同一个群，按可复现日程轮流发言',
+    empty: '暂无数据',
+    confirm: '确认执行',
+    form: {
+      title: '新建养号计划',
+      desc: '账号按平台装箱；确认后才会执行',
+      name: '计划名',
+      createGroup: '需要先建群（走 B18 人工门）',
+      accounts: '参与账号 id（逗号分隔）',
+      atPoints: '每天时间点（逗号分隔）',
+      rounds: '每点轮数',
+      perGroup: '每群账号数',
+      summary: '{{accounts}} 个账号 · {{points}} 个时间点 · 每点 {{rounds}} 轮',
+      create: '创建计划（待确认）',
+    },
+    list: {
+      title: '养号计划',
+      desc: '待确认的计划需确认后才执行',
+    },
+    runs: {
+      title: '发言记录',
+    },
   },
   groupOps: {
     title: '群自动加群 / 踢人',
