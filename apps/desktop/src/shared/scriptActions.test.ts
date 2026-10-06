@@ -1,7 +1,7 @@
 // src/shared/scriptActions.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { ACTION_TYPES, SCRIPT_ACTIONS, failoverAccount, nextStep } from './scriptActions.ts'
+import { ACTION_TYPES, SCRIPT_ACTIONS, failoverAccount, isDelegatedAction, nextStep } from './scriptActions.ts'
 
 test('动作词表：五类齐全、post_message 作用于群', () => {
   assert.ok(ACTION_TYPES.includes('post_message'))
@@ -34,4 +34,15 @@ test('failoverAccount：切下一个、用尽返 null', () => {
   assert.equal(failoverAccount([1, 2, 3], 2), null, '最后一个失败 → 用尽')
   assert.equal(failoverAccount([1], 0), null)
   assert.equal(failoverAccount([1, null, 3], 0), 3, '跳过空账号取下一个')
+})
+
+// ===== 委托类动作（B8 剧本对接 B18/B19） =====
+
+test('isDelegatedAction：只有 join_group/kick_member 是委托类', () => {
+  assert.equal(isDelegatedAction('join_group'), true)
+  assert.equal(isDelegatedAction('kick_member'), true)
+  assert.equal(isDelegatedAction('post_message'), false, '普通动作不当场执行')
+  assert.equal(isDelegatedAction('dm_member'), false)
+  assert.equal(isDelegatedAction('react'), false)
+  assert.equal(isDelegatedAction(null), false)
 })

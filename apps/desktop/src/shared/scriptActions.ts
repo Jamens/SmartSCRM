@@ -25,6 +25,24 @@ export const SCRIPT_ACTIONS: Record<string, ScriptActionDef> = {
 
 export const ACTION_TYPES = Object.keys(SCRIPT_ACTIONS)
 
+/**
+ * 「委托类」动作：剧本自己不执行，而是**转成 B18/B19 的任务**交出去。
+ *
+ * 为什么是委托而不是直接执行：加群/踢人不可逆（加错群只能退群、踢错人找不回），
+ * 两者都带**人工门**（B18 需 confirmed、B19 需 approved，见 B18/B19 spec §5）。
+ * 剧本直接调 wa-js 就等于绕过那道门。所以口径是「委托即完成」——
+ * step 建完委托任务就算 success，并在 step 上留 ref 供回查；真正动手由那个任务走自己的门。
+ *
+ * 这份判定放在 shared：**后端调度器与驱动要用同一份**，各写一份必然漂移。
+ */
+export type DelegatedAction = 'join_group' | 'kick_member'
+export const DELEGATED_ACTIONS: DelegatedAction[] = ['join_group', 'kick_member']
+
+/** 该动作是否属于「委托类」（是→转 B18/B19 任务；否→剧本自己派发）。 */
+export function isDelegatedAction(actionType: string | null | undefined): actionType is DelegatedAction {
+  return actionType === 'join_group' || actionType === 'kick_member'
+}
+
 /** 步骤执行状态（与后端 script_task_step.status 同一词表）。 */
 export type StepStatus = 'pending' | 'sending' | 'success' | 'failed' | 'skipped'
 

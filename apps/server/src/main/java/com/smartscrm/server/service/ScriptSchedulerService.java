@@ -11,6 +11,7 @@ import com.smartscrm.server.mapper.ScriptPlaybookStepMapper;
 import com.smartscrm.server.mapper.ScriptTaskMapper;
 import com.smartscrm.server.mapper.ScriptTaskStepMapper;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -45,13 +46,31 @@ public class ScriptSchedulerService {
     private final ScriptTaskStepMapper taskStepMapper;
     private final ScriptPlaybookMapper playbookMapper;
     private final ScriptPlaybookStepMapper playbookStepMapper;
+    private final GroupJoinService groupJoinService;
+    private final GroupKickService groupKickService;
 
     public ScriptSchedulerService(ScriptTaskMapper taskMapper, ScriptTaskStepMapper taskStepMapper,
                                   ScriptPlaybookMapper playbookMapper, ScriptPlaybookStepMapper playbookStepMapper) {
+        this(taskMapper, taskStepMapper, playbookMapper, playbookStepMapper, null, null);
+    }
+
+    /**
+     * 生产构造：带 B18/B19 服务，用于委托类动作。
+     *
+     * <p>刻意标 {@code @Autowired}：本类有**两个**构造器时 Spring 无法自己选（会找无参/报
+     * "No default constructor found"）。这不是单测能覆盖的——单测用 new 直调，只有真起
+     * 容器才暴露 bean 图错误。
+     */
+    @org.springframework.beans.factory.annotation.Autowired
+    public ScriptSchedulerService(ScriptTaskMapper taskMapper, ScriptTaskStepMapper taskStepMapper,
+                                  ScriptPlaybookMapper playbookMapper, ScriptPlaybookStepMapper playbookStepMapper,
+                                  GroupJoinService groupJoinService, GroupKickService groupKickService) {
         this.taskMapper = taskMapper;
         this.taskStepMapper = taskStepMapper;
         this.playbookMapper = playbookMapper;
         this.playbookStepMapper = playbookStepMapper;
+        this.groupJoinService = groupJoinService;
+        this.groupKickService = groupKickService;
     }
 
     /** 扫描到期 task（next_run_at <= now 且 running/pending），逐个推进一格。到期口径含 heartbeat 回收。 */
@@ -97,6 +116,22 @@ public class ScriptSchedulerService {
             row.setStatus(PENDING);
             taskStepMapper.insert(row);
         }
+        // 委托类动作（join_group/kick_member）：转 B18/B19 任务，**不当场执行**（spec §6）。
+        // 「委托即完成」：委托成功即 success + 记 ref；缺参数/缺依赖判 failed（不无限重试）。
+        if ("join_group".equals(row.getActionType()) || "kick_member".equals(row.getActionType())) {
+            ScriptPlaybookStep pdef = defs.stream().filter(d -> next.equals(d.getSeq())).findFirst().orElse(null);
+            boolean ok = delegate(task, row, pdef == null ? null : pdef.getParams());
+            row.setStatus(ok ? SUCCESS : FAILED);
+            if (!ok) row.setErrorDetail("委托失败：缺参数或服务不可用");
+            taskStepMapper.updateById(row);
+            task.setCurrentStep(next);
+            task.setStatus(T_RUNNING);
+            task.setNextRunAt(nextRunAt(task, now));
+            taskMapper.updateById(task);
+            log.info("[script] task={} 委托 step={} action={} ok={} ref={}/{}",
+                taskId, next, row.getActionType(), ok, row.getRefType(), row.getRefId());
+            return true;
+        }
         row.setStatus(SENDING);
         taskStepMapper.updateById(row);
         // 断点移到该步；task 置 running、排下一轮唤醒时间
@@ -107,6 +142,79 @@ public class ScriptSchedulerService {
         // 真正的"派发"（回报桌面端执行）留到 B18/B19 + 执行器；本期到置 sending 为止。
         log.info("[script] task={} 推进到 step={} action={}", taskId, next, row.getActionType());
         return true;
+    }
+
+    /**
+     * 委托类动作（join_group/kick_member）**不当场执行**——它们转成 B18/B19 任务交出去
+     * （那两个动作不可逆、都带人工门，见 B18/B19 spec §5；剧本直接调 wa-js 等于绕过那道门）。
+     * 口径「委托即完成」：委托任务建好即 success，并在 step 上留 ref 供回查。
+     *
+     * <p>params 约定（缺省用剧本目标群）：
+     * <ul>
+     *   <li>join_group：{@code {"inviteCode":"..."}}；缺省取 task.target_chat_key</li>
+     *   <li>kick_member：{@code {"participantIds":["a@c.us"]}}（必填，没有名单就没法踢）</li>
+     * </ul>
+     * @return 是否成功委托（false=缺依赖/参数或服务未注入，调用方据此把 step 判 failed）
+     */
+    @Transactional
+    public boolean delegate(ScriptTask task, ScriptTaskStep row, String paramsJson) {
+        String at = row.getActionType();
+        if ("join_group".equals(at)) {
+            if (groupJoinService == null) return false;
+            String code = jsonString(paramsJson, "inviteCode");
+            if (code == null || code.isBlank()) code = task.getTargetChatKey();
+            if (code == null || code.isBlank()) return false;
+            var t = groupJoinService.create(task.getTenantId(), task.getAccountId(),
+                "剧本委托-" + task.getId() + "-" + row.getSeq(), code, null, null, null);
+            row.setRefType("join");
+            row.setRefId(t.getId());
+            return true;
+        }
+        if ("kick_member".equals(at)) {
+            if (groupKickService == null) return false;
+            var ids = jsonList(paramsJson, "participantIds");
+            if (ids.isEmpty()) return false; // 没有名单就没法踢
+            var t = groupKickService.create(task.getTenantId(), task.getAccountId(), task.getTargetGroupId(),
+                "剧本委托-" + task.getId() + "-" + row.getSeq(), null, ids);
+            row.setRefType("kick");
+            row.setRefId(t.getId());
+            return true;
+        }
+        return false;
+    }
+
+    /** 极简取 JSON 字符串字段（够用即可，不引 JSON 库）。 */
+    static String jsonString(String json, String key) {
+        if (json == null) return null;
+        String pat = "\"" + key + "\"";
+        int i = json.indexOf(pat);
+        if (i < 0) return null;
+        int c = json.indexOf(':', i + pat.length());
+        if (c < 0) return null;
+        int q1 = json.indexOf('"', c + 1);
+        if (q1 < 0) return null;
+        int q2 = json.indexOf('"', q1 + 1);
+        return q2 < 0 ? null : json.substring(q1 + 1, q2);
+    }
+
+    /** 极简取 JSON 字符串数组字段。 */
+    static List<String> jsonList(String json, String key) {
+        List<String> out = new ArrayList<>();
+        if (json == null) return out;
+        String pat = "\"" + key + "\"";
+        int i = json.indexOf(pat);
+        if (i < 0) return out;
+        int lb = json.indexOf('[', i);
+        if (lb < 0) return out;
+        int rb = json.indexOf(']', lb);
+        if (rb < 0) return out;
+        for (String part : json.substring(lb + 1, rb).split(",")) {
+            String s = part.trim();
+            if (s.length() >= 2 && s.startsWith("\"") && s.endsWith("\"")) {
+                out.add(s.substring(1, s.length() - 1));
+            }
+        }
+        return out;
     }
 
     /** 桌面端回报某步结果：success 推进/收轮；failed 累计 attempts、超阈值切号(failover)、用尽判 error。 */

@@ -27,6 +27,10 @@ public class ScriptTaskStep {
     private String errorCode;
     private String errorDetail;
     private String msgKey;
+    /** 委托留痕：join|kick（B18/B19），普通动作为空。 */
+    private String refType;
+    /** 委托留痕：委托出去的 B18/B19 任务 id。 */
+    private Long refId;
     private LocalDateTime createdAt;
     private LocalDateTime updatedAt;
 }
