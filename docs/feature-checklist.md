@@ -36,7 +36,7 @@
 | B5 | 聊天记录（采集入库 / 全局搜索 / 统计 / 应用内回复发送 / 会话与客户绑定） | P6 |
 | B7 | 批量群发（笛卡尔展开/随机间隔/撤回/看门狗） | P7 |
 | B6 | 群成员分析（事件流水 + 状态快照 + 导出） | P8 |
-| B8 | 炒群引擎（角色库三级/剧本/loop 调度/failover/断点续跑，调度在 Java） | P9 · **已扩 spec（2026-10-06，`docs/superpowers/specs/2026-10-06-b8-script-engine-design.md`）**：backlog 标注「大/需 spec/数据模型需另起 spec」，故先定数据模型与调度架构再分段落地——三级角色库(`script_role_category`/`script_role`/`script_action_tpl`)+剧本(`script_playbook`/`script_playbook_step`)+任务实例(`script_task`/`script_task_step`，`uk(tenant,playbook,chat_key)` 幂等、`current_step` 断点) + **Java 侧 loop 调度**（与 B7 泵在 Electron 不同，勿混）+ failover(不重置断点)+心跳超时判 error。分期 P9-1 数据层 / P9-2 调度器 / P9-3 前端；真执行接 B18/B19 |
+| B8 | 炒群引擎（角色库三级/剧本/loop 调度/failover/断点续跑，调度在 Java） | P9 · **已扩 spec（2026-10-06，`docs/superpowers/specs/2026-10-06-b8-script-engine-design.md`）**：backlog 标注「大/需 spec/数据模型需另起 spec」，故先定数据模型与调度架构再分段落地——三级角色库(`script_role_category`/`script_role`/`script_action_tpl`)+剧本(`script_playbook`/`script_playbook_step`)+任务实例(`script_task`/`script_task_step`，`uk(tenant,playbook,chat_key)` 幂等、`current_step` 断点) + **Java 侧 loop 调度**（与 B7 泵在 Electron 不同，勿混）+ failover(不重置断点)+心跳超时判 error。**P9-1 数据模型已落地（2026-10-06）**：V23 七表迁移 + 7 实体/Mapper + `shared/scriptActions.ts`(`nextStep`断点推进/`failoverAccount` 切号/动作词表) + 纯规则单测。**P9-1 余下**：后端 CRUD(Service/Controller/VO)。随后 P9-2 调度器 / P9-3 前端；真执行接 B18/B19 |
 | B9 | 互聊养号（装箱算法 + 可复现日程） | P10 |
 | B13 | 代理池管理 | P11 |
 | B14 | 浏览器指纹配置 | P11 |
