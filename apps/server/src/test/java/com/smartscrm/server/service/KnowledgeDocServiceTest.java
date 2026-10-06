@@ -44,7 +44,7 @@ class KnowledgeDocServiceTest {
         docMapper = mock(KnowledgeDocMapper.class);
         chunkMapper = mock(KnowledgeChunkMapper.class);
         qaMapper = mock(KnowledgeQaMapper.class);
-        docService = new KnowledgeDocService(docMapper, chunkMapper);
+        docService = new KnowledgeDocService(docMapper, chunkMapper, qaMapper);
         qaService = new KnowledgeQaService(qaMapper, chunkMapper);
     }
 
@@ -107,5 +107,21 @@ class KnowledgeDocServiceTest {
         when(chunkMapper.selectById(7L)).thenReturn(chunk);
         assertThrows(BizException.class, () -> qaService.createDerived(TENANT, 7L, null, null, "问", "答"));
         verify(qaMapper, never()).insert(any(KnowledgeQa.class));
+    }
+
+    // ===== 删文档：抹掉派生 QA 的来源指针但保留 QA（不销毁已确认的知识、无悬空引用） =====
+
+    @Test
+    void deleteDoc_clearsDerivedQaProvenance_butKeepsQa() {
+        com.smartscrm.server.entity.KnowledgeDoc doc = new com.smartscrm.server.entity.KnowledgeDoc();
+        doc.setId(3L);
+        doc.setTenantId(TENANT);
+        when(docMapper.selectById(3L)).thenReturn(doc);
+
+        docService.delete(TENANT, 3L);
+
+        // 抹来源指针的 update 被调用（qaMapper.update），QA 行本身不被销毁
+        verify(qaMapper).update(any(), any());
+        verify(docMapper).deleteById(3L);
     }
 }

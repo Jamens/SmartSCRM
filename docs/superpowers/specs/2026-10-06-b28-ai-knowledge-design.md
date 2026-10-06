@@ -141,3 +141,7 @@ B28 行写的"养号设置与推荐规则"——按租户一份，存推荐参�
   前端接管台不要绕过这个状态机直接改 `handling_status`。
 - **V23 已给 `chat_message` 加 `has_sensitive`**：知识库分片/QA 若将来也要过敏感词，复用那条标记口径，
   别新造一套。
+- **删文档 vs 派生 QA（2026-10-06 裁定，已实现）**：`knowledge_qa` 对文档/分片**不做级联删除**。
+  派生 QA 是**人工确认过的独立知识**，删源文档不该销毁它（破坏性且反直觉）；但留着 `chunk_id`
+  会变成指向已删分片的悬空引用。取法：删文档时把该文档派生 QA 的 `doc_id/chunk_id` **抹成 null**、
+  QA 本身保留（`source` 仍为 derived）。落在 `KnowledgeDocService.delete`。

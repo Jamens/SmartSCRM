@@ -1,11 +1,14 @@
 package com.smartscrm.server.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.KnowledgeChunk;
 import com.smartscrm.server.entity.KnowledgeDoc;
+import com.smartscrm.server.entity.KnowledgeQa;
 import com.smartscrm.server.mapper.KnowledgeChunkMapper;
 import com.smartscrm.server.mapper.KnowledgeDocMapper;
+import com.smartscrm.server.mapper.KnowledgeQaMapper;
 import java.util.ArrayList;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -24,10 +27,12 @@ public class KnowledgeDocService {
 
     private final KnowledgeDocMapper docMapper;
     private final KnowledgeChunkMapper chunkMapper;
+    private final KnowledgeQaMapper qaMapper;
 
-    public KnowledgeDocService(KnowledgeDocMapper docMapper, KnowledgeChunkMapper chunkMapper) {
+    public KnowledgeDocService(KnowledgeDocMapper docMapper, KnowledgeChunkMapper chunkMapper, KnowledgeQaMapper qaMapper) {
         this.docMapper = docMapper;
         this.chunkMapper = chunkMapper;
+        this.qaMapper = qaMapper;
     }
 
     public List<KnowledgeDoc> list(Long tenantId) {
@@ -78,6 +83,14 @@ public class KnowledgeDocService {
     @Transactional
     public void delete(Long tenantId, Long id) {
         KnowledgeDoc d = get(tenantId, id);
+        // 删除文档前先把「由本文档派生的 QA」的来源指针抹掉(doc_id/chunk_id→null)：
+        // 派生 QA 是**人工确认过的独立知识**，不该因为删了源文档就被销毁(那是破坏性且反直觉)；
+        // 但留着 chunk_id 又会变成指向已删分片的悬空引用。抹掉指针、QA 独立存活——既不丢数据也不留脏引用。
+        qaMapper.update(null, new LambdaUpdateWrapper<KnowledgeQa>()
+            .eq(KnowledgeQa::getTenantId, tenantId)
+            .eq(KnowledgeQa::getDocId, d.getId())
+            .set(KnowledgeQa::getDocId, null)
+            .set(KnowledgeQa::getChunkId, null));
         chunkMapper.delete(new LambdaQueryWrapper<KnowledgeChunk>()
             .eq(KnowledgeChunk::getDocId, d.getId()).eq(KnowledgeChunk::getTenantId, tenantId));
         docMapper.deleteById(d.getId());
