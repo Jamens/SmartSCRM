@@ -1289,7 +1289,8 @@ export const en: DeepString<typeof zhCN> = {
       loading: 'Loading…',
       loadError: 'Cannot load accounts. Please make sure the backend is running.',
       empty: 'No accounts yet. Click + at the top right to add one.',
-      deleteTitle: 'Delete account'
+      deleteTitle: 'Delete account',
+      importTitle: 'Import session credential'
     },
     add: {
       title: 'Add platform account',
@@ -1304,6 +1305,26 @@ export const en: DeepString<typeof zhCN> = {
       remarkPlaceholder: 'Usage note',
       submitting: 'Adding…',
       confirm: 'Confirm add'
+    },
+    import: {
+      title: 'Import session credential',
+      desc: 'Paste or upload the localStorage credential exported from the platform web page. After import, opening this account logs in automatically — no QR scan needed.',
+      statusLabel: 'Current status',
+      imported: 'Credential imported',
+      notImported: 'No credential imported',
+      pasteOption: 'Paste JSON',
+      fileOption: 'Upload file',
+      pastePlaceholder: 'Paste the credential JSON here, e.g. {"key":"value", ...}',
+      fileButton: 'Choose .json file',
+      fileLoaded: 'File loaded: {{name}}',
+      willAutoLogin: 'After import, the next time you open this account the session loads automatically.',
+      invalidFormat: 'Invalid credential: must be a non-empty JSON object (key-value pairs).',
+      importFailed: 'Import failed: {{msg}}',
+      clearFailed: 'Clear failed: {{msg}}',
+      importButton: 'Import & save',
+      clearButton: 'Clear credential',
+      importedTip: 'Credential saved. This account will log in automatically next time.',
+      clearedTip: 'Imported credential cleared.'
     }
   },
   labels: {

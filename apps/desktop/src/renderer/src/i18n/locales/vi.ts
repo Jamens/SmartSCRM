@@ -1285,7 +1285,8 @@ export const vi: DeepString<typeof zhCN> = {
       loading: 'Đang tải…',
       loadError: 'Không thể tải tài khoản. Vui lòng xác nhận backend đã khởi động.',
       empty: 'Chưa có tài khoản nào. Nhấn + ở góc trên bên phải để thêm.',
-      deleteTitle: 'Xóa tài khoản'
+      deleteTitle: 'Xóa tài khoản',
+      importTitle: 'Nhập thông tin xác thực phiên'
     },
     add: {
       title: 'Thêm tài khoản nền tảng',
@@ -1300,6 +1301,26 @@ export const vi: DeepString<typeof zhCN> = {
       remarkPlaceholder: 'Mô tả mục đích',
       submitting: 'Đang thêm…',
       confirm: 'Xác nhận thêm'
+    },
+    import: {
+      title: 'Nhập thông tin xác thực phiên',
+      desc: 'Dán hoặc tải lên thông tin xác thực localStorage được xuất từ trang web nền tảng. Sau khi nhập, mở tài khoản này sẽ tự động đăng nhập — không cần quét QR.',
+      statusLabel: 'Trạng thái hiện tại',
+      imported: 'Đã nhập thông tin xác thực',
+      notImported: 'Chưa nhập thông tin xác thực',
+      pasteOption: 'Dán JSON',
+      fileOption: 'Tải tệp lên',
+      pastePlaceholder: 'Dán JSON thông tin xác thực vào đây, ví dụ {"key":"value", ...}',
+      fileButton: 'Chọn tệp .json',
+      fileLoaded: 'Đã tải tệp: {{name}}',
+      willAutoLogin: 'Sau khi nhập, lần sau mở tài khoản này phiên sẽ tự động tải.',
+      invalidFormat: 'Định dạng không hợp lệ: phải là đối tượng JSON không rỗng (cặp khóa-giá trị).',
+      importFailed: 'Nhập thất bại: {{msg}}',
+      clearFailed: 'Xóa thất bại: {{msg}}',
+      importButton: 'Nhập & lưu',
+      clearButton: 'Xóa thông tin xác thực',
+      importedTip: 'Đã lưu thông tin xác thực. Lần sau mở tài khoản này sẽ tự động đăng nhập.',
+      clearedTip: 'Đã xóa thông tin xác thực đã nhập.'
     }
   },
   labels: {

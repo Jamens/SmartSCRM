@@ -1295,7 +1295,8 @@ export const ja: DeepString<typeof zhCN> = {
       loading: '読み込み中…',
       loadError: 'アカウントを読み込めません。バックエンドが起動しているか確認してください。',
       empty: 'アカウントはまだありません。右上の + をクリックして追加してください。',
-      deleteTitle: 'アカウントを削除'
+      deleteTitle: 'アカウントを削除',
+      importTitle: 'セッション資格情報をインポート'
     },
     add: {
       title: 'プラットフォームアカウントを追加',
@@ -1310,6 +1311,26 @@ export const ja: DeepString<typeof zhCN> = {
       remarkPlaceholder: '用途の説明',
       submitting: '追加中…',
       confirm: '追加を確定'
+    },
+    import: {
+      title: 'セッション資格情報をインポート',
+      desc: 'プラットフォームのウェブページからエクスポートした localStorage 資格情報を貼り付けまたはアップロードします。インポート後、このアカウントを開くと QR スキャンなしで自動ログインします。',
+      statusLabel: '現在の状態',
+      imported: '資格情報をインポート済み',
+      notImported: '資格情報は未インポート',
+      pasteOption: 'JSON を貼り付け',
+      fileOption: 'ファイルをアップロード',
+      pastePlaceholder: 'ここに資格情報の JSON を貼り付けます。例: {"key":"value", ...}',
+      fileButton: '.json ファイルを選択',
+      fileLoaded: 'ファイルを読み込みました: {{name}}',
+      willAutoLogin: 'インポート後、次回このアカウントを開くとセッションが自動的に読み込まれます。',
+      invalidFormat: '資格情報の形式が正しくありません: 非空の JSON オブジェクト (キーと値のペア) である必要があります。',
+      importFailed: 'インポート失敗: {{msg}}',
+      clearFailed: '削除失敗: {{msg}}',
+      importButton: 'インポートして保存',
+      clearButton: '資格情報を削除',
+      importedTip: '資格情報を保存しました。次回このアカウントを開くと自動ログインします。',
+      clearedTip: 'インポートした資格情報を削除しました。'
     }
   },
   labels: {

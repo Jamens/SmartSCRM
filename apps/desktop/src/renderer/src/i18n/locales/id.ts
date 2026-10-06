@@ -1300,7 +1300,8 @@ export const id: DeepString<typeof zhCN> = {
       loading: 'Memuat…',
       loadError: 'Tidak dapat memuat akun. Pastikan backend sudah berjalan.',
       empty: 'Belum ada akun. Klik + di kanan atas untuk menambah.',
-      deleteTitle: 'Hapus akun'
+      deleteTitle: 'Hapus akun',
+      importTitle: 'Impor kredensial sesi'
     },
     add: {
       title: 'Tambah akun platform',
@@ -1315,6 +1316,26 @@ export const id: DeepString<typeof zhCN> = {
       remarkPlaceholder: 'Keterangan kegunaan',
       submitting: 'Menambahkan…',
       confirm: 'Konfirmasi tambah'
+    },
+    import: {
+      title: 'Impor kredensial sesi',
+      desc: 'Tempel atau unggah kredensial localStorage yang diekspor dari halaman web platform. Setelah diimpor, membuka akun ini akan login otomatis — tidak perlu pindai QR.',
+      statusLabel: 'Status saat ini',
+      imported: 'Kredensial diimpor',
+      notImported: 'Belum ada kredensial diimpor',
+      pasteOption: 'Tempel JSON',
+      fileOption: 'Unggah berkas',
+      pastePlaceholder: 'Tempel JSON kredensial di sini, mis. {"key":"value", ...}',
+      fileButton: 'Pilih berkas .json',
+      fileLoaded: 'Berkas dimuat: {{name}}',
+      willAutoLogin: 'Setelah diimpor, sesi akan dimuat otomatis saat Anda membuka akun ini berikutnya.',
+      invalidFormat: 'Format kredensial tidak valid: harus berupa objek JSON non-kosong (pasangan kunci-nilai).',
+      importFailed: 'Impor gagal: {{msg}}',
+      clearFailed: 'Penghapusan gagal: {{msg}}',
+      importButton: 'Impor & simpan',
+      clearButton: 'Hapus kredensial',
+      importedTip: 'Kredensial disimpan. Akun ini akan login otomatis saat berikutnya dibuka.',
+      clearedTip: 'Kredensial yang diimpor telah dihapus.'
     }
   },
   labels: {

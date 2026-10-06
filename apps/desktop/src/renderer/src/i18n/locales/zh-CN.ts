@@ -1268,7 +1268,8 @@ export const zhCN = {
       loading: '加载中…',
       loadError: '无法加载账号，请确认后端已启动',
       empty: '还没有账号，点击右上角 + 添加',
-      deleteTitle: '删除账号'
+      deleteTitle: '删除账号',
+      importTitle: '导入会话凭据'
     },
     add: {
       title: '新增平台账号',
@@ -1283,6 +1284,26 @@ export const zhCN = {
       remarkPlaceholder: '用途说明',
       submitting: '添加中…',
       confirm: '确认添加'
+    },
+    import: {
+      title: '导入会话凭据',
+      desc: '粘贴或上传从平台网页导出的 localStorage 凭据，导入后打开该账号将自动登录，无需扫码。',
+      statusLabel: '当前状态',
+      imported: '已导入凭据',
+      notImported: '尚未导入凭据',
+      pasteOption: '粘贴 JSON',
+      fileOption: '上传文件',
+      pastePlaceholder: '在此粘贴凭据 JSON，例如 {"key":"value", ...}',
+      fileButton: '选择 .json 文件',
+      fileLoaded: '已读取文件：{{name}}',
+      willAutoLogin: '导入成功后，下次打开该账号将自动载入会话。',
+      invalidFormat: '凭据格式不正确：必须是非空的 JSON 对象（键值对）。',
+      importFailed: '导入失败：{{msg}}',
+      clearFailed: '清除失败：{{msg}}',
+      importButton: '导入并保存',
+      clearButton: '清除凭据',
+      importedTip: '凭据已保存，下次打开该账号将自动登录。',
+      clearedTip: '已清除导入的凭据。'
     }
   },
   labels: {

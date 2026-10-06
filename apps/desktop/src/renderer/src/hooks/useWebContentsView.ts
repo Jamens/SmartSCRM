@@ -9,6 +9,8 @@ export interface ActiveView {
   channel?: string
   /** Config forwarded to `__SCRM_INJECT__`. */
   injectConfig?: Record<string, unknown>
+  /** 导入的会话凭据（localStorage JSON 原文），非空时主进程在 partition 内注入免扫码登录。 */
+  seedCredential?: string
 }
 
 /**
@@ -47,11 +49,11 @@ export function useWebContentsView(
       return
     }
     let cancelled = false
-    const { viewId, url, channel, injectConfig } = active
+    const { viewId, url, channel, injectConfig, seedCredential } = active
 
     void (async () => {
       setLoading(true)
-      await viewService.create(viewId, url)
+      await viewService.create(viewId, url, seedCredential ? { seedCredential } : undefined)
       if (cancelled) return
       await viewService.show(viewId)
       boundsRef.current()
@@ -81,7 +83,7 @@ export function useWebContentsView(
       // 舞台一消失（切路由、退出登录）就必须主动收起，否则它会留在原坐标盖住别的页面。
       void viewService.hideAll()
     }
-  }, [active?.viewId, active?.url, active?.channel, containerRef])
+  }, [active?.viewId, active?.url, active?.channel, active?.seedCredential, containerRef])
 
   // 对话框这类浮层打开时收起视图，浮层完全消失后再把视图放回舞台原位。
   const activeViewId = active?.viewId

@@ -21,7 +21,10 @@ public class PlatformAccountService {
     public List<PlatformAccount> list(Long tenantId) {
         return mapper.selectList(new LambdaQueryWrapper<PlatformAccount>()
             .eq(PlatformAccount::getTenantId, tenantId)
-            .orderByAsc(PlatformAccount::getId));
+            .orderByAsc(PlatformAccount::getId))
+            .stream()
+            .peek(this::withHasFlag)
+            .toList();
     }
 
     public PlatformAccount create(Long tenantId, PlatformAccount body) {
@@ -35,7 +38,7 @@ public class PlatformAccountService {
         }
         body.setStatus(body.getStatus() == null ? 0 : body.getStatus());
         mapper.insert(body);
-        return mapper.selectById(body.getId());
+        return withHasFlag(mapper.selectById(body.getId()));
     }
 
     public PlatformAccount update(Long tenantId, Long id, PlatformAccount body) {
@@ -46,7 +49,31 @@ public class PlatformAccountService {
         existing.setAvatar(body.getAvatar());
         existing.setRemark(body.getRemark());
         mapper.updateById(existing);
-        return mapper.selectById(id);
+        return withHasFlag(mapper.selectById(id));
+    }
+
+    /** 导入会话凭据（免扫码登录用）。仅覆盖凭据字段，不动其它配置。 */
+    public void importCredential(Long tenantId, Long id, String credential) {
+        PlatformAccount existing = requireOwned(tenantId, id);
+        existing.setSessionCredential(credential);
+        mapper.updateById(existing);
+    }
+
+    /** 清除已导入的会话凭据。 */
+    public void clearCredential(Long tenantId, Long id) {
+        PlatformAccount existing = requireOwned(tenantId, id);
+        existing.setSessionCredential(null);
+        mapper.updateById(existing);
+    }
+
+    /** 读取凭据原文（仅专门的 GET /credential 使用，列表已忽略）。 */
+    public String getCredential(Long tenantId, Long id) {
+        return requireOwned(tenantId, id).getSessionCredential();
+    }
+
+    private PlatformAccount withHasFlag(PlatformAccount account) {
+        account.setHasCredential(account.getSessionCredential() != null);
+        return account;
     }
 
     public void delete(Long tenantId, Long id) {

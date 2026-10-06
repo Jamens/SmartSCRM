@@ -1,11 +1,12 @@
 import { useEffect, useState } from 'react'
 import { useTranslation } from 'react-i18next'
-import { Plus, Trash2 } from 'lucide-react'
+import { KeyRound, Plus, Trash2 } from 'lucide-react'
 import { platformOf } from '@/lib/platform'
 import { isElectron } from '@/services/viewService'
 import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import AddAccountDialog from '@/components/AddAccountDialog'
+import ImportCredentialDialog from '@/components/ImportCredentialDialog'
 import {
   useAccounts,
   useDeleteAccount,
@@ -20,6 +21,7 @@ export default function AccountSidebar(): React.JSX.Element {
   const select = useSelectionStore((s) => s.select)
   const remove = useDeleteAccount()
   const [dialogOpen, setDialogOpen] = useState(false)
+  const [importTarget, setImportTarget] = useState<PlatformAccount | null>(null)
 
   const accounts = data ?? []
 
@@ -99,6 +101,16 @@ export default function AccountSidebar(): React.JSX.Element {
                   }`}
                 />
                 <button
+                  className="hidden shrink-0 rounded p-0.5 text-muted-foreground hover:text-primary group-hover:block"
+                  onClick={(e) => {
+                    e.stopPropagation()
+                    setImportTarget(account)
+                  }}
+                  title={t('account.sidebar.importTitle')}
+                >
+                  <KeyRound className="size-3.5" />
+                </button>
+                <button
                   className="hidden shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive group-hover:block"
                   onClick={(e) => {
                     e.stopPropagation()
@@ -119,6 +131,17 @@ export default function AccountSidebar(): React.JSX.Element {
         onOpenChange={setDialogOpen}
         onCreated={() => undefined}
       />
+
+      {importTarget && (
+        <ImportCredentialDialog
+          key={importTarget.id}
+          open={!!importTarget}
+          onOpenChange={(o) => {
+            if (!o) setImportTarget(null)
+          }}
+          account={importTarget}
+        />
+      )}
     </aside>
   )
 }

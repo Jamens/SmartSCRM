@@ -6,6 +6,7 @@ import com.smartscrm.server.security.AuthPrincipal;
 import com.smartscrm.server.service.PlatformAccountService;
 import com.smartscrm.server.web.dto.PlatformAccountRequest;
 import jakarta.validation.Valid;
+import jakarta.validation.constraints.NotBlank;
 import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
@@ -66,6 +67,30 @@ public class PlatformAccountController {
         return ApiResponse.ok(null);
     }
 
+    @PostMapping("/{id}/credential")
+    @PreAuthorize("hasAuthority('account:write')")
+    public ApiResponse<Void> importCredential(@AuthenticationPrincipal AuthPrincipal principal,
+                                             @PathVariable Long id,
+                                             @Valid @RequestBody CredentialRequest req) {
+        service.importCredential(principal.tenantId(), id, req.credential());
+        return ApiResponse.ok(null);
+    }
+
+    @DeleteMapping("/{id}/credential")
+    @PreAuthorize("hasAuthority('account:write')")
+    public ApiResponse<Void> clearCredential(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
+        service.clearCredential(principal.tenantId(), id);
+        return ApiResponse.ok(null);
+    }
+
+    @GetMapping("/{id}/credential")
+    @PreAuthorize("hasAuthority('account:read')")
+    public ApiResponse<CredentialPayload> getCredential(@AuthenticationPrincipal AuthPrincipal principal,
+                                                       @PathVariable Long id) {
+        // 凭据原文只经此专用通道下发；列表/`@JsonIgnoreProperties` 已保证普通读取不泄露。
+        return ApiResponse.ok(new CredentialPayload(service.getCredential(principal.tenantId(), id)));
+    }
+
     private PlatformAccount toEntity(PlatformAccountRequest req) {
         PlatformAccount account = new PlatformAccount();
         account.setPlatformType(req.platformType());
@@ -78,5 +103,11 @@ public class PlatformAccountController {
     }
 
     public record StatusRequest(Integer status) {
+    }
+
+    public record CredentialRequest(@NotBlank String credential) {
+    }
+
+    public record CredentialPayload(String credential) {
     }
 }

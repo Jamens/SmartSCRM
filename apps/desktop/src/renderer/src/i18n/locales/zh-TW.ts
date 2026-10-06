@@ -1258,7 +1258,8 @@ export const zhTW: DeepString<typeof zhCN> = {
       loading: '載入中…',
       loadError: '無法載入帳號，請確認後端已啟動',
       empty: '還沒有帳號，點擊右上角 + 新增',
-      deleteTitle: '刪除帳號'
+      deleteTitle: '刪除帳號',
+      importTitle: '匯入會話憑證'
     },
     add: {
       title: '新增平台帳號',
@@ -1273,6 +1274,26 @@ export const zhTW: DeepString<typeof zhCN> = {
       remarkPlaceholder: '用途說明',
       submitting: '新增中…',
       confirm: '確認新增'
+    },
+    import: {
+      title: '匯入會話憑證',
+      desc: '貼上或上傳從平台網頁匯出的 localStorage 憑證，匯入後開啟該帳號將自動登入，無需掃描 QR Code。',
+      statusLabel: '目前狀態',
+      imported: '已匯入憑證',
+      notImported: '尚未匯入憑證',
+      pasteOption: '貼上 JSON',
+      fileOption: '上傳檔案',
+      pastePlaceholder: '在此貼上憑證 JSON，例如 {"key":"value", ...}',
+      fileButton: '選擇 .json 檔案',
+      fileLoaded: '已讀取檔案：{{name}}',
+      willAutoLogin: '匯入成功後，下次開啟該帳號將自動載入會話。',
+      invalidFormat: '憑證格式不正確：必須是非空的 JSON 物件（鍵值對）。',
+      importFailed: '匯入失敗：{{msg}}',
+      clearFailed: '清除失敗：{{msg}}',
+      importButton: '匯入並儲存',
+      clearButton: '清除憑證',
+      importedTip: '憑證已儲存，下次開啟該帳號將自動登入。',
+      clearedTip: '已清除匯入的憑證。'
     }
   },
   labels: {

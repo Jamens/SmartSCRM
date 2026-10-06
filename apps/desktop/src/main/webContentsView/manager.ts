@@ -11,6 +11,10 @@ interface ManagedView {
   url: string
   host: string
   visible: boolean
+  /** 导入的会话凭据（localStorage JSON 原文）；非空时在 dom-ready 注入 partition 后重载一次。 */
+  seedCredential: string | null
+  /** 凭据注入标记：只在每次视图生命周期内注入一次，避免 dom-ready（重载会再触发）无限循环。 */
+  seeded: boolean
 }
 
 interface InjectEntry {
@@ -47,9 +51,14 @@ export class WebContentsViewManager {
     return getMainWindow()
   }
 
-  createView(viewId: string, url: string): boolean {
-    if (this.views.has(viewId)) {
+  createView(viewId: string, url: string, seedCredential?: string): boolean {
+    const existed = this.views.has(viewId)
+    if (existed) {
+      const managed = this.views.get(viewId)!
+      // 凭据可能在视图已存在后才导入：刷新一次待注入的凭据；若页面已就绪则立即注入并重载。
+      if (seedCredential) managed.seedCredential = seedCredential
       this.showView(viewId)
+      if (seedCredential && !managed.seeded) void this.maybeSeed(viewId)
       return false
     }
     const win = this.hostWindow()
@@ -83,6 +92,9 @@ export class WebContentsViewManager {
       // 不清掉"已装 wa-js"记录，msgBridge 重挂时会跳过 wa 段，桥对着不存在的 Store 采不到东西。
       // （实测 Electron 39 的 WebContentsView 上 did-navigate 对 reload 不触发，dom-ready 才是可靠信号。）
       forgetPageBundleCache(view.webContents.id)
+      // 先注入凭据：localStorage 写好并 reload 后，下一轮 dom-ready 里 seeded 已为 true，
+      // 不会再重复注入；若本次不需注入（无凭据 / 已注入过），则直接走下面的 runInject。
+      void this.maybeSeed(viewId)
       void this.runInject(viewId)
     })
 
@@ -90,12 +102,50 @@ export class WebContentsViewManager {
     view.setBounds(HIDDEN)
     view.setVisible(false)
 
-    this.views.set(viewId, { view, url, host: safeHost(url), visible: false })
+    this.views.set(viewId, {
+      view,
+      url,
+      host: safeHost(url),
+      visible: false,
+      seedCredential: seedCredential ?? null,
+      seeded: false
+    })
     view.webContents.loadURL(url)
     // 新视图的缩放要立刻对齐主窗口，否则第一帧会按默认 1.0 渲染，和已开着的视图比例不一致。
     this.syncZoomToWindow()
     this.emit(viewId, 'created', url)
     return true
+  }
+
+  /**
+   * B29 会话凭据注入：把导出的 localStorage JSON 写进视图的持久化 partition（与页面同源），
+   * 再 reload 一次让平台脚本读到已登录态。只在首次 dom-ready 跑一次（seeded 守卫），避免
+   * reload 触发的下一轮 dom-ready 无限循环。凭据非法 / 为空则标 seeded 跳过，不再重试。
+   */
+  private async maybeSeed(viewId: string): Promise<void> {
+    const managed = this.views.get(viewId)
+    if (!managed || managed.seeded || !managed.seedCredential) return
+    try {
+      const parsed = JSON.parse(managed.seedCredential)
+      if (
+        parsed &&
+        typeof parsed === 'object' &&
+        !Array.isArray(parsed) &&
+        Object.keys(parsed).length > 0
+      ) {
+        const code =
+          '(function(){var s=' +
+          JSON.stringify(parsed) +
+          ';for(var k in s){try{localStorage.setItem(k,String(s[k]));}catch(e){}}})();'
+        await managed.view.webContents.executeJavaScript(code, true)
+        managed.seeded = true
+        managed.view.webContents.reload()
+        return
+      }
+    } catch {
+      /* 凭据格式损坏：标记已处理，避免反复重试 */
+    }
+    managed.seeded = true
   }
 
   showView(viewId: string): void {

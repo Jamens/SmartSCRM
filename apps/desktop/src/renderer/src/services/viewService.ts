@@ -18,7 +18,8 @@ const noVal = <T>(v: T): (() => Promise<T>) => () => Promise.resolve(v)
 
 /** Browser fallback so the renderer still runs outside Electron during plain `vite` dev. */
 const fallback: ViewApi = {
-  create: noVal(false),
+  create: (_viewId: string, _url: string, _options?: { seedCredential?: string }): Promise<boolean> =>
+    Promise.resolve(false),
   destroy: noop,
   show: noop,
   hideAll: noop,

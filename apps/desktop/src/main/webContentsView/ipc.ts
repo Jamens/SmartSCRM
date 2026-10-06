@@ -55,7 +55,9 @@ function forwardToHost(viewId: string, channel: string, data: unknown): void {
 }
 
 export function registerViewIpc(): void {
-  ipcMain.handle('wcv-create', (_e, viewId: string, url: string) => viewManager.createView(viewId, url))
+  ipcMain.handle('wcv-create', (_e, viewId: string, url: string, seedCredential?: string) =>
+    viewManager.createView(viewId, url, seedCredential)
+  )
   ipcMain.handle('wcv-destroy', (_e, viewId: string) => viewManager.destroyView(viewId))
   ipcMain.handle('wcv-show', (_e, viewId: string) => viewManager.showView(viewId))
   ipcMain.handle('wcv-hide-all', () => viewManager.hideAll())

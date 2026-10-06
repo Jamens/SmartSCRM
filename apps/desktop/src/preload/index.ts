@@ -150,8 +150,12 @@ const scrm = {
     clear: (): Promise<void> => ipcRenderer.invoke('logs:clear')
   },
   view: {
-    create: (viewId: string, url: string): Promise<boolean> =>
-      ipcRenderer.invoke('wcv-create', viewId, url),
+    create: (
+      viewId: string,
+      url: string,
+      options?: { seedCredential?: string }
+    ): Promise<boolean> =>
+      ipcRenderer.invoke('wcv-create', viewId, url, options?.seedCredential),
     destroy: (viewId: string): Promise<void> => ipcRenderer.invoke('wcv-destroy', viewId),
     show: (viewId: string): Promise<void> => ipcRenderer.invoke('wcv-show', viewId),
     hideAll: (): Promise<void> => ipcRenderer.invoke('wcv-hide-all'),

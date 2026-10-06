@@ -10,7 +10,7 @@ import { API_BASE } from '@/lib/http'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import ConversationSettingsDialog from '@/components/translation/ConversationSettingsDialog'
-import type { PlatformAccount } from '@/stores/accounts'
+import { useAccountCredential, type PlatformAccount } from '@/stores/accounts'
 
 interface Props {
   account: PlatformAccount | null
@@ -28,6 +28,10 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
   const embedUrl = meta?.embedUrl ?? null
   const canInject = isElectron && embedUrl && meta?.channel && injectOn
 
+  // B29：仅当该账号已导入凭据时，才按需拉取凭据原文，用于打开视图时注入 partition 免扫码登录。
+  const { data: cred } = useAccountCredential(account?.id ?? null, account?.hasCredential === true)
+  const seedCredential = cred?.credential ?? undefined
+
   const active: ActiveView | null =
     account && embedUrl
       ? {
@@ -39,7 +43,8 @@ export default function AccountStage({ account }: Props): React.JSX.Element {
             inviteCode,
             apiBase: API_BASE,
             previewEnabled: true
-          }
+          },
+          seedCredential
         }
       : null
   const { loading, reload } = useWebContentsView(containerRef, active)

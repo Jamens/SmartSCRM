@@ -1283,7 +1283,8 @@ export const ko: DeepString<typeof zhCN> = {
       loading: '로딩 중…',
       loadError: '계정을 불러올 수 없습니다. 백엔드가 실행 중인지 확인하세요.',
       empty: '아직 계정이 없습니다. 오른쪽 위 + 를 클릭해 추가하세요.',
-      deleteTitle: '계정 삭제'
+      deleteTitle: '계정 삭제',
+      importTitle: '세션 자격 증명 가져오기'
     },
     add: {
       title: '플랫폼 계정 추가',
@@ -1298,6 +1299,26 @@ export const ko: DeepString<typeof zhCN> = {
       remarkPlaceholder: '용도 설명',
       submitting: '추가 중…',
       confirm: '추가 확인'
+    },
+    import: {
+      title: '세션 자격 증명 가져오기',
+      desc: '플랫폼 웹페이지에서 내보낸 localStorage 자격 증명을 붙여넣거나 업로드하세요. 가져오기 후 이 계정을 열면 QR 스캔 없이 자동으로 로그인됩니다.',
+      statusLabel: '현재 상태',
+      imported: '자격 증명 가져옴',
+      notImported: '자격 증명 미가져옴',
+      pasteOption: 'JSON 붙여넣기',
+      fileOption: '파일 업로드',
+      pastePlaceholder: '여기에 자격 증명 JSON을 붙여넣으세요. 예: {"key":"value", ...}',
+      fileButton: '.json 파일 선택',
+      fileLoaded: '파일 로드됨: {{name}}',
+      willAutoLogin: '가져오기 성공 후, 다음에 이 계정을 열면 세션이 자동으로 로드됩니다.',
+      invalidFormat: '자격 증명 형식이 올바르지 않습니다: 비어 있지 않은 JSON 객체(키-값 쌍)여야 합니다.',
+      importFailed: '가져오기 실패: {{msg}}',
+      clearFailed: '삭제 실패: {{msg}}',
+      importButton: '가져오기 및 저장',
+      clearButton: '자격 증명 삭제',
+      importedTip: '자격 증명이 저장되었습니다. 다음에 이 계정을 열면 자동 로그인됩니다.',
+      clearedTip: '가져온 자격 증명을 삭제했습니다.'
     }
   },
   labels: {
