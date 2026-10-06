@@ -45,8 +45,8 @@
 | B12 | 支付/套餐门控（模拟支付宝） | P13 |
 | B16 | 会话级全局设置（内嵌聊天页的会话设置面） | P7 前置 |
 | B17 | 素材·按钮消息（interactive buttons）+ 个人/公共/联系人归属分层 | P7 |
-| B18 | 群自动加群（任务表单 + 批量加入执行链） | P9 |
-| B19 | 群自动踢人（规则表单 + 执行链） | P9 |
+| B18 | 群自动加群（任务表单 + 批量加入执行链） | P9 · **已扩 spec（2026-10-06，`docs/superpowers/specs/2026-10-06-b18-b19-group-ops-design.md`）**：backlog 标「需 spec/入群方案需另起 spec」。**引擎硬约束**——wa-js 只有 `join(inviteCode)`，**无「按群名搜索加入」API**（市面工具走改协议包，非正路），故输入只能是**邀请码清单导入**。已探明能力：join/addParticipants/removeParticipants/canRemove/revokeInviteCode/getGroupInfoFromInviteCode/leave。**加群与踢人一律人工门**（B18 需 confirmed、B19 需 approved，门在执行链入口再判一次）。分期 P9-4 数据层 / P9-5 执行链 / P9-6 前端 |
+| B19 | 群自动踢人（规则表单 + 执行链） | P9 · **已并入 B18/B19 spec（同上文件）**：规则出**待踢名单** → 人工审阅确认 → `canRemove` 校验（false 标 skipped 不硬踢，防踢超管这类不可逆事故）→ `removeParticipants`。join/kick 不可逆，故**不自动重试**、全链人工门 |
 | B20 | 本地自动化任务面板（批量关闭 / 批量删除 / 状态总览） | P10 |
 | B21 | 云账号池（分组 / 统计卡 / 批量转移 / 筛选 / 同步到本地） | P12 |
 | B22 | 团队 / 部门 / 子账号 + 客户绑定客服（坐席归属） | 🟡 **管理端部分交付（2026-10-04）**：V14 建 `sys_team`/`sys_user_team`；`AdminTeamController` + `AdminUserController`（团队树 CRUD、用户 CRUD、`{id}/roles` 与 `{id}/teams` 分配、`{id}/status` 启停、删除）+ 管理端 `TeamList`/`UserList`。**仍缺**：部门三字段 `type`(NORMAL/DC)/`isPushTicket`/`powers`——`SysTeam` 现只有 `parentId`/`name`/`leaderId`/`scope`/`status`；子账号**端口上限**（现只有租户级 `tenant.seat_limit`，V15）；**重置密码**（`AdminUserController` 无该端点）。客户绑定客服已由 B28 的 `chat_conversation.assignee_id` 部分覆盖 |
