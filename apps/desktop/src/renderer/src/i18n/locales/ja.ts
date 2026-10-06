@@ -14,6 +14,7 @@ export const ja: DeepString<typeof zhCN> = {
     nextPage: '次へ'
   },
   nav: {
+    home: 'ホーム',
     workspace: 'ワークスペース',
     dashboard: 'ダッシュボード',
     messages: 'チャット履歴',
@@ -657,6 +658,7 @@ export const ja: DeepString<typeof zhCN> = {
     conversations: '会話数',
     activeConversations: 'アクティブ {{count}}',
     tasks: '一括送信タスク',
+    messages: 'メッセージ総数',
     runningTasks: '実行中 {{count}}',
     lastDays: '直近 {{count}}日',
     trend: 'メッセージ推移',
@@ -1560,5 +1562,17 @@ export const ja: DeepString<typeof zhCN> = {
     tencentSecretLabel: 'SecretKey',
     appIdPlaceholderTencent: '例：AKID****************',
     save: '保存'
+  },
+  overview: {
+    title: 'ホーム概要',
+    plan: 'プラン情報',
+    defaultPlan: 'スタンダード',
+    quickEntry: 'クイックアクセス',
+    quickEntryDesc: '各モジュールへ移動',
+    platform: 'オンラインプラットフォーム',
+    usage: '利用量',
+    seats: 'シート',
+    aiTokens: 'AI 利用量',
+    translationChars: '翻訳文字数'
   }
 }

@@ -14,6 +14,7 @@ export const ko: DeepString<typeof zhCN> = {
     nextPage: '다음'
   },
   nav: {
+    home: '홈',
     workspace: '작업 공간',
     dashboard: '대시보드',
     messages: '채팅 기록',
@@ -655,6 +656,7 @@ export const ko: DeepString<typeof zhCN> = {
     conversations: '대화 수',
     activeConversations: '활성 {{count}}',
     tasks: '일괄 발송 작업',
+    messages: '총 메시지',
     runningTasks: '실행 중 {{count}}',
     lastDays: '최근 {{count}}일',
     trend: '메시지 추이',
@@ -1545,5 +1547,17 @@ export const ko: DeepString<typeof zhCN> = {
     tencentSecretLabel: 'SecretKey',
     appIdPlaceholderTencent: '예: AKID****************',
     save: '저장'
+  },
+  overview: {
+    title: '홈 개요',
+    plan: '플랜 정보',
+    defaultPlan: '스탠다드',
+    quickEntry: '빠른 메뉴',
+    quickEntryDesc: '모듈로 이동',
+    platform: '플랫폼 온라인 현황',
+    usage: '사용량',
+    seats: '시트',
+    aiTokens: 'AI 사용량',
+    translationChars: '번역 문자 수'
   }
 }

@@ -17,6 +17,7 @@ export const zhCN = {
     nextPage: '下一页'
   },
   nav: {
+    home: '首页',
     workspace: '工作台',
     dashboard: '仪表盘',
     messages: '聊天记录',
@@ -660,6 +661,7 @@ export const zhCN = {
     conversations: '会话总数',
     activeConversations: '活跃 {{count}}',
     tasks: '群发任务',
+    messages: '消息总数',
     runningTasks: '运行中 {{count}}',
     lastDays: '近 {{count}} 天',
     trend: '消息趋势',
@@ -1526,6 +1528,18 @@ export const zhCN = {
     tencentSecretLabel: 'SecretKey',
     appIdPlaceholderTencent: '例：AKID****************',
     save: '保存'
+  },
+  overview: {
+    title: '首页概览',
+    plan: '套餐信息',
+    defaultPlan: '标准版',
+    quickEntry: '快捷入口',
+    quickEntryDesc: '一键进入各业务模块',
+    platform: '平台在线盘点',
+    usage: '用量统计',
+    seats: '席位',
+    aiTokens: 'AI 用量',
+    translationChars: '翻译用量'
   }
 } as const
 

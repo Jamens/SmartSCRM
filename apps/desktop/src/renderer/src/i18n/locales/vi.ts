@@ -14,6 +14,7 @@ export const vi: DeepString<typeof zhCN> = {
     nextPage: 'Sau'
   },
   nav: {
+    home: 'Trang chủ',
     workspace: 'Không gian làm việc',
     dashboard: 'Bảng điều khiển',
     messages: 'Lịch sử trò chuyện',
@@ -656,6 +657,7 @@ export const vi: DeepString<typeof zhCN> = {
     conversations: 'Hội thoại',
     activeConversations: '{{count}} hoạt động',
     tasks: 'Tác vụ gửi nhóm',
+    messages: 'Tổng tin nhắn',
     runningTasks: '{{count}} đang chạy',
     lastDays: '{{count}} ngày',
     trend: 'Xu hướng tin nhắn',
@@ -1551,5 +1553,17 @@ export const vi: DeepString<typeof zhCN> = {
     tencentSecretLabel: 'SecretKey',
     appIdPlaceholderTencent: 'Ví dụ: AKID****************',
     save: 'Lưu'
+  },
+  overview: {
+    title: 'Tổng quan trang chủ',
+    plan: 'Thông tin gói',
+    defaultPlan: 'Tiêu chuẩn',
+    quickEntry: 'Truy cập nhanh',
+    quickEntryDesc: 'Mở mô-đun bất kỳ',
+    platform: 'Nền tảng trực tuyến',
+    usage: 'Mức sử dụng',
+    seats: 'Ghế',
+    aiTokens: 'Token AI',
+    translationChars: 'Ký tự dịch'
   }
 }

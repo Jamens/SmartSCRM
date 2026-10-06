@@ -15,6 +15,7 @@ export const en: DeepString<typeof zhCN> = {
     nextPage: 'Next'
   },
   nav: {
+    home: 'Home',
     workspace: 'Workspace',
     dashboard: 'Dashboard',
     messages: 'Messages',
@@ -657,6 +658,7 @@ export const en: DeepString<typeof zhCN> = {
     conversations: 'Conversations',
     activeConversations: '{{count}} active',
     tasks: 'Batch tasks',
+    messages: 'Messages',
     runningTasks: '{{count}} running',
     lastDays: 'Last {{count}}d',
     trend: 'Message trend',
@@ -1554,5 +1556,17 @@ export const en: DeepString<typeof zhCN> = {
     tencentSecretLabel: 'SecretKey',
     appIdPlaceholderTencent: 'e.g. AKID****************',
     save: 'Save'
+  },
+  overview: {
+    title: 'Overview',
+    plan: 'Plan',
+    defaultPlan: 'Standard',
+    quickEntry: 'Quick Entry',
+    quickEntryDesc: 'Jump to any module',
+    platform: 'Platform Online',
+    usage: 'Usage',
+    seats: 'Seats',
+    aiTokens: 'AI Tokens',
+    translationChars: 'Translation Chars'
   }
 }

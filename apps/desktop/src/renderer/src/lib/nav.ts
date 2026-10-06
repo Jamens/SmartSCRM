@@ -14,6 +14,7 @@ import {
   Globe,
   HelpCircle,
   History,
+  Home,
   Languages,
   LayoutDashboard,
   Megaphone,
@@ -33,8 +34,9 @@ export interface NavItem {
   icon: LucideIcon
 }
 
-/** Left module rail: workbench keeps the embedded-account workspace; the rest are data modules. */
+/** Left module rail: home is the at-a-glance overview; workbench keeps the embedded-account workspace; the rest are data modules. */
 export const NAV_ITEMS: NavItem[] = [
+  { path: '/home', i18nKey: 'nav.home', icon: Home },
   { path: '/workspace', i18nKey: 'nav.workspace', icon: LayoutDashboard },
   // 报表仪表盘（B11）：租户级总览（账号/客户/会话/任务 + 7 天消息趋势），紧随工作台。
   { path: '/dashboard', i18nKey: 'nav.dashboard', icon: BarChart3 },
@@ -78,4 +80,4 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/settings', i18nKey: 'nav.settings', icon: Settings }
 ]
 
-export const DEFAULT_NAV_PATH = '/workspace'
+export const DEFAULT_NAV_PATH = '/home'

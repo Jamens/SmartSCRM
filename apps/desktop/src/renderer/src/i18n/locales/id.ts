@@ -14,6 +14,7 @@ export const id: DeepString<typeof zhCN> = {
     nextPage: 'Berikutnya'
   },
   nav: {
+    home: 'Beranda',
     workspace: 'Ruang Kerja',
     dashboard: 'Dasbor',
     messages: 'Riwayat Chat',
@@ -658,6 +659,7 @@ export const id: DeepString<typeof zhCN> = {
     conversations: 'Percakapan',
     activeConversations: '{{count}} aktif',
     tasks: 'Tugas massal',
+    messages: 'Total pesan',
     runningTasks: '{{count}} berjalan',
     lastDays: '{{count}} hari',
     trend: 'Tren pesan',
@@ -1568,5 +1570,17 @@ export const id: DeepString<typeof zhCN> = {
     tencentSecretLabel: 'SecretKey',
     appIdPlaceholderTencent: 'Mis. AKID****************',
     save: 'Simpan'
+  },
+  overview: {
+    title: 'Ikhtisar Beranda',
+    plan: 'Info Paket',
+    defaultPlan: 'Standar',
+    quickEntry: 'Akses Cepat',
+    quickEntryDesc: 'Buka modul apa pun',
+    platform: 'Platform Online',
+    usage: 'Penggunaan',
+    seats: 'Kursi',
+    aiTokens: 'Token AI',
+    translationChars: 'Karakter Terjemahan'
   }
 }

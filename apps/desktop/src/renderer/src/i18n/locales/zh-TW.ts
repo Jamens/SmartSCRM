@@ -14,6 +14,7 @@ export const zhTW: DeepString<typeof zhCN> = {
     nextPage: '下一頁'
   },
   nav: {
+    home: '首頁',
     workspace: '工作台',
     dashboard: '儀表板',
     messages: '聊天記錄',
@@ -650,6 +651,7 @@ export const zhTW: DeepString<typeof zhCN> = {
     conversations: '會話總數',
     activeConversations: '活躍 {{count}}',
     tasks: '群發任務',
+    messages: '訊息總數',
     runningTasks: '執行中 {{count}}',
     lastDays: '近 {{count}} 天',
     trend: '訊息趨勢',
@@ -1516,5 +1518,17 @@ export const zhTW: DeepString<typeof zhCN> = {
     tencentSecretLabel: 'SecretKey',
     appIdPlaceholderTencent: '例：AKID****************',
     save: '保存'
+  },
+  overview: {
+    title: '首頁概覽',
+    plan: '套餐資訊',
+    defaultPlan: '標準版',
+    quickEntry: '快捷入口',
+    quickEntryDesc: '一鍵進入各業務模組',
+    platform: '平台在線盤點',
+    usage: '用量統計',
+    seats: '席位',
+    aiTokens: 'AI 用量',
+    translationChars: '翻譯用量'
   }
 }

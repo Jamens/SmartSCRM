@@ -14,6 +14,7 @@ export const th: DeepString<typeof zhCN> = {
     nextPage: 'ถัดไป'
   },
   nav: {
+    home: 'หน้าแรก',
     workspace: 'พื้นที่ทำงาน',
     dashboard: 'แดชบอร์ด',
     messages: 'ประวัติแชท',
@@ -655,6 +656,7 @@ export const th: DeepString<typeof zhCN> = {
     conversations: 'การสนทนา',
     activeConversations: ' active {{count}}',
     tasks: 'งานส่งกลุ่ม',
+    messages: 'ข้อความทั้งหมด',
     runningTasks: 'กำลังทำงาน {{count}}',
     lastDays: '{{count}} วันล่าสุด',
     trend: 'แนวโน้มข้อความ',
@@ -1545,5 +1547,17 @@ export const th: DeepString<typeof zhCN> = {
     tencentSecretLabel: 'SecretKey',
     appIdPlaceholderTencent: 'เช่น AKID****************',
     save: 'บันทึก'
+  },
+  overview: {
+    title: 'ภาพรวมหน้าแรก',
+    plan: 'ข้อมูลแพ็กเกจ',
+    defaultPlan: 'มาตรฐาน',
+    quickEntry: 'ทางลัด',
+    quickEntryDesc: 'เข้าโมดูลต่าง ๆ',
+    platform: 'แพลตฟอร์มออนไลน์',
+    usage: 'การใช้งาน',
+    seats: 'ที่นั่ง',
+    aiTokens: 'โทเค็น AI',
+    translationChars: 'ตัวอักษรแปล'
   }
 }
