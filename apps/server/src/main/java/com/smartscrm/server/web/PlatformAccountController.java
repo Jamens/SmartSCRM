@@ -7,6 +7,7 @@ import com.smartscrm.server.service.PlatformAccountService;
 import com.smartscrm.server.web.dto.PlatformAccountRequest;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -29,17 +30,20 @@ public class PlatformAccountController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAuthority('account:read')")
     public ApiResponse<List<PlatformAccount>> list(@AuthenticationPrincipal AuthPrincipal principal) {
         return ApiResponse.ok(service.list(principal.tenantId()));
     }
 
     @PostMapping
+    @PreAuthorize("hasAuthority('account:write')")
     public ApiResponse<PlatformAccount> create(@AuthenticationPrincipal AuthPrincipal principal,
                                                @Valid @RequestBody PlatformAccountRequest req) {
         return ApiResponse.ok(service.create(principal.tenantId(), toEntity(req)));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('account:write')")
     public ApiResponse<PlatformAccount> update(@AuthenticationPrincipal AuthPrincipal principal,
                                                @PathVariable Long id,
                                                @Valid @RequestBody PlatformAccountRequest req) {
@@ -47,6 +51,7 @@ public class PlatformAccountController {
     }
 
     @PatchMapping("/{id}/status")
+    @PreAuthorize("hasAuthority('account:write')")
     public ApiResponse<Void> updateStatus(@AuthenticationPrincipal AuthPrincipal principal,
                                           @PathVariable Long id,
                                           @RequestBody StatusRequest req) {
@@ -55,6 +60,7 @@ public class PlatformAccountController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('account:write')")
     public ApiResponse<Void> delete(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         service.delete(principal.tenantId(), id);
         return ApiResponse.ok(null);

@@ -14,16 +14,19 @@ import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
 import com.smartscrm.server.mapper.AdminPermissionMapper;
+import java.lang.reflect.Method;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.mock.web.MockHttpServletRequest;
 import org.springframework.mock.web.MockHttpServletResponse;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.authentication.UsernamePasswordAuthenticationToken;
 import org.springframework.security.core.Authentication;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.web.method.HandlerMethod;
 
 class AdminPermissionInterceptorTest {
 
@@ -203,12 +206,85 @@ class AdminPermissionInterceptorTest {
     void preHandle_authoritiesEmpty_whenNoGrants() throws Exception {
         AuthPrincipal p = new AuthPrincipal(13L, null, "IC", "owner", true, Set.of());
         SecurityContextHolder.getContext().setAuthentication(
-                new UsernamePasswordAuthenticationToken(p, null, List.of()));
+            new UsernamePasswordAuthenticationToken(p, null, List.of()));
         when(mapper.selectMenuCodesByUserId(13L)).thenReturn(Set.of());
 
         run("/api/admin/menus");
 
         Authentication after = SecurityContextHolder.getContext().getAuthentication();
         assertTrue(after.getAuthorities().isEmpty());
+    }
+
+    // ===== A16 桌面侧授权（业务路径）· 反向证据 =====
+    // 正向（有码→放行）已用真接口验过；这里补反向：未授予的码不会被 publish，
+    // 因此 @PreAuthorize("hasAuthority('该码')") 必然拒绝。mock 即可，不建真实用户。
+
+    /** 带/不带 @PreAuthorize 的哑控制器，用来造业务端点的 HandlerMethod。 */
+    static class Biz {
+        @PreAuthorize("hasAuthority('label:read')")
+        public void guarded() {}
+        public void plain() {}
+    }
+
+    private static HandlerMethod handlerFor(String method) throws Exception {
+        Method m = Biz.class.getMethod(method);
+        return new HandlerMethod(new Biz(), m);
+    }
+
+    private void runBiz(String uri, Object handler) throws Exception {
+        var req = new MockHttpServletRequest("GET", uri);
+        req.setRequestURI(uri);
+        interceptor.preHandle(req, new MockHttpServletResponse(), handler);
+    }
+
+    private Set<String> businessCodes() {
+        return SecurityContextHolder.getContext().getAuthentication().getAuthorities().stream()
+            .map(g -> g.getAuthority())
+            .filter(s -> !s.startsWith("ROLE_"))
+            .collect(java.util.stream.Collectors.toSet());
+    }
+
+    /** 反向核心：只授予 label:read 时，未授予的 label:write 绝不能进 authority（否则误放行）。 */
+    @Test
+    void businessAuthzHandler_publishesOnlyGranted_ungrantedAbsent() throws Exception {
+        authenticate(false, 7L);
+        when(mapper.selectMenuCodesByUserId(7L)).thenReturn(Set.of("label:read"));
+
+        runBiz("/api/label-groups", handlerFor("guarded"));
+
+        assertTrue(businessCodes().contains("label:read"), "授予的码应被 publish");
+        assertFalse(businessCodes().contains("label:write"), "未授予的码不能被 publish");
+    }
+
+    /** 空授权角色（无任何码）→ authority 里没有业务码，标注端点全部会被拒。 */
+    @Test
+    void businessAuthzHandler_emptyGrant_publishesNoBusinessCode() throws Exception {
+        authenticate(false, 8L);
+        when(mapper.selectMenuCodesByUserId(8L)).thenReturn(Set.of());
+
+        runBiz("/api/label-groups", handlerFor("guarded"));
+
+        assertTrue(businessCodes().isEmpty(), "空授权不应产生任何业务 authority");
+    }
+
+    /** 业务端点带 @PreAuthorize：会查库并 publish（桌面侧判定生效的路径）。 */
+    @Test
+    void businessAuthzHandler_resolvesPermissions() throws Exception {
+        authenticate(false, 7L);
+        when(mapper.selectMenuCodesByUserId(7L)).thenReturn(Set.of("label:read"));
+
+        runBiz("/api/label-groups", handlerFor("guarded"));
+
+        verify(mapper).selectMenuCodesByUserId(7L);
+    }
+
+    /** 业务端点没带 @PreAuthorize：一次库都不查（零成本、零行为变更的守卫）。 */
+    @Test
+    void businessPlainHandler_skipsLookup() throws Exception {
+        authenticate(false, 7L);
+
+        runBiz("/api/messages/unread-total", handlerFor("plain"));
+
+        verifyNoInteractions(mapper);
     }
 }
