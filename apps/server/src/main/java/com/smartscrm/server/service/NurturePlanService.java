@@ -107,9 +107,15 @@ public class NurturePlanService {
     /**
      * 执行链入口的**人工门校验**（spec §5）：非 confirmed 一律拒绝。
      * 做成 public static 让执行器直接调用同一份判定，避免"UI 挡一道、执行链忘了再挡一道"。
+     *
+     * <p>口径：门是「**通过过确认**」这一事实，不是某一瞬间的状态。所以 {@code confirmed} 与
+     * {@code running} 都算过门——计划跑起来后状态会转 running，若只认 confirmed 就会在第二天
+     * 的调度里把自己拒掉（门变成一次性开关，而不是"已获准"的持续状态）。
      */
     public static void requireConfirmed(NurturePlan p) {
-        if (p == null || !"confirmed".equals(p.getStatus())) {
+        String s = p == null ? null : p.getStatus();
+        boolean passed = "confirmed".equals(s) || "running".equals(s);
+        if (!passed) {
             throw new BizException(40301, "养号计划未经人工确认，禁止执行（需 confirmed）");
         }
     }

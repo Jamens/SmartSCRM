@@ -103,9 +103,18 @@ class NurturePlanServiceTest {
     @Test
     void requireConfirmed_blocksUnconfirmed() {
         assertThrows(BizException.class, () -> NurturePlanService.requireConfirmed(plan("pending")));
-        assertThrows(BizException.class, () -> NurturePlanService.requireConfirmed(plan("running")));
+        assertThrows(BizException.class, () -> NurturePlanService.requireConfirmed(plan("paused")));
+        assertThrows(BizException.class, () -> NurturePlanService.requireConfirmed(plan("error")));
+        assertThrows(BizException.class, () -> NurturePlanService.requireConfirmed(plan("cancelled")));
         assertThrows(BizException.class, () -> NurturePlanService.requireConfirmed(null));
         NurturePlanService.requireConfirmed(plan("confirmed"));
+    }
+
+    @Test
+    void requireConfirmed_acceptsRunning_alreadyPassedGate() {
+        // 门是「通过过确认」这一事实，不是瞬时状态：计划跑起来转 running 后仍应放行，
+        // 否则第二天的调度会把自己拒掉（门退化成一次性开关）。
+        NurturePlanService.requireConfirmed(plan("running"));
     }
 
     @Test
