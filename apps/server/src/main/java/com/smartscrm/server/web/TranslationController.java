@@ -19,6 +19,7 @@ import com.smartscrm.server.web.vo.TranslationSettingVO;
 import jakarta.validation.Valid;
 import java.util.List;
 import java.util.Map;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -46,6 +47,7 @@ public class TranslationController {
      * 不查这一档、也不报错——读取那条链的容错口径见 Task 2 那条 javadoc）。
      */
     @GetMapping("/settings")
+    @PreAuthorize("hasAuthority('translation:read')")
     public ApiResponse<TranslationSettingVO> getSettings(@AuthenticationPrincipal AuthPrincipal principal,
                                                          @RequestParam(required = false) Long customerId,
                                                          @RequestParam(required = false) Long accountId,
@@ -54,6 +56,7 @@ public class TranslationController {
     }
 
     @PutMapping("/settings")
+    @PreAuthorize("hasAuthority('translation:write')")
     public ApiResponse<TranslationSettingVO> updateSettings(@AuthenticationPrincipal AuthPrincipal principal,
                                                             @Valid @RequestBody TranslationSettingInput input) {
         String scope = input.scope() == null || input.scope().isBlank() ? "global" : input.scope();
@@ -93,6 +96,7 @@ public class TranslationController {
     }
 
     @DeleteMapping("/settings/customer/{customerId}")
+    @PreAuthorize("hasAuthority('translation:write')")
     public ApiResponse<Map<String, Integer>> clearCustomer(@AuthenticationPrincipal AuthPrincipal principal,
                                                            @PathVariable Long customerId) {
         return ApiResponse.ok(Map.of("cleared", service.clearCustomerSettings(principal.tenantId(), customerId)));
@@ -104,6 +108,7 @@ public class TranslationController {
      * 删除的幂等由 `{cleared:0|1}` 如实表达，"本来就没有"不报成失败。
      */
     @DeleteMapping("/settings/conversation")
+    @PreAuthorize("hasAuthority('translation:write')")
     public ApiResponse<Map<String, Integer>> clearConversation(@AuthenticationPrincipal AuthPrincipal principal,
                                                                @RequestParam(required = false) Long accountId,
                                                                @RequestParam(required = false) String chatKey) {
@@ -112,38 +117,45 @@ public class TranslationController {
     }
 
     @GetMapping("/nodes")
+    @PreAuthorize("hasAuthority('translation:read')")
     public ApiResponse<List<TranslationNodeVO>> nodes() {
         return ApiResponse.ok(service.nodes());
     }
 
     @GetMapping("/nodes/delays")
+    @PreAuthorize("hasAuthority('translation:read')")
     public ApiResponse<List<ServerDelayVO>> delays() {
         return ApiResponse.ok(service.delays());
     }
 
     @PostMapping("/translate")
+    @PreAuthorize("hasAuthority('translation:write')")
     public ApiResponse<TranslateVO> translate(@AuthenticationPrincipal AuthPrincipal principal,
                                               @Valid @RequestBody TranslateDTO dto) {
         return ApiResponse.ok(service.translate(principal.tenantId(), dto));
     }
 
     @GetMapping("/cache/stats")
+    @PreAuthorize("hasAuthority('translation:read')")
     public ApiResponse<TranslationCacheStatsVO> cacheStats(@AuthenticationPrincipal AuthPrincipal principal) {
         return ApiResponse.ok(service.cacheStats(principal.tenantId()));
     }
 
     @GetMapping("/credentials")
+    @PreAuthorize("hasAuthority('translation:read')")
     public ApiResponse<List<TranslationCredentialVO>> credentials(@AuthenticationPrincipal AuthPrincipal principal) {
         return ApiResponse.ok(service.credentials(principal.tenantId()));
     }
 
     @PutMapping("/credentials")
+    @PreAuthorize("hasAuthority('translation:write')")
     public ApiResponse<TranslationCredentialVO> putCredential(@AuthenticationPrincipal AuthPrincipal principal,
                                                               @Valid @RequestBody TranslationCredentialInput input) {
         return ApiResponse.ok(service.putCredential(principal.tenantId(), input));
     }
 
     @PostMapping("/credentials/test")
+    @PreAuthorize("hasAuthority('translation:write')")
     public ApiResponse<CredentialTestVO> testCredential(@AuthenticationPrincipal AuthPrincipal principal,
                                                         @Valid @RequestBody CredentialTestDTO dto) {
         return ApiResponse.ok(service.testCredential(principal.tenantId(), dto));

@@ -18,6 +18,7 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 import org.springframework.http.MediaType;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -43,17 +44,20 @@ public class MaterialController {
     }
 
     @GetMapping("/material-groups")
+    @PreAuthorize("hasAuthority('material:read')")
     public ApiResponse<List<MaterialGroupVO>> listGroups(@AuthenticationPrincipal AuthPrincipal principal) {
         return ApiResponse.ok(service.listGroups(principal.tenantId()));
     }
 
     @PostMapping("/material-groups")
+    @PreAuthorize("hasAuthority('material:write')")
     public ApiResponse<MaterialGroup> createGroup(@AuthenticationPrincipal AuthPrincipal principal,
                                                   @Valid @RequestBody MaterialGroupRequest req) {
         return ApiResponse.ok(service.createGroup(principal.tenantId(), req));
     }
 
     @PutMapping("/material-groups/{id}")
+    @PreAuthorize("hasAuthority('material:write')")
     public ApiResponse<MaterialGroup> updateGroup(@AuthenticationPrincipal AuthPrincipal principal,
                                                   @PathVariable Long id,
                                                   @Valid @RequestBody MaterialGroupRequest req) {
@@ -61,12 +65,14 @@ public class MaterialController {
     }
 
     @DeleteMapping("/material-groups/{id}")
+    @PreAuthorize("hasAuthority('material:write')")
     public ApiResponse<Void> deleteGroup(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         service.deleteGroup(principal.tenantId(), id);
         return ApiResponse.ok(null);
     }
 
     @GetMapping("/materials")
+    @PreAuthorize("hasAuthority('material:read')")
     public ApiResponse<List<MaterialVO>> list(@AuthenticationPrincipal AuthPrincipal principal,
                                               @RequestParam(required = false) Long groupId,
                                               @RequestParam(required = false) Integer type,
@@ -78,12 +84,14 @@ public class MaterialController {
     }
 
     @PostMapping("/materials")
+    @PreAuthorize("hasAuthority('material:write')")
     public ApiResponse<MaterialVO> create(@AuthenticationPrincipal AuthPrincipal principal,
                                           @Valid @RequestBody MaterialRequest req) {
         return ApiResponse.ok(service.create(principal.tenantId(), principal.userId(), req));
     }
 
     @PutMapping("/materials/{id}")
+    @PreAuthorize("hasAuthority('material:write')")
     public ApiResponse<MaterialVO> update(@AuthenticationPrincipal AuthPrincipal principal,
                                           @PathVariable Long id,
                                           @Valid @RequestBody MaterialRequest req) {
@@ -91,6 +99,7 @@ public class MaterialController {
     }
 
     @DeleteMapping("/materials/{id}")
+    @PreAuthorize("hasAuthority('material:write')")
     public ApiResponse<Void> delete(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         service.delete(principal.tenantId(), principal.userId(), id);
         return ApiResponse.ok(null);
@@ -102,6 +111,7 @@ public class MaterialController {
      * edit; the file is named by UUID and therefore un-guessable.
      */
     @PostMapping(value = "/materials/media", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    @PreAuthorize("hasAuthority('material:write')")
     public ApiResponse<MaterialMediaVO> uploadMedia(@AuthenticationPrincipal AuthPrincipal principal,
                                                     @RequestParam("file") MultipartFile file) throws IOException {
         if (file == null || file.isEmpty()) {
@@ -120,6 +130,7 @@ public class MaterialController {
      * un-guessable UUID filename.
      */
     @GetMapping("/materials/media/{name}")
+    @PreAuthorize("hasAuthority('material:read')")
     public void serveMedia(@PathVariable String name, HttpServletResponse response) throws IOException {
         Path p = mediaStorage.serve(name);
         if (p == null) {
@@ -134,6 +145,7 @@ public class MaterialController {
     }
 
     @DeleteMapping("/materials/media/{name}")
+    @PreAuthorize("hasAuthority('material:write')")
     public ApiResponse<Void> deleteMedia(@PathVariable String name) {
         mediaStorage.delete(name);
         return ApiResponse.ok(null);

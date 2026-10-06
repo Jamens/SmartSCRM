@@ -9,6 +9,7 @@ import com.smartscrm.server.web.vo.AudienceVO;
 import com.smartscrm.server.web.vo.CustomerVO;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -31,16 +32,19 @@ public class AudienceController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAuthority('audience:read')")
     public ApiResponse<List<AudienceVO>> list(@AuthenticationPrincipal AuthPrincipal principal) {
         return ApiResponse.ok(service.list(principal.tenantId()));
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('audience:read')")
     public ApiResponse<AudienceVO> detail(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         return ApiResponse.ok(service.detail(principal.tenantId(), id));
     }
 
     @GetMapping("/{id}/customers")
+    @PreAuthorize("hasAuthority('audience:read')")
     public ApiResponse<PageResult<CustomerVO>> customers(@AuthenticationPrincipal AuthPrincipal principal,
                                                          @PathVariable Long id,
                                                          @RequestParam(defaultValue = "1") long page,
@@ -49,12 +53,14 @@ public class AudienceController {
     }
 
     @PostMapping
+    @PreAuthorize("hasAuthority('audience:write')")
     public ApiResponse<AudienceVO> create(@AuthenticationPrincipal AuthPrincipal principal,
                                           @Valid @RequestBody AudienceRequest req) {
         return ApiResponse.ok(service.create(principal.tenantId(), req));
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('audience:write')")
     public ApiResponse<AudienceVO> update(@AuthenticationPrincipal AuthPrincipal principal,
                                           @PathVariable Long id,
                                           @Valid @RequestBody AudienceRequest req) {
@@ -62,6 +68,7 @@ public class AudienceController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('audience:write')")
     public ApiResponse<Void> delete(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         service.delete(principal.tenantId(), id);
         return ApiResponse.ok(null);

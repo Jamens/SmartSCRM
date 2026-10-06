@@ -12,6 +12,7 @@ import com.smartscrm.server.web.vo.CustomerTimelineVO;
 import com.smartscrm.server.web.vo.CustomerVO;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -36,6 +37,7 @@ public class CustomerController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAuthority('customer:read')")
     public ApiResponse<PageResult<CustomerVO>> list(@AuthenticationPrincipal AuthPrincipal principal,
                                                     @RequestParam(required = false) String keyword,
                                                     @RequestParam(required = false) Integer platformType,
@@ -48,11 +50,13 @@ public class CustomerController {
     }
 
     @GetMapping("/{id}")
+    @PreAuthorize("hasAuthority('customer:read')")
     public ApiResponse<CustomerVO> detail(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         return ApiResponse.ok(service.detail(principal.tenantId(), id));
     }
 
     @PostMapping
+    @PreAuthorize("hasAuthority('customer:write')")
     public ApiResponse<CustomerVO> create(@AuthenticationPrincipal AuthPrincipal principal,
                                           @Valid @RequestBody CustomerCreateRequest req) {
         return ApiResponse.ok(service.create(principal.tenantId(), req));
@@ -60,6 +64,7 @@ public class CustomerController {
 
     /** 时间线消费的是 chat_* 那两张表，实现留在 MessageQueryService，这里只做路由（Task 5）。 */
     @GetMapping("/{id}/timeline")
+    @PreAuthorize("hasAuthority('customer:read')")
     public ApiResponse<CustomerTimelineVO> timeline(@AuthenticationPrincipal AuthPrincipal principal,
                                                     @PathVariable Long id,
                                                     @RequestParam(required = false) Integer size) {
@@ -67,6 +72,7 @@ public class CustomerController {
     }
 
     @PutMapping("/{id}")
+    @PreAuthorize("hasAuthority('customer:write')")
     public ApiResponse<CustomerVO> update(@AuthenticationPrincipal AuthPrincipal principal,
                                           @PathVariable Long id,
                                           @RequestBody CustomerEditRequest req) {
@@ -74,6 +80,7 @@ public class CustomerController {
     }
 
     @PutMapping("/{id}/labels")
+    @PreAuthorize("hasAuthority('customer:write')")
     public ApiResponse<CustomerVO> setLabels(@AuthenticationPrincipal AuthPrincipal principal,
                                              @PathVariable Long id,
                                              @Valid @RequestBody CustomerLabelsRequest req) {
@@ -81,6 +88,7 @@ public class CustomerController {
     }
 
     @DeleteMapping("/{id}")
+    @PreAuthorize("hasAuthority('customer:write')")
     public ApiResponse<Void> delete(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         service.delete(principal.tenantId(), id);
         return ApiResponse.ok(null);

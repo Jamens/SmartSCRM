@@ -5,6 +5,7 @@ import com.smartscrm.server.common.PageResult;
 import com.smartscrm.server.security.AuthPrincipal;
 import com.smartscrm.server.service.NotificationService;
 import com.smartscrm.server.web.vo.NotificationVO;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -30,6 +31,7 @@ public class NotificationController {
     }
 
     @GetMapping
+    @PreAuthorize("hasAuthority('notification:read')")
     public ApiResponse<PageResult<NotificationVO>> list(@AuthenticationPrincipal AuthPrincipal principal,
                                                        @RequestParam(defaultValue = "1") long page,
                                                        @RequestParam(defaultValue = "20") long pageSize,
@@ -40,17 +42,20 @@ public class NotificationController {
     }
 
     @GetMapping("/unread-count")
+    @PreAuthorize("hasAuthority('notification:read')")
     public ApiResponse<Long> unreadCount(@AuthenticationPrincipal AuthPrincipal principal) {
         return ApiResponse.ok(service.unreadCount(principal.tenantId(), principal.userId()));
     }
 
     @PutMapping("/{id}/read")
+    @PreAuthorize("hasAuthority('notification:write')")
     public ApiResponse<Void> markRead(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         service.markRead(principal.tenantId(), principal.userId(), id);
         return ApiResponse.ok(null);
     }
 
     @PutMapping("/read-all")
+    @PreAuthorize("hasAuthority('notification:write')")
     public ApiResponse<Integer> markAllRead(@AuthenticationPrincipal AuthPrincipal principal) {
         return ApiResponse.ok(service.markAllRead(principal.tenantId(), principal.userId()));
     }

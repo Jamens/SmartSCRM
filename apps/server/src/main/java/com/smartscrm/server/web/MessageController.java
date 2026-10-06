@@ -13,6 +13,7 @@ import com.smartscrm.server.web.vo.MessageStatsVO;
 import com.smartscrm.server.web.vo.UnreadTotalVO;
 import jakarta.validation.Valid;
 import java.util.Map;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -40,12 +41,14 @@ public class MessageController {
     }
 
     @PostMapping("/status")
+    @PreAuthorize("hasAuthority('message:write')")
     public ApiResponse<Map<String, Integer>> status(@AuthenticationPrincipal AuthPrincipal principal,
                                                     @Valid @RequestBody MessageStatusDTO dto) {
         return ApiResponse.ok(Map.of("updated", service.applyStatus(principal.tenantId(), dto)));
     }
 
     @GetMapping
+    @PreAuthorize("hasAuthority('message:read')")
     public ApiResponse<MessagePageVO> list(@AuthenticationPrincipal AuthPrincipal principal,
                                            @RequestParam Long accountId,
                                            @RequestParam String chatKey,
@@ -56,6 +59,7 @@ public class MessageController {
     }
 
     @GetMapping("/search")
+    @PreAuthorize("hasAuthority('message:read')")
     public ApiResponse<MessageSearchVO> search(@AuthenticationPrincipal AuthPrincipal principal,
                                                @RequestParam String q,
                                                @RequestParam(required = false) Long accountId,
@@ -71,6 +75,7 @@ public class MessageController {
     }
 
     @GetMapping("/stats")
+    @PreAuthorize("hasAuthority('message:read')")
     public ApiResponse<MessageStatsVO> stats(@AuthenticationPrincipal AuthPrincipal principal,
                                             @RequestParam Long accountId,
                                             @RequestParam(required = false) Integer days) {
@@ -79,6 +84,7 @@ public class MessageController {
 
     /** 租户级未读汇总：不带 accountId，任务栏角标要的是"这个应用总共有多少没读的"。 */
     @GetMapping("/unread-total")
+    @PreAuthorize("hasAuthority('message:read')")
     public ApiResponse<UnreadTotalVO> unreadTotal(@AuthenticationPrincipal AuthPrincipal principal) {
         return ApiResponse.ok(query.unreadTotal(principal.tenantId()));
     }

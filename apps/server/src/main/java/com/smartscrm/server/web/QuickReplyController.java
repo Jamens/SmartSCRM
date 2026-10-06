@@ -10,6 +10,7 @@ import com.smartscrm.server.web.vo.QuickReplyGroupVO;
 import com.smartscrm.server.web.vo.QuickReplyVO;
 import jakarta.validation.Valid;
 import java.util.List;
+import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -32,17 +33,20 @@ public class QuickReplyController {
     }
 
     @GetMapping("/quick-reply-groups")
+    @PreAuthorize("hasAuthority('quick_reply:read')")
     public ApiResponse<List<QuickReplyGroupVO>> listGroups(@AuthenticationPrincipal AuthPrincipal principal) {
         return ApiResponse.ok(service.listGroups(principal.tenantId()));
     }
 
     @PostMapping("/quick-reply-groups")
+    @PreAuthorize("hasAuthority('quick_reply:write')")
     public ApiResponse<QuickReplyGroup> createGroup(@AuthenticationPrincipal AuthPrincipal principal,
                                                     @Valid @RequestBody QuickReplyGroupRequest req) {
         return ApiResponse.ok(service.createGroup(principal.tenantId(), req));
     }
 
     @PutMapping("/quick-reply-groups/{id}")
+    @PreAuthorize("hasAuthority('quick_reply:write')")
     public ApiResponse<QuickReplyGroup> updateGroup(@AuthenticationPrincipal AuthPrincipal principal,
                                                     @PathVariable Long id,
                                                     @Valid @RequestBody QuickReplyGroupRequest req) {
@@ -50,12 +54,14 @@ public class QuickReplyController {
     }
 
     @DeleteMapping("/quick-reply-groups/{id}")
+    @PreAuthorize("hasAuthority('quick_reply:write')")
     public ApiResponse<Void> deleteGroup(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         service.deleteGroup(principal.tenantId(), id);
         return ApiResponse.ok(null);
     }
 
     @GetMapping("/quick-replies")
+    @PreAuthorize("hasAuthority('quick_reply:read')")
     public ApiResponse<List<QuickReplyVO>> list(@AuthenticationPrincipal AuthPrincipal principal,
                                                 @RequestParam(required = false) Long groupId,
                                                 @RequestParam(required = false) String keyword) {
@@ -63,17 +69,20 @@ public class QuickReplyController {
     }
 
     @GetMapping("/quick-replies/{id}")
+    @PreAuthorize("hasAuthority('quick_reply:read')")
     public ApiResponse<QuickReplyVO> detail(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         return ApiResponse.ok(service.detail(principal.tenantId(), id));
     }
 
     @PostMapping("/quick-replies")
+    @PreAuthorize("hasAuthority('quick_reply:write')")
     public ApiResponse<QuickReplyVO> create(@AuthenticationPrincipal AuthPrincipal principal,
                                             @Valid @RequestBody QuickReplyRequest req) {
         return ApiResponse.ok(service.create(principal.tenantId(), principal.userId(), req));
     }
 
     @PutMapping("/quick-replies/{id}")
+    @PreAuthorize("hasAuthority('quick_reply:write')")
     public ApiResponse<QuickReplyVO> update(@AuthenticationPrincipal AuthPrincipal principal,
                                             @PathVariable Long id,
                                             @Valid @RequestBody QuickReplyRequest req) {
@@ -81,12 +90,14 @@ public class QuickReplyController {
     }
 
     @DeleteMapping("/quick-replies/{id}")
+    @PreAuthorize("hasAuthority('quick_reply:write')")
     public ApiResponse<Void> delete(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         service.delete(principal.tenantId(), id);
         return ApiResponse.ok(null);
     }
 
     @PostMapping("/quick-replies/{id}/use")
+    @PreAuthorize("hasAuthority('quick_reply:write')")
     public ApiResponse<QuickReplyVO> recordUse(@AuthenticationPrincipal AuthPrincipal principal,
                                                @PathVariable Long id) {
         return ApiResponse.ok(service.recordUse(principal.tenantId(), id));
