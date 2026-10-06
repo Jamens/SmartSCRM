@@ -34,6 +34,18 @@ public class MessageController {
         this.query = query;
     }
 
+    /**
+     * 消息批量入库（主进程 msgBridge 上报）。**刻意不加 {@code @PreAuthorize}**——
+     * 这是机器对机器的采集口，不是人在 UI 上的操作，用菜单码判定会出错：
+     * <ul>
+     *   <li><b>语义</b>：菜单码模型"这个人能在 UI 做什么"，而这里是应用管线在报告它观测到的消息；</li>
+     *   <li><b>会坏功能</b>：入库用当前登录用户的 token，若按其 {@code message:*} 判定，
+     *       一个只读子账号登录时消息采集就断了；</li>
+     *   <li><b>性能</b>：标注 = 每批消息多查一次权限码，而这是高频调用。</li>
+     * </ul>
+     * 边界靠**认证 + 租户隔离**兜底：{@code /api/**} 全部 {@code authenticated()}（见 SecurityConfig），
+     * 且 accept 按 {@code principal.tenantId()} 收窄——最坏情况只影响本租户数据，跨租户不可达。
+     */
     @PostMapping("/batch")
     public ApiResponse<BatchAcceptVO> batch(@AuthenticationPrincipal AuthPrincipal principal,
                                             @Valid @RequestBody MessageBatchDTO dto) {
