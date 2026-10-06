@@ -41,3 +41,28 @@ export function deriveQaPreview(chunkContent: string | null | undefined): QaCand
   }
   return out
 }
+
+/** 人设模板：助手按语气标签挑一个，产出**草稿**交人工确认（不自动落库、不调外部模型）。 */
+export interface PersonaTemplate {
+  id: string
+  name: string
+  prompt: string
+}
+
+const PERSONA_TEMPLATES: Record<string, PersonaTemplate> = {
+  friendly: { id: 'friendly', name: '亲切客服', prompt: '你是一名亲切耐心的客服，语气温暖、先安抚情绪再解决问题。' },
+  pro: { id: 'pro', name: '专业顾问', prompt: '你是一名专业顾问，答复准确、结构清晰，必要时给出步骤。' },
+  concise: { id: 'concise', name: '简洁客服', prompt: '你是一名简洁的客服，直接给出结论，不说多余的话。' }
+}
+
+/** 默认模板（语气未识别/为空时用 pro）。 */
+export const DEFAULT_PERSONA_TEMPLATE = PERSONA_TEMPLATES.pro
+
+/**
+ * 语气标签 → 人设模板。语气为空或未识别时回落到 {@link DEFAULT_PERSONA_TEMPLATE}。
+ * 纯查表（无 I/O），助手生成草稿与驱动断言共用这一份。
+ */
+export function personaTemplateOf(tone: string | null | undefined): PersonaTemplate {
+  const key = (tone ?? '').trim().toLowerCase()
+  return PERSONA_TEMPLATES[key] ?? DEFAULT_PERSONA_TEMPLATE
+}

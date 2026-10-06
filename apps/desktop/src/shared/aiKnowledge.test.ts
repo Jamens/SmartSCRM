@@ -1,7 +1,7 @@
 // src/shared/aiKnowledge.test.ts
 import { test } from 'node:test'
 import assert from 'node:assert/strict'
-import { deriveQaPreview } from './aiKnowledge.ts'
+import { deriveQaPreview, personaTemplateOf, DEFAULT_PERSONA_TEMPLATE } from './aiKnowledge.ts'
 
 test('分片：首行作问、其余作答', () => {
   const cands = deriveQaPreview('怎么申请退款？\n在订单页点退款即可\n一般 3 天到账')
@@ -38,4 +38,18 @@ test('分片：容忍 CRLF 与块内多空行', () => {
   assert.equal(cands.length, 1)
   assert.equal(cands[0].question, '怎么开发票？')
   assert.equal(cands[0].answer, '在个人中心\n申请')
+})
+
+// ===== 人设模板 =====
+
+test('personaTemplateOf：按语气标签取模板', () => {
+  assert.equal(personaTemplateOf('friendly').id, 'friendly')
+  assert.equal(personaTemplateOf('PRO').id, 'pro') // 大小写不敏感
+  assert.equal(personaTemplateOf('  concise ').id, 'concise')
+})
+
+test('personaTemplateOf：空/未识别回落默认', () => {
+  assert.equal(personaTemplateOf('').id, DEFAULT_PERSONA_TEMPLATE.id)
+  assert.equal(personaTemplateOf(null).id, DEFAULT_PERSONA_TEMPLATE.id)
+  assert.equal(personaTemplateOf('不存在的语气').id, DEFAULT_PERSONA_TEMPLATE.id)
 })
