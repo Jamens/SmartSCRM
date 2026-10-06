@@ -15,6 +15,7 @@ import SettingsPage from '@/pages/SettingsPage'
 import LogCenterPage from '@/pages/LogCenterPage'
 import NotificationsPage from '@/pages/NotificationsPage'
 import HelpPage from '@/pages/HelpPage'
+import AiWorkspacePage from '@/pages/AiWorkspacePage'
 import LoginPage from '@/pages/LoginPage'
 import { DEFAULT_NAV_PATH } from '@/lib/nav'
 import { useProtocolSync } from '@/hooks/useProtocolSync'
@@ -63,6 +64,7 @@ function App(): React.JSX.Element {
           <Route path="/translation" element={<TranslationPage />} />
           <Route path="/notifications" element={<NotificationsPage />} />
           <Route path="/help" element={<HelpPage />} />
+          <Route path="/ai" element={<AiWorkspacePage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/logs" element={<LogCenterPage />} />
           <Route path="*" element={<Navigate to={DEFAULT_NAV_PATH} replace />} />

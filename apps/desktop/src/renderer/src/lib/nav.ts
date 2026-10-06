@@ -1,5 +1,6 @@
 import {
   Bell,
+  Bot,
   FileText,
   FolderOpen,
   HelpCircle,
@@ -39,6 +40,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/notifications', i18nKey: 'nav.notifications', icon: Bell },
   // 帮助中心（A11）：FAQ + 模板下载，独立内容页。
   { path: '/help', i18nKey: 'nav.help', icon: HelpCircle },
+  // AI 工作区（B28）：知识库三栏/文档/人设/养号/接管台，独立内容页。
+  { path: '/ai', i18nKey: 'nav.ai', icon: Bot },
   // 日志中心（A19）：排查用的宿主能力，排在业务模块之后、设置之前。
   { path: '/logs', i18nKey: 'nav.logs', icon: FileText },
   // 设置排在最后：它是宿主能力，不是业务模块。
