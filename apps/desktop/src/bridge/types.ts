@@ -146,6 +146,17 @@ export interface WppGroupApi {
   getAllGroups(): Promise<Array<WaChatModel | undefined>>
   /** `getParticipants(groupId)`：快照主源。超大群是否分页截断**未实测**（spec §15#3）。 */
   getParticipants(groupId: string): Promise<WaParticipant[]>
+  // ---- B18/B19 群操作。签名按 wa-js 4.x `dist/group/functions/*.d.ts` 实测 ----
+  /** `join(inviteCode)`：加群的**唯一**路径（无「按群名搜索加入」API）。 */
+  join?(inviteCode: string): Promise<{ id: string; pendingApproval: boolean }>
+  /** `getGroupInfoFromInviteCode(code)`：join 前预览群信息。 */
+  getGroupInfoFromInviteCode?(
+    inviteCode: string
+  ): Promise<{ id: string; owner: string | undefined; descOwner: string | undefined; participants: { id: string }[] }>
+  /** `canRemove(groupId, ids)`：踢人前的能力校验（防踢超管，靠它）。 */
+  canRemove?(groupId: string, participantsIds: string | string[]): Promise<boolean>
+  /** `removeParticipants(groupId, ids)`：真正踢人。 */
+  removeParticipants?(groupId: string, participantsIds: string | string[]): Promise<void>
 }
 
 /** `WPP.contact`：只用来补成员的手机号与显示名，取不到就留空，不猜。 */

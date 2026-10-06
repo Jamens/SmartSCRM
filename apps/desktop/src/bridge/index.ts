@@ -2,6 +2,7 @@
 import { makeThrottledReporter, onCommand, report } from './host.ts'
 import * as whatsappCollect from './whatsapp/collect.ts'
 import { listGroups, snapshotGroup, subscribeGroupEvents } from './whatsapp/groups.ts'
+import { joinGroup, kickParticipants, previewInvite } from './whatsapp/groupOps.ts'
 import { sendViaWa } from './whatsapp/send.ts'
 import { recallViaWa } from './whatsapp/recall.ts'
 import type { BridgeCommand, BridgeInstallConfig } from '../shared/chatTypes.ts'
@@ -109,6 +110,24 @@ export function install(config: BridgeInstallConfig): boolean {
       case 'group_snapshot':
         void snapshotGroup(wppAll(), cmd.chatKey).then((r) => {
           push({ kind: 'group_snapshot_result', reqId: cmd.reqId, chatKey: cmd.chatKey, ...r })
+        })
+        return
+      // ---- B18/B19 群操作。人工门在 Java 侧执行链入口已判（requireConfirmed/requireApproved），
+      // 页内只做能力兜底（canRemove）。与 send 一样不排 sendLock：这些是账号级群操作，
+      // 不是消息发送，走发送锁会把两类操作互相拖住。 ----
+      case 'group_join':
+        void joinGroup(wppAll(), cmd.inviteCode).then((r) => {
+          push({ kind: 'group_join_result', reqId: cmd.reqId, ...r })
+        })
+        return
+      case 'group_invite_preview':
+        void previewInvite(wppAll(), cmd.inviteCode).then((r) => {
+          push({ kind: 'group_invite_preview_result', reqId: cmd.reqId, ...r })
+        })
+        return
+      case 'group_kick':
+        void kickParticipants(wppAll(), cmd.chatKey, cmd.participantIds).then((r) => {
+          push({ kind: 'group_kick_result', reqId: cmd.reqId, ...r })
         })
         return
     }

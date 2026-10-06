@@ -183,6 +183,41 @@ export type BridgeReport =
       truncated?: boolean
       error?: string
     }
+  // ---- B18/B19 群操作回执。removed/skipped/failed 三种结局分开带，调用方别把 skipped 当失败重试。 ----
+  /** `group_join` 的回执。pendingApproval=true 也算成功（已提交审核，等群主批）。 */
+  | {
+      kind: 'group_join_result'
+      reqId: string
+      ok: boolean
+      groupId?: string
+      pendingApproval?: boolean
+      error?: string
+    }
+  /** `group_invite_preview` 的回执。失败不阻断主流程。 */
+  | {
+      kind: 'group_invite_preview_result'
+      reqId: string
+      ok: boolean
+      groupId?: string
+      owner?: string | null
+      participantCount?: number
+      error?: string
+    }
+  /**
+   * `group_kick` 的回执。三种结局分列：
+   * - `removed` 真踢掉了；
+   * - `skipped` 能力不允许、**没踢**（超管/自己）——这不是失败，别重试；
+   * - `failed` 真踢了但报错。
+   */
+  | {
+      kind: 'group_kick_result'
+      reqId: string
+      ok: boolean
+      removed?: string[]
+      skipped?: string[]
+      failed?: Array<{ id: string; error: string }>
+      error?: string
+    }
   /** 进退事件，随到随报，不等建档泵。一批一帧，避免一次群变动打出几十个请求。 */
   | { kind: 'group_event'; events: GroupEventWire[] }
 
@@ -198,6 +233,14 @@ export type BridgeCommand =
   | { kind: 'group_list'; reqId: string }
   /** 拉一个群的成员名单。只读：不发消息、不改页面状态。 */
   | { kind: 'group_snapshot'; reqId: string; chatKey: string }
+  // ---- B18/B19 群操作：破坏性动作。**人工门在 Java 侧执行链入口已判过**（requireConfirmed/
+  // requireApproved），页内拿到即"获准执行"，只做能力兜底（canRemove）。 ----
+  /** B18 凭邀请码加群。加群的唯一路径（无「按群名搜索加入」API）。 */
+  | { kind: 'group_join'; reqId: string; inviteCode: string }
+  /** B18 join 前预览：群主/成员数，给人知道这个码是哪个群。 */
+  | { kind: 'group_invite_preview'; reqId: string; inviteCode: string }
+  /** B19 踢一批成员。页内逐个判 canRemove，不可踢的只报 skipped 不硬踢。 */
+  | { kind: 'group_kick'; reqId: string; chatKey: string; participantIds: string[] }
 
 export interface BridgeInstallConfig {
   bridgeVersion: string

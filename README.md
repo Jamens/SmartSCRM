@@ -191,6 +191,7 @@ HTTP 请求
 | `components/messages/` | 记录页的 9 个部件：`ConversationList`、`ConversationActions`(会话头语向弹层)、`CreateCustomerDialog`、`CustomerDirectionDialog`、`MessageThread`、`MessageBubble`、`ReplyComposer`(回复框)、`SearchPanel`(全局搜索，300ms 防抖)、`StatsCards` |
 | `components/customers/` | `CustomerDrawer`（客户抽屉）、`CustomerTimeline`（时间线 + 跳回记录页） |
 | `components/translation/LangSelect.tsx` | 语种选择器 |
+| B18/B19 加群/踢人 | 数据层 V32 + 执行链：页内 `bridge/whatsapp/groupOps.ts` 调 wa-js（join/canRemove/removeParticipants，逐个判 canRemove）；Java `GroupOpsExecutorService` 编排（判人工门/派发/回填/计数），**Java 不碰 wa-js**（spec §9 分工） |
 | `components/ui/` | 11 个 shadcn 基础件 |
 | `api/` | 按域分文件的后端调用：`customers` `labels` `audiences` `materials` `quickReplies` `messages` `translation` `dashboard` `aiKnowledge` `scriptEngine` |
 | `stores/auth.ts` | 登录态：token 只经 `window.scrm.session` 存（不进 localStorage），启动时 `boot` 恢复 |
