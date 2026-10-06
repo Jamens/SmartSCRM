@@ -28,6 +28,7 @@ export const zhTW: DeepString<typeof zhCN> = {
     help: '說明',
     logs: '日誌中心',
     ai: 'AI 工作區',
+    script: '炒群引擎',
     settings: '設定'
   },
   notifications: {
@@ -176,6 +177,63 @@ export const zhTW: DeepString<typeof zhCN> = {
     faq3A: '側欄鈴鐺「訊息中心」，未讀會高亮，點開即已讀。',
     downloadTemplate: '下載 FAQ 範本',
     downloadTemplateDesc: '下載一個 CSV 範本，把你的 FAQ 填進去。',
+  },
+  script: {
+    title: '炒群引擎',
+    add: '新增',
+    delete: '刪除',
+    empty: '暫無資料',
+    tab: {
+      library: '角色庫',
+      playbook: '劇本',
+      tasks: '任務面板',
+    },
+    category: {
+      title: '品類',
+      desc: '群分類，如 種草/測評',
+      name: '品類名',
+    },
+    role: {
+      title: '角色',
+      desc: '品類下的具體人設',
+      name: '角色名',
+      pickCatFirst: '先選左側品類',
+    },
+    tpl: {
+      title: '動作模板',
+      desc: '角色執行某動作的預設參數',
+      name: '模板名',
+      pickRoleFirst: '先選中間角色',
+    },
+    playbook: {
+      title: '劇本',
+      desc: '綁定角色的有序動作序列',
+      name: '劇本名',
+      pickRole: '選擇角色',
+      interval: 'loop 間隔（秒）',
+      accountHint: '帳號列表（逗號分隔，= failover 順序）',
+    },
+    step: {
+      title: '劇本步驟',
+      desc: '按序執行的動作',
+      pickPlaybook: '左側選一個劇本',
+      add: '追加一步',
+    },
+    task: {
+      title: '任務',
+      desc: '對某群跑某劇本（同群同劇本冪等）',
+      pickPlaybook: '選擇劇本',
+      start: '起任務',
+      advance: '推進一格',
+      cancel: '取消',
+    },
+    taskStep: {
+      title: '任務步驟',
+      desc: '斷點續跑粒度；sending 可回報結果',
+      pickTask: '左側選一個任務',
+      ok: '成功',
+      fail: '失敗',
+    },
   },
   dashboard: {
     title: '報表儀表板',

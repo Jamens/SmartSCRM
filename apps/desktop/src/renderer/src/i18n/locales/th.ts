@@ -28,6 +28,7 @@ export const th: DeepString<typeof zhCN> = {
     help: 'ช่วยเหลือ',
     logs: 'ศูนย์บันทึก',
     ai: 'พื้นที่ทำงาน AI',
+    script: 'สคริปต์เอนจิ้น',
     settings: 'การตั้งค่า'
   },
   notifications: {
@@ -181,6 +182,63 @@ export const th: DeepString<typeof zhCN> = {
     faq3A: 'ระฆัง "ศูนย์การแจ้งเตือน" ในแถบด้านข้าง รายการที่ยังไม่อ่านจะเน้น และเปิดอ่านแล้วถือว่าอ่านแล้ว',
     downloadTemplate: 'ดาวน์โหลดเทมเพลต FAQ',
     downloadTemplateDesc: 'ดาวน์โหลดเทมเพลต CSV แล้วกรอก FAQ ของคุณ',
+  },
+  script: {
+    title: 'สคริปต์เอนจิ้น',
+    add: 'เพิ่ม',
+    delete: 'ลบ',
+    empty: 'ยังไม่มีข้อมูล',
+    tab: {
+      library: 'คลังบทบาท',
+      playbook: 'สคริปต์',
+      tasks: 'งาน',
+    },
+    category: {
+      title: 'หมวดหมู่',
+      desc: 'ประเภทกลุ่ม',
+      name: 'ชื่อหมวดหมู่',
+    },
+    role: {
+      title: 'บทบาท',
+      desc: 'บุคลิกใต้หมวดหมู่',
+      name: 'ชื่อบทบาท',
+      pickCatFirst: 'เลือกหมวดหมู่ก่อน',
+    },
+    tpl: {
+      title: 'เทมเพลตการกระทำ',
+      desc: 'พารามิเตอร์เริ่มต้นของการกระทำ',
+      name: 'ชื่อเทมเพลต',
+      pickRoleFirst: 'เลือกบทบาทก่อน',
+    },
+    playbook: {
+      title: 'สคริปต์',
+      desc: 'ลำดับการกระทำผูกกับบทบาท',
+      name: 'ชื่อสคริปต์',
+      pickRole: 'เลือกบทบาท',
+      interval: 'ช่วง loop (วิ)',
+      accountHint: 'บัญชี (คั่นด้วยจุลภาค = ลำดับ failover)',
+    },
+    step: {
+      title: 'ขั้นตอน',
+      desc: 'การกระทำตามลำดับ',
+      pickPlaybook: 'เลือกสคริปต์ทางซ้าย',
+      add: 'เพิ่มขั้นตอน',
+    },
+    task: {
+      title: 'งาน',
+      desc: 'รันสคริปต์กับกลุ่ม (idempotent)',
+      pickPlaybook: 'เลือกสคริปต์',
+      start: 'เริ่มงาน',
+      advance: 'เดินหน้า',
+      cancel: 'ยกเลิก',
+    },
+    taskStep: {
+      title: 'ขั้นตอนงาน',
+      desc: 'หน่วยการทำงานต่อ; sending รายงานผลได้',
+      pickTask: 'เลือกงานทางซ้าย',
+      ok: 'สำเร็จ',
+      fail: 'ล้มเหลว',
+    },
   },
   dashboard: {
     title: 'รายงานและแดชบอร์ด',

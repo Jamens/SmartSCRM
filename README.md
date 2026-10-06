@@ -184,7 +184,7 @@ HTTP 请求
 |---|---|
 | `App.tsx` | `HashRouter` + 路由表；未登录跳 `LoginPage` |
 | `layouts/AppLayout.tsx` | 整体框架：`TitleBar` + `ModuleRail` + `AccountSidebar` + 内容区 |
-| `pages/` | 9 个页面：`HomePage`(工作台)、`MessagesPage`(聊天记录)、`CustomersPage`、`LabelsPage`、`AudiencesPage`、`QuickRepliesPage`、`MaterialsPage`、`TranslationPage`、`LoginPage` |
+| `pages/` | 业务页面：`HomePage`(工作台)、`MessagesPage`(聊天记录)、`CustomersPage`、`LabelsPage`、`AudiencesPage`、`QuickRepliesPage`、`MaterialsPage`、`TranslationPage`、`DashboardPage`(B11 报表仪表盘)、`AiWorkspacePage`(B28 AI 工作区)、`ScriptPage`(B8 炒群引擎)、`LoginPage` 等 |
 | `components/AccountSidebar.tsx` | 账号列表 + 增删（删除即销毁视图） |
 | `components/AccountStage.tsx` | 内嵌视图舞台：量测容器 bounds，向主进程传 `injectConfig`（含 `apiBase`） |
 | `components/AddAccountDialog.tsx` / `ModuleRail.tsx` / `TitleBar.tsx` / `ModulePlaceholder.tsx` | 新建账号弹窗 / 左侧模块导航 / 自绘标题栏 / 未实现模块占位 |
@@ -192,7 +192,7 @@ HTTP 请求
 | `components/customers/` | `CustomerDrawer`（客户抽屉）、`CustomerTimeline`（时间线 + 跳回记录页） |
 | `components/translation/LangSelect.tsx` | 语种选择器 |
 | `components/ui/` | 11 个 shadcn 基础件 |
-| `api/` | 按域分文件的后端调用：`customers` `labels` `audiences` `materials` `quickReplies` `messages` `translation` |
+| `api/` | 按域分文件的后端调用：`customers` `labels` `audiences` `materials` `quickReplies` `messages` `translation` `dashboard` `aiKnowledge` `scriptEngine` |
 | `stores/auth.ts` | 登录态：token 只经 `window.scrm.session` 存（不进 localStorage），启动时 `boot` 恢复 |
 | `stores/accounts.ts` | 账号列表与当前账号 |
 | `stores/chatJump.ts` | 一次性交接信号：抽屉里 `hold(conversation)`，记录页挂载时取走并 `clear()`（整条 `ConversationVO`，不用路由参数——`chat_key` 含 `@`/`.`/连字符，且不该暴露在地址栏） |
@@ -242,7 +242,7 @@ HTTP 请求
 
 ### 5.6 `src/shared` 两端共用的纯模型
 
-`chatTypes.ts`（帧形状）、`chatKeys.ts`、`chatTime.ts`、`chatStatus.ts`、`chatPlatform.ts`、`liveTail.ts`（尾巴合并 / 乐观行结清 / 状态推进）、`translateKey.ts`、`groupMembers.ts`（群成员的 wire 类型、常量与纯规则：action→event_type、系统消息分类、覆盖率闸）、`theme.ts`（三档主题与落盘）、`badge.ts`（角标口径）、`batchSend.ts`、`machine.ts`，各配 `.test.ts`。这是"渲染层与桥对同一条消息／同一个成员的理解一致"的地方，**node:test 直接跑**。
+`chatTypes.ts`（帧形状）、`chatKeys.ts`、`chatTime.ts`、`chatStatus.ts`、`chatPlatform.ts`、`liveTail.ts`（尾巴合并 / 乐观行结清 / 状态推进）、`translateKey.ts`、`groupMembers.ts`（群成员的 wire 类型、常量与纯规则：action→event_type、系统消息分类、覆盖率闸）、`theme.ts`（三档主题与落盘）、`badge.ts`（角标口径）、`batchSend.ts`、`machine.ts`、`aiKnowledge.ts`（B28：派生 QA 预览 `deriveQaPreview` + 人设模板 `personaTemplateOf`）、`dashboard.ts`（B11：`dashboardCsv` 导出）、`scriptActions.ts`（B8：动作词表 `SCRIPT_ACTIONS` + 断点推进 `nextStep` + `failoverAccount`），各配 `.test.ts`。这是"渲染层与桥对同一条消息／同一个成员的理解一致"的地方，**node:test 直接跑**。
 
 ### 5.7 构建脚本与产物
 

@@ -31,6 +31,7 @@ export const zhCN = {
     help: '帮助',
     logs: '日志中心',
     ai: 'AI 工作区',
+    script: '炒群引擎',
     settings: '设置'
   },
   notifications: {
@@ -186,6 +187,63 @@ export const zhCN = {
     faq3A: '侧栏铃铛「消息中心」，未读会高亮，点开即已读。',
     downloadTemplate: '下载 FAQ 模板',
     downloadTemplateDesc: '下载一个 CSV 模板，把你的 FAQ 填进去。',
+  },
+  script: {
+    title: '炒群引擎',
+    add: '添加',
+    delete: '删除',
+    empty: '暂无数据',
+    tab: {
+      library: '角色库',
+      playbook: '剧本',
+      tasks: '任务面板',
+    },
+    category: {
+      title: '品类',
+      desc: '群分类，如 种草/测评',
+      name: '品类名',
+    },
+    role: {
+      title: '角色',
+      desc: '品类下的具体人设',
+      name: '角色名',
+      pickCatFirst: '先选左侧品类',
+    },
+    tpl: {
+      title: '动作模板',
+      desc: '角色执行某动作的默认参数',
+      name: '模板名',
+      pickRoleFirst: '先选中间角色',
+    },
+    playbook: {
+      title: '剧本',
+      desc: '绑定角色的有序动作序列',
+      name: '剧本名',
+      pickRole: '选择角色',
+      interval: 'loop 间隔（秒）',
+      accountHint: '账号列表（逗号分隔，= failover 顺序）',
+    },
+    step: {
+      title: '剧本步骤',
+      desc: '按序执行的动作',
+      pickPlaybook: '左侧选一个剧本',
+      add: '追加一步',
+    },
+    task: {
+      title: '任务',
+      desc: '对某群跑某剧本（同群同剧本幂等）',
+      pickPlaybook: '选择剧本',
+      start: '起任务',
+      advance: '推进一格',
+      cancel: '取消',
+    },
+    taskStep: {
+      title: '任务步骤',
+      desc: '断点续跑粒度；sending 可回报结果',
+      pickTask: '左侧选一个任务',
+      ok: '成功',
+      fail: '失败',
+    },
   },
   dashboard: {
     title: '报表仪表盘',

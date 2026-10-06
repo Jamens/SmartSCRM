@@ -28,6 +28,7 @@ export const vi: DeepString<typeof zhCN> = {
     help: 'Trợ giúp',
     logs: 'Trung tâm nhật ký',
     ai: 'Không gian AI',
+    script: 'Động cơ kịch bản',
     settings: 'Cài đặt'
   },
   notifications: {
@@ -182,6 +183,63 @@ export const vi: DeepString<typeof zhCN> = {
     faq3A: 'Biểu tượng chuông "Thông báo" trên thanh bên; mục chưa đọc được làm nổi bật và mở ra là đã đọc.',
     downloadTemplate: 'Tải mẫu FAQ',
     downloadTemplateDesc: 'Tải một mẫu CSV và điền FAQ của bạn.',
+  },
+  script: {
+    title: 'Động cơ kịch bản',
+    add: 'Thêm',
+    delete: 'Xóa',
+    empty: 'Chưa có dữ liệu',
+    tab: {
+      library: 'Thư viện vai trò',
+      playbook: 'Kịch bản',
+      tasks: 'Tác vụ',
+    },
+    category: {
+      title: 'Nhóm',
+      desc: 'Loại nhóm',
+      name: 'Tên nhóm',
+    },
+    role: {
+      title: 'Vai trò',
+      desc: 'Nhân cách dưới nhóm',
+      name: 'Tên vai trò',
+      pickCatFirst: 'Chọn nhóm trước',
+    },
+    tpl: {
+      title: 'Mẫu hành động',
+      desc: 'Tham số mặc định của hành động',
+      name: 'Tên mẫu',
+      pickRoleFirst: 'Chọn vai trò trước',
+    },
+    playbook: {
+      title: 'Kịch bản',
+      desc: 'Chuỗi hành động gắn với vai trò',
+      name: 'Tên kịch bản',
+      pickRole: 'Chọn vai trò',
+      interval: 'Khoảng loop (giây)',
+      accountHint: 'Tài khoản (phân tách bởi dấu phẩy = thứ tự failover)',
+    },
+    step: {
+      title: 'Bước',
+      desc: 'Hành động chạy theo thứ tự',
+      pickPlaybook: 'Chọn kịch bản bên trái',
+      add: 'Thêm bước',
+    },
+    task: {
+      title: 'Tác vụ',
+      desc: 'Chạy kịch bản trên nhóm (idempotent)',
+      pickPlaybook: 'Chọn kịch bản',
+      start: 'Bắt đầu',
+      advance: 'Tiến',
+      cancel: 'Huỷ',
+    },
+    taskStep: {
+      title: 'Bước tác vụ',
+      desc: 'Đơn vị tiếp tục; sending có thể báo kết quả',
+      pickTask: 'Chọn tác vụ bên trái',
+      ok: 'OK',
+      fail: 'Lỗi',
+    },
   },
   dashboard: {
     title: 'Báo cáo & Bảng điều khiển',

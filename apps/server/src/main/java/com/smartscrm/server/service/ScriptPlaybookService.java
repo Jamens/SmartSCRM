@@ -48,7 +48,7 @@ public class ScriptPlaybookService {
         p.setName(require(name, "name"));
         p.setEnabled(enabled == null ? 1 : (enabled == 0 ? 0 : 1));
         p.setLoopIntervalSec(loopIntervalSec == null ? 3600 : Math.max(60, loopIntervalSec));
-        p.setAccountIds(accountIds);
+        p.setAccountIds(normalizeAccountIds(accountIds));
         playbookMapper.insert(p);
         return p;
     }
@@ -60,7 +60,7 @@ public class ScriptPlaybookService {
         if (name != null && !name.isBlank()) p.setName(name.trim());
         if (enabled != null) p.setEnabled(enabled == 0 ? 0 : 1);
         if (loopIntervalSec != null) p.setLoopIntervalSec(Math.max(60, loopIntervalSec));
-        if (accountIds != null) p.setAccountIds(accountIds);
+        if (accountIds != null) p.setAccountIds(normalizeAccountIds(accountIds));
         playbookMapper.updateById(p);
         return p;
     }
@@ -139,5 +139,44 @@ public class ScriptPlaybookService {
     private static String require(String v, String field) {
         if (v == null || v.isBlank()) throw new BizException(40000, field + " 不能为空");
         return v.trim();
+    }
+
+    /**
+     * account_ids 列是 MySQL **JSON 类型**，非法 JSON 会在 insert 时报
+     * "Invalid JSON text ... document root must not be followed by other values"（500）。
+     * 页面通常传的是 {@code 7,2} 这种逗号串，所以在服务层统一规范化成 {@code [7,2]}——
+     * 也顺带把「不是数字」的脏输入挡在 400 而不是丢到 DB 报 500。
+     */
+    static String normalizeAccountIds(String raw) {
+        if (raw == null || raw.isBlank()) return null;
+        String s = raw.trim();
+        if (s.startsWith("[")) {
+            // 已是 JSON 数组：只做「元素都是数字」的轻校验
+            String inner = s.substring(1, s.endsWith("]") ? s.length() - 1 : s.length());
+            for (String p : inner.split(",")) {
+                String x = p.trim();
+                if (x.isEmpty()) continue;
+                try {
+                    Long.parseLong(x);
+                } catch (NumberFormatException e) {
+                    throw new BizException(40000, "account_ids 含非数字: " + x);
+                }
+            }
+            return s;
+        }
+        StringBuilder sb = new StringBuilder("[");
+        for (String p : s.split(",")) {
+            String x = p.trim();
+            if (x.isEmpty()) continue;
+            try {
+                Long.parseLong(x);
+            } catch (NumberFormatException e) {
+                throw new BizException(40000, "account_ids 含非数字: " + x);
+            }
+            if (sb.length() > 1) sb.append(',');
+            sb.append(x);
+        }
+        sb.append(']');
+        return sb.toString();
     }
 }

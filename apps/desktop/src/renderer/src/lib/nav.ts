@@ -3,6 +3,7 @@ import {
   Bell,
   Bot,
   FileText,
+  Layers,
   FolderOpen,
   HelpCircle,
   History,
@@ -45,6 +46,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/help', i18nKey: 'nav.help', icon: HelpCircle },
   // AI 工作区（B28）：知识库三栏/文档/人设/养号/接管台，独立内容页。
   { path: '/ai', i18nKey: 'nav.ai', icon: Bot },
+  // 炒群引擎（B8）：角色库三级/剧本/任务面板，紧随 AI 工作区。
+  { path: '/script', i18nKey: 'nav.script', icon: Layers },
   // 日志中心（A19）：排查用的宿主能力，排在业务模块之后、设置之前。
   { path: '/logs', i18nKey: 'nav.logs', icon: FileText },
   // 设置排在最后：它是宿主能力，不是业务模块。

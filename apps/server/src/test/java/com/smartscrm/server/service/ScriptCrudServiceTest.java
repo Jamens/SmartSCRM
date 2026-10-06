@@ -115,4 +115,30 @@ class ScriptCrudServiceTest {
         assertThrows(BizException.class, () -> playbookService.createStep(TENANT, 3L, 0, "post_message", null));
         verify(stepMapper, never()).insert(any(ScriptPlaybookStep.class));
     }
+
+    // ===== account_ids 规范化（MySQL JSON 列拒收 "7,2" → 曾 500） =====
+
+    @Test
+    void normalizeAccountIds_convertsCommaStringToJsonArray() {
+        assertEquals("[7,2]", ScriptPlaybookService.normalizeAccountIds("7,2"));
+        assertEquals("[7,2]", ScriptPlaybookService.normalizeAccountIds(" 7 , 2 "));
+        assertEquals("[7]", ScriptPlaybookService.normalizeAccountIds("7"));
+        assertEquals("[7,2]", ScriptPlaybookService.normalizeAccountIds("[7,2]"), "已是 JSON 数组则原样保留");
+        assertEquals(null, ScriptPlaybookService.normalizeAccountIds(null));
+        assertEquals(null, ScriptPlaybookService.normalizeAccountIds("  "));
+    }
+
+    @Test
+    void normalizeAccountIds_rejectsNonNumeric() {
+        assertThrows(BizException.class, () -> ScriptPlaybookService.normalizeAccountIds("7,abc"));
+    }
+
+    @Test
+    void create_normalizesAccountIds() {
+        ScriptRole r = new ScriptRole();
+        r.setTenantId(TENANT);
+        when(roleMapper.selectById(5L)).thenReturn(r);
+        var p = playbookService.create(TENANT, 5L, "剧本", null, null, "7,2");
+        assertEquals("[7,2]", p.getAccountIds(), "服务层应把 7,2 规范成合法 JSON");
+    }
 }

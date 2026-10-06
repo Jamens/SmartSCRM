@@ -28,6 +28,7 @@ export const ja: DeepString<typeof zhCN> = {
     help: 'ヘルプ',
     logs: 'ログセンター',
     ai: 'AI ワークスペース',
+    script: 'スクリプトエンジン',
     settings: '設定'
   },
   notifications: {
@@ -183,6 +184,63 @@ export const ja: DeepString<typeof zhCN> = {
     faq3A: 'サイドバーのベル「メッセージセンター」。未読は強調され、開くと既読になります。',
     downloadTemplate: 'FAQ テンプレートをダウンロード',
     downloadTemplateDesc: 'CSV テンプレートをダウンロードして独自の FAQ を記入できます。',
+  },
+  script: {
+    title: 'スクリプトエンジン',
+    add: '追加',
+    delete: '削除',
+    empty: 'データなし',
+    tab: {
+      library: 'ロールライブラリ',
+      playbook: 'プレイブック',
+      tasks: 'タスク',
+    },
+    category: {
+      title: 'カテゴリ',
+      desc: 'グループ種別',
+      name: 'カテゴリ名',
+    },
+    role: {
+      title: 'ロール',
+      desc: 'カテゴリ下の人設',
+      name: 'ロール名',
+      pickCatFirst: 'まずカテゴリを選択',
+    },
+    tpl: {
+      title: 'アクションテンプレート',
+      desc: 'アクションの既定パラメータ',
+      name: 'テンプレート名',
+      pickRoleFirst: 'まずロールを選択',
+    },
+    playbook: {
+      title: 'プレイブック',
+      desc: 'ロールに紐づく有序アクション',
+      name: 'プレイブック名',
+      pickRole: 'ロールを選択',
+      interval: 'loop 間隔（秒）',
+      accountHint: 'アカウント（カンマ区切り=failover 順）',
+    },
+    step: {
+      title: 'ステップ',
+      desc: '順番に実行するアクション',
+      pickPlaybook: '左でプレイブックを選択',
+      add: 'ステップ追加',
+    },
+    task: {
+      title: 'タスク',
+      desc: 'グループでプレイブック実行（冪等）',
+      pickPlaybook: 'プレイブックを選択',
+      start: 'タスク開始',
+      advance: '進める',
+      cancel: 'キャンセル',
+    },
+    taskStep: {
+      title: 'タスクステップ',
+      desc: '再開の粒度；sending は結果報告可',
+      pickTask: '左でタスクを選択',
+      ok: '成功',
+      fail: '失敗',
+    },
   },
   dashboard: {
     title: 'レポートダッシュボード',

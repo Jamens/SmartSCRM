@@ -29,6 +29,7 @@ export const en: DeepString<typeof zhCN> = {
     help: 'Help',
     logs: 'Logs',
     ai: 'AI Workspace',
+    script: 'Script Engine',
     settings: 'Settings'
   },
   notifications: {
@@ -183,6 +184,63 @@ export const en: DeepString<typeof zhCN> = {
     faq3A: 'The bell "Notifications" in the sidebar; unread items are highlighted and open as read.',
     downloadTemplate: 'Download FAQ template',
     downloadTemplateDesc: 'Download a CSV template and fill in your own FAQ.',
+  },
+  script: {
+    title: 'Script Engine',
+    add: 'Add',
+    delete: 'Delete',
+    empty: 'No data',
+    tab: {
+      library: 'Role library',
+      playbook: 'Playbook',
+      tasks: 'Tasks',
+    },
+    category: {
+      title: 'Categories',
+      desc: 'Group types, e.g. seeding/reviews',
+      name: 'Category name',
+    },
+    role: {
+      title: 'Roles',
+      desc: 'Personas under a category',
+      name: 'Role name',
+      pickCatFirst: 'Pick a category first',
+    },
+    tpl: {
+      title: 'Action templates',
+      desc: 'Default params for an action',
+      name: 'Template name',
+      pickRoleFirst: 'Pick a role first',
+    },
+    playbook: {
+      title: 'Playbooks',
+      desc: 'Ordered actions bound to a role',
+      name: 'Playbook name',
+      pickRole: 'Pick a role',
+      interval: 'Loop interval (s)',
+      accountHint: 'Accounts (comma-separated = failover order)',
+    },
+    step: {
+      title: 'Steps',
+      desc: 'Actions run in order',
+      pickPlaybook: 'Pick a playbook on the left',
+      add: 'Append step',
+    },
+    task: {
+      title: 'Tasks',
+      desc: 'Run a playbook on a group (idempotent)',
+      pickPlaybook: 'Pick a playbook',
+      start: 'Start task',
+      advance: 'Advance',
+      cancel: 'Cancel',
+    },
+    taskStep: {
+      title: 'Task steps',
+      desc: 'Resume granularity; report on sending',
+      pickTask: 'Pick a task on the left',
+      ok: 'OK',
+      fail: 'Fail',
+    },
   },
   dashboard: {
     title: 'Reports & Dashboard',

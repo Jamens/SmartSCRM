@@ -28,6 +28,7 @@ export const ko: DeepString<typeof zhCN> = {
     help: '도움말',
     logs: '로그 센터',
     ai: 'AI 워크스페이스',
+    script: '스크립트 엔진',
     settings: '설정'
   },
   notifications: {
@@ -181,6 +182,63 @@ export const ko: DeepString<typeof zhCN> = {
     faq3A: '사이드벨의 "알림 센터". 읽지 않은 항목은 강조되며 열면 읽음 처리됩니다.',
     downloadTemplate: 'FAQ 템플릿 다운로드',
     downloadTemplateDesc: 'CSV 템플릿을 내려받아 나만의 FAQ를 작성하세요.',
+  },
+  script: {
+    title: '스크립트 엔진',
+    add: '추가',
+    delete: '삭제',
+    empty: '데이터 없음',
+    tab: {
+      library: '역할 라이브러리',
+      playbook: '플레이북',
+      tasks: '작업',
+    },
+    category: {
+      title: '분류',
+      desc: '그룹 유형',
+      name: '분류명',
+    },
+    role: {
+      title: '역할',
+      desc: '분류 아래 페르소나',
+      name: '역할명',
+      pickCatFirst: '먼저 분류 선택',
+    },
+    tpl: {
+      title: '액션 템플릿',
+      desc: '액션 기본 파라미터',
+      name: '템플릿명',
+      pickRoleFirst: '먼저 역할 선택',
+    },
+    playbook: {
+      title: '플레이북',
+      desc: '역할에 묶인 순서 액션',
+      name: '플레이북명',
+      pickRole: '역할 선택',
+      interval: 'loop 간격(초)',
+      accountHint: '계정(쉼표 구분=failover 순서)',
+    },
+    step: {
+      title: '단계',
+      desc: '순서대로 실행되는 액션',
+      pickPlaybook: '왼쪽에서 플레이북 선택',
+      add: '단계 추가',
+    },
+    task: {
+      title: '작업',
+      desc: '그룹에 플레이북 실행(멱등)',
+      pickPlaybook: '플레이북 선택',
+      start: '작업 시작',
+      advance: '진행',
+      cancel: '취소',
+    },
+    taskStep: {
+      title: '작업 단계',
+      desc: '재개 단위; sending은 결과 보고 가능',
+      pickTask: '왼쪽에서 작업 선택',
+      ok: '성공',
+      fail: '실패',
+    },
   },
   dashboard: {
     title: '리포트 대시보드',

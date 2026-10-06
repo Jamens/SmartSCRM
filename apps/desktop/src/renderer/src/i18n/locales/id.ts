@@ -28,6 +28,7 @@ export const id: DeepString<typeof zhCN> = {
     help: 'Bantuan',
     logs: 'Pusat Log',
     ai: 'Ruang AI',
+    script: 'Mesin Skrip',
     settings: 'Pengaturan'
   },
   notifications: {
@@ -184,6 +185,63 @@ export const id: DeepString<typeof zhCN> = {
     faq3A: 'Lonceng "Notifikasi" di bilah samping; yang belum dibaca disorot dan terbuka berarti terbaca.',
     downloadTemplate: 'Unduh templat FAQ',
     downloadTemplateDesc: 'Unduh templat CSV lalu isi FAQ Anda.',
+  },
+  script: {
+    title: 'Mesin Skrip',
+    add: 'Tambah',
+    delete: 'Hapus',
+    empty: 'Belum ada data',
+    tab: {
+      library: 'Pustaka peran',
+      playbook: 'Playbook',
+      tasks: 'Tugas',
+    },
+    category: {
+      title: 'Kategori',
+      desc: 'Jenis grup',
+      name: 'Nama kategori',
+    },
+    role: {
+      title: 'Peran',
+      desc: 'Persona di bawah kategori',
+      name: 'Nama peran',
+      pickCatFirst: 'Pilih kategori dulu',
+    },
+    tpl: {
+      title: 'Templat aksi',
+      desc: 'Parameter default aksi',
+      name: 'Nama templat',
+      pickRoleFirst: 'Pilih peran dulu',
+    },
+    playbook: {
+      title: 'Playbook',
+      desc: 'Urutan aksi yang terikat peran',
+      name: 'Nama playbook',
+      pickRole: 'Pilih peran',
+      interval: 'Interval loop (detik)',
+      accountHint: 'Akun (pisah koma = urutan failover)',
+    },
+    step: {
+      title: 'Langkah',
+      desc: 'Aksi yang berjalan berurutan',
+      pickPlaybook: 'Pilih playbook di kiri',
+      add: 'Tambah langkah',
+    },
+    task: {
+      title: 'Tugas',
+      desc: 'Jalankan playbook pada grup (idempoten)',
+      pickPlaybook: 'Pilih playbook',
+      start: 'Mulai tugas',
+      advance: 'Lanjut',
+      cancel: 'Batal',
+    },
+    taskStep: {
+      title: 'Langkah tugas',
+      desc: 'Granularitas lanjut; sending bisa lapor',
+      pickTask: 'Pilih tugas di kiri',
+      ok: 'Sukses',
+      fail: 'Gagal',
+    },
   },
   dashboard: {
     title: 'Laporan & Dasbor',
