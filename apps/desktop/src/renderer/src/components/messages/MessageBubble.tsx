@@ -1,5 +1,5 @@
 // src/renderer/src/components/messages/MessageBubble.tsx
-import type { ReactNode } from 'react'
+import { useRef, useState, type ChangeEvent, type ReactNode } from 'react'
 import { useTranslation } from 'react-i18next'
 import {
   AlertTriangle,
@@ -19,6 +19,7 @@ import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
 import { timeOfMessage } from '@/lib/chatDisplay'
 import type { ThreadRow } from '@/api/messages'
+import { useImageTranslate, useVoiceTranslate } from '@/api/translation'
 import type { MediaType, MsgStatus } from '@shared/chatTypes'
 
 /**
@@ -75,6 +76,9 @@ export default function MessageBubble({
   // 先收到局部变量再判：TS 对 `row.mediaType` 这种属性路径的收窄不如局部 const 稳。
   const mediaType = row.mediaType
   const Media = mediaType === 'text' ? null : MEDIA_ICON[mediaType]
+  // B25：图片/语音气泡提供「翻译」入口；媒体字节不在前端，由用户从本机选文件递交后端 OCR/ASR。
+  const isMediaTranslateable = mediaType === 'image' || mediaType === 'audio'
+  const [showMedia, setShowMedia] = useState(false)
   return (
     <div
       /**
@@ -125,12 +129,131 @@ export default function MessageBubble({
           </Badge>
         )}
         {timeOfMessage(row.ts)}
+        {isMediaTranslateable && (
+          <button
+            type="button"
+            className="underline-offset-2 hover:underline"
+            onClick={() => setShowMedia((v) => !v)}
+          >
+            {t('translation.media.translate')}
+          </button>
+        )}
         {out && <Tick status={row.status} />}
         {out &&
           row.status === 'failed' &&
           (failedHint ?? <Badge variant="outline">{t('messages.bubble.sendFailed')}</Badge>)}
         {out && row.source === 'native_send' && <span>· 页面内发送</span>}
       </span>
+      {showMedia && isMediaTranslateable && (
+        <MediaTranslatePanel
+          row={row}
+          kind={mediaType === 'image' ? 'image' : 'audio'}
+        />
+      )}
+    </div>
+  )
+}
+
+/**
+ * B25 会话内媒体翻译面板：媒体字节不在前端（MessageBubble 隐私口径），所以由用户从本机选文件，
+ * 以 base64 递交后端 OCR/ASR + 翻译。type 按气泡方向取 send/receive，并带上 accountId/chatKey/
+ * customerId 让后端按会话生效语向译出。
+ */
+function MediaTranslatePanel({
+  row,
+  kind
+}: {
+  row: ThreadRow
+  kind: 'image' | 'audio'
+}): React.JSX.Element {
+  const { t } = useTranslation()
+  const [file, setFile] = useState<File | null>(null)
+  const [b64, setB64] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const imageMut = useImageTranslate()
+  const voiceMut = useVoiceTranslate()
+
+  function onPick(e: ChangeEvent<HTMLInputElement>): void {
+    const f = e.target.files?.[0]
+    if (!f) return
+    setError(null)
+    setFile(f)
+    const reader = new FileReader()
+    reader.onload = () => {
+      const url = String(reader.result)
+      const comma = url.indexOf(',')
+      setB64(comma >= 0 ? url.slice(comma + 1) : url)
+    }
+    reader.readAsDataURL(f)
+  }
+
+  function run(): void {
+    if (!b64) return
+    const mut = kind === 'image' ? imageMut : voiceMut
+    mut.mutate({
+      data: b64,
+      mime: file?.type ?? '',
+      type: row.direction === 'out' ? 'send' : 'receive',
+      accountId: row.accountId,
+      chatKey: row.chatKey,
+      customerId: row.customerId
+    })
+  }
+
+  const result = imageMut.data ?? voiceMut.data
+  const pending = imageMut.isPending || voiceMut.isPending
+
+  return (
+    <div className="mt-1 flex max-w-[560px] flex-col gap-1.5 rounded-lg border border-border/60 bg-muted/50 px-3 py-2 text-xs">
+      <p className="text-[11px] text-muted-foreground">{t('translation.media.inConversationHint')}</p>
+      <div className="flex items-center gap-2">
+        <button
+          type="button"
+          className="rounded-full border border-border px-2.5 py-1 text-[11px] text-muted-foreground hover:bg-background"
+          onClick={() => fileRef.current?.click()}
+        >
+          {kind === 'image' ? t('translation.media.pickImage') : t('translation.media.pickAudio')}
+        </button>
+        <input
+          ref={fileRef}
+          type="file"
+          accept={kind === 'image' ? 'image/*' : 'audio/*'}
+          className="hidden"
+          onChange={onPick}
+        />
+        <button
+          type="button"
+          disabled={!b64 || pending}
+          onClick={run}
+          className="rounded-full bg-primary px-2.5 py-1 text-[11px] text-primary-foreground disabled:opacity-40"
+        >
+          {t('translation.media.translate')}
+        </button>
+      </div>
+      {file && <p className="truncate text-[11px] text-muted-foreground">{file.name}</p>}
+      {error && <p className="text-[11px] text-red-600">{error}</p>}
+      {result && (
+        <div className="flex flex-col gap-1">
+          <p>
+            <span className="text-muted-foreground">{t('translation.media.extracted')}：</span>
+            {result.extractedText}
+          </p>
+          <p className="text-foreground">
+            <span className="text-muted-foreground">{t('translation.media.result')}：</span>
+            {result.translation}
+          </p>
+          <p className="flex flex-wrap gap-x-2 text-[11px] text-muted-foreground">
+            {result.degraded && <span className="text-amber-600">{t('translation.media.degradedMock')}</span>}
+            <span>
+              {result.fromLangCode || 'auto'} → {result.toLangCode}
+            </span>
+          </p>
+        </div>
+      )}
+      {(imageMut.isError || voiceMut.isError) && (
+        <p className="text-[11px] text-red-600">{t('translation.requestFailed')}</p>
+      )}
     </div>
   )
 }

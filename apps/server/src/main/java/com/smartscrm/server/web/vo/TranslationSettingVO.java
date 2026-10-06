@@ -16,6 +16,8 @@ public record TranslationSettingVO(
     Boolean enterToSend,
     Boolean disableChinese,
     Boolean disableChinesePreventSend,
+    Boolean ocrEnabled,
+    Boolean asrEnabled,
     String scope,
     String scopeKey,
     /** true = 该客户没有覆盖行，这份设置来自全局（UI 据此显示「跟随全局」）。 */

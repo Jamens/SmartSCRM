@@ -32,6 +32,8 @@ public record TranslationSettingInput(
     Boolean enterToSend,
     Boolean disableChinese,
     Boolean disableChinesePreventSend,
+    Boolean ocrEnabled,
+    Boolean asrEnabled,
     /** 可空：缺省即 global；'customer' 时必须带 scopeKey=客户 id；'conversation' 时不接受 scopeKey。 */
     String scope,
     String scopeKey,

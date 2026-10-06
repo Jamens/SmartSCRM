@@ -82,7 +82,7 @@ class MessageTranslationEchoTest {
         when(cacheMapper.selectOne(any())).thenReturn(null);
         return new TranslationService(settingMapper, mock(TranslationNodeMapper.class), cacheMapper,
             credentialMapper, mock(CustomerMapper.class), mock(ChatConversationMapper.class),
-            mock(PlatformAccountMapper.class), messageMapper, engine, List.of());
+            mock(PlatformAccountMapper.class), messageMapper, engine, List.of(), List.of(), null);
     }
 
     private static TranslateDTO request(Boolean noCache) {

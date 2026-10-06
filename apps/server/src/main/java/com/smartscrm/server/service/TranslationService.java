@@ -19,6 +19,8 @@ import com.smartscrm.server.mapper.TranslationCacheMapper;
 import com.smartscrm.server.mapper.TranslationCredentialMapper;
 import com.smartscrm.server.mapper.TranslationNodeMapper;
 import com.smartscrm.server.mapper.TranslationSettingMapper;
+import com.smartscrm.server.service.media.MediaEngine;
+import com.smartscrm.server.service.media.SimulatedMediaEngine;
 import com.smartscrm.server.service.msg.ConversationScopeKey;
 import com.smartscrm.server.service.msg.ScopeSettings;
 import com.smartscrm.server.service.provider.Credentials;
@@ -26,11 +28,14 @@ import com.smartscrm.server.service.provider.ProviderException;
 import com.smartscrm.server.service.provider.ProviderResult;
 import com.smartscrm.server.service.provider.TranslationProvider;
 import com.smartscrm.server.web.dto.CredentialTestDTO;
+import com.smartscrm.server.web.dto.ImageTranslateDTO;
 import com.smartscrm.server.web.dto.TranslateDTO;
 import com.smartscrm.server.web.dto.TranslationCredentialInput;
 import com.smartscrm.server.web.dto.TranslationSettingInput;
+import com.smartscrm.server.web.dto.VoiceTranslateDTO;
 import com.smartscrm.server.web.vo.CredentialTestVO;
 import com.smartscrm.server.web.vo.ServerDelayVO;
+import com.smartscrm.server.web.vo.MediaTranslateVO;
 import com.smartscrm.server.web.vo.TranslateVO;
 import com.smartscrm.server.web.vo.TranslationCacheEntryVO;
 import com.smartscrm.server.web.vo.TranslationCacheStatsVO;
@@ -39,6 +44,7 @@ import com.smartscrm.server.web.vo.TranslationNodeVO;
 import com.smartscrm.server.web.vo.TranslationSettingVO;
 import java.util.List;
 import java.util.Map;
+import java.util.Base64;
 import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.function.Function;
@@ -71,13 +77,16 @@ public class TranslationService {
     private final ChatMessageMapper messageMapper;
     private final SimulatedTranslationEngine engine;
     private final Map<String, TranslationProvider> providers;
+    private final Map<String, MediaEngine> mediaEngines;
+    private final SimulatedMediaEngine simulatedMediaEngine;
 
     @Autowired
     public TranslationService(TranslationSettingMapper settingMapper, TranslationNodeMapper nodeMapper,
                               TranslationCacheMapper cacheMapper, TranslationCredentialMapper credentialMapper,
                               CustomerMapper customerMapper, ChatConversationMapper conversationMapper,
                               PlatformAccountMapper accountMapper, ChatMessageMapper messageMapper,
-                              SimulatedTranslationEngine engine, List<TranslationProvider> providerBeans) {
+                              SimulatedTranslationEngine engine, List<TranslationProvider> providerBeans,
+                              List<MediaEngine> mediaEngineBeans, SimulatedMediaEngine simulatedMediaEngine) {
         this.settingMapper = settingMapper;
         this.nodeMapper = nodeMapper;
         this.cacheMapper = cacheMapper;
@@ -89,20 +98,25 @@ public class TranslationService {
         this.engine = engine;
         this.providers = providerBeans.stream()
             .collect(Collectors.toMap(TranslationProvider::providerId, Function.identity()));
+        this.mediaEngines = mediaEngineBeans.stream()
+            .collect(Collectors.toMap(MediaEngine::providerId, Function.identity()));
+        this.simulatedMediaEngine = simulatedMediaEngine;
     }
 
     /**
      * 测试缝的既有 9 参形状（{@code TranslationServiceRaceTest} 的"其余协作者给 null 即未被咨询"）。
      * 委托时把 {@code messageMapper} 置 null：走这一格的实例上消息级回显整段关闭，
      * {@code translate()} 的启用条件里显式判它——生产装配永远走上面那个 10 参构造。
+     * 媒体引擎两参同样透传：媒体翻译不被这些测试覆盖，传空表与 null 模拟引擎即可。
      */
     TranslationService(TranslationSettingMapper settingMapper, TranslationNodeMapper nodeMapper,
                        TranslationCacheMapper cacheMapper, TranslationCredentialMapper credentialMapper,
                        CustomerMapper customerMapper, ChatConversationMapper conversationMapper,
                        PlatformAccountMapper accountMapper,
-                       SimulatedTranslationEngine engine, List<TranslationProvider> providerBeans) {
+                       SimulatedTranslationEngine engine, List<TranslationProvider> providerBeans,
+                       List<MediaEngine> mediaEngineBeans, SimulatedMediaEngine simulatedMediaEngine) {
         this(settingMapper, nodeMapper, cacheMapper, credentialMapper, customerMapper, conversationMapper,
-            accountMapper, null, engine, providerBeans);
+            accountMapper, null, engine, providerBeans, mediaEngineBeans, simulatedMediaEngine);
     }
 
     // ============ settings ============
@@ -334,6 +348,8 @@ public class TranslationService {
         current.setDisableChinese(input.disableChinese() == null ? current.getDisableChinese() : input.disableChinese());
         current.setDisableChinesePreventSend(input.disableChinesePreventSend() == null
             ? current.getDisableChinesePreventSend() : input.disableChinesePreventSend());
+        current.setOcrEnabled(input.ocrEnabled() == null ? current.getOcrEnabled() : input.ocrEnabled());
+        current.setAsrEnabled(input.asrEnabled() == null ? current.getAsrEnabled() : input.asrEnabled());
         settingMapper.updateById(current);
         TranslationSetting saved = settingMapper.selectById(current.getId());
         // 刚写入的那行：档位就是它自己的列值，`inherited` 只有全局行算真。
@@ -364,6 +380,8 @@ public class TranslationService {
         row.setEnterToSend(source.getEnterToSend());
         row.setDisableChinese(source.getDisableChinese());
         row.setDisableChinesePreventSend(source.getDisableChinesePreventSend());
+        row.setOcrEnabled(source.getOcrEnabled());
+        row.setAsrEnabled(source.getAsrEnabled());
         return row;
     }
 
@@ -624,6 +642,119 @@ public class TranslationService {
             dto.type(), channel, result.fromLang(), toLang, cacheKey, false, null, scope, false);
     }
 
+    // ============ B25 media translation (OCR image / ASR voice) ============
+
+    public MediaTranslateVO translateImage(Long tenantId, ImageTranslateDTO dto) {
+        return mediaTranslate(tenantId, dto.type(), dto.imageBase64(), dto.mime(), false,
+            dto.customerId(), dto.accountId(), dto.chatKey(), dto.fromLang(), dto.toLang());
+    }
+
+    public MediaTranslateVO translateVoice(Long tenantId, VoiceTranslateDTO dto) {
+        return mediaTranslate(tenantId, dto.type(), dto.audioBase64(), dto.mime(), true,
+            dto.customerId(), dto.accountId(), dto.chatKey(), dto.fromLang(), dto.toLang());
+    }
+
+    /**
+     * 媒体翻译两段式：先用 OCR/ASR 引擎把图片/语音抽成文字，再用既有文本翻译链路（厂商或本地模拟）
+     * 按当前生效语向译出。厂商引擎只在已配置 `tencent` 密钥时启用，否则（或厂商抛错）整段回退本地
+     * 模拟引擎并标 `degraded`——与文本翻译"本地模拟优先"的口径一致。前端不持有媒体字节，内容由调用方
+     * 以 base64 递交，这里只负责解码与翻译，不做任何落盘。
+     */
+    private MediaTranslateVO mediaTranslate(Long tenantId, String type, String base64, String mime,
+                                           boolean voice, Long customerId, Long accountId, String chatKey,
+                                           String fromOverride, String toOverride) {
+        if (!"receive".equals(type) && !"send".equals(type)) {
+            throw new BizException(40000, "type 只能是 receive 或 send");
+        }
+        if (base64 == null || base64.isBlank()) {
+            throw new BizException(40000, "媒体内容(base64)不能为空");
+        }
+        byte[] bytes;
+        try {
+            bytes = Base64.getDecoder().decode(base64);
+        } catch (IllegalArgumentException e) {
+            throw new BizException(40000, "base64 解码失败");
+        }
+        if (bytes.length == 0) {
+            throw new BizException(40000, "媒体内容为空");
+        }
+
+        ScopeSettings.Resolved resolved = resolveSetting(tenantId, customerId, accountId, chatKey);
+        TranslationSetting s = resolved.setting();
+        String scope = resolved.scope();
+        String channel = s.getChannel();
+        String fromLang = "receive".equals(type) ? s.getReceiveFromLang() : s.getSendFromLang();
+        String toLang = "receive".equals(type) ? s.getReceiveToLang() : s.getSendToLang();
+        if (fromOverride != null && !fromOverride.isBlank()) fromLang = fromOverride.trim();
+        if (toOverride != null && !toOverride.isBlank()) toLang = toOverride.trim();
+
+        boolean useVendor = mediaEngines.containsKey("tencent") && loadCredentials(tenantId, "tencent") != null;
+        MediaEngine engine = useVendor ? mediaEngines.get("tencent") : simulatedMediaEngine;
+        Credentials mediaCreds = useVendor ? loadCredentials(tenantId, "tencent") : null;
+
+        String extracted;
+        boolean degraded = false;
+        String degradeReason = null;
+        boolean degradeRetryable = false;
+        try {
+            extracted = voice ? engine.asr(mediaCreds, bytes, mime) : engine.ocr(mediaCreds, bytes, mime);
+        } catch (ProviderException e) {
+            if (simulatedMediaEngine == null) {
+                throw e;
+            }
+            extracted = voice ? simulatedMediaEngine.asr(null, bytes, mime)
+                : simulatedMediaEngine.ocr(null, bytes, mime);
+            degraded = true;
+            degradeReason = e.getMessage();
+            degradeRetryable = e.retryable();
+        }
+
+        TranslateTextResult tr = translateCore(tenantId, extracted, channel, fromLang, toLang);
+        boolean degradedAll = degraded || tr.degraded();
+        String reasonAll = degradeReason != null ? degradeReason : tr.degradeReason();
+        boolean retryAll = degraded ? degradeRetryable : (tr.degraded() ? tr.retryable() : false);
+        return new MediaTranslateVO(extracted, tr.translation(), false, false, containsChinese(tr.translation()),
+            type, channel, tr.fromLang(), toLang, null, degradedAll, reasonAll, scope, retryAll);
+    }
+
+    /**
+     * 纯文本翻译核心：把"厂商优先、失败回退本地模拟"这段逻辑从 {@code translate()} 抽出来供媒体链路复用，
+     * 避免两处各写一份降级分支（R5：同一份规则不出现两份字面量）。不含缓存与消息级回显——
+     * 媒体链路目前只做即时翻译，不写译文缓存。
+     */
+    private TranslateTextResult translateCore(Long tenantId, String text, String channel,
+                                             String fromLang, String toLang) {
+        if (fromLang != null && fromLang.equals(toLang)) {
+            return new TranslateTextResult(text, false, null, fromLang, false);
+        }
+        String providerId = CHANNEL_TO_PROVIDER.get(channel);
+        if (providerId != null) {
+            Credentials creds = loadCredentials(tenantId, providerId);
+            if (creds != null) {
+                try {
+                    ProviderResult online = providers.get(providerId).translate(creds, text, fromLang, toLang);
+                    return new TranslateTextResult(online.translation(), false, null,
+                        displayFrom(fromLang, online.detectedFrom()), false);
+                } catch (ProviderException e) {
+                    SimulatedTranslationEngine.EngineResult fb = engine.translate(
+                        SimulatedTranslationEngine.normalize(text), fromLang, toLang, channel);
+                    return new TranslateTextResult(fb.translation(), true, e.getMessage(), fb.fromLang(), e.retryable());
+                }
+            }
+            SimulatedTranslationEngine.EngineResult fb = engine.translate(
+                SimulatedTranslationEngine.normalize(text), fromLang, toLang, channel);
+            return new TranslateTextResult(fb.translation(), true,
+                providerId + " 未配置密钥，此结果来自本地模拟引擎", fb.fromLang(), false);
+        }
+        SimulatedTranslationEngine.EngineResult r = engine.translate(
+            SimulatedTranslationEngine.normalize(text), fromLang, toLang, channel);
+        return new TranslateTextResult(r.translation(), false, null, r.fromLang(), false);
+    }
+
+    private record TranslateTextResult(String translation, boolean degraded, String degradeReason,
+                                      String fromLang, boolean retryable) {
+    }
+
     private void writeCache(Long tenantId, String cacheKey, String type, String channel, String fromLang,
                             String toLang, String sourceText, String targetText, boolean partial) {
         TranslationCache row = new TranslationCache();
@@ -816,6 +947,7 @@ public class TranslationService {
             s.getSendEnabled(), s.getSendFromLang(), s.getSendToLang(),
             s.getVoiceEnabled(), s.getPreviewEnabled(), s.getEnterToSend(),
             s.getDisableChinese(), s.getDisableChinesePreventSend(),
+            s.getOcrEnabled(), s.getAsrEnabled(),
             scope, s.getScopeKey(), inherited);
     }
 }

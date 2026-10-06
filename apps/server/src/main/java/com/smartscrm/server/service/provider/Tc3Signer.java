@@ -13,7 +13,7 @@ import java.security.MessageDigest;
  * tencentcloud-sdk-java AbstractClient/Sign implementation: POST JSON to "/" with
  * signed headers "content-type;host" and the date/service/tc3_request key chain.
  */
-final class Tc3Signer {
+public final class Tc3Signer {
 
     static final String ALGORITHM = "TC3-HMAC-SHA256";
 
@@ -43,7 +43,7 @@ final class Tc3Signer {
     }
 
     /** The complete Authorization header value for a POST JSON request against "/". */
-    static String authorization(String secretId, String secretKey, String service, String host,
+    public static String authorization(String secretId, String secretKey, String service, String host,
                                 String contentType, byte[] payload, long epochSeconds) {
         String timestamp = String.valueOf(epochSeconds);
         String date = utcDate(epochSeconds);

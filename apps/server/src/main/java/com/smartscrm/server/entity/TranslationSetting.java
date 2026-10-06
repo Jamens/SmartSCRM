@@ -30,6 +30,10 @@ public class TranslationSetting {
     private Boolean enterToSend;
     private Boolean disableChinese;
     private Boolean disableChinesePreventSend;
+    /** B25: 图片翻译(OCR)开关。 */
+    private Boolean ocrEnabled;
+    /** B25: 语音翻译(ASR)开关。 */
+    private Boolean asrEnabled;
     private LocalDateTime createdAt;
     @TableField(update = "CURRENT_TIMESTAMP(3)")
     private LocalDateTime updatedAt;

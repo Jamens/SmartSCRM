@@ -43,7 +43,7 @@ class TranslationServiceRaceTest {
 
     /** 只喂 settingMapper：insertOrAdopt 全程只碰这一只 mapper，其余协作者给 null 就是"未被咨询"的写法。 */
     private static TranslationService serviceWith(TranslationSettingMapper mapper) {
-        return new TranslationService(mapper, null, null, null, null, null, null, null, List.of());
+        return new TranslationService(mapper, null, null, null, null, null, null, null, List.of(), List.of(), null);
     }
 
     private static TranslationSetting draft() {

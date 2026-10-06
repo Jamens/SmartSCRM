@@ -1,8 +1,9 @@
-import { useMemo, useState } from 'react'
+import { useMemo, useRef, useState } from 'react'
 import {
   Activity,
   Coins,
   Database,
+  Image as ImageIcon,
   KeyRound,
   Languages,
   RotateCw,
@@ -40,7 +41,9 @@ import {
   type TranslateType,
   type TranslationCredentialVO,
   type TranslationSettingInput,
-  type TranslationSettingVO
+  type TranslationSettingVO,
+  useImageTranslate,
+  useVoiceTranslate
 } from '@/api/translation'
 import { GLOBAL_REF } from '@/lib/scopeLabel'
 import {
@@ -218,6 +221,30 @@ export default function TranslationPage(): React.JSX.Element {
               />
             </CardContent>
           </Card>
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2 text-sm">
+                <ImageIcon className="size-4 text-primary" />
+                {t('translation.media.title')}
+              </CardTitle>
+              <CardDescription>{t('translation.media.desc')}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-3">
+              <ToggleRow
+                label={t('translation.media.ocrSwitch')}
+                hint={t('translation.media.ocrHint')}
+                checked={settings.ocrEnabled}
+                onChange={(v) => void patch({ ocrEnabled: v })}
+              />
+              <ToggleRow
+                label={t('translation.media.asrSwitch')}
+                hint={t('translation.media.asrHint')}
+                checked={settings.asrEnabled}
+                onChange={(v) => void patch({ asrEnabled: v })}
+              />
+            </CardContent>
+          </Card>
+          <MediaTrialCard />
           <KeyConfigCard
             credentialOf={credentialOf}
             loadError={!credentialsQuery.isPending && credentialsQuery.isError}
@@ -277,6 +304,134 @@ export default function TranslationPage(): React.JSX.Element {
         </div>
       </div>
     </div>
+  )
+}
+
+/**
+ * B25 媒体翻译试用：前端不持久化媒体字节（见 MessageBubble 隐私口径），所以这里由用户从本机选
+ * 文件，以 base64 递交后端做 OCR/ASR + 翻译。图片与语音切换为一个 tab；结果区先展示抽取文字，
+ * 再展示译文，并标注是否降级到本地模拟引擎。
+ */
+function MediaTrialCard(): React.JSX.Element {
+  const { t } = useTranslation()
+  const [mode, setMode] = useState<'image' | 'voice'>('image')
+  const [file, setFile] = useState<File | null>(null)
+  const [b64, setB64] = useState<string | null>(null)
+  const [error, setError] = useState<string | null>(null)
+  const fileRef = useRef<HTMLInputElement>(null)
+  const imageMut = useImageTranslate()
+  const voiceMut = useVoiceTranslate()
+
+  function onPick(e: React.ChangeEvent<HTMLInputElement>): void {
+    const f = e.target.files?.[0]
+    if (!f) return
+    if (mode === 'image' && !f.type.startsWith('image/')) {
+      setError(t('translation.media.notImage'))
+      return
+    }
+    if (mode === 'voice' && !f.type.startsWith('audio/')) {
+      setError(t('translation.media.notAudio'))
+      return
+    }
+    setError(null)
+    setFile(f)
+    const reader = new FileReader()
+    reader.onload = () => {
+      const url = String(reader.result)
+      const comma = url.indexOf(',')
+      setB64(comma >= 0 ? url.slice(comma + 1) : url)
+    }
+    reader.readAsDataURL(f)
+  }
+
+  function run(): void {
+    if (!b64) return
+    const mut = mode === 'image' ? imageMut : voiceMut
+    mut.mutate({ data: b64, mime: file?.type ?? '', type: 'receive' })
+  }
+
+  const result = imageMut.data ?? voiceMut.data
+  const pending = imageMut.isPending || voiceMut.isPending
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2 text-sm">
+          <ImageIcon className="size-4 text-primary" />
+          {t('translation.media.title')} · {t('translation.trialTitle')}
+        </CardTitle>
+        <CardDescription>{t('translation.media.inConversationHint')}</CardDescription>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-2">
+        <div className="flex items-center gap-2">
+          {(['image', 'voice'] as const).map((m) => (
+            <button
+              key={m}
+              type="button"
+              onClick={() => {
+                setMode(m)
+                setFile(null)
+                setB64(null)
+                setError(null)
+                imageMut.reset()
+                voiceMut.reset()
+              }}
+              className={cn(
+                'rounded-full border px-2.5 py-1 text-[11px]',
+                mode === m
+                  ? 'border-primary bg-primary text-primary-foreground'
+                  : 'border-border text-muted-foreground'
+              )}
+            >
+              {m === 'image' ? t('translation.media.imageTab') : t('translation.media.voiceTab')}
+            </button>
+          ))}
+          <Button
+            size="sm"
+            variant="outline"
+            className="ml-auto h-7 text-xs"
+            onClick={() => fileRef.current?.click()}
+          >
+            {mode === 'image' ? t('translation.media.pickImage') : t('translation.media.pickAudio')}
+          </Button>
+          <input
+            ref={fileRef}
+            type="file"
+            accept={mode === 'image' ? 'image/*' : 'audio/*'}
+            className="hidden"
+            onChange={onPick}
+          />
+        </div>
+        {file && <p className="truncate text-[11px] text-muted-foreground">{file.name}</p>}
+        {error && <p className="text-[11px] text-red-600">{error}</p>}
+        <Button size="sm" className="w-fit gap-1.5" disabled={!b64 || pending} onClick={run}>
+          <Send className="size-3.5" />
+          {t('translation.media.translate')}
+        </Button>
+        {result && (
+          <div className="flex flex-col gap-1 rounded-lg border border-border/60 bg-muted/40 px-3 py-2 text-xs">
+            <p>
+              <span className="text-muted-foreground">{t('translation.media.extracted')}：</span>
+              {result.extractedText}
+            </p>
+            <p className="text-foreground">
+              <span className="text-muted-foreground">{t('translation.media.result')}：</span>
+              {result.translation}
+            </p>
+            <p className="flex flex-wrap gap-x-2 text-[11px] text-muted-foreground">
+              {result.degraded && <span className="text-amber-600">{t('translation.media.degradedMock')}</span>}
+              {result.degradeReason && <span title={result.degradeReason}>{result.degradeReason}</span>}
+              <span>
+                {result.fromLangCode || 'auto'} → {result.toLangCode}
+              </span>
+            </p>
+          </div>
+        )}
+        {(imageMut.isError || voiceMut.isError) && (
+          <p className="text-[11px] text-red-600">{t('translation.requestFailed')}</p>
+        )}
+      </CardContent>
+    </Card>
   )
 }
 

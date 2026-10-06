@@ -106,7 +106,7 @@ class DegradeClassificationTest {
             .thenReturn(new SimulatedTranslationEngine.EngineResult(TEXT, true, "zh-CN"));
         return new TranslationService(settingMapper, mock(TranslationNodeMapper.class), cacheMapper,
             credentialMapper, mock(CustomerMapper.class), mock(ChatConversationMapper.class),
-            mock(PlatformAccountMapper.class), messageMapper, engine, List.of(provider));
+            mock(PlatformAccountMapper.class), messageMapper, engine, List.of(provider), List.of(), null);
     }
 
     private static TranslationProvider throwing(ProviderException failure) {

@@ -30,6 +30,10 @@ export interface TranslationSettingVO {
   enterToSend: boolean
   disableChinese: boolean
   disableChinesePreventSend: boolean
+  /** B25: 图片翻译(OCR)开关。 */
+  ocrEnabled: boolean
+  /** B25: 语音翻译(ASR)开关。 */
+  asrEnabled: boolean
   /** 'global' | 'customer' | 'conversation'：这次拿到的设置属于哪一层。 */
   scope: string
   /** scope='customer' 时是客户 id 的字符串形式；scope='conversation' 时是后端成形的会话键（只显示、不解析）；全局为 null。 */
@@ -58,6 +62,8 @@ export interface TranslationSettingInput {
   enterToSend?: boolean
   disableChinese?: boolean
   disableChinesePreventSend?: boolean
+  ocrEnabled?: boolean
+  asrEnabled?: boolean
   /** 缺省即写全局；写客户覆盖行时与 `scopeKey` 成对出现。 */
   scope?: string
   scopeKey?: string
@@ -98,6 +104,25 @@ export interface TranslateVO {
   degradeRetryable: boolean
   /** 这次翻译**实际**用的那一档：`global` | `customer` | `conversation`（spec §3.1 / §4③）。 */
   scope: string
+}
+
+/** B25: 媒体翻译（图片 OCR / 语音 ASR）的返回：先抽文字再翻译。 */
+export interface MediaTranslateVO {
+  extractedText: string
+  translation: string
+  cached: boolean
+  partial: boolean
+  containsChinese: boolean
+  type: string
+  channel: string
+  fromLangCode: string
+  toLangCode: string
+  cacheKey: string | null
+  /** OCR/ASR 或文本翻译回退到本地模拟引擎时为 true */
+  degraded: boolean
+  degradeReason: string | null
+  scope: string
+  degradeRetryable: boolean
 }
 
 export interface TranslationCredentialVO {
@@ -250,6 +275,53 @@ export function useTrialTranslate(): UseMutationResult<TranslateVO, Error, { tex
   })
 }
 
+export interface MediaTranslateInput {
+  /** base64（不含 data: 前缀）。 */
+  data: string
+  /** 媒体 MIME，如 image/png / audio/wav。 */
+  mime: string
+  type: TranslateType
+  fromLang?: string
+  toLang?: string
+  customerId?: number | null
+  accountId?: number
+  chatKey?: string
+}
+
+/** B25: 图片 OCR 翻译。媒体字节由调用方以 base64 递交（前端不落盘媒体）。 */
+export function useImageTranslate(): UseMutationResult<MediaTranslateVO, Error, MediaTranslateInput, unknown> {
+  return useMutation({
+    mutationFn: (input: MediaTranslateInput) =>
+      http.post<MediaTranslateVO>('/api/translation/image', {
+        type: input.type,
+        imageBase64: input.data,
+        mime: input.mime,
+        fromLang: input.fromLang,
+        toLang: input.toLang,
+        customerId: input.customerId,
+        accountId: input.accountId,
+        chatKey: input.chatKey
+      })
+  })
+}
+
+/** B25: 语音 ASR 翻译。 */
+export function useVoiceTranslate(): UseMutationResult<MediaTranslateVO, Error, MediaTranslateInput, unknown> {
+  return useMutation({
+    mutationFn: (input: MediaTranslateInput) =>
+      http.post<MediaTranslateVO>('/api/translation/voice', {
+        type: input.type,
+        audioBase64: input.data,
+        mime: input.mime,
+        fromLang: input.fromLang,
+        toLang: input.toLang,
+        customerId: input.customerId,
+        accountId: input.accountId,
+        chatKey: input.chatKey
+      })
+  })
+}
+
 /**
  * 整份提交的构造器：`PUT /settings` 本身是**局部提交**（上面 `TranslationSettingInput` 的口径，
  * 翻译中心就只发改动的那几个字段），这里把当前读到的那份 VO 逐字段抄进 input 再叠上 patch，
@@ -278,6 +350,8 @@ export function settingsInputOf(
     enterToSend: current.enterToSend,
     disableChinese: current.disableChinese,
     disableChinesePreventSend: current.disableChinesePreventSend,
+    ocrEnabled: current.ocrEnabled,
+    asrEnabled: current.asrEnabled,
     ...patch
   }
 }
