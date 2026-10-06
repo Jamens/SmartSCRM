@@ -202,6 +202,12 @@ export const zhCN = {
     in: '收',
     out: '发',
     total: '合计',
+    export: '导出 CSV',
+    byAccount: '按账号下钻',
+    byAccountDesc: '窗口内各账号的收发量',
+    online: '在线',
+    offline: '离线',
+    noAccountData: '窗口内无账号消息',
   },
   ai: {
     title: 'AI 工作区',

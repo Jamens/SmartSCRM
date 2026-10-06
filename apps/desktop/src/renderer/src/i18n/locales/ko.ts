@@ -197,6 +197,12 @@ export const ko: DeepString<typeof zhCN> = {
     in: '수신',
     out: '발신',
     total: '합계',
+    export: 'CSV 내보내기',
+    byAccount: '계정별',
+    byAccountDesc: '기간 내 계정별 수신/발신',
+    online: '온라인',
+    offline: '오프라인',
+    noAccountData: '기간 내 계정 메시지 없음',
   },
   ai: {
     title: 'AI 워크스페이스',

@@ -192,6 +192,12 @@ export const zhTW: DeepString<typeof zhCN> = {
     in: '收',
     out: '發',
     total: '合計',
+    export: '匯出 CSV',
+    byAccount: '按帳號下鑽',
+    byAccountDesc: '視窗內各帳號的收發量',
+    online: '在線',
+    offline: '離線',
+    noAccountData: '視窗內無帳號訊息',
   },
   ai: {
     title: 'AI 工作區',

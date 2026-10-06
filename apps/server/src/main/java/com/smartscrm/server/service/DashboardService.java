@@ -10,6 +10,7 @@ import com.smartscrm.server.mapper.BatchSendTaskMapper;import com.smartscrm.serv
 import com.smartscrm.server.mapper.ChatMessageMapper;
 import com.smartscrm.server.mapper.CustomerMapper;
 import com.smartscrm.server.mapper.PlatformAccountMapper;
+import com.smartscrm.server.web.vo.AccountStatVO;
 import com.smartscrm.server.web.vo.DayCountVO;
 import com.smartscrm.server.web.vo.DashboardVO;
 import java.time.LocalDate;
@@ -91,5 +92,39 @@ public class DashboardService {
         if (row == null) return 0L;
         Object v = row.get(key);
         return v == null ? 0L : ((Number) v).longValue();
+    }
+
+    // ============ B11 下钻 / 导出 ============
+
+    /**
+     * 下钻：按账号分组看窗口内收发量（谁贡献的），并带上账号名/平台/是否在线。
+     * 只列出窗口内有消息的账号（"没有消息的账号"是账号列表页的职责，不是趋势下钻）。
+     */
+    public List<AccountStatVO> perAccount(Long tenantId, Integer days) {
+        LocalDateTime from = fromOf(days);
+        Map<Long, PlatformAccount> accounts = new HashMap<>();
+        for (PlatformAccount a : accountMapper.selectList(
+                new LambdaQueryWrapper<PlatformAccount>().eq(PlatformAccount::getTenantId, tenantId))) {
+            accounts.put(a.getId(), a);
+        }
+        List<AccountStatVO> out = new ArrayList<>();
+        for (Map<String, Object> row : messageMapper.statsPerAccount(tenantId, from)) {
+            Object idObj = row.get("accountId");
+            if (idObj == null) continue;
+            Long accountId = ((Number) idObj).longValue();
+            PlatformAccount a = accounts.get(accountId);
+            out.add(new AccountStatVO(accountId,
+                a == null ? String.valueOf(accountId) : a.getName(),
+                a == null ? "" : String.valueOf(a.getPlatformType()),
+                a != null && a.getStatus() != null && a.getStatus() == 1,
+                num(row, "inCount"), num(row, "outCount"), num(row, "activeConversations")));
+        }
+        return out;
+    }
+
+    private static LocalDateTime fromOf(Integer days) {
+        int window = days == null || days <= 0 ? 7 : Math.min(days, 90);
+        LocalDate today = LocalDate.now(MsgTimes.CHAT_ZONE);
+        return today.minusDays(window - 1L).atStartOfDay();
     }
 }

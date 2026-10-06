@@ -199,6 +199,12 @@ export const en: DeepString<typeof zhCN> = {
     in: 'In',
     out: 'Out',
     total: 'Total',
+    export: 'Export CSV',
+    byAccount: 'By account',
+    byAccountDesc: 'In/out per account in window',
+    online: 'Online',
+    offline: 'Offline',
+    noAccountData: 'No account messages in window',
   },
   ai: {
     title: 'AI Workspace',

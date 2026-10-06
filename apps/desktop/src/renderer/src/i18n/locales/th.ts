@@ -197,6 +197,12 @@ export const th: DeepString<typeof zhCN> = {
     in: 'รับ',
     out: 'ส่ง',
     total: 'รวม',
+    export: 'ส่งออก CSV',
+    byAccount: 'ตามบัญชี',
+    byAccountDesc: 'รับ/ส่งรายบัญชีในช่วง',
+    online: 'ออนไลน์',
+    offline: 'ออฟไลน์',
+    noAccountData: 'ไม่มีข้อความบัญชีในช่วง',
   },
   ai: {
     title: 'พื้นที่ทำงาน AI',

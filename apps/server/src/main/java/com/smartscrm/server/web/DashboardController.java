@@ -3,7 +3,9 @@ package com.smartscrm.server.web;
 import com.smartscrm.server.common.ApiResponse;
 import com.smartscrm.server.security.AuthPrincipal;
 import com.smartscrm.server.service.DashboardService;
+import com.smartscrm.server.web.vo.AccountStatVO;
 import com.smartscrm.server.web.vo.DashboardVO;
+import java.util.List;
 import org.springframework.security.access.prepost.PreAuthorize;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -30,5 +32,13 @@ public class DashboardController {
     public ApiResponse<DashboardVO> overview(@AuthenticationPrincipal AuthPrincipal principal,
                                              @RequestParam(required = false) Integer days) {
         return ApiResponse.ok(service.overview(principal.tenantId(), days));
+    }
+
+    /** 下钻：按账号看窗口内收发量（谁贡献的），按总量降序。 */
+    @GetMapping("/accounts")
+    @PreAuthorize("hasAuthority('message:read')")
+    public ApiResponse<List<AccountStatVO>> accounts(@AuthenticationPrincipal AuthPrincipal principal,
+                                                    @RequestParam(required = false) Integer days) {
+        return ApiResponse.ok(service.perAccount(principal.tenantId(), days));
     }
 }

@@ -199,6 +199,12 @@ export const ja: DeepString<typeof zhCN> = {
     in: '受信',
     out: '送信',
     total: '合計',
+    export: 'CSV エクスポート',
+    byAccount: 'アカウント別',
+    byAccountDesc: '期間内のアカウント別受信/送信',
+    online: 'オンライン',
+    offline: 'オフライン',
+    noAccountData: '期間内アカウントのメッセージなし',
   },
   ai: {
     title: 'AI ワークスペース',

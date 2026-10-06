@@ -198,6 +198,12 @@ export const vi: DeepString<typeof zhCN> = {
     in: 'Nhận',
     out: 'Gửi',
     total: 'Tổng',
+    export: 'Xuất CSV',
+    byAccount: 'Theo tài khoản',
+    byAccountDesc: 'Nhận/gửi theo tài khoản trong kỳ',
+    online: 'Trực tuyến',
+    offline: 'Ngoại tuyến',
+    noAccountData: 'Không có tin nhắn tài khoản trong kỳ',
   },
   ai: {
     title: 'Không gian AI',

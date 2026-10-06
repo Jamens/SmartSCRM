@@ -200,6 +200,12 @@ export const id: DeepString<typeof zhCN> = {
     in: 'Masuk',
     out: 'Keluar',
     total: 'Total',
+    export: 'Ekspor CSV',
+    byAccount: 'Per akun',
+    byAccountDesc: 'Masuk/keluar per akun dalam periode',
+    online: 'Online',
+    offline: 'Offline',
+    noAccountData: 'Tidak ada pesan akun dalam periode',
   },
   ai: {
     title: 'Ruang AI',

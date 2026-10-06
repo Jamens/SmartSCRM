@@ -92,6 +92,17 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
                                             @Param("from") LocalDateTime from);
 
     /**
+     * B11 仪表盘下钻——租户级**按账号**分组（窗口内收发量），供点指标卡看"谁贡献的"。
+     * 没有消息的账号不出现在这里（那是账号列表页的职责，不是趋势下钻）。
+     */
+    @Select("SELECT account_id accountId, COALESCE(SUM(direction = 'in'), 0) inCount,"
+        + " COALESCE(SUM(direction = 'out'), 0) outCount, COUNT(DISTINCT chat_key) activeConversations"
+        + " FROM chat_message WHERE tenant_id = #{tenantId} AND msg_time >= #{from}"
+        + " GROUP BY account_id ORDER BY (inCount + outCount) DESC")
+    List<Map<String, Object>> statsPerAccount(@Param("tenantId") Long tenantId,
+                                             @Param("from") LocalDateTime from);
+
+    /**
      * 消息级译文回显的候选行，两条定位谓词拆成两次调用（{@link #findForTranslationByMsgId} 先、
      * {@link #findForTranslationByMsgKeyTail} 后）：作用域用主进程盖的 tenant/account/chat_key，
      * 再用页给的 msgId 缩小。
