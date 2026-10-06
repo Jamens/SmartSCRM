@@ -37,6 +37,7 @@ export const en: DeepString<typeof zhCN> = {
     proxypool: "Proxy Pool",
     fingerprint: "Browser Fingerprint",
     cloudaccount: "Cloud Account Pool",
+    customerfollow: "Follow-ups",
     settings: 'Settings'
   },
   notifications: {
@@ -492,6 +493,63 @@ export const en: DeepString<typeof zhCN> = {
     },
     loading: "Loading…",
     loadFailed: "Load failed",
+  },
+
+  customerfollow: {
+    title: "Customer Follow-ups",
+    desc: "Follow-up records + label change log + stat cards / batch bar (unlabeling deletes the row, so only the log can tell what changed)",
+    stats: {
+      customers: "Customers",
+      followUps: "Follow-ups",
+      pending: "Pending",
+      changes: "Label changes",
+    },
+    batch: {
+      title: "Customers & batch actions",
+      desc: "Select customers to add or remove a label in bulk (idempotent, counts real changes only)",
+      selected: "{{count}} customers selected",
+      pickLabel: "Pick a label",
+      add: "Add label",
+      remove: "Remove label",
+      customer: "Customer",
+      labels: "Labels",
+      viewFollowUps: "Follow-ups",
+    },
+    followUp: {
+      title: "Follow-up records",
+      new: "New follow-up",
+      content: "Follow-up content",
+      empty: "No follow-up records yet",
+      edit: "Edit",
+      pickCustomer: "Select a customer above first",
+      remindAt: "Remind: {{at}}",
+    },
+    type: {
+      note: "Note",
+      call: "Call",
+      email: "Email",
+      meeting: "Meeting",
+      other: "Other",
+    },
+    change: {
+      title: "Label change log",
+      desc: "Unlabeling deletes the row outright, so changes only live here",
+      empty: "No label changes yet",
+    },
+    changeAction: {
+      add: "Added",
+      remove: "Removed",
+    },
+    form: {
+      submit: "Save",
+      cancel: "Cancel",
+    },
+    confirm: {
+      title: "Delete this follow-up?",
+      desc: "Removes the record from this tenant (irreversible).",
+      yes: "Confirm delete",
+      no: "Cancel",
+    },
   },
 
   groupOps: {

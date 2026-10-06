@@ -36,6 +36,7 @@ export const ja: DeepString<typeof zhCN> = {
     proxypool: "プロキシブール",
     fingerprint: "ブラウザフィンガープリント",
     cloudaccount: "クラウドアカウントプール",
+    customerfollow: "フォローアップ",
     settings: '設定'
   },
   notifications: {
@@ -492,6 +493,63 @@ export const ja: DeepString<typeof zhCN> = {
     },
     loading: "読み込み中…",
     loadFailed: "読み込み失敗",
+  },
+
+  customerfollow: {
+    title: "顧客フォローアップ",
+    desc: "フォロー記録 + ラベル変更ログ + 統計カード / 一括操作バー（ラベル解除は行ごと消えるため、変更はログでしか追えません）",
+    stats: {
+      customers: "顧客数",
+      followUps: "フォロー記録",
+      pending: "未対応",
+      changes: "ラベル変更",
+    },
+    batch: {
+      title: "顧客と一括操作",
+      desc: "顧客を選んでラベルを一括付与/解除（冪等、実際の変更のみカウント）",
+      selected: "{{count}} 件選択中",
+      pickLabel: "ラベルを選択",
+      add: "ラベル付与",
+      remove: "ラベル解除",
+      customer: "顧客",
+      labels: "ラベル",
+      viewFollowUps: "フォロー",
+    },
+    followUp: {
+      title: "フォロー記録",
+      new: "新規フォロー",
+      content: "フォロー内容",
+      empty: "フォロー記録はまだありません",
+      edit: "編集",
+      pickCustomer: "先に上の顧客を選んでください",
+      remindAt: "リマインド：{{at}}",
+    },
+    type: {
+      note: "メモ",
+      call: "電話",
+      email: "メール",
+      meeting: "面会",
+      other: "その他",
+    },
+    change: {
+      title: "ラベル変更ログ",
+      desc: "ラベル解除は行ごと消えるため、履歴はここだけに残ります",
+      empty: "ラベル変更はまだありません",
+    },
+    changeAction: {
+      add: "付与",
+      remove: "解除",
+    },
+    form: {
+      submit: "保存",
+      cancel: "キャンセル",
+    },
+    confirm: {
+      title: "このフォロー記録を削除しますか？",
+      desc: "このテナントから記録を削除します（元に戻せません）。",
+      yes: "削除する",
+      no: "キャンセル",
+    },
   },
 
   groupOps: {

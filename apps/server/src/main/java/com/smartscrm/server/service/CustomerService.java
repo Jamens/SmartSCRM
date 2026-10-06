@@ -7,7 +7,9 @@ import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.common.PageResult;
 import com.smartscrm.server.entity.Customer;
 import com.smartscrm.server.entity.CustomerLabel;
+import com.smartscrm.server.entity.CustomerLabelChange;
 import com.smartscrm.server.entity.Label;
+import com.smartscrm.server.mapper.CustomerLabelChangeMapper;
 import com.smartscrm.server.mapper.CustomerLabelMapper;
 import com.smartscrm.server.mapper.CustomerMapper;
 import com.smartscrm.server.mapper.LabelMapper;
@@ -37,12 +39,16 @@ public class CustomerService {
     private final CustomerMapper customerMapper;
     private final LabelMapper labelMapper;
     private final CustomerLabelMapper customerLabelMapper;
+    /** B23：标签变更流水（customer_label 撤标即删行，事后无痕迹，故写入路径显式落流水）。 */
+    private final CustomerLabelChangeMapper labelChangeMapper;
 
     public CustomerService(CustomerMapper customerMapper, LabelMapper labelMapper,
-                           CustomerLabelMapper customerLabelMapper) {
+                           CustomerLabelMapper customerLabelMapper,
+                           CustomerLabelChangeMapper labelChangeMapper) {
         this.customerMapper = customerMapper;
         this.labelMapper = labelMapper;
         this.customerLabelMapper = customerLabelMapper;
+        this.labelChangeMapper = labelChangeMapper;
     }
 
     public PageResult<CustomerVO> page(Long tenantId, String keyword, Integer platformType,
@@ -141,9 +147,14 @@ public class CustomerService {
     @Transactional
     public CustomerVO setLabels(Long tenantId, Long id, List<Long> labelIds) {
         requireOwned(tenantId, id);
+        // B23：删除前先记下当前已挂标签——customer_label 撤标即删行，删完就推不出「撤了谁」。
+        Set<Long> before = customerLabelMapper.selectList(new LambdaQueryWrapper<CustomerLabel>()
+                .eq(CustomerLabel::getCustomerId, id))
+            .stream().map(CustomerLabel::getLabelId).collect(Collectors.toSet());
         customerLabelMapper.delete(new LambdaQueryWrapper<CustomerLabel>()
             .eq(CustomerLabel::getCustomerId, id));
         List<Long> requested = normalize(labelIds);
+        Set<Long> after = new LinkedHashSet<>();
         if (!requested.isEmpty()) {
             Set<Long> owned = labelMapper.selectList(new LambdaQueryWrapper<Label>()
                     .eq(Label::getTenantId, tenantId)
@@ -158,9 +169,31 @@ public class CustomerService {
                 row.setCustomerId(id);
                 row.setLabelId(labelId);
                 customerLabelMapper.insert(row);
+                after.add(labelId);
+            }
+        }
+        // 落流水：本次新增的记 add，本次消失的记 remove。
+        for (Long labelId : after) {
+            if (!before.contains(labelId)) {
+                recordLabelChange(tenantId, id, labelId, "add");
+            }
+        }
+        for (Long labelId : before) {
+            if (!after.contains(labelId)) {
+                recordLabelChange(tenantId, id, labelId, "remove");
             }
         }
         return detail(tenantId, id);
+    }
+
+    /** B23 标签变更流水：只增不改不删，供客户侧回溯「谁在什么时候打/撤了哪个标签」。 */
+    private void recordLabelChange(Long tenantId, Long customerId, Long labelId, String action) {
+        CustomerLabelChange row = new CustomerLabelChange();
+        row.setTenantId(tenantId);
+        row.setCustomerId(customerId);
+        row.setLabelId(labelId);
+        row.setAction(action);
+        labelChangeMapper.insert(row);
     }
 
     public void delete(Long tenantId, Long id) {

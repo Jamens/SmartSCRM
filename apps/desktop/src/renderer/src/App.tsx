@@ -25,6 +25,7 @@ import CloudPhonePage from '@/pages/CloudPhonePage'
 import ProxyPoolPage from '@/pages/ProxyPoolPage'
 import FingerprintProfilePage from '@/pages/FingerprintProfilePage'
 import CloudAccountPage from '@/pages/CloudAccountPage'
+import CustomerFollowUpPage from '@/pages/CustomerFollowUpPage'
 import LoginPage from '@/pages/LoginPage'
 import { DEFAULT_NAV_PATH } from '@/lib/nav'
 import { useProtocolSync } from '@/hooks/useProtocolSync'
@@ -83,6 +84,7 @@ function App(): React.JSX.Element {
           <Route path="/proxy-pool" element={<ProxyPoolPage />} />
           <Route path="/fingerprint-profiles" element={<FingerprintProfilePage />} />
           <Route path="/cloud-accounts" element={<CloudAccountPage />} />
+          <Route path="/customer-follow-ups" element={<CustomerFollowUpPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/logs" element={<LogCenterPage />} />
           <Route path="*" element={<Navigate to={DEFAULT_NAV_PATH} replace />} />

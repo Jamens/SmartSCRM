@@ -36,6 +36,7 @@ export const vi: DeepString<typeof zhCN> = {
     proxypool: "Nhóm Proxy",
     fingerprint: "Vân tay trình duyệt",
     cloudaccount: "Nhóm tài khoản cloud",
+    customerfollow: "Theo dõi KH",
     settings: 'Cài đặt'
   },
   notifications: {
@@ -491,6 +492,63 @@ export const vi: DeepString<typeof zhCN> = {
     },
     loading: "Đang tải…",
     loadFailed: "Tải thất bại",
+  },
+
+  customerfollow: {
+    title: "Theo dõi khách hàng",
+    desc: "Bản ghi theo dõi + lịch sử đổi nhãn + thẻ thống kê / thanh thao tác hàng loạt (gỡ nhãn xóa luôn dòng, nên chỉ lịch sử mới trả lời được)",
+    stats: {
+      customers: "Khách hàng",
+      followUps: "Theo dõi",
+      pending: "Chờ xử lý",
+      changes: "Đổi nhãn",
+    },
+    batch: {
+      title: "Khách hàng & thao tác hàng loạt",
+      desc: "Chọn khách rồi gắn/gỡ nhãn hàng loạt (idempotent, chỉ đếm thay đổi thật)",
+      selected: "Đã chọn {{count}} khách",
+      pickLabel: "Chọn nhãn",
+      add: "Gắn nhãn",
+      remove: "Gỡ nhãn",
+      customer: "Khách hàng",
+      labels: "Nhãn",
+      viewFollowUps: "Theo dõi",
+    },
+    followUp: {
+      title: "Bản ghi theo dõi",
+      new: "Thêm theo dõi",
+      content: "Nội dung theo dõi",
+      empty: "Chưa có bản ghi theo dõi",
+      edit: "Sửa",
+      pickCustomer: "Chọn một khách ở trên trước",
+      remindAt: "Nhắc: {{at}}",
+    },
+    type: {
+      note: "Ghi chú",
+      call: "Gọi điện",
+      email: "Email",
+      meeting: "Gặp mặt",
+      other: "Khác",
+    },
+    change: {
+      title: "Lịch sử đổi nhãn",
+      desc: "Gỡ nhãn xóa luôn dòng, nên dấu vết chỉ còn ở đây",
+      empty: "Chưa có thay đổi nhãn",
+    },
+    changeAction: {
+      add: "Gắn",
+      remove: "Gỡ",
+    },
+    form: {
+      submit: "Lưu",
+      cancel: "Hủy",
+    },
+    confirm: {
+      title: "Xóa bản ghi theo dõi này?",
+      desc: "Xóa bản ghi khỏi tenant này (không thể hoàn tác).",
+      yes: "Xác nhận xóa",
+      no: "Hủy",
+    },
   },
 
   groupOps: {

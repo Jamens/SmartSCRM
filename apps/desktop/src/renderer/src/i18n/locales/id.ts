@@ -36,6 +36,7 @@ export const id: DeepString<typeof zhCN> = {
     proxypool: "Pool Proxy",
     fingerprint: "Sidik Jari Browser",
     cloudaccount: "Pool Akun Cloud",
+    customerfollow: "Tindak Lanjut",
     settings: 'Pengaturan'
   },
   notifications: {
@@ -493,6 +494,63 @@ export const id: DeepString<typeof zhCN> = {
     },
     loading: "Memuat…",
     loadFailed: "Gagal memuat",
+  },
+
+  customerfollow: {
+    title: "Tindak Lanjut Pelanggan",
+    desc: "Catatan tindak lanjut + log perubahan label + kartu statistik / bilah aksi massal (hapus label langsung menghapus baris, hanya log yang bisa menjawabnya)",
+    stats: {
+      customers: "Pelanggan",
+      followUps: "Tindak lanjut",
+      pending: "Tertunda",
+      changes: "Perubahan label",
+    },
+    batch: {
+      title: "Pelanggan & aksi massal",
+      desc: "Pilih pelanggan lalu tambah/hapus label sekaligus (idempoten, hanya menghitung perubahan nyata)",
+      selected: "{{count}} pelanggan dipilih",
+      pickLabel: "Pilih label",
+      add: "Tambah label",
+      remove: "Hapus label",
+      customer: "Pelanggan",
+      labels: "Label",
+      viewFollowUps: "Tindak lanjut",
+    },
+    followUp: {
+      title: "Catatan tindak lanjut",
+      new: "Tindak lanjut baru",
+      content: "Isi tindak lanjut",
+      empty: "Belum ada catatan tindak lanjut",
+      edit: "Edit",
+      pickCustomer: "Pilih pelanggan di atas dulu",
+      remindAt: "Pengingat: {{at}}",
+    },
+    type: {
+      note: "Catatan",
+      call: "Telepon",
+      email: "Email",
+      meeting: "Pertemuan",
+      other: "Lainnya",
+    },
+    change: {
+      title: "Log perubahan label",
+      desc: "Hapus label langsung menghapus baris, jejaknya hanya ada di sini",
+      empty: "Belum ada perubahan label",
+    },
+    changeAction: {
+      add: "Ditambah",
+      remove: "Dihapus",
+    },
+    form: {
+      submit: "Simpan",
+      cancel: "Batal",
+    },
+    confirm: {
+      title: "Hapus catatan ini?",
+      desc: "Menghapus catatan dari tenant ini (tidak bisa dibatalkan).",
+      yes: "Konfirmasi hapus",
+      no: "Batal",
+    },
   },
 
   groupOps: {

@@ -39,6 +39,7 @@ export const zhCN = {
     proxypool: "代理池",
     fingerprint: "浏览器指纹",
     cloudaccount: "云账号池",
+    customerfollow: "客户跟进",
     settings: '设置'
   },
   notifications: {
@@ -495,6 +496,63 @@ export const zhCN = {
     },
     loading: "加载中…",
     loadFailed: "加载失败",
+  },
+
+  customerfollow: {
+    title: "客户跟进",
+    desc: "跟进记录 + 标签变更记录 + 统计卡 / 批量操作条（撤标即删行，变更后只能靠流水回溯）",
+    stats: {
+      customers: "客户总数",
+      followUps: "跟进记录",
+      pending: "待跟进",
+      changes: "标签变更",
+    },
+    batch: {
+      title: "客户与批量操作",
+      desc: "勾选客户后批量打标签 / 撤标签（幂等，只计实际变更）",
+      selected: "已选 {{count}} 个客户",
+      pickLabel: "选择标签",
+      add: "打标签",
+      remove: "撤标签",
+      customer: "客户",
+      labels: "标签",
+      viewFollowUps: "看跟进",
+    },
+    followUp: {
+      title: "跟进记录",
+      new: "新增跟进",
+      content: "跟进内容",
+      empty: "暂无跟进记录",
+      edit: "编辑",
+      pickCustomer: "先在上方选一个客户",
+      remindAt: "提醒：{{at}}",
+    },
+    type: {
+      note: "备注",
+      call: "电话",
+      email: "邮件",
+      meeting: "会面",
+      other: "其他",
+    },
+    change: {
+      title: "标签变更记录",
+      desc: "撤标会直接删行，故变更只在这里留痕",
+      empty: "暂无标签变更记录",
+    },
+    changeAction: {
+      add: "打标",
+      remove: "撤标",
+    },
+    form: {
+      submit: "保存",
+      cancel: "取消",
+    },
+    confirm: {
+      title: "删除该跟进记录？",
+      desc: "将从本租户移除该记录（不可逆）。",
+      yes: "确认删除",
+      no: "取消",
+    },
   },
 
   groupOps: {

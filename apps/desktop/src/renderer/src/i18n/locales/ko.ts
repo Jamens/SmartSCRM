@@ -36,6 +36,7 @@ export const ko: DeepString<typeof zhCN> = {
     proxypool: "프록시 풀",
     fingerprint: "브라우저 지문",
     cloudaccount: "클라우드 계정 풀",
+    customerfollow: "고객 팔로업",
     settings: '설정'
   },
   notifications: {
@@ -490,6 +491,63 @@ export const ko: DeepString<typeof zhCN> = {
     },
     loading: "불러오는 중…",
     loadFailed: "불러오기 실패",
+  },
+
+  customerfollow: {
+    title: "고객 팔로업",
+    desc: "팔로업 기록 + 라벨 변경 로그 + 통계 카드 / 일괄 작업 바 (라벨 해제는 행을 지우므로 변경은 로그로만 알 수 있음)",
+    stats: {
+      customers: "고객",
+      followUps: "팔로업",
+      pending: "대기 중",
+      changes: "라벨 변경",
+    },
+    batch: {
+      title: "고객 및 일괄 작업",
+      desc: "고객을 선택해 라벨을 일괄 부여/해제(멱등, 실제 변경만 집계)",
+      selected: "{{count}}명 선택",
+      pickLabel: "라벨 선택",
+      add: "라벨 부여",
+      remove: "라벨 해제",
+      customer: "고객",
+      labels: "라벨",
+      viewFollowUps: "팔로업",
+    },
+    followUp: {
+      title: "팔로업 기록",
+      new: "새 팔로업",
+      content: "팔로업 내용",
+      empty: "팔로업 기록이 없습니다",
+      edit: "편집",
+      pickCustomer: "먼저 위에서 고객을 선택하세요",
+      remindAt: "알림: {{at}}",
+    },
+    type: {
+      note: "메모",
+      call: "전화",
+      email: "이메일",
+      meeting: "미팅",
+      other: "기타",
+    },
+    change: {
+      title: "라벨 변경 로그",
+      desc: "라벨 해제는 행을 그냥 지우므로 흔적은 여기에만 남습니다",
+      empty: "라벨 변경이 없습니다",
+    },
+    changeAction: {
+      add: "부여",
+      remove: "해제",
+    },
+    form: {
+      submit: "저장",
+      cancel: "취소",
+    },
+    confirm: {
+      title: "이 팔로업 기록을 삭제할까요?",
+      desc: "이 테넌트에서 기록을 삭제합니다(되돌릴 수 없음).",
+      yes: "삭제",
+      no: "취소",
+    },
   },
 
   groupOps: {

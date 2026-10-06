@@ -36,6 +36,7 @@ export const zhTW: DeepString<typeof zhCN> = {
     proxypool: "代理池",
     fingerprint: "瀏覽器指紋",
     cloudaccount: "雲帳號池",
+    customerfollow: "客戶跟進",
     settings: '設定'
   },
   notifications: {
@@ -485,6 +486,63 @@ export const zhTW: DeepString<typeof zhCN> = {
     },
     loading: "載入中…",
     loadFailed: "載入失敗",
+  },
+
+  customerfollow: {
+    title: "客戶跟進",
+    desc: "跟進記錄 + 標籤變更記錄 + 統計卡 / 批次操作條（撤標即刪行，變更後只能靠流水回溯）",
+    stats: {
+      customers: "客戶總數",
+      followUps: "跟進記錄",
+      pending: "待跟進",
+      changes: "標籤變更",
+    },
+    batch: {
+      title: "客戶與批次操作",
+      desc: "勾選客戶後批次打標籤 / 撤標籤（冪等，只計實際變更）",
+      selected: "已選 {{count}} 個客戶",
+      pickLabel: "選擇標籤",
+      add: "打標籤",
+      remove: "撤標籤",
+      customer: "客戶",
+      labels: "標籤",
+      viewFollowUps: "看跟進",
+    },
+    followUp: {
+      title: "跟進記錄",
+      new: "新增跟進",
+      content: "跟進內容",
+      empty: "暫無跟進記錄",
+      edit: "編輯",
+      pickCustomer: "先在上方選一個客戶",
+      remindAt: "提醒：{{at}}",
+    },
+    type: {
+      note: "備註",
+      call: "電話",
+      email: "郵件",
+      meeting: "會面",
+      other: "其他",
+    },
+    change: {
+      title: "標籤變更記錄",
+      desc: "撤標會直接刪行，故變更只在這裡留痕",
+      empty: "暫無標籤變更記錄",
+    },
+    changeAction: {
+      add: "打標",
+      remove: "撤標",
+    },
+    form: {
+      submit: "儲存",
+      cancel: "取消",
+    },
+    confirm: {
+      title: "刪除該跟進記錄？",
+      desc: "將從本租戶移除該記錄（不可逆）。",
+      yes: "確認刪除",
+      no: "取消",
+    },
   },
 
   groupOps: {
