@@ -80,6 +80,8 @@ const scrm = {
     set: (patch: Partial<AppSettings>): Promise<AppSettings> =>
       ipcRenderer.invoke('settings:set', patch),
     theme: (): Promise<ThemeSnapshot> => ipcRenderer.invoke('theme:get'),
+    /** 存储管理（B26）：把所有用户偏好回到出厂默认。 */
+    reset: (): Promise<AppSettings> => ipcRenderer.invoke('settings:reset'),
     onThemeChanged: (callback: (snapshot: ThemeSnapshot) => void): (() => void) => {
       const listener = (_event: IpcRendererEvent, snapshot: ThemeSnapshot): void =>
         callback(snapshot)

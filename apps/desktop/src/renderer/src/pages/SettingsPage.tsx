@@ -37,6 +37,7 @@ import { useLanguage } from '@/lib/language'
 import SensitiveWordsCard from '@/components/SensitiveWordsCard'
 import PerfMetricsCard from '@/components/PerfMetricsCard'
 import UpdateCard from '@/components/UpdateCard'
+import StorageCard from '@/components/StorageCard'
 import { changePassword } from '@/api/auth'
 import { API_BASE, ApiError } from '@/lib/http'
 import { cn } from '@/lib/utils'
@@ -458,6 +459,9 @@ export default function SettingsPage(): React.JSX.Element {
               </p>
             </CardContent>
           </Card>
+
+          {/* 存储管理（B26）：联系人缓存开关 + 本地数据清理与存储占用。放在设备信息之后。 */}
+          <StorageCard />
         </div>
       </div>
     </div>

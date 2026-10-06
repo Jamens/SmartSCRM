@@ -1,5 +1,13 @@
+import { useEffect } from 'react'
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query'
 import { http } from '@/lib/http'
+import {
+  getCachedCustomer,
+  getCachedPage,
+  isContactCacheEnabled,
+  putCustomer,
+  putPage
+} from '@/lib/contactCache'
 
 export interface LabelVO {
   id: number
@@ -77,18 +85,72 @@ function toQuery(filters: CustomerFilters): string {
 }
 
 export function useCustomers(filters: CustomerFilters): import("@tanstack/react-query").UseQueryResult<PageResult<CustomerVO>, Error> {
-  return useQuery({
-    queryKey: [...CUSTOMERS_KEY, filters],
-    queryFn: () => http.get<PageResult<CustomerVO>>(`/api/customers?${toQuery(filters)}`)
+  const qc = useQueryClient()
+  const queryKey = [...CUSTOMERS_KEY, filters] as const
+  const cacheKey = toQuery(filters)
+  const query = useQuery<PageResult<CustomerVO>, Error>({
+    queryKey,
+    queryFn: async () => {
+      try {
+        const fresh = await http.get<PageResult<CustomerVO>>(`/api/customers?${cacheKey}`)
+        if (isContactCacheEnabled()) void putPage(cacheKey, fresh)
+        return fresh
+      } catch (err) {
+        // 离线 / 后端挂了：回退到本地缓存，界面不空。
+        if (isContactCacheEnabled()) {
+          const cached = await getCachedPage(cacheKey)
+          if (cached) return cached
+        }
+        throw err
+      }
+    },
+    staleTime: 30_000
   })
+  // 缓存优先：挂载时若本地有缓存，先塞进 react-query，界面秒开；网络回来再覆盖。
+  useEffect(() => {
+    if (!isContactCacheEnabled()) return
+    let cancelled = false
+    void getCachedPage(cacheKey).then((cached) => {
+      if (!cancelled && cached) qc.setQueryData(queryKey, cached)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [qc, cacheKey, queryKey])
+  return query
 }
 
 export function useCustomer(id: number | null): import("@tanstack/react-query").UseQueryResult<CustomerVO, Error> {
-  return useQuery({
-    queryKey: [...CUSTOMERS_KEY, 'detail', id],
-    queryFn: () => http.get<CustomerVO>(`/api/customers/${id}`),
+  const qc = useQueryClient()
+  const queryKey = [...CUSTOMERS_KEY, 'detail', id] as const
+  const query = useQuery<CustomerVO, Error>({
+    queryKey,
+    queryFn: async () => {
+      try {
+        const fresh = await http.get<CustomerVO>(`/api/customers/${id}`)
+        if (isContactCacheEnabled() && id != null) void putCustomer(fresh)
+        return fresh
+      } catch (err) {
+        if (isContactCacheEnabled() && id != null) {
+          const cached = await getCachedCustomer(id)
+          if (cached) return cached
+        }
+        throw err
+      }
+    },
     enabled: id != null
   })
+  useEffect(() => {
+    if (!isContactCacheEnabled() || id == null) return
+    let cancelled = false
+    void getCachedCustomer(id).then((cached) => {
+      if (!cancelled && cached) qc.setQueryData(queryKey, cached)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [qc, id, queryKey])
+  return query
 }
 
 export function useLabelTree(): import("@tanstack/react-query").UseQueryResult<LabelGroupVO[], Error> {

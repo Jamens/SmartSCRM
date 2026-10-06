@@ -140,6 +140,20 @@ export function patchSettings(patch: unknown): AppSettings {
 }
 
 /**
+ * 重置为出厂默认值（存储管理「清除通用本地数据 / 全部重置」用）。
+ * 只回写 `DEFAULTS` 并落盘——不删文件、不碰其它目录；主题/语言等偏好一并回到默认。
+ */
+export function resetSettings(): AppSettings {
+  current = { ...DEFAULTS }
+  try {
+    writeFileSync(settingsFile(), JSON.stringify(current, null, 2), 'utf-8')
+  } catch (error) {
+    console.warn(`[settings] reset 写盘失败（原因：${String(error)}）`)
+  }
+  return getSettings()
+}
+
+/**
  * 主进程侧的生效动作：`themeSource` 一旦设好，`nativeTheme.shouldUseDarkColors`
  * 就成了单一真值——light/dark 档把它钉死，system 档让它跟着操作系统走。
  *

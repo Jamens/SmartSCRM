@@ -13,6 +13,7 @@ import {
   applyThemeSource,
   getSettings,
   patchSettings,
+  resetSettings,
   themeSnapshot,
   type AppSettings
 } from './state/settings'
@@ -79,6 +80,15 @@ export function registerIpcHandlers(): void {
   ipcMain.handle('settings:get', () => getSettings())
   ipcMain.handle('settings:set', (_event, patch: Partial<AppSettings>) => {
     const next = patchSettings(patch)
+    applyThemeSource(next)
+    broadcastSettings()
+    broadcastTheme()
+    return next
+  })
+  // 存储管理（B26）：一键把所有用户偏好（主题/语言/开关等）回到出厂默认并落盘。
+  // 不删文件、不碰会话文件——清会话由渲染层走 session:clear（即登出）。
+  ipcMain.handle('settings:reset', () => {
+    const next = resetSettings()
     applyThemeSource(next)
     broadcastSettings()
     broadcastTheme()
