@@ -33,9 +33,11 @@ interface Props {
 /**
  * 会话档编辑器。入口只有一个（工作台舞台那颗「会话设置」），记录页的「语向」仍只编辑客户档（D-07）：
  * 两处开同一个弹层会让用户分不清自己在改哪一层。
- * 这里**没有任何 enabled 开关**（spec §6 / D-09）：会话档改的是"怎么说"（语种、线路），
- * 不是"要不要说"——页内开关位仍是进程级一份 flags、来源全局行。给了控件就是给一颗按了没反应的按钮，
- * 所以那几列只随 §3.3 的整份复制从生效行带过去，界面上既不说谎也不逐个解释列的去处。
+ * B16：会话档现**暴露收发各自的启用开关**（receiveEnabled / sendEnabled），覆盖了 spec §6 / D-09 原本
+ * "会话档只有语种与线路、开关位全局一份" 的设计——后端会话级 `PUT /api/translation/settings` 本就按
+ * accountId+chatKey 支持这两列，缺的只是前端控件。`DirectionDraft` 早已带这两列，`LangRow` 也早有开关形态，
+ * 所以这里只是把控件接上；其余行为开关（语音 / 预览 / 回车发送 / 中文拦截）仍只在全局生效，会话档不暴露，
+ * 避免一颗按了没反应的按钮。
  */
 export default function ConversationSettingsDialog({
   accountId,
@@ -128,8 +130,8 @@ function ConvSettingsForm({ data, ref, chatKey, save, reset, onOpenChange }: For
           >
             {chatKey}
           </span>
-          未关联客户时这是这条会话的唯一标识。只改语种与线路：开关位（先译再发 / 接收翻译 /
-          输入框预览 / 中文拦截）本阶段仍是全局那一份。
+          未关联客户时这是这条会话的唯一标识。可单独开 / 关这条会话的「收信翻译」「发信翻译」；
+          其余行为开关（语音 / 预览 / 回车发送 / 中文拦截）仍是全局那一份。
         </DialogDescription>
       </DialogHeader>
 
@@ -156,6 +158,8 @@ function ConvSettingsForm({ data, ref, chatKey, save, reset, onOpenChange }: For
 
         <LangRow
           title="收信"
+          enabled={draft.receiveEnabled}
+          onEnabled={(v) => patch({ receiveEnabled: v })}
           from={draft.receiveFromLang}
           to={draft.receiveToLang}
           onFrom={(v) => patch({ receiveFromLang: v })}
@@ -164,6 +168,8 @@ function ConvSettingsForm({ data, ref, chatKey, save, reset, onOpenChange }: For
         />
         <LangRow
           title="发信"
+          enabled={draft.sendEnabled}
+          onEnabled={(v) => patch({ sendEnabled: v })}
           from={draft.sendFromLang}
           to={draft.sendToLang}
           onFrom={(v) => patch({ sendFromLang: v })}
