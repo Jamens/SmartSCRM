@@ -31,6 +31,9 @@ public class KnowledgeQaController {
 
     public record QaRequest(@NotBlank String question, @NotBlank String answer,
                             Long roleId, Long categoryId, Integer status) {}
+    /** 人工确认后的派生 QA：锚回分片，source 固定 derived。 */
+    public record DerivedQaRequest(@NotBlank String question, @NotBlank String answer,
+                                   Long roleId, Long categoryId) {}
 
     @GetMapping
     @PreAuthorize("hasAuthority('knowledge:read')")
@@ -63,5 +66,15 @@ public class KnowledgeQaController {
     public ApiResponse<Void> delete(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         service.delete(principal.tenantId(), id);
         return ApiResponse.ok(null);
+    }
+
+    /** 人工确认派生候选 → 落库（source=derived，锚回分片）。预览在前端做，这里只落确认结果。 */
+    @PostMapping("/derived")
+    @PreAuthorize("hasAuthority('knowledge:write')")
+    public ApiResponse<KnowledgeQaVO> createDerived(@AuthenticationPrincipal AuthPrincipal principal,
+                                                    @RequestParam Long chunkId,
+                                                    @RequestBody DerivedQaRequest req) {
+        return ApiResponse.ok(KnowledgeQaVO.of(service.createDerived(principal.tenantId(), chunkId,
+            req.roleId(), req.categoryId(), req.question(), req.answer())));
     }
 }

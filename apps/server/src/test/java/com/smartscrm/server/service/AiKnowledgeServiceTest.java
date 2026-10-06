@@ -16,6 +16,7 @@ import com.smartscrm.server.entity.AiRole;
 import com.smartscrm.server.entity.KnowledgeQa;
 import com.smartscrm.server.mapper.AiCategoryMapper;
 import com.smartscrm.server.mapper.AiRoleMapper;
+import com.smartscrm.server.mapper.KnowledgeChunkMapper;
 import com.smartscrm.server.mapper.KnowledgeQaMapper;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.apache.ibatis.session.Configuration;
@@ -31,6 +32,7 @@ class AiKnowledgeServiceTest {
     private AiRoleMapper roleMapper;
     private AiCategoryMapper categoryMapper;
     private KnowledgeQaMapper qaMapper;
+    private KnowledgeChunkMapper chunkMapper;
     private AiRoleService roleService;
     private AiCategoryService categoryService;
     private KnowledgeQaService qaService;
@@ -45,9 +47,10 @@ class AiKnowledgeServiceTest {
         roleMapper = mock(AiRoleMapper.class);
         categoryMapper = mock(AiCategoryMapper.class);
         qaMapper = mock(KnowledgeQaMapper.class);
+        chunkMapper = mock(KnowledgeChunkMapper.class);
         roleService = new AiRoleService(roleMapper);
         categoryService = new AiCategoryService(categoryMapper);
-        qaService = new KnowledgeQaService(qaMapper);
+        qaService = new KnowledgeQaService(qaMapper, chunkMapper);
     }
 
     // ===== 角色 =====

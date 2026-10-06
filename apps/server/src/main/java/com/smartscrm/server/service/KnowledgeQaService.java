@@ -2,7 +2,9 @@ package com.smartscrm.server.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smartscrm.server.common.BizException;
+import com.smartscrm.server.entity.KnowledgeChunk;
 import com.smartscrm.server.entity.KnowledgeQa;
+import com.smartscrm.server.mapper.KnowledgeChunkMapper;
 import com.smartscrm.server.mapper.KnowledgeQaMapper;
 import java.util.List;
 import org.springframework.stereotype.Service;
@@ -17,11 +19,14 @@ import org.springframework.transaction.annotation.Transactional;
 public class KnowledgeQaService {
 
     private static final String SRC_MANUAL = "manual";
+    private static final String SRC_DERIVED = "derived";
 
     private final KnowledgeQaMapper mapper;
+    private final KnowledgeChunkMapper chunkMapper;
 
-    public KnowledgeQaService(KnowledgeQaMapper mapper) {
+    public KnowledgeQaService(KnowledgeQaMapper mapper, KnowledgeChunkMapper chunkMapper) {
         this.mapper = mapper;
+        this.chunkMapper = chunkMapper;
     }
 
     public List<KnowledgeQa> list(Long tenantId, Long roleId, Long categoryId, Integer status) {
@@ -64,6 +69,34 @@ public class KnowledgeQaService {
     @Transactional
     public void delete(Long tenantId, Long id) {
         mapper.deleteById(get(tenantId, id).getId());
+    }
+
+    /**
+     * 人工确认后把**某个分片派生出的候选**落库（source=derived，锚回 docId/chunkId）。
+     * 分片归属校验：chunk 必须属于本租户（防跨租户引用他人文档的分片）。
+     */
+    @Transactional
+    public KnowledgeQa createDerived(Long tenantId, Long chunkId, Long roleId, Long categoryId,
+                                      String question, String answer) {
+        KnowledgeChunk chunk = chunkMapper.selectById(chunkId);
+        if (chunk == null || !tenantId.equals(chunk.getTenantId())) {
+            throw new BizException(40404, "分片不存在: " + chunkId);
+        }
+        KnowledgeQa q = new KnowledgeQa();
+        q.setTenantId(tenantId);
+        q.setRoleId(roleId);
+        q.setCategoryId(categoryId);
+        q.setQuestion(requireText(question, "question"));
+        q.setAnswer(requireText(answer, "answer"));
+        q.setSource(SRC_DERIVED);
+        q.setDocId(chunk.getDocId());
+        q.setChunkId(chunk.getId());
+        q.setStatus(1);
+        mapper.insert(q);
+        // 标记该分片已被人工确认/派生过
+        chunk.setDerived(1);
+        chunkMapper.updateById(chunk);
+        return q;
     }
 
     private KnowledgeQa get(Long tenantId, Long id) {
