@@ -34,6 +34,7 @@ export const zhCN = {
     script: '炒群引擎',
     groupOps: '加群/踢人',
     nurture: '互聊养号',
+    automation: "自动化",
     settings: '设置'
   },
   notifications: {
@@ -215,6 +216,50 @@ export const zhCN = {
       title: '发言记录',
     },
   },
+  automation: {
+    title: "自动化任务面板",
+    desc: "跨模块只读聚合 + 账号批量关闭 / 删除（删除前先停任务）",
+    overview: {
+      accounts: "账号总数",
+      online: "在线",
+      tasks: "任务总数",
+      active: "在跑任务",
+      none: "暂无任务",
+    },
+    kind: {
+      script: "炒群剧本",
+      nurture: "互聊养号",
+      groupJoin: "自动加群",
+      groupKick: "自动踢人",
+    },
+    table: {
+      title: "账号列表",
+      desc: "勾选后批量关闭 / 删除；删除前先停其上任务",
+      selectAll: "全选",
+      account: "账号",
+      platform: "平台",
+      online: "在线",
+      tasks: "在跑任务",
+      empty: "暂无账号",
+    },
+    actions: {
+      close: "批量关闭",
+      delete: "批量删除",
+      selected: "已选 {{count}} 个",
+      closeConfirm: "确认关闭",
+      deleteConfirm: "确认删除",
+      cancel: "取消",
+    },
+    confirm: {
+      closeTitle: "关闭 {{count}} 个账号？",
+      closeDesc: "将停掉这些账号上共 {{tasks}} 个在跑任务（可恢复）。",
+      deleteTitle: "删除 {{count}} 个账号？",
+      deleteDesc: "将先停掉这些账号上共 {{tasks}} 个在跑任务，再删除账号。此操作不可逆。",
+      done: "已处理：停掉 {{tasks}} 个任务",
+      closeDone: "已关闭：停掉 {{tasks}} 个任务",
+    },
+  },
+
   groupOps: {
     title: '群自动加群 / 踢人',
     accountId: '执行账号 ID',

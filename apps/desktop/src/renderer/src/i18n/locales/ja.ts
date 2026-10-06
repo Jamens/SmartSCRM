@@ -31,6 +31,7 @@ export const ja: DeepString<typeof zhCN> = {
     script: 'スクリプトエンジン',
     groupOps: '参加/退出',
     nurture: '相互チャット',
+    automation: "自動化",
     settings: '設定'
   },
   notifications: {
@@ -212,6 +213,50 @@ export const ja: DeepString<typeof zhCN> = {
       title: '発言ログ',
     },
   },
+  automation: {
+    title: "自動化タスクパネル",
+    desc: "モジュール横断の読み取り専用集計＋アカウント一括停止 / 削除（削除前にタスク停止）",
+    overview: {
+      accounts: "アカウント数",
+      online: "オンライン",
+      tasks: "タスク数",
+      active: "実行中",
+      none: "タスクなし",
+    },
+    kind: {
+      script: "スクリプト",
+      nurture: "育成",
+      groupJoin: "自動参加",
+      groupKick: "自動キック",
+    },
+    table: {
+      title: "アカウント一覧",
+      desc: "選択して一括停止 / 削除。削除前にタスクを停止",
+      selectAll: "すべて選択",
+      account: "アカウント",
+      platform: "プラットフォーム",
+      online: "オンライン",
+      tasks: "実行中タスク",
+      empty: "アカウントなし",
+    },
+    actions: {
+      close: "一括停止",
+      delete: "一括削除",
+      selected: "{{count}} 件選択",
+      closeConfirm: "停止する",
+      deleteConfirm: "削除する",
+      cancel: "キャンセル",
+    },
+    confirm: {
+      closeTitle: "{{count}} 件のアカウントを停止しますか？",
+      closeDesc: "これらのアカウント上の実行中タスク {{tasks}} 件を停止します（復元可）。",
+      deleteTitle: "{{count}} 件のアカウントを削除しますか？",
+      deleteDesc: "先に実行中タスク {{tasks}} 件を停止し、その後アカウントを削除します。元に戻せません。",
+      done: "完了：タスク {{tasks}} 件を停止",
+      closeDone: "停止完了：タスク {{tasks}} 件を停止",
+    },
+  },
+
   groupOps: {
     title: 'グループ自動参加 / 退出',
     accountId: '実行アカウント ID',

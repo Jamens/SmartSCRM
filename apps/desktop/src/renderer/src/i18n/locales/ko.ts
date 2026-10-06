@@ -31,6 +31,7 @@ export const ko: DeepString<typeof zhCN> = {
     script: '스크립트 엔진',
     groupOps: '참여/퇴출',
     nurture: '상호 채팅',
+    automation: "자동화",
     settings: '설정'
   },
   notifications: {
@@ -210,6 +211,50 @@ export const ko: DeepString<typeof zhCN> = {
       title: '발언 기록',
     },
   },
+  automation: {
+    title: "자동화 작업 패널",
+    desc: "모듈 통합 읽기 전용 집계 + 계정 일괄 닫기 / 삭제(삭제 전 작업 중지)",
+    overview: {
+      accounts: "계정 수",
+      online: "온라인",
+      tasks: "작업 수",
+      active: "실행 중",
+      none: "작업 없음",
+    },
+    kind: {
+      script: "스크립트",
+      nurture: "육성",
+      groupJoin: "자동 가입",
+      groupKick: "자동 추방",
+    },
+    table: {
+      title: "계정 목록",
+      desc: "선택 후 일괄 닫기 / 삭제. 삭제 전 작업 중지",
+      selectAll: "전체 선택",
+      account: "계정",
+      platform: "플랫폼",
+      online: "온라인",
+      tasks: "실행 중 작업",
+      empty: "계정 없음",
+    },
+    actions: {
+      close: "일괄 닫기",
+      delete: "일괄 삭제",
+      selected: "{{count}}개 선택",
+      closeConfirm: "닫기 확인",
+      deleteConfirm: "삭제 확인",
+      cancel: "취소",
+    },
+    confirm: {
+      closeTitle: "{{count}}개 계정을 닫을까요?",
+      closeDesc: "이 계정들의 실행 중 작업 {{tasks}}개를 중지합니다(복구 가능).",
+      deleteTitle: "{{count}}개 계정을 삭제할까요?",
+      deleteDesc: "먼저 실행 중 작업 {{tasks}}개를 중지한 뒤 계정을 삭제합니다. 되돌릴 수 없습니다.",
+      done: "완료: 작업 {{tasks}}개 중지",
+      closeDone: "닫기 완료: 작업 {{tasks}}개 중지",
+    },
+  },
+
   groupOps: {
     title: '그룹 자동 참여 / 퇴출',
     accountId: '실행 계정 ID',

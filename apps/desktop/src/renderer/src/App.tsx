@@ -20,6 +20,7 @@ import DashboardPage from '@/pages/DashboardPage'
 import ScriptPage from '@/pages/ScriptPage'
 import GroupOpsPage from '@/pages/GroupOpsPage'
 import NurturePlanPage from '@/pages/NurturePlanPage'
+import AutomationPage from '@/pages/AutomationPage'
 import LoginPage from '@/pages/LoginPage'
 import { DEFAULT_NAV_PATH } from '@/lib/nav'
 import { useProtocolSync } from '@/hooks/useProtocolSync'
@@ -73,6 +74,7 @@ function App(): React.JSX.Element {
           <Route path="/script" element={<ScriptPage />} />
           <Route path="/group-ops" element={<GroupOpsPage />} />
           <Route path="/nurture" element={<NurturePlanPage />} />
+          <Route path="/automation" element={<AutomationPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/logs" element={<LogCenterPage />} />
           <Route path="*" element={<Navigate to={DEFAULT_NAV_PATH} replace />} />

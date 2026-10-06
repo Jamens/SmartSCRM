@@ -6,6 +6,7 @@ import {
   Layers,
   ShieldAlert,
   Sprout,
+  Cpu,
   FolderOpen,
   HelpCircle,
   History,
@@ -54,6 +55,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/group-ops', i18nKey: 'nav.groupOps', icon: ShieldAlert },
   // 互聊养号（B9）：多账号进群按可复现日程轮流发言，带人工门。
   { path: '/nurture', i18nKey: 'nav.nurture', icon: Sprout },
+  // 本地自动化任务面板（B20）：跨模块只读聚合 + 账号批量关闭/删除（删除先停任务）。
+  { path: '/automation', i18nKey: 'nav.automation', icon: Cpu },
   // 日志中心（A19）：排查用的宿主能力，排在业务模块之后、设置之前。
   { path: '/logs', i18nKey: 'nav.logs', icon: FileText },
   // 设置排在最后：它是宿主能力，不是业务模块。

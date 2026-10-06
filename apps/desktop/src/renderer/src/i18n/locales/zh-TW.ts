@@ -31,6 +31,7 @@ export const zhTW: DeepString<typeof zhCN> = {
     script: '炒群引擎',
     groupOps: '加群/踢人',
     nurture: '互聊養號',
+    automation: "自動化",
     settings: '設定'
   },
   notifications: {
@@ -205,6 +206,50 @@ export const zhTW: DeepString<typeof zhCN> = {
       title: '發言記錄',
     },
   },
+  automation: {
+    title: "自動化任務面板",
+    desc: "跨模組唯讀聚合 + 帳號批次關閉 / 刪除（刪除前先停任務）",
+    overview: {
+      accounts: "帳號總數",
+      online: "線上",
+      tasks: "任務總數",
+      active: "在跑任務",
+      none: "暫無任務",
+    },
+    kind: {
+      script: "炒群劇本",
+      nurture: "互聊養號",
+      groupJoin: "自動加群",
+      groupKick: "自動踢人",
+    },
+    table: {
+      title: "帳號列表",
+      desc: "勾選後批次關閉 / 刪除；刪除前先停其上任務",
+      selectAll: "全選",
+      account: "帳號",
+      platform: "平台",
+      online: "線上",
+      tasks: "在跑任務",
+      empty: "暫無帳號",
+    },
+    actions: {
+      close: "批次關閉",
+      delete: "批次刪除",
+      selected: "已選 {{count}} 個",
+      closeConfirm: "確認關閉",
+      deleteConfirm: "確認刪除",
+      cancel: "取消",
+    },
+    confirm: {
+      closeTitle: "關閉 {{count}} 個帳號？",
+      closeDesc: "將停掉這些帳號上共 {{tasks}} 個在跑任務（可恢復）。",
+      deleteTitle: "刪除 {{count}} 個帳號？",
+      deleteDesc: "將先停掉這些帳號上共 {{tasks}} 個在跑任務，再刪除帳號。此操作不可逆。",
+      done: "已處理：停掉 {{tasks}} 個任務",
+      closeDone: "已關閉：停掉 {{tasks}} 個任務",
+    },
+  },
+
   groupOps: {
     title: '群自動加群 / 踢人',
     accountId: '執行帳號 ID',

@@ -31,6 +31,7 @@ export const th: DeepString<typeof zhCN> = {
     script: 'สคริปต์เอนจิ้น',
     groupOps: 'เข้ากลุ่ม/เตะกลุ่ม',
     nurture: 'แชทหมู่',
+    automation: "อัตโนมัติ",
     settings: 'การตั้งค่า'
   },
   notifications: {
@@ -210,6 +211,50 @@ export const th: DeepString<typeof zhCN> = {
       title: 'บันทึกการพูด',
     },
   },
+  automation: {
+    title: "แผงงานอัตโนมัติ",
+    desc: "สรุปแบบอ่านอย่างเดียวข้ามโมดูล + ปิด / ลบบัญชีแบบกลุ่ม (หยุดงานก่อนลบ)",
+    overview: {
+      accounts: "จำนวนบัญชี",
+      online: "ออนไลน์",
+      tasks: "งานทั้งหมด",
+      active: "กำลังทำงาน",
+      none: "ไม่มีงาน",
+    },
+    kind: {
+      script: "สคริปต์",
+      nurture: "เพาะบัญชี",
+      groupJoin: "เข้ากลุ่มอัตโนมัติ",
+      groupKick: "เตะอัตโนมัติ",
+    },
+    table: {
+      title: "รายชื่อบัญชี",
+      desc: "เลือกเพื่อปิด / ลบบัญชีแบบกลุ่ม หยุดงานก่อนลบ",
+      selectAll: "เลือกทั้งหมด",
+      account: "บัญชี",
+      platform: "แพลตฟอร์ม",
+      online: "ออนไลน์",
+      tasks: "งานที่ทำงาน",
+      empty: "ไม่มีบัญชี",
+    },
+    actions: {
+      close: "ปิดแบบกลุ่ม",
+      delete: "ลบแบบกลุ่ม",
+      selected: "เลือก {{count}} รายการ",
+      closeConfirm: "ยืนยันปิด",
+      deleteConfirm: "ยืนยันลบ",
+      cancel: "ยกเลิก",
+    },
+    confirm: {
+      closeTitle: "ปิดบัญชี {{count}} รายการ?",
+      closeDesc: "จะหยุดงานที่กำลังทำงาน {{tasks}} รายการบนบัญชีเหล่านี้ (กู้คืนได้)",
+      deleteTitle: "ลบบัญชี {{count}} รายการ?",
+      deleteDesc: "จะหยุดงาน {{tasks}} รายการก่อน แล้วค่อยลบบัญชี ไม่สามารถย้อนกลับได้",
+      done: "เสร็จ: หยุดงาน {{tasks}} รายการ",
+      closeDone: "ปิดแล้ว: หยุดงาน {{tasks}} รายการ",
+    },
+  },
+
   groupOps: {
     title: 'เข้ากลุ่มอัตโนมัติ / เตะกลุ่ม',
     accountId: 'ID บัญชีที่ใช้',

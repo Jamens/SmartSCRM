@@ -32,6 +32,7 @@ export const en: DeepString<typeof zhCN> = {
     script: 'Script Engine',
     groupOps: 'Join/Kick',
     nurture: 'Nurture',
+    automation: "Automation",
     settings: 'Settings'
   },
   notifications: {
@@ -212,6 +213,50 @@ export const en: DeepString<typeof zhCN> = {
       title: 'Speaking log',
     },
   },
+  automation: {
+    title: "Automation Panel",
+    desc: "Cross-module read-only overview + bulk close / delete accounts (stop tasks before delete)",
+    overview: {
+      accounts: "Accounts",
+      online: "Online",
+      tasks: "Tasks",
+      active: "Active",
+      none: "No tasks",
+    },
+    kind: {
+      script: "Script",
+      nurture: "Nurture",
+      groupJoin: "Auto-join",
+      groupKick: "Auto-kick",
+    },
+    table: {
+      title: "Accounts",
+      desc: "Select to bulk close / delete; tasks are stopped before delete",
+      selectAll: "Select all",
+      account: "Account",
+      platform: "Platform",
+      online: "Online",
+      tasks: "Active tasks",
+      empty: "No accounts",
+    },
+    actions: {
+      close: "Bulk close",
+      delete: "Bulk delete",
+      selected: "{{count}} selected",
+      closeConfirm: "Confirm close",
+      deleteConfirm: "Confirm delete",
+      cancel: "Cancel",
+    },
+    confirm: {
+      closeTitle: "Close {{count}} account(s)?",
+      closeDesc: "This stops {{tasks}} active task(s) on these accounts (recoverable).",
+      deleteTitle: "Delete {{count}} account(s)?",
+      deleteDesc: "Tasks ({{tasks}}) will be stopped first, then accounts deleted. This is irreversible.",
+      done: "Done: stopped {{tasks}} task(s)",
+      closeDone: "Closed: stopped {{tasks}} task(s)",
+    },
+  },
+
   groupOps: {
     title: 'Auto Join / Kick',
     accountId: 'Executor account ID',

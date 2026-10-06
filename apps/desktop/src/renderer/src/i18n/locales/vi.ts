@@ -31,6 +31,7 @@ export const vi: DeepString<typeof zhCN> = {
     script: 'Động cơ kịch bản',
     groupOps: 'Tham gia/Loại',
     nurture: 'Trò chuyện đan',
+    automation: "Tự động",
     settings: 'Cài đặt'
   },
   notifications: {
@@ -211,6 +212,50 @@ export const vi: DeepString<typeof zhCN> = {
       title: 'Nhật ký phát biểu',
     },
   },
+  automation: {
+    title: "Bảng tác vụ tự động",
+    desc: "Tổng hợp chỉ đọc xuyên module + đóng / xóa hàng loạt tài khoản (dừng tác vụ trước khi xóa)",
+    overview: {
+      accounts: "Số tài khoản",
+      online: "Trực tuyến",
+      tasks: "Tác vụ",
+      active: "Đang chạy",
+      none: "Chưa có tác vụ",
+    },
+    kind: {
+      script: "Kịch bản",
+      nurture: "Dưỡng tài khoản",
+      groupJoin: "Tự tham gia",
+      groupKick: "Tự xóa thành viên",
+    },
+    table: {
+      title: "Danh sách tài khoản",
+      desc: "Chọn để đóng / xóa hàng loạt; dừng tác vụ trước khi xóa",
+      selectAll: "Chọn tất cả",
+      account: "Tài khoản",
+      platform: "Nền tảng",
+      online: "Trực tuyến",
+      tasks: "Tác vụ chạy",
+      empty: "Chưa có tài khoản",
+    },
+    actions: {
+      close: "Đóng hàng loạt",
+      delete: "Xóa hàng loạt",
+      selected: "Đã chọn {{count}}",
+      closeConfirm: "Xác nhận đóng",
+      deleteConfirm: "Xác nhận xóa",
+      cancel: "Hủy",
+    },
+    confirm: {
+      closeTitle: "Đóng {{count}} tài khoản?",
+      closeDesc: "Sẽ dừng {{tasks}} tác vụ đang chạy trên các tài khoản này (có thể khôi phục).",
+      deleteTitle: "Xóa {{count}} tài khoản?",
+      deleteDesc: "Tác vụ ({{tasks}}) sẽ được dừng trước, sau đó xóa tài khoản. Không thể hoàn tác.",
+      done: "Xong: đã dừng {{tasks}} tác vụ",
+      closeDone: "Đã đóng: đã dừng {{tasks}} tác vụ",
+    },
+  },
+
   groupOps: {
     title: 'Tự động tham gia / loại nhóm',
     accountId: 'ID tài khoản thực thi',

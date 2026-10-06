@@ -31,6 +31,7 @@ export const id: DeepString<typeof zhCN> = {
     script: 'Mesin Skrip',
     groupOps: 'Gabung/Kick',
     nurture: 'Obrolan Silang',
+    automation: "Otomasi",
     settings: 'Pengaturan'
   },
   notifications: {
@@ -213,6 +214,50 @@ export const id: DeepString<typeof zhCN> = {
       title: 'Log bicara',
     },
   },
+  automation: {
+    title: "Panel Otomasi",
+    desc: "Ringkasan baca-saja lintas-modul + tutup / hapus akun massal (hentikan tugas sebelum hapus)",
+    overview: {
+      accounts: "Total akun",
+      online: "Online",
+      tasks: "Total tugas",
+      active: "Aktif",
+      none: "Tidak ada tugas",
+    },
+    kind: {
+      script: "Skrip",
+      nurture: "Pemeliharaan",
+      groupJoin: "Gabung otomatis",
+      groupKick: "Kick otomatis",
+    },
+    table: {
+      title: "Daftar akun",
+      desc: "Pilih untuk tutup / hapus massal; tugas dihentikan sebelum hapus",
+      selectAll: "Pilih semua",
+      account: "Akun",
+      platform: "Platform",
+      online: "Online",
+      tasks: "Tugas aktif",
+      empty: "Tidak ada akun",
+    },
+    actions: {
+      close: "Tutup massal",
+      delete: "Hapus massal",
+      selected: "{{count}} dipilih",
+      closeConfirm: "Konfirmasi tutup",
+      deleteConfirm: "Konfirmasi hapus",
+      cancel: "Batal",
+    },
+    confirm: {
+      closeTitle: "Tutup {{count}} akun?",
+      closeDesc: "Akan menghentikan {{tasks}} tugas aktif pada akun ini (bisa dipulihkan).",
+      deleteTitle: "Hapus {{count}} akun?",
+      deleteDesc: "Tugas ({{tasks}}) akan dihentikan dulu, lalu akun dihapus. Tidak bisa dibatalkan.",
+      done: "Selesai: menghentikan {{tasks}} tugas",
+      closeDone: "Ditutup: menghentikan {{tasks}} tugas",
+    },
+  },
+
   groupOps: {
     title: 'Gabung / Kick Otomatis',
     accountId: 'ID akun eksekutor',
