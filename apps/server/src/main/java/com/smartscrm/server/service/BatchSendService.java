@@ -44,6 +44,8 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -71,15 +73,18 @@ public class BatchSendService {
     private final PlatformAccountMapper accountMapper;
     private final ChatConversationMapper conversationMapper;
     private final CustomerMapper customerMapper;
+    private final NotificationService notificationService;
+    private static final Logger log = LoggerFactory.getLogger(BatchSendService.class);
 
     public BatchSendService(BatchSendTaskMapper taskMapper, BatchSendDetailMapper detailMapper,
                             PlatformAccountMapper accountMapper, ChatConversationMapper conversationMapper,
-                            CustomerMapper customerMapper) {
+                            CustomerMapper customerMapper, NotificationService notificationService) {
         this.taskMapper = taskMapper;
         this.detailMapper = detailMapper;
         this.accountMapper = accountMapper;
         this.conversationMapper = conversationMapper;
         this.customerMapper = customerMapper;
+        this.notificationService = notificationService;
     }
 
     @Transactional
@@ -270,11 +275,35 @@ public class BatchSendService {
             int open = taskMapper.openCount(tenantId, taskId);
             if (dto.isAllHalted() && open > 0) {
                 taskMapper.moveTo(tenantId, taskId, "running", "error");
+                publishFinished(tenantId, task, false);
             } else if (open == 0) {
                 taskMapper.moveTo(tenantId, taskId, "running", "done");
+                publishFinished(tenantId, task, true);
             }
         }
         return resultOf(tenantId, taskId);
+    }
+
+    /**
+     * A10 投递触发点：群发跑到终态（done / error）时给租户发一条系统通知。
+     *
+     * 只在**这一趟真的把状态搬进终态**时才发（外层已判 running），所以重复 reports 轮询
+     * 不会重复投递。`userId=null` = 租户全员广播（任务表没记创建人，无法定向）。
+     * 通知失败**不能**反过来把群发结算带崩——投递是旁路，包一层 try/catch 记日志。
+     */
+    private void publishFinished(long tenantId, BatchSendTask task, boolean done) {
+        try {
+            String title = done ? "批量群发任务已完成" : "批量群发任务异常终止";
+            String content = task.getName() + "：成功 " + nvl(task.getSentCount())
+                + " 条，失败 " + nvl(task.getFailCount()) + " 条";
+            notificationService.publish(tenantId, "system", title, content, "/broadcast", null);
+        } catch (RuntimeException e) {
+            log.warn("群发终态通知投递失败 taskId={}", task.getId(), e);
+        }
+    }
+
+    private static int nvl(Integer v) {
+        return v == null ? 0 : v;
     }
 
     /**

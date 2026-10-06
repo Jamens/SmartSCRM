@@ -8,6 +8,7 @@ import static org.mockito.ArgumentMatchers.anyList;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.inOrder;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -39,6 +40,7 @@ import java.util.Map;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 import org.mockito.InOrder;
 
 /**
@@ -67,8 +69,9 @@ class BatchSendServiceTest {
     private final PlatformAccountMapper accountMapper = mock(PlatformAccountMapper.class);
     private final ChatConversationMapper conversationMapper = mock(ChatConversationMapper.class);
     private final CustomerMapper customerMapper = mock(CustomerMapper.class);
+    private final NotificationService notificationService = mock(NotificationService.class);
     private final BatchSendService service = new BatchSendService(
-            taskMapper, detailMapper, accountMapper, conversationMapper, customerMapper);
+            taskMapper, detailMapper, accountMapper, conversationMapper, customerMapper, notificationService);
 
     /**
      * MyBatis-Plus 在 {@code in(...)} 与 {@code set(...)} 这两处会当场把 lambda 解析成列名（{@code eq(...)}
@@ -205,6 +208,27 @@ class BatchSendServiceTest {
 
         verify(detailMapper, times(5)).applyReport(eq(TENANT), eq(TASK), anyLong(), anyString(),
                 any(), any(), any(), any(), any());
+    }
+
+    /**
+     * A10 投递触发点：running→done（open==0）时给租户广播一条系统通知，带 `/broadcast` 跳转。
+     * 只在这一趟真把状态搬进终态时发，所以重复轮询 reports 不会重复投递。
+     */
+    @Test
+    void aTaskReachingDonePublishesASystemNotification() {
+        when(taskMapper.selectOne(any())).thenReturn(task("running"));
+        when(taskMapper.openCount(anyLong(), anyLong())).thenReturn(0);
+        List<BatchReportItemDTO> items = new ArrayList<>();
+        items.add(item(200L, "success"));
+        BatchReportsDTO dto = new BatchReportsDTO();
+        dto.setItems(items);
+
+        service.reports(TENANT, TASK, dto);
+
+        verify(taskMapper).moveTo(TENANT, TASK, "running", "done");
+        ArgumentCaptor<String> title = ArgumentCaptor.forClass(String.class);
+        verify(notificationService).publish(eq(TENANT), eq("system"), title.capture(), any(), eq("/broadcast"), isNull());
+        assertTrue(title.getValue().contains("已完成"), "标题要说已完成：" + title.getValue());
     }
 
     @Test
