@@ -73,3 +73,14 @@ export function useCheckSensitiveWord(): UseMutationResult<string[], Error, stri
     mutationFn: (text) => http.post<string[]>('/api/sensitive-words/check', { text })
   })
 }
+
+/**
+ * 发送前的即时判定（非 hook，供 `useSendText.send` 在漏斗里直接 await）。
+ * 匹配口径全在后端 `SensitiveWordService.match`（唯一来源），这里只发一次请求取回命中词。
+ * 判定本身出错（后端不可达等）时**放行**（fail-open）——风控是旁路，不该因为它抖动就把
+ * 所有回复都堵死；要改成 fail-closed 只需在这里把 catch 改成抛。
+ */
+export async function checkSensitiveWordsNow(text: string): Promise<string[]> {
+  const hits = await http.post<string[]>('/api/sensitive-words/check', { text })
+  return Array.isArray(hits) ? hits : []
+}

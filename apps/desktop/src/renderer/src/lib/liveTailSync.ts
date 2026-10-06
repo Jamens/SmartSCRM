@@ -23,6 +23,7 @@ import { useIncomingNotifier } from './desktopNotify'
 import { useAccounts } from '@/stores/accounts'
 import { PlatformType } from '@/lib/platform'
 import { sendViaProtocol } from '@/services/protocol/send'
+import { checkSensitiveWordsNow } from '@/api/sensitiveWords'
 
 /**
  * 记录页"双源取数"的另一半：历史读库（`api/messages`），尾巴吃广播（本文件）。
@@ -359,6 +360,18 @@ export function useSendText(
   return {
     async send(text, buttons) {
       if (accountId === null || chatKey === null) return { ok: false, message: '还没选中会话' }
+      // A8 敏感词风控：发送漏斗里判一次，命中就拦下**不发**——放在 appendPending 之前，
+      // 被拦的消息不会留下一条 pending 气泡。匹配口径全在后端（唯一来源），这里只取回命中词。
+      // 判定本身出错时 fail-open 放行（见 checkSensitiveWordsNow 注释）：风控是旁路，
+      // 不该因为它抖动就把所有回复堵死。
+      try {
+        const hits = await checkSensitiveWordsNow(text)
+        if (hits.length > 0) {
+          return { ok: false, message: `消息含敏感词：${hits.join('、')}` }
+        }
+      } catch {
+        // 判定不可用 → 放行，不阻断发送。
+      }
       const localId = crypto.randomUUID()
       appendPending(qc, { accountId, chatKey, text, localId })
       // 出站分流（B27 出站腿）：type-7（WA 协议号）账号无 WebContentsView、不绑 viewId，
