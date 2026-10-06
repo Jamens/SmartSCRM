@@ -5,11 +5,11 @@
 ## A. 壳层 / 基础框架
 | # | 功能 | 阶段 |
 |---|------|------|
-| A1 | 登录/鉴权（账号密码 + 邀请码租户 + 机器码设备绑定，JWT） | P1 |
-| A2 | 无边框主窗（自绘标题栏、托盘、单实例） | P1 |
-| A3 | 多开/窗口管理（同账号多窗检测、登录态分区） | P2 |
+| A1 | 登录/鉴权（账号密码 + 邀请码租户 + 机器码设备绑定，JWT） | ✅ 已交付（经代码核实：stores/auth.ts + LoginPage） |
+| A2 | 无边框主窗（自绘标题栏、托盘、单实例） | ✅ 已交付（经代码核实：mainWindow frame:false + TitleBar） |
+| A3 | 多开/窗口管理（同账号多窗检测、登录态分区） | ✅ 已交付（经代码核实：requestSingleInstanceLock + WebContentsView 分区） |
 | A4 | i18n（zh-CN / en 起，8 语种框架；覆盖面铺开中：壳层 + messages 域 + customers 域 + broadcast 域 + 布局壳层(AccountStage/AccountSidebar/AddAccountDialog) + Labels 页面 + Materials 页面 + Audiences 页面 + QuickReplies 页面(主组件 + ReplyCard + ItemPreview + ItemEditor + MaterialPicker 5 子组件) + Translation 页面(主组件 + PageHeader + NodeCard + DirectionCard + CacheStatsCard + TrialCard + KeyConfigCard + ProviderKeyForm 8 子组件) 已抽 t()；zh-TW/ja/ko/vi/id/th 已补译并在 `i18n/index.ts` 注册生效） | P14（已交付） |
-| A5 | 主题色板：宝蓝主色 + 金色点缀（light/dark 两套变量层） | P1 |
+| A5 | 主题色板：宝蓝主色 + 金色点缀（light/dark 两套变量层） | ✅ 已交付（经代码核实：shared/theme.ts + main.css 变量层） |
 | A6 | 自动更新框架（本地源） | 🟡 **检查+通知已交付（2026-10-06）**：受开源红线约束，更新源**自托管可配**——`AppSettings.updateManifestUrl` 默认空串 = 不检查、不外连（绝不硬编码商业云）。`shared/update.ts` 纯模型（`parseUpdateManifest` 校验形状、`isNewerVersion` 点分数字比版本、预发布保守判非更新、`verdictFrom`/`disabledVerdict`）有单测；主进程 `services/updateChecker.ts` 拉自托管清单（空则 disabled 零请求，网络/形状错→error 不当"无更新"）+ `downloadUpdate` 下载到本地 downloads 目录；`update:check`/`update:download` IPC + preload + 设置页「自动更新」卡（更新源增删改查/检查/下载并回路径）。**本版不自动安装/替换 exe**（Windows 替换运行中程序有坑，留后续） |
 | A7 | 内存/性能监控 | 🟡 **已交付（2026-10-06）**：`shared/perf.ts` 纯模型（字节复用 `machine.formatBytes`、新增 `formatDuration`、固定 6 行 `perfRows`：`memory.rss/heapUsed/heapTotal/external` + `runtime.uptime` + `cpu.total`，取不到时复用「未知」）；主进程 `services/perfMetrics.ts` 采 `process.memoryUsage/cpuUsage/uptime`（微秒→秒）经 `app:get-perf-metrics` IPC → preload `scrm.app.getPerfMetrics` → 渲染层 `lib/perfMetrics.ts`（3s 轮询）+ 设置页「性能监控」卡。shared 单测 6 条 |
 | A8 | 敏感词风控（本地库） | 🟡 **已交付 + 发送链接入（2026-10-06）**：V22 建 `sensitive_word`（`uk(tenant_id,word)` 租户内去重，`enabled` 控是否参与命中，`category` 仅分组标签不参与匹配）；`SensitiveWordService` 租户隔离 + CRUD + `match()`（不区分大小写子串、忽略停用词、去重、保留原样便于高亮，做成可单测纯函数）+ `POST /api/sensitive-words/check` 命中端点；前端 `api/sensitiveWords.ts` + 设置页「敏感词库」卡（增删/启停/文本试检）。后端 12 条单测。**发送链接入（2026-10-06）**：渲染层发送漏斗 `useSendText.send`（`MessageThread`/`ReplyComposer` 共用，协议号与 IPC 两分支都在内）在 `appendPending` **之前**调 `checkSensitiveWordsNow(text)` 判一次——命中即拦下**不发**、不留 pending 气泡，返回「消息含敏感词：…」；匹配口径仍唯一在后端。判定请求本身出错时 **fail-open 放行**（风控是旁路，不因它抖动堵死所有回复）。**入站判定已接（2026-10-06）**：V23 给 `chat_message` 加 `has_sensitive`；`MessageService.accept` 入库时对「入站+有正文」判一次（**整批只查一次词表**、内存逐条 `matchWords`，复用已单测纯函数），命中打 `has_sensitive=1` 存进行里（读列表直接读标记、免得 N+1 回查）；`MessageVO` 暴露 `hasSensitive`，渲染层入站气泡底部显示「含敏感词」徽标。`MessageServiceAcceptRuleTest` 补两条（命中打标记/未命中不打）。**批量群发已接（2026-10-06）**：主进程泵 `batchSend/host.ts` 的真发路径改为 `makeRealDispatch(api.checkSensitive)` 工厂——每条**发前**判一次，命中不发光按 `failed` 记（`errorCode=SENSITIVE_WORD`，详情页看得出是风控拦而非发送失败）；判定这一跳失败（`null`）时 fail-open 照发。批量按分钟级间隔慢发、每条一次后端往返可接受，**匹配口径仍唯一在后端**、主进程不复制词表/匹配逻辑 |
@@ -28,12 +28,12 @@
 ## B. 业务模块
 | # | 功能 | 阶段 |
 |---|------|------|
-| B1 | 多平台账号视图（WebContentsView + 分区登录态 + 代理） | P2 |
-| B15 | 注入脚本系统（WhatsApp/TG 适配器、翻译/UI/消息） | P2 |
-| B4 | 客户管理（联系人/标签树/备注/时间线/受众包） | P3 |
-| B3 | 快捷回复素材库（文字/图片/名片多组件） | P4 |
-| B2 | 翻译中心（4 渠道 + 节点测速 + 模拟翻译 + 译文缓存） | P5 |
-| B5 | 聊天记录（采集入库 / 全局搜索 / 统计 / 应用内回复发送 / 会话与客户绑定） | P6 |
+| B1 | 多平台账号视图（WebContentsView + 分区登录态 + 代理） | ✅ 已交付（经代码核实：AccountStage + webContentsView/manager） |
+| B15 | 注入脚本系统（WhatsApp/TG 适配器、翻译/UI/消息） | ✅ 已交付（经代码核实：inject/ + bridge/whatsapp/*） |
+| B4 | 客户管理（联系人/标签树/备注/时间线/受众包） | ✅ 已交付（经代码核实：CustomersPage + components/customers/*） |
+| B3 | 快捷回复素材库（文字/图片/名片多组件） | ✅ 已交付（经代码核实：QuickRepliesPage） |
+| B2 | 翻译中心（4 渠道 + 节点测速 + 模拟翻译 + 译文缓存） | ✅ 已交付（经代码核实：TranslationPage + translationBridge） |
+| B5 | 聊天记录（采集入库 / 全局搜索 / 统计 / 应用内回复发送 / 会话与客户绑定） | ✅ 已交付（经代码核实：MessagesPage + MessageThread + ConversationList） |
 | B7 | 批量群发（笛卡尔展开/随机间隔/撤回/看门狗） | P7 |
 | B6 | 群成员分析（事件流水 + 状态快照 + 导出） | P8 |
 | B8 | 炒群引擎（角色库三级/剧本/loop 调度/failover/断点续跑，调度在 Java） | P9 · **已扩 spec（2026-10-06，`docs/superpowers/specs/2026-10-06-b8-script-engine-design.md`）**：backlog 标注「大/需 spec/数据模型需另起 spec」，故先定数据模型与调度架构再分段落地——三级角色库(`script_role_category`/`script_role`/`script_action_tpl`)+剧本(`script_playbook`/`script_playbook_step`)+任务实例(`script_task`/`script_task_step`，`uk(tenant,playbook,chat_key)` 幂等、`current_step` 断点) + **Java 侧 loop 调度**（与 B7 泵在 Electron 不同，勿混）+ failover(不重置断点)+心跳超时判 error。**P9-1 数据模型已落地（2026-10-06）**：V23 七表迁移 + 7 实体/Mapper + `shared/scriptActions.ts`(`nextStep`断点推进/`failoverAccount` 切号/动作词表) + 纯规则单测。**P9-1 CRUD 已交付**：`ScriptRoleService`(品类/角色/动作模板)+ `ScriptPlaybookService`(剧本/步骤) + 两个 Controller（`/api/script-roles`·`/api/script-playbooks`，接 A16 `script:read/write`）+ V30 权限码。校验：重名/租户隔离/角色归属/动作白名单/seq 重复。**P9-2 调度器已交付**：`ScriptSchedulerService`（**Java 侧** loop 调度，spec §4）——到期推进 step(置 sending)、断点续跑只补 pending(sending 跳过/failed 不自动重试)、一轮跑完归零排下一轮、failover 切号**不重置断点**、心跳超时判 error。7 条单测。**P9-3 前端已交付**：`api/scriptEngine.ts` + `ScriptPage.tsx`（三 tab：角色库三级/剧本/任务面板，任务面板能起任务+推进一格+回报结果——状态机在 UI 上可驱动可观察）+ 路由 `/script` + 侧栏入口 + 8 语。补后端缺口：`ScriptTaskService`/Controller(起任务幂等+预建 step+step 回报+心跳+取消) + `ScriptSchedulerDriver`(`@Scheduled` 10s tick，全局开 `@EnableScheduling`) + **修 account_ids JSON 列 500**（页面传 `7,2` 被 MySQL JSON 列拒收，服务层规范化）。UI 端到端 13/13 PASS。**B8 完整**——真执行(动手)接 B18/B19 |
