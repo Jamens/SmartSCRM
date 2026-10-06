@@ -88,6 +88,17 @@ export function createBatchApi(opts: BatchApiOptions) {
         { method: 'POST' })
       return data?.updated ?? 0
     },
+    /**
+     * A8 敏感词：判定一段正文是否命中词库（匹配口径唯一在后端 `SensitiveWordService`）。
+     * 三态，与本文件其它方法同一条口径：
+     * - `[词…]` = 命中，按这些词拦；
+     * - `[]`    = 判定过了、未命中，照发；
+     * - `null`  = 这一跳没成（`call` 的三种塌法），调用方 **fail-open 照发**——风控是旁路，
+     *   不该因为它抖动就把整批群发停掉（与渲染层 `useSendText` 漏斗同一条取舍）。
+     */
+    checkSensitive: (text: string) =>
+      call<string[]>('/api/sensitive-words/check',
+        { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ text }) }),
     reports: (taskId: number, items: ReportItem[], allHalted: boolean) =>
       postProgress(`/api/batch-send/tasks/${taskId}/reports`, { items, allHalted }),
     /**

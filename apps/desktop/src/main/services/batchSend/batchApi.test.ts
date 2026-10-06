@@ -36,6 +36,20 @@ test('401 无 data 字段这条既有口径不在这里兜：只信 code===0 && 
   assert.equal(await api.task(1), null)
 })
 
+// A8 群发敏感词：三态必须分得开——[词]=命中拦、[]=未命中照发、null=这一跳没成→调用方 fail-open。
+test('checkSensitive：命中回词、未命中回空数组、这一跳没成回 null', async () => {
+  const hit = createBatchApi({ fetcher: async () => json({ code: 0, data: ['spam'] }) })
+  assert.deepEqual(await hit.checkSensitive('这是 spam'), ['spam'])
+
+  const clean = createBatchApi({ fetcher: async () => json({ code: 0, data: [] }) })
+  assert.deepEqual(await clean.checkSensitive('你好'), [])
+
+  const dead = createBatchApi({ fetcher: async () => { throw new Error('ECONNREFUSED') } })
+  assert.equal(await dead.checkSensitive('x'), null)
+  const httpFail = createBatchApi({ fetcher: async () => json({ code: 500, message: 'boom' }, 500) })
+  assert.equal(await httpFail.checkSensitive('x'), null)
+})
+
 test('recall 出参保留 eligible 与 rejected 两侧', async () => {
   const api = createBatchApi({
     fetcher: async () => json({ code: 0, data: {

@@ -58,8 +58,8 @@ const dryDispatch: Dispatch = async (d: BatchDetail): Promise<SendOutcome> => {
   return { ok: true, msgKey: `dryrun:${d.id}` }
 }
 
-/** 真发：localId 用引擎给的那一个——回执要靠它与明细行对齐（Task 9 的归属登记）。 */
-const realDispatch: Dispatch = async (d: BatchDetail, _viewId: string, localId: string): Promise<SendOutcome> => {
+/** 真发的桥调用：localId 用引擎给的那一个——回执要靠它与明细行对齐（Task 9 的归属登记）。 */
+const sendViaBridge: Dispatch = async (d: BatchDetail, _viewId: string, localId: string): Promise<SendOutcome> => {
   // B17 P5：按钮素材群发链——明细行带的 `buttons` 原样透传给 `sendText`，
   // 后者经主进程→桥→wa-js 渲染原生按钮。普通文本群发 `d.buttons` 为 undefined，不影响原路径。
   const receipt = await sendText({
@@ -71,6 +71,24 @@ const realDispatch: Dispatch = async (d: BatchDetail, _viewId: string, localId: 
   })
   return { ok: receipt.ok, msgKey: receipt.msgKey, error: receipt.error, detail: receipt.detail }
 }
+
+/**
+ * A8 群发敏感词：每条**发前**判一次，命中就不发、按 failed 记（errorCode=`SENSITIVE_WORD`，
+ * 详情页能看出是风控拦的而不是发送失败）。判定这一跳失败（null）时 fail-open 照发——与渲染层
+ * `useSendText` 漏斗同一条口径。批量本身按分钟级间隔慢发，每条一次往返可接受；匹配口径唯一在
+ * 后端，主进程不复制一份词表/匹配逻辑（也就没有"两份词表不同步"的问题）。
+ */
+const makeRealDispatch =
+  (check: (text: string) => Promise<string[] | null>): Dispatch =>
+  async (d: BatchDetail, viewId: string, localId: string): Promise<SendOutcome> => {
+    if (d.body) {
+      const hits = await check(d.body)
+      if (hits && hits.length > 0) {
+        return { ok: false, error: 'SENSITIVE_WORD', detail: `敏感词拦截：${hits.join('、')}` }
+      }
+    }
+    return sendViaBridge(d, viewId, localId)
+  }
 
 const recallDispatch: RecallDispatch = async (t: RecallTarget): Promise<{ ok: boolean; isRevoked?: boolean; detail?: string }> => {
   const r = await recallText({ accountId: t.accountId, chatKey: t.chatKey, msgKey: t.msgKey, localId: `r${t.detailId}` })
@@ -115,7 +133,7 @@ async function runTask(taskId: number): Promise<{ started: boolean; duplicate: b
     return { started: false, duplicate: false }
   }
   const engine = new BatchEngine({
-    api, dispatch: task.dryRun ? dryDispatch : realDispatch, viewIdOf,
+    api, dispatch: task.dryRun ? dryDispatch : makeRealDispatch(api.checkSensitive), viewIdOf,
     sleep, rand: Math.random, now: () => Date.now(),
     log: (where, e) => console.warn(`[batch] task=${taskId} ${where}`, e)
   })
