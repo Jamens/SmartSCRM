@@ -1,4 +1,5 @@
 import {
+  BarChart3,
   Bell,
   Bot,
   FileText,
@@ -26,6 +27,8 @@ export interface NavItem {
 /** Left module rail: workbench keeps the embedded-account workspace; the rest are data modules. */
 export const NAV_ITEMS: NavItem[] = [
   { path: '/workspace', i18nKey: 'nav.workspace', icon: LayoutDashboard },
+  // 报表仪表盘（B11）：租户级总览（账号/客户/会话/任务 + 7 天消息趋势），紧随工作台。
+  { path: '/dashboard', i18nKey: 'nav.dashboard', icon: BarChart3 },
   // 记录页是"看数据"的模块，所以排在工作台（账号在不在）之后、客户（数据归属谁）之前。
   { path: '/messages', i18nKey: 'nav.messages', icon: History },
   { path: '/customers', i18nKey: 'nav.customers', icon: Users },

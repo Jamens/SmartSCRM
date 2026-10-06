@@ -74,6 +74,24 @@ public interface ChatMessageMapper extends BaseMapper<ChatMessage> {
                                           @Param("from") LocalDateTime from);
 
     /**
+     * B11 仪表盘——**租户级**总量（不带 account 过滤），跨该租户所有账号。
+     * 与按账号那版（{@link #statsTotals}）并存：仪表盘要看"全租户"，不接受单账号口径。
+     */
+    @Select("SELECT COUNT(*) total, COALESCE(SUM(direction = 'in'), 0) inCount,"
+        + " COALESCE(SUM(direction = 'out'), 0) outCount,"
+        + " COUNT(DISTINCT chat_key) activeConversations"
+        + " FROM chat_message WHERE tenant_id = #{tenantId} AND msg_time >= #{from}")
+    Map<String, Object> statsTotalsAll(@Param("tenantId") Long tenantId,
+                                        @Param("from") LocalDateTime from);
+
+    /** B11 仪表盘——租户级按日计数（同样跨所有账号）。 */
+    @Select("SELECT DATE_FORMAT(msg_time, '%Y-%m-%d') day, COALESCE(SUM(direction = 'in'), 0) inCount,"
+        + " COALESCE(SUM(direction = 'out'), 0) outCount"
+        + " FROM chat_message WHERE tenant_id = #{tenantId} AND msg_time >= #{from} GROUP BY day ORDER BY day")
+    List<Map<String, Object>> statsPerDayAll(@Param("tenantId") Long tenantId,
+                                            @Param("from") LocalDateTime from);
+
+    /**
      * 消息级译文回显的候选行，两条定位谓词拆成两次调用（{@link #findForTranslationByMsgId} 先、
      * {@link #findForTranslationByMsgKeyTail} 后）：作用域用主进程盖的 tenant/account/chat_key，
      * 再用页给的 msgId 缩小。
