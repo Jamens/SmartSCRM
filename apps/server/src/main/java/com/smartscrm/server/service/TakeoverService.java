@@ -10,6 +10,8 @@ import com.smartscrm.server.web.vo.ConversationVO;
 import java.time.LocalDateTime;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -33,10 +35,14 @@ public class TakeoverService {
 
     private final ChatConversationMapper conversationMapper;
     private final MessageQueryService query;
+    private final NotificationService notificationService;
+    private static final Logger log = LoggerFactory.getLogger(TakeoverService.class);
 
-    public TakeoverService(ChatConversationMapper conversationMapper, MessageQueryService query) {
+    public TakeoverService(ChatConversationMapper conversationMapper, MessageQueryService query,
+                           NotificationService notificationService) {
         this.conversationMapper = conversationMapper;
         this.query = query;
+        this.notificationService = notificationService;
     }
 
     /**
@@ -106,7 +112,22 @@ public class TakeoverService {
             .set(ChatConversation::getWaitTakeoverAt,
                 LocalDateTime.now(MsgTimes.CHAT_ZONE).truncatedTo(ChronoUnit.MILLIS))
             .set(ChatConversation::getTransferReason, reason == null ? null : reason));
+        publishQueued(tenantId, conversationId, reason);
         return ConversationVO.of(query.requireOwned(tenantId, conversationId));
+    }
+
+    /**
+     * A10 投递触发点：会话进入接管队列时给租户发一条系统通知（坐席该知道队列里多了一条）。
+     * 这里是队列收口（规则引擎与坐席手动转都走 {@link #transferHuman}），是唯一该发的地方。
+     * 投递是旁路：失败只记 warn，不把「转人工」这个正事带崩。
+     */
+    private void publishQueued(Long tenantId, Long conversationId, String reason) {
+        try {
+            String content = reason == null || reason.isBlank() ? "会话已转入接管队列" : ("转入原因：" + reason);
+            notificationService.publish(tenantId, "system", "有会话待接管", content, "/messages", null);
+        } catch (RuntimeException e) {
+            log.warn("转人工通知投递失败 conversationId={}", conversationId, e);
+        }
     }
 
     /** 接管队列：本租户所有 WAITING_TAKEOVER 会话，按等待时长升序（最久的排最前）。 */

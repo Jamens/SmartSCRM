@@ -4,6 +4,8 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.anyString;
+import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.ArgumentMatchers.isNull;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.never;
@@ -36,6 +38,7 @@ class TakeoverServiceTest {
 
     private ChatConversationMapper mapper;
     private MessageQueryService query;
+    private NotificationService notificationService;
     private TakeoverService service;
 
     /** The single DB row the test drives; requireOwned always returns it, update mutates it. */
@@ -48,7 +51,9 @@ class TakeoverServiceTest {
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new Configuration(), ""), ChatConversation.class);
         mapper = mock(ChatConversationMapper.class);
         query = mock(MessageQueryService.class);
-        service = new TakeoverService(mapper, query);
+        // A10：mock 的 publish 默认空实现，转人工通知不干扰本类既有用例。
+        notificationService = mock(NotificationService.class);
+        service = new TakeoverService(mapper, query, notificationService);
 
         row = new ChatConversation();
         row.setId(11L);
@@ -183,6 +188,14 @@ class TakeoverServiceTest {
 
         assertEquals("WAITING_TAKEOVER", vo.handlingStatus());
         assertNull(vo.transferReason());
+    }
+
+    // A10 投递触发点：会话进入接管队列时给租户发一条系统通知（带 reason、跳 /messages）。
+    @Test
+    void transferHuman_publishesAQueuedSystemNotification() {
+        service.transferHuman(7L, 11L, "rule:keyword");
+
+        verify(notificationService).publish(eq(7L), eq("system"), anyString(), any(), eq("/messages"), isNull());
     }
 
     @Test
