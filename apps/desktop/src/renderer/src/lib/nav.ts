@@ -4,6 +4,7 @@ import {
   Bot,
   FileText,
   Layers,
+  ShieldAlert,
   FolderOpen,
   HelpCircle,
   History,
@@ -48,6 +49,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/ai', i18nKey: 'nav.ai', icon: Bot },
   // 炒群引擎（B8）：角色库三级/剧本/任务面板，紧随 AI 工作区。
   { path: '/script', i18nKey: 'nav.script', icon: Layers },
+  // 群自动加群/踢人（B18/B19）：带人工门，独立内容页，紧随炒群引擎。
+  { path: '/group-ops', i18nKey: 'nav.groupOps', icon: ShieldAlert },
   // 日志中心（A19）：排查用的宿主能力，排在业务模块之后、设置之前。
   { path: '/logs', i18nKey: 'nav.logs', icon: FileText },
   // 设置排在最后：它是宿主能力，不是业务模块。

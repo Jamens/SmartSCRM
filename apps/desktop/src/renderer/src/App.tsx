@@ -18,6 +18,7 @@ import HelpPage from '@/pages/HelpPage'
 import AiWorkspacePage from '@/pages/AiWorkspacePage'
 import DashboardPage from '@/pages/DashboardPage'
 import ScriptPage from '@/pages/ScriptPage'
+import GroupOpsPage from '@/pages/GroupOpsPage'
 import LoginPage from '@/pages/LoginPage'
 import { DEFAULT_NAV_PATH } from '@/lib/nav'
 import { useProtocolSync } from '@/hooks/useProtocolSync'
@@ -69,6 +70,7 @@ function App(): React.JSX.Element {
           <Route path="/ai" element={<AiWorkspacePage />} />
           <Route path="/dashboard" element={<DashboardPage />} />
           <Route path="/script" element={<ScriptPage />} />
+          <Route path="/group-ops" element={<GroupOpsPage />} />
           <Route path="/settings" element={<SettingsPage />} />
           <Route path="/logs" element={<LogCenterPage />} />
           <Route path="*" element={<Navigate to={DEFAULT_NAV_PATH} replace />} />
