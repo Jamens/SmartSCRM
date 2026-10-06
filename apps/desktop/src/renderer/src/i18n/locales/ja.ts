@@ -33,6 +33,7 @@ export const ja: DeepString<typeof zhCN> = {
     nurture: '相互チャット',
     automation: "自動化",
     cloudphone: "クラウドフォン",
+    proxypool: "プロキシブール",
     settings: '設定'
   },
   notifications: {
@@ -298,6 +299,59 @@ export const ja: DeepString<typeof zhCN> = {
     confirm: {
       deleteTitle: "このクラウドフォン端末を削除しますか？",
       deleteDesc: "本テナントから端末記録を削除します（元に戻せません）。",
+      yes: "削除する",
+      no: "キャンセル",
+    },
+  },
+
+  proxypool: {
+    title: "プロキシブール",
+    desc: "プロキシCRUD＋疑似出口プローブ（v1のプローブは実際の外部接続を行いません。オープンソース赤線準拠）",
+    newProxy: "新規プロキシ",
+    table: {
+      title: "プロキシ一覧",
+      desc: "プロキシを選ぶと出口プローブを表示；削除は確認が必要",
+      name: "名前",
+      endpoint: "エンドポイント",
+      protocol: "プロトコル",
+      status: "ステータス",
+      egress: "出口",
+      empty: "プロキシはまだありません。右上の新規プロキシをクリック",
+      selectHint: "左のプロキシを選んで出口プローブを表示",
+    },
+    form: {
+      name: "プロキシ名",
+      host: "プロキシホスト",
+      username: "認証ユーザー名",
+      password: "認証パスワード",
+      remark: "備考",
+      submit: "保存",
+      cancel: "キャンセル",
+      createTitle: "新規プロキシ",
+      editTitle: "プロキシ編集",
+    },
+    status: {
+      online: "オンライン",
+      offline: "オフライン",
+      error: "接続失敗",
+      degraded: "劣化",
+    },
+    protocol: {
+      http: "HTTP",
+      https: "HTTPS",
+      socks5: "SOCKS5",
+    },
+    detail: {
+      test: "出口をテスト",
+      egressIp: "出口IP",
+      geo: "所在地",
+      latency: "遅延",
+      simNote: "疑似プローブ：実際の外部接続は行わず、データはデモ用",
+      notProbed: "未プローブ。上のボタンで出口をテスト",
+    },
+    confirm: {
+      deleteTitle: "このプロキシを削除しますか？",
+      deleteDesc: "このテナントからプロキシ記録を削除します（元に戻せません）。",
       yes: "削除する",
       no: "キャンセル",
     },

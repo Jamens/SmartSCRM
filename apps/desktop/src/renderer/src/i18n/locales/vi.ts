@@ -33,6 +33,7 @@ export const vi: DeepString<typeof zhCN> = {
     nurture: 'Trò chuyện đan',
     automation: "Tự động",
     cloudphone: "Điện thoại đám mây",
+    proxypool: "Nhóm Proxy",
     settings: 'Cài đặt'
   },
   notifications: {
@@ -297,6 +298,59 @@ export const vi: DeepString<typeof zhCN> = {
     confirm: {
       deleteTitle: "Xóa thiết bị điện thoại đám mây này?",
       deleteDesc: "Xóa bản ghi thiết bị khỏi tenant này (không thể hoàn tác).",
+      yes: "Xác nhận xóa",
+      no: "Hủy",
+    },
+  },
+
+  proxypool: {
+    title: "Nhóm Proxy",
+    desc: "CRUD proxy + mô phỏng thăm dò egress (v1 không thực hiện kết nối đi thật, tuân thủ ranh giới mã nguồn mở)",
+    newProxy: "Proxy mới",
+    table: {
+      title: "Danh sách Proxy",
+      desc: "Chọn proxy để xem thăm dò egress; xóa cần xác nhận",
+      name: "Tên",
+      endpoint: "Điểm cuối",
+      protocol: "Giao thức",
+      status: "Trạng thái",
+      egress: "Egress",
+      empty: "Chưa có proxy, bấm Proxy mới góc trên bên phải",
+      selectHint: "Chọn proxy bên trái để xem thăm dò egress",
+    },
+    form: {
+      name: "Tên proxy",
+      host: "Host proxy",
+      username: "Tên người dùng xác thực",
+      password: "Mật khẩu xác thực",
+      remark: "Ghi chú",
+      submit: "Lưu",
+      cancel: "Hủy",
+      createTitle: "Proxy mới",
+      editTitle: "Sửa Proxy",
+    },
+    status: {
+      online: "Trực tuyến",
+      offline: "Ngoại tuyến",
+      error: "Lỗi kết nối",
+      degraded: "Suy giảm",
+    },
+    protocol: {
+      http: "HTTP",
+      https: "HTTPS",
+      socks5: "SOCKS5",
+    },
+    detail: {
+      test: "Kiểm tra egress",
+      egressIp: "IP Egress",
+      geo: "Vị trí",
+      latency: "Độ trễ",
+      simNote: "Thăm dò mô phỏng: không có kết nối đi thật, dữ liệu để trình diễn",
+      notProbed: "Chưa thăm dò, bấm nút trên để kiểm tra egress",
+    },
+    confirm: {
+      deleteTitle: "Xóa proxy này?",
+      deleteDesc: "Xóa bản ghi proxy khỏi tenant này (không thể hoàn tác).",
       yes: "Xác nhận xóa",
       no: "Hủy",
     },

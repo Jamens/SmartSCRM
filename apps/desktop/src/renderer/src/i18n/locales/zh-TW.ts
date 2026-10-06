@@ -33,6 +33,7 @@ export const zhTW: DeepString<typeof zhCN> = {
     nurture: '互聊養號',
     automation: "自動化",
     cloudphone: "雲手機",
+    proxypool: "代理池",
     settings: '設定'
   },
   notifications: {
@@ -291,6 +292,59 @@ export const zhTW: DeepString<typeof zhCN> = {
     confirm: {
       deleteTitle: "刪除該雲手機裝置？",
       deleteDesc: "將從本租戶移除該裝置記錄（不可逆）。",
+      yes: "確認刪除",
+      no: "取消",
+    },
+  },
+
+  proxypool: {
+    title: "代理池",
+    desc: "代理 CRUD + 模擬出口探測（v1 探測不發起真實外連，符合開源紅線）",
+    newProxy: "新建代理",
+    table: {
+      title: "代理列表",
+      desc: "選中代理可看出口探測結果；刪除走二次確認",
+      name: "名稱",
+      endpoint: "地址",
+      protocol: "協議",
+      status: "狀態",
+      egress: "出口",
+      empty: "暫無代理，點右上角新建",
+      selectHint: "選中左側代理查看出口探測",
+    },
+    form: {
+      name: "代理名稱",
+      host: "代理地址",
+      username: "認證使用者名稱",
+      password: "認證密碼",
+      remark: "備註",
+      submit: "儲存",
+      cancel: "取消",
+      createTitle: "新建代理",
+      editTitle: "編輯代理",
+    },
+    status: {
+      online: "線上",
+      offline: "離線",
+      error: "連線失敗",
+      degraded: "降級",
+    },
+    protocol: {
+      http: "HTTP",
+      https: "HTTPS",
+      socks5: "SOCKS5",
+    },
+    detail: {
+      test: "測試出口",
+      egressIp: "出口 IP",
+      geo: "歸屬地",
+      latency: "延遲",
+      simNote: "模擬探測：未發起真實外連，資料為演示用途",
+      notProbed: "尚未探測，點上方按鈕測試出口",
+    },
+    confirm: {
+      deleteTitle: "刪除該代理？",
+      deleteDesc: "將從本租戶移除該代理記錄（不可逆）。",
       yes: "確認刪除",
       no: "取消",
     },

@@ -9,6 +9,7 @@ import {
   Cpu,
   Smartphone,
   FolderOpen,
+  Globe,
   HelpCircle,
   History,
   Languages,
@@ -60,6 +61,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/automation', i18nKey: 'nav.automation', icon: Cpu },
   // 云手机（B10）：设备管理 + 模拟拉流视图（v1 不接真实 VMOS，符合开源红线）。
   { path: '/cloud-phone', i18nKey: 'nav.cloudphone', icon: Smartphone },
+  // 代理池（B13）：代理 CRUD + 模拟出口探测（开源红线：探测不发起真实外连）。
+  { path: '/proxy-pool', i18nKey: 'nav.proxypool', icon: Globe },
   // 日志中心（A19）：排查用的宿主能力，排在业务模块之后、设置之前。
   { path: '/logs', i18nKey: 'nav.logs', icon: FileText },
   // 设置排在最后：它是宿主能力，不是业务模块。

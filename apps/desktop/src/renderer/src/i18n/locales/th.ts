@@ -33,6 +33,7 @@ export const th: DeepString<typeof zhCN> = {
     nurture: 'แชทหมู่',
     automation: "อัตโนมัติ",
     cloudphone: "โทรศัพท์คลาวด์",
+    proxypool: "พูลพร็อกซี",
     settings: 'การตั้งค่า'
   },
   notifications: {
@@ -296,6 +297,59 @@ export const th: DeepString<typeof zhCN> = {
     confirm: {
       deleteTitle: "ลบอุปกรณ์โทรศัพท์คลาวด์นี้?",
       deleteDesc: "ลบบันทึกอุปกรณ์ออกจากเทนแอนต์นี้ (ไม่สามารถย้อนกลับได้)",
+      yes: "ยืนยันลบ",
+      no: "ยกเลิก",
+    },
+  },
+
+  proxypool: {
+    title: "พูลพร็อกซี",
+    desc: "CRUD พร็อกซี + จำลองการตรวจสอบอีเกรส (v1 ไม่มีการเชื่อมต่อออกจริง ตามข้อจำกัดโอเพนซอร์ส)",
+    newProxy: "พร็อกซีใหม่",
+    table: {
+      title: "รายการพร็อกซี",
+      desc: "เลือกพร็อกซีเพื่อดูผลตรวจอีเกรส; การลบต้องยืนยัน",
+      name: "ชื่อ",
+      endpoint: "จุดเชื่อมต่อ",
+      protocol: "โปรโตคอล",
+      status: "สถานะ",
+      egress: "อีเกรส",
+      empty: "ยังไม่มีพร็อกซี คลิกพร็อกซีใหม่มุมขวาบน",
+      selectHint: "เลือกพร็อกซีด้านซ้ายเพื่อดูการตรวจอีเกรส",
+    },
+    form: {
+      name: "ชื่อพร็อกซี",
+      host: "โฮสต์พร็อกซี",
+      username: "ชื่อผู้ใช้ auth",
+      password: "รหัสผ่าน auth",
+      remark: "หมายเหตุ",
+      submit: "บันทึก",
+      cancel: "ยกเลิก",
+      createTitle: "พร็อกซีใหม่",
+      editTitle: "แก้ไขพร็อกซี",
+    },
+    status: {
+      online: "ออนไลน์",
+      offline: "ออฟไลน์",
+      error: "เชื่อมต่อล้มเหลว",
+      degraded: "เสื่อมสภาพ",
+    },
+    protocol: {
+      http: "HTTP",
+      https: "HTTPS",
+      socks5: "SOCKS5",
+    },
+    detail: {
+      test: "ทดสอบอีเกรส",
+      egressIp: "IP อีเกรส",
+      geo: "ตำแหน่ง",
+      latency: "ความหน่วง",
+      simNote: "การตรวจจำลอง: ไม่มีการเชื่อมต่อออกจริง ข้อมูลเพื่อการสาธิต",
+      notProbed: "ยังไม่ได้ตรวจ เลือกปุ่มด้านบนเพื่อทดสอบอีเกรส",
+    },
+    confirm: {
+      deleteTitle: "ลบพร็อกซีนี้?",
+      deleteDesc: "ลบบันทึกพร็อกซีออกจากเทนแอนต์นี้ (ไม่สามารถย้อนกลับได้)",
       yes: "ยืนยันลบ",
       no: "ยกเลิก",
     },

@@ -36,6 +36,7 @@ export const zhCN = {
     nurture: '互聊养号',
     automation: "自动化",
     cloudphone: "云手机",
+    proxypool: "代理池",
     settings: '设置'
   },
   notifications: {
@@ -301,6 +302,59 @@ export const zhCN = {
     confirm: {
       deleteTitle: "删除该云手机设备？",
       deleteDesc: "将从本租户移除该设备记录（不可逆）。",
+      yes: "确认删除",
+      no: "取消",
+    },
+  },
+
+  proxypool: {
+    title: "代理池",
+    desc: "代理 CRUD + 模拟出口探测（v1 探测不发起真实外连，符合开源红线）",
+    newProxy: "新建代理",
+    table: {
+      title: "代理列表",
+      desc: "选中代理可看出口探测结果；删除走二次确认",
+      name: "名称",
+      endpoint: "地址",
+      protocol: "协议",
+      status: "状态",
+      egress: "出口",
+      empty: "暂无代理，点右上角新建",
+      selectHint: "选中左侧代理查看出口探测",
+    },
+    form: {
+      name: "代理名称",
+      host: "代理地址",
+      username: "认证用户名",
+      password: "认证密码",
+      remark: "备注",
+      submit: "保存",
+      cancel: "取消",
+      createTitle: "新建代理",
+      editTitle: "编辑代理",
+    },
+    status: {
+      online: "在线",
+      offline: "离线",
+      error: "连接失败",
+      degraded: "降级",
+    },
+    protocol: {
+      http: "HTTP",
+      https: "HTTPS",
+      socks5: "SOCKS5",
+    },
+    detail: {
+      test: "测试出口",
+      egressIp: "出口 IP",
+      geo: "归属地",
+      latency: "延迟",
+      simNote: "模拟探测：未发起真实外连，数据为演示用途",
+      notProbed: "尚未探测，点上方按钮测试出口",
+    },
+    confirm: {
+      deleteTitle: "删除该代理？",
+      deleteDesc: "将从本租户移除该代理记录（不可逆）。",
       yes: "确认删除",
       no: "取消",
     },

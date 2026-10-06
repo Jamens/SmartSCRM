@@ -34,6 +34,7 @@ export const en: DeepString<typeof zhCN> = {
     nurture: 'Nurture',
     automation: "Automation",
     cloudphone: "Cloud Phone",
+    proxypool: "Proxy Pool",
     settings: 'Settings'
   },
   notifications: {
@@ -298,6 +299,59 @@ export const en: DeepString<typeof zhCN> = {
     confirm: {
       deleteTitle: "Delete this cloud phone device?",
       deleteDesc: "Removes the device record from this tenant (irreversible).",
+      yes: "Confirm delete",
+      no: "Cancel",
+    },
+  },
+
+  proxypool: {
+    title: "Proxy Pool",
+    desc: "Proxy CRUD + simulated egress probe (v1 probe makes no real outbound call, per open-source red line)",
+    newProxy: "New Proxy",
+    table: {
+      title: "Proxy List",
+      desc: "Select a proxy to see egress probe; delete needs confirmation",
+      name: "Name",
+      endpoint: "Endpoint",
+      protocol: "Protocol",
+      status: "Status",
+      egress: "Egress",
+      empty: "No proxies yet, click New Proxy on the top right",
+      selectHint: "Select a proxy on the left to see the egress probe",
+    },
+    form: {
+      name: "Proxy name",
+      host: "Proxy host",
+      username: "Auth username",
+      password: "Auth password",
+      remark: "Remark",
+      submit: "Save",
+      cancel: "Cancel",
+      createTitle: "New Proxy",
+      editTitle: "Edit Proxy",
+    },
+    status: {
+      online: "Online",
+      offline: "Offline",
+      error: "Connection failed",
+      degraded: "Degraded",
+    },
+    protocol: {
+      http: "HTTP",
+      https: "HTTPS",
+      socks5: "SOCKS5",
+    },
+    detail: {
+      test: "Test egress",
+      egressIp: "Egress IP",
+      geo: "Location",
+      latency: "Latency",
+      simNote: "Simulated probe: no real outbound call, data is for demonstration",
+      notProbed: "Not probed yet, click the button above to test egress",
+    },
+    confirm: {
+      deleteTitle: "Delete this proxy?",
+      deleteDesc: "Removes the proxy record from this tenant (irreversible).",
       yes: "Confirm delete",
       no: "Cancel",
     },

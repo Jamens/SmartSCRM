@@ -33,6 +33,7 @@ export const ko: DeepString<typeof zhCN> = {
     nurture: '상호 채팅',
     automation: "자동화",
     cloudphone: "클라우드 폰",
+    proxypool: "프록시 풀",
     settings: '설정'
   },
   notifications: {
@@ -296,6 +297,59 @@ export const ko: DeepString<typeof zhCN> = {
     confirm: {
       deleteTitle: "이 클라우드 폰 기기를 삭제할까요?",
       deleteDesc: "이 테넌트에서 기기 기록을 삭제합니다(되돌릴 수 없음).",
+      yes: "삭제",
+      no: "취소",
+    },
+  },
+
+  proxypool: {
+    title: "프록시 풀",
+    desc: "프록시 CRUD + 시뮬레이션 송신 프로브 (v1 프로브는 실제 외부 연결을 하지 않음, 오픈소스 레드라인 준수)",
+    newProxy: "새 프록시",
+    table: {
+      title: "프록시 목록",
+      desc: "프록시를 선택하면 송신 프로브 표시; 삭제는 확인 필요",
+      name: "이름",
+      endpoint: "엔드포인트",
+      protocol: "프로토콜",
+      status: "상태",
+      egress: "송신",
+      empty: "프록시가 없습니다. 오른쪽 위의 새 프록시를 클릭",
+      selectHint: "왼쪽 프록시를 선택해 송신 프로브 보기",
+    },
+    form: {
+      name: "프록시 이름",
+      host: "프록시 호스트",
+      username: "인증 사용자명",
+      password: "인증 비밀번호",
+      remark: "비고",
+      submit: "저장",
+      cancel: "취소",
+      createTitle: "새 프록시",
+      editTitle: "프록시 편집",
+    },
+    status: {
+      online: "온라인",
+      offline: "오프라인",
+      error: "연결 실패",
+      degraded: "성능 저하",
+    },
+    protocol: {
+      http: "HTTP",
+      https: "HTTPS",
+      socks5: "SOCKS5",
+    },
+    detail: {
+      test: "송신 테스트",
+      egressIp: "송신 IP",
+      geo: "위치",
+      latency: "지연",
+      simNote: "시뮬레이션 프로브: 실제 외부 연결 없음, 데모용 데이터",
+      notProbed: "아직 프로브 안 함, 위 버튼으로 송신 테스트",
+    },
+    confirm: {
+      deleteTitle: "이 프록시를 삭제할까요?",
+      deleteDesc: "이 테넌트에서 프록시 기록을 삭제합니다(되돌릴 수 없음).",
       yes: "삭제",
       no: "취소",
     },

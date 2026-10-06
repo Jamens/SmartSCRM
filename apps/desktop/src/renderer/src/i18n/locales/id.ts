@@ -33,6 +33,7 @@ export const id: DeepString<typeof zhCN> = {
     nurture: 'Obrolan Silang',
     automation: "Otomasi",
     cloudphone: "Cloud Phone",
+    proxypool: "Pool Proxy",
     settings: 'Pengaturan'
   },
   notifications: {
@@ -299,6 +300,59 @@ export const id: DeepString<typeof zhCN> = {
     confirm: {
       deleteTitle: "Hapus perangkat cloud phone ini?",
       deleteDesc: "Menghapus catatan perangkat dari tenant ini (tidak bisa dibatalkan).",
+      yes: "Konfirmasi hapus",
+      no: "Batal",
+    },
+  },
+
+  proxypool: {
+    title: "Pool Proxy",
+    desc: "CRUD proxy + simulasi probe egress (v1 probe tidak melakukan panggilan keluar nyata, sesuai batas merah open-source)",
+    newProxy: "Proxy Baru",
+    table: {
+      title: "Daftar Proxy",
+      desc: "Pilih proxy untuk melihat probe egress; hapus butuh konfirmasi",
+      name: "Nama",
+      endpoint: "Endpoint",
+      protocol: "Protokol",
+      status: "Status",
+      egress: "Egress",
+      empty: "Belum ada proxy, klik Proxy Baru di kanan atas",
+      selectHint: "Pilih proxy di kiri untuk melihat probe egress",
+    },
+    form: {
+      name: "Nama proxy",
+      host: "Host proxy",
+      username: "Nama pengguna auth",
+      password: "Kata sandi auth",
+      remark: "Catatan",
+      submit: "Simpan",
+      cancel: "Batal",
+      createTitle: "Proxy Baru",
+      editTitle: "Edit Proxy",
+    },
+    status: {
+      online: "Online",
+      offline: "Offline",
+      error: "Gagal terhubung",
+      degraded: "Menurun",
+    },
+    protocol: {
+      http: "HTTP",
+      https: "HTTPS",
+      socks5: "SOCKS5",
+    },
+    detail: {
+      test: "Uji egress",
+      egressIp: "IP Egress",
+      geo: "Lokasi",
+      latency: "Latensi",
+      simNote: "Probe simulasi: tidak ada panggilan keluar nyata, data untuk demonstrasi",
+      notProbed: "Belum diuji, klik tombol di atas untuk menguji egress",
+    },
+    confirm: {
+      deleteTitle: "Hapus proxy ini?",
+      deleteDesc: "Menghapus catatan proxy dari tenant ini (tidak bisa dibatalkan).",
       yes: "Konfirmasi hapus",
       no: "Batal",
     },
