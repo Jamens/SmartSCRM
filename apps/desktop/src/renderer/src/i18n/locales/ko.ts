@@ -383,7 +383,8 @@ export const ko: DeepString<typeof zhCN> = {
       contact: '연락처',
       country: '국가',
       labels: '라벨',
-      lastContact: '최근 연락'
+      lastContact: '최근 연락',
+      sensitive: '민감어',
     },
     prevPage: '이전',
     nextPage: '다음',

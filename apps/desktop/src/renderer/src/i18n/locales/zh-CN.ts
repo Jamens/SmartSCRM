@@ -382,7 +382,8 @@ export const zhCN = {
       contact: '联系方式',
       country: '国家',
       labels: '标签',
-      lastContact: '最近联系'
+      lastContact: '最近联系',
+      sensitive: '含敏感词',
     },
     prevPage: '上一页',
     nextPage: '下一页',

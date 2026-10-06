@@ -7,6 +7,7 @@ import com.smartscrm.server.entity.ChatConversation;
 import com.smartscrm.server.entity.ChatMessage;
 import com.smartscrm.server.entity.Customer;
 import com.smartscrm.server.entity.PlatformAccount;
+import com.smartscrm.server.entity.SensitiveWord;
 import com.smartscrm.server.mapper.ChatConversationMapper;
 import com.smartscrm.server.mapper.ChatMessageMapper;
 import com.smartscrm.server.mapper.CustomerMapper;
@@ -50,16 +51,19 @@ public class MessageService {
     private final PlatformAccountMapper accountMapper;
     private final TakeoverService takeover;
     private final AiTransferRuleService aiTransferRuleService;
+    private final SensitiveWordService sensitiveWordService;
 
     public MessageService(ChatMessageMapper messageMapper, ChatConversationMapper conversationMapper,
                           CustomerMapper customerMapper, PlatformAccountMapper accountMapper,
-                          @Lazy TakeoverService takeover, AiTransferRuleService aiTransferRuleService) {
+                          @Lazy TakeoverService takeover, AiTransferRuleService aiTransferRuleService,
+                          SensitiveWordService sensitiveWordService) {
         this.messageMapper = messageMapper;
         this.conversationMapper = conversationMapper;
         this.customerMapper = customerMapper;
         this.accountMapper = accountMapper;
         this.takeover = takeover;
         this.aiTransferRuleService = aiTransferRuleService;
+        this.sensitiveWordService = sensitiveWordService;
     }
 
     public record ResolvedAccount(Long accountId, String platform, Integer platformType) {}
@@ -94,6 +98,9 @@ public class MessageService {
         // 一批内同一会话的入站消息只评估一次规则：绝大多数批次只有两三个 chatKey，
         // 重复评估既浪费查询又会在已转人工的会话上反复走幂等守卫。
         Set<String> evaluatedChatKeys = new HashSet<>();
+        // A8 入站敏感词：整批只查一次启用词表，随后逐条在内存里匹配（matchWords 是已单测的纯函数）。
+        // 词表为空时下面那次匹配对每条都是空转，不额外判——matchWords 自己会短路。
+        List<SensitiveWord> sensitiveWords = sensitiveWordService.enabledWords(tenantId);
 
         for (MessageItemDTO item : items) {
             if (!DIRECTIONS.contains(item.direction()) || !SOURCES.contains(item.source())) {
@@ -132,6 +139,12 @@ public class MessageService {
             row.setSenderKey(item.senderKey());
             row.setSenderName(item.senderName());
             row.setBody(item.body() == null || item.body().isBlank() ? null : item.body());
+            // A8 入站敏感词：只对「入站 + 有正文」判，命中打 has_sensitive=1 存进行里（读列表时直接读标记，
+            // 不用再回查词库）。出站不判——出站侧在渲染层 useSendText 漏斗发送前就拦了。
+            if ("in".equals(row.getDirection()) && row.getBody() != null
+                    && !SensitiveWordService.matchWords(row.getBody(), sensitiveWords).isEmpty()) {
+                row.setHasSensitive(1);
+            }
             row.setMediaType(normalizeMediaType(item.mediaType()));
             row.setMediaSummary(item.mediaSummary());
             row.setMsgTime(MsgTimes.toDbTime(item.msgTimeEpochSec(), receivedAt));

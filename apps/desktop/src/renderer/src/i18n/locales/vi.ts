@@ -384,7 +384,8 @@ export const vi: DeepString<typeof zhCN> = {
       contact: 'Liên hệ',
       country: 'Quốc gia',
       labels: 'Nhãn',
-      lastContact: 'Liên hệ gần'
+      lastContact: 'Liên hệ gần',
+      sensitive: 'Nhạy cảm',
     },
     prevPage: 'Trước',
     nextPage: 'Sau',

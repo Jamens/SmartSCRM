@@ -1,6 +1,7 @@
 package com.smartscrm.server.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.mock;
@@ -11,8 +12,10 @@ import static org.mockito.Mockito.when;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.smartscrm.server.entity.AiTransferRule;
 import com.smartscrm.server.entity.ChatConversation;
+import com.smartscrm.server.entity.ChatMessage;
 import com.smartscrm.server.entity.Customer;
 import com.smartscrm.server.entity.PlatformAccount;
+import com.smartscrm.server.entity.SensitiveWord;
 import com.smartscrm.server.mapper.ChatConversationMapper;
 import com.smartscrm.server.mapper.ChatMessageMapper;
 import com.smartscrm.server.mapper.CustomerMapper;
@@ -25,6 +28,7 @@ import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * B28 P2 — verifies the rule-engine hook inside {@link MessageService#accept}: an inbound
@@ -40,6 +44,7 @@ class MessageServiceAcceptRuleTest {
     private PlatformAccountMapper accountMapper;
     private TakeoverService takeover;
     private AiTransferRuleService aiRuleService;
+    private SensitiveWordService sensitiveWordService;
 
     private MessageService service;
 
@@ -56,9 +61,11 @@ class MessageServiceAcceptRuleTest {
         accountMapper = mock(PlatformAccountMapper.class);
         takeover = mock(TakeoverService.class);
         aiRuleService = mock(AiTransferRuleService.class);
+        // A8 入站敏感词：mock 的 enabledWords 默认回空列表，所以本类既有用例不受影响（无词=不命中）。
+        sensitiveWordService = mock(SensitiveWordService.class);
 
         service = new MessageService(messageMapper, conversationMapper, customerMapper, accountMapper,
-            takeover, aiRuleService);
+            takeover, aiRuleService, sensitiveWordService);
 
         PlatformAccount account = new PlatformAccount();
         account.setId(5L);
@@ -127,6 +134,39 @@ class MessageServiceAcceptRuleTest {
 
         verify(aiRuleService, never()).firstMatch(any(), any());
         verify(takeover, never()).transferIfAi(any(), any(), any());
+    }
+
+    // ---- A8 入站敏感词标记 ----
+
+    private SensitiveWord word(String w) {
+        SensitiveWord s = new SensitiveWord();
+        s.setWord(w);
+        s.setEnabled(1);
+        return s;
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void accept_inboundBodyHitsSensitiveWord_setsHasSensitiveFlag() {
+        when(sensitiveWordService.enabledWords(7L)).thenReturn(List.of(word("spam")));
+
+        service.accept(7L, new MessageBatchDTO(5L, null, List.of(inbound("这是 spam 内容"))));
+
+        ArgumentCaptor<List<ChatMessage>> cap = ArgumentCaptor.forClass(List.class);
+        verify(messageMapper).insertIgnoreBatch(cap.capture());
+        assertEquals(1, cap.getValue().get(0).getHasSensitive(), "入站命中敏感词应打 has_sensitive=1");
+    }
+
+    @SuppressWarnings("unchecked")
+    @Test
+    void accept_inboundBodyClean_leavesHasSensitiveUnset() {
+        when(sensitiveWordService.enabledWords(7L)).thenReturn(List.of(word("spam")));
+
+        service.accept(7L, new MessageBatchDTO(5L, null, List.of(inbound("hello there"))));
+
+        ArgumentCaptor<List<ChatMessage>> cap = ArgumentCaptor.forClass(List.class);
+        verify(messageMapper).insertIgnoreBatch(cap.capture());
+        assertNull(cap.getValue().get(0).getHasSensitive(), "未命中不应打标记");
     }
 
     @Test

@@ -386,7 +386,8 @@ export const th: DeepString<typeof zhCN> = {
       contact: 'ช่องทางติดต่อ',
       country: 'ประเทศ',
       labels: 'ป้ายกำกับ',
-      lastContact: 'ติดต่อล่าสุด'
+      lastContact: 'ติดต่อล่าสุด',
+      sensitive: 'คำอ่อนโยค',
     },
     prevPage: 'ก่อนหน้า',
     nextPage: 'ถัดไป',

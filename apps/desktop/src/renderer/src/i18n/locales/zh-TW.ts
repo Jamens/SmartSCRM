@@ -372,7 +372,8 @@ export const zhTW: DeepString<typeof zhCN> = {
       contact: '聯絡方式',
       country: '國家',
       labels: '標籤',
-      lastContact: '最近聯絡'
+      lastContact: '最近聯絡',
+      sensitive: '含敏感詞',
     },
     prevPage: '上一頁',
     nextPage: '下一頁',

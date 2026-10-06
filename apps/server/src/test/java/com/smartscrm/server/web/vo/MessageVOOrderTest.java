@@ -11,7 +11,7 @@ class MessageVOOrderTest {
 
     private static MessageVO msg(long id, LocalDateTime time) {
         return new MessageVO(id, 1L, "whatsapp", "8613800001001@c.us", "M" + id, "in", null,
-            null, null, "b" + id, null, null, time, null, null, null);
+            null, null, "b" + id, null, null, time, null, null, null, false);
     }
 
     private static List<Long> idsAfterSort(MessageVO... input) {

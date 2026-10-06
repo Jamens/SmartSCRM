@@ -388,7 +388,8 @@ export const en: DeepString<typeof zhCN> = {
       contact: 'Contact',
       country: 'Country',
       labels: 'Labels',
-      lastContact: 'Last contact'
+      lastContact: 'Last contact',
+      sensitive: 'Sensitive',
     },
     prevPage: 'Previous',
     nextPage: 'Next',

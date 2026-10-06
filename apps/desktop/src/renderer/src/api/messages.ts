@@ -65,6 +65,8 @@ export interface MessageVO {
   status: MsgStatus
   source: MsgSource
   sendLocalId: string | null
+  /** A8 入站敏感词标记：入站正文命中词库时为 true（后端入库时判定并存标记）。 */
+  hasSensitive?: boolean
 }
 
 export interface ConversationPageVO {
@@ -538,6 +540,8 @@ export interface ThreadRow extends TailRow {
   senderName: string | null
   customerId: number | null
   sendLocalId: string | null
+  /** A8 入站敏感词标记：入站正文命中词库（后端入库时判定）。乐观气泡没有这个标记。 */
+  hasSensitive?: boolean
 }
 
 /**

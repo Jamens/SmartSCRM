@@ -117,6 +117,13 @@ export default function MessageBubble({
         )}
       </div>
       <span className="mt-0.5 flex items-center gap-1.5 text-[11px] text-muted-foreground">
+        {/* A8 入站敏感词：后端入库时判定并存标记，这里只显示。放元信息行是它恒渲染，
+            分组气泡（不显示发送者）也能看到标记。 */}
+        {!out && row.hasSensitive && (
+          <Badge variant="outline" data-p8g-sensitive="" className="border-destructive/50 text-destructive">
+            {t('messages.bubble.sensitive')}
+          </Badge>
+        )}
         {timeOfMessage(row.ts)}
         {out && <Tick status={row.status} />}
         {out &&

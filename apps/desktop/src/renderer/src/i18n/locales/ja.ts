@@ -387,7 +387,8 @@ export const ja: DeepString<typeof zhCN> = {
       contact: '連絡先',
       country: '国',
       labels: 'ラベル',
-      lastContact: '最終連絡'
+      lastContact: '最終連絡',
+      sensitive: 'センシティブ',
     },
     prevPage: '前へ',
     nextPage: '次へ',

@@ -392,7 +392,8 @@ export const id: DeepString<typeof zhCN> = {
       contact: 'Kontak',
       country: 'Negara',
       labels: 'Label',
-      lastContact: 'Kontak terakhir'
+      lastContact: 'Kontak terakhir',
+      sensitive: 'Sensitif',
     },
     prevPage: 'Sebelumnya',
     nextPage: 'Berikutnya',

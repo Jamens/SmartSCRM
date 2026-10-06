@@ -29,6 +29,8 @@ public class ChatMessage {
     private String mediaSummary;
     private LocalDateTime msgTime;
     private String status;
+    /** A8 入站敏感词判定：1 = 该入站正文命中敏感词库（0/其它 = 未命中或非入站）。 */
+    private Integer hasSensitive;
     private String source;
     private String sendLocalId;
     private LocalDateTime createdAt;

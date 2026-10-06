@@ -71,11 +71,18 @@ public class SensitiveWordService {
         if (text == null || text.isBlank()) {
             return List.of();
         }
-        List<SensitiveWord> enabled = mapper.selectList(new LambdaQueryWrapper<SensitiveWord>()
+        return matchWords(text, enabledWords(tenantId));
+    }
+
+    /**
+     * 取该租户全部**启用中**的词。入库批量判定（MessageService.accept）要每批只查一次、
+     * 然后在内存里逐条 {@link #matchWords}，所以把这个"查库"单独开出来。
+     */
+    public List<SensitiveWord> enabledWords(Long tenantId) {
+        return mapper.selectList(new LambdaQueryWrapper<SensitiveWord>()
             .eq(SensitiveWord::getTenantId, tenantId)
             .eq(SensitiveWord::getEnabled, 1)
             .orderByAsc(SensitiveWord::getId));
-        return matchWords(text, enabled);
     }
 
     /**
