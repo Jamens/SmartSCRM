@@ -55,7 +55,7 @@
 | B25 | 图片 / 语音翻译（OCR 与 ASR 线路，本地模拟优先） | P15 |
 | B26 | 联系人缓存 + 本地数据清理与存储管理 | P15 |
 | B27 | WhatsApp 协议号通道（REST 会话/消息/发送/已读/撤回 + WS 入站与状态推送；零注入、不经网页登录，收发两腿分阶段交付） | P16 |
-| B28 | AI 智能客服 + AI 知识库（QA / 角色 / 分类三栏 + 养号设置与推荐规则） | P17 · **已扩 spec（2026-10-06，`docs/superpowers/specs/2026-10-06-b28-ai-knowledge-design.md`）**：**已交付 P1 后端** = 转人工规则（V17 `ai_transfer_rule` + `AiTransferRuleService`）+ 接管队列状态机（V16 `chat_conversation.handling_status/assignee_id` + `TakeoverService`）+ 消息入库接线（`accept`→`firstMatch`→`transferIfAi`）+ 进队列 A10 通知；**缺口**（spec §3 已把数据模型定死）= 知识库文档/分片/QA 实体、AI 人设助手、接管台前端、三栏前端、养号设置。分期与验收见 spec §5–§7 |
+| B28 | AI 智能客服 + AI 知识库（QA / 角色 / 分类三栏 + 养号设置与推荐规则） | P17 · **已扩 spec（2026-10-06，`docs/superpowers/specs/2026-10-06-b28-ai-knowledge-design.md`）**：**已交付 P1 后端** = 转人工规则（V17 `ai_transfer_rule` + `AiTransferRuleService`）+ 接管队列状态机（V16 `chat_conversation.handling_status/assignee_id` + `TakeoverService`）+ 消息入库接线（`accept`→`firstMatch`→`transferIfAi`）+ 进队列 A10 通知；**第一段：三栏数据层后端已交付（2026-10-06，V26）** = `ai_role`/`ai_category`/`knowledge_qa` 三表 + 实体/Mapper/Service/Controller（`/api/ai-roles`·`/api/ai-categories`·`/api/knowledge-qa`，接 A16 `knowledge:read/write` 判定）+ 单测，端到端 CRUD 验过。**剩余**（spec §5–§7）：文档管线（`knowledge_doc`/`knowledge_chunk` + 解析/派生预览）、AI 人设（`ai_persona` + 助手）、养号设置（`ai_nurture_setting`）、接管台前端、三栏前端 |
 | B29 | 会话凭据导入（用已登录的会话凭据替代扫码，**仍走内嵌视图**，不新增通道、不涉及注入层改动） | 与 TG 链（12a–12d）同支，排在其后 |
 
 ## 阶段增补记录（2026-09-23）
