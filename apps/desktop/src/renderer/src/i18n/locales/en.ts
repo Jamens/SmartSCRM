@@ -33,6 +33,7 @@ export const en: DeepString<typeof zhCN> = {
     groupOps: 'Join/Kick',
     nurture: 'Nurture',
     automation: "Automation",
+    cloudphone: "Cloud Phone",
     settings: 'Settings'
   },
   notifications: {
@@ -254,6 +255,51 @@ export const en: DeepString<typeof zhCN> = {
       deleteDesc: "Tasks ({{tasks}}) will be stopped first, then accounts deleted. This is irreversible.",
       done: "Done: stopped {{tasks}} task(s)",
       closeDone: "Closed: stopped {{tasks}} task(s)",
+    },
+  },
+
+  cloudphone: {
+    title: "Cloud Phone",
+    desc: "Device management + simulated stream (v1 no real VMOS, per open-source red line)",
+    newDevice: "New device",
+    table: {
+      title: "Cloud Phone Devices",
+      desc: "Select a device to view the simulated stream; delete needs confirmation",
+      name: "Name",
+      provider: "Provider",
+      status: "Status",
+      specs: "Specs",
+      actions: "",
+      empty: "No devices, click New device",
+      selectHint: "Select a device on the left to view the stream",
+    },
+    form: {
+      name: "Device name",
+      host: "Host (unused in v1)",
+      androidVersion: "Android version",
+      resolution: "Resolution",
+      streamSeed: "Stream seed",
+      remark: "Remark",
+      submit: "Save",
+      cancel: "Cancel",
+      createTitle: "New device",
+      editTitle: "Edit device",
+    },
+    provider: {
+      generic: "Generic",
+      vmos: "VMOS",
+    },
+    status: {
+      offline: "Offline",
+      booting: "Booting",
+      online: "Online",
+      error: "Error",
+    },
+    confirm: {
+      deleteTitle: "Delete this cloud phone device?",
+      deleteDesc: "Removes the device record from this tenant (irreversible).",
+      yes: "Confirm delete",
+      no: "Cancel",
     },
   },
 

@@ -32,6 +32,7 @@ export const vi: DeepString<typeof zhCN> = {
     groupOps: 'Tham gia/Loại',
     nurture: 'Trò chuyện đan',
     automation: "Tự động",
+    cloudphone: "Điện thoại đám mây",
     settings: 'Cài đặt'
   },
   notifications: {
@@ -253,6 +254,51 @@ export const vi: DeepString<typeof zhCN> = {
       deleteDesc: "Tác vụ ({{tasks}}) sẽ được dừng trước, sau đó xóa tài khoản. Không thể hoàn tác.",
       done: "Xong: đã dừng {{tasks}} tác vụ",
       closeDone: "Đã đóng: đã dừng {{tasks}} tác vụ",
+    },
+  },
+
+  cloudphone: {
+    title: "Điện thoại đám mây",
+    desc: "Quản lý thiết bị + stream mô phỏng (v1 không nối VMOS thật, theo quy tắc mã nguồn mở)",
+    newDevice: "Thiết bị mới",
+    table: {
+      title: "Thiết bị điện thoại đám mây",
+      desc: "Chọn thiết bị để xem stream mô phỏng; xóa cần xác nhận",
+      name: "Tên",
+      provider: "Nhà cung cấp",
+      status: "Trạng thái",
+      specs: "Cấu hình",
+      actions: "",
+      empty: "Chưa có thiết bị, bấm Thêm mới",
+      selectHint: "Chọn thiết bị bên trái để xem stream",
+    },
+    form: {
+      name: "Tên thiết bị",
+      host: "Host (v1 không dùng)",
+      androidVersion: "Phiên bản Android",
+      resolution: "Độ phân giải",
+      streamSeed: "Seed stream",
+      remark: "Ghi chú",
+      submit: "Lưu",
+      cancel: "Hủy",
+      createTitle: "Thiết bị mới",
+      editTitle: "Sửa thiết bị",
+    },
+    provider: {
+      generic: "Chung",
+      vmos: "VMOS",
+    },
+    status: {
+      offline: "Ngoại tuyến",
+      booting: "Đang khởi động",
+      online: "Trực tuyến",
+      error: "Lỗi kết nối",
+    },
+    confirm: {
+      deleteTitle: "Xóa thiết bị điện thoại đám mây này?",
+      deleteDesc: "Xóa bản ghi thiết bị khỏi tenant này (không thể hoàn tác).",
+      yes: "Xác nhận xóa",
+      no: "Hủy",
     },
   },
 

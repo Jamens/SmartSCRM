@@ -32,6 +32,7 @@ export const zhTW: DeepString<typeof zhCN> = {
     groupOps: '加群/踢人',
     nurture: '互聊養號',
     automation: "自動化",
+    cloudphone: "雲手機",
     settings: '設定'
   },
   notifications: {
@@ -247,6 +248,51 @@ export const zhTW: DeepString<typeof zhCN> = {
       deleteDesc: "將先停掉這些帳號上共 {{tasks}} 個在跑任務，再刪除帳號。此操作不可逆。",
       done: "已處理：停掉 {{tasks}} 個任務",
       closeDone: "已關閉：停掉 {{tasks}} 個任務",
+    },
+  },
+
+  cloudphone: {
+    title: "雲手機",
+    desc: "裝置管理 + 模擬拉流（v1 不接真實 VMOS，符合開源紅線）",
+    newDevice: "新建设備",
+    table: {
+      title: "雲手機裝置",
+      desc: "選中裝置可看模擬拉流；刪除走二次確認",
+      name: "名稱",
+      provider: "廠商",
+      status: "狀態",
+      specs: "規格",
+      actions: "",
+      empty: "暫無裝置，點右上角新建",
+      selectHint: "選中左側裝置查看模擬拉流",
+    },
+    form: {
+      name: "裝置名稱",
+      host: "連線位址（v1 不消費）",
+      androidVersion: "安卓版本",
+      resolution: "解析度",
+      streamSeed: "拉流種子",
+      remark: "備註",
+      submit: "儲存",
+      cancel: "取消",
+      createTitle: "新建设備",
+      editTitle: "編輯裝置",
+    },
+    provider: {
+      generic: "通用",
+      vmos: "VMOS",
+    },
+    status: {
+      offline: "離線",
+      booting: "啟動中",
+      online: "線上",
+      error: "連線失敗",
+    },
+    confirm: {
+      deleteTitle: "刪除該雲手機裝置？",
+      deleteDesc: "將從本租戶移除該裝置記錄（不可逆）。",
+      yes: "確認刪除",
+      no: "取消",
     },
   },
 

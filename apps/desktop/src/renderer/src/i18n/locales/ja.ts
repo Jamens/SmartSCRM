@@ -32,6 +32,7 @@ export const ja: DeepString<typeof zhCN> = {
     groupOps: '参加/退出',
     nurture: '相互チャット',
     automation: "自動化",
+    cloudphone: "クラウドフォン",
     settings: '設定'
   },
   notifications: {
@@ -254,6 +255,51 @@ export const ja: DeepString<typeof zhCN> = {
       deleteDesc: "先に実行中タスク {{tasks}} 件を停止し、その後アカウントを削除します。元に戻せません。",
       done: "完了：タスク {{tasks}} 件を停止",
       closeDone: "停止完了：タスク {{tasks}} 件を停止",
+    },
+  },
+
+  cloudphone: {
+    title: "クラウドフォン",
+    desc: "デバイス管理＋シミュレートストリーム（v1 は実 VMOS 非接続、オープンソース方針に準拠）",
+    newDevice: "デバイス追加",
+    table: {
+      title: "クラウドフォン端末",
+      desc: "端末を選ぶとシミュレートストリームを表示。削除は確認あり",
+      name: "名前",
+      provider: "提供元",
+      status: "状態",
+      specs: "仕様",
+      actions: "",
+      empty: "端末がありません。右上から追加",
+      selectHint: "左の端末を選ぶとストリーム表示",
+    },
+    form: {
+      name: "デバイス名",
+      host: "ホスト（v1 未使用）",
+      androidVersion: "Android バージョン",
+      resolution: "解像度",
+      streamSeed: "ストリームシード",
+      remark: "備考",
+      submit: "保存",
+      cancel: "キャンセル",
+      createTitle: "デバイス追加",
+      editTitle: "デバイス編集",
+    },
+    provider: {
+      generic: "汎用",
+      vmos: "VMOS",
+    },
+    status: {
+      offline: "オフライン",
+      booting: "起動中",
+      online: "オンライン",
+      error: "接続失敗",
+    },
+    confirm: {
+      deleteTitle: "このクラウドフォン端末を削除しますか？",
+      deleteDesc: "本テナントから端末記録を削除します（元に戻せません）。",
+      yes: "削除する",
+      no: "キャンセル",
     },
   },
 

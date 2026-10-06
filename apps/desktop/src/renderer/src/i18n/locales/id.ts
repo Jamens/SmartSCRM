@@ -32,6 +32,7 @@ export const id: DeepString<typeof zhCN> = {
     groupOps: 'Gabung/Kick',
     nurture: 'Obrolan Silang',
     automation: "Otomasi",
+    cloudphone: "Cloud Phone",
     settings: 'Pengaturan'
   },
   notifications: {
@@ -255,6 +256,51 @@ export const id: DeepString<typeof zhCN> = {
       deleteDesc: "Tugas ({{tasks}}) akan dihentikan dulu, lalu akun dihapus. Tidak bisa dibatalkan.",
       done: "Selesai: menghentikan {{tasks}} tugas",
       closeDone: "Ditutup: menghentikan {{tasks}} tugas",
+    },
+  },
+
+  cloudphone: {
+    title: "Cloud Phone",
+    desc: "Manajemen perangkat + stream simulasi (v1 tidak sambung VMOS nyata, sesuai aturan open-source)",
+    newDevice: "Perangkat baru",
+    table: {
+      title: "Perangkat Cloud Phone",
+      desc: "Pilih perangkat untuk lihat stream simulasi; hapus butuh konfirmasi",
+      name: "Nama",
+      provider: "Penyedia",
+      status: "Status",
+      specs: "Spesifikasi",
+      actions: "",
+      empty: "Belum ada perangkat, klik Perangkat baru",
+      selectHint: "Pilih perangkat di kiri untuk lihat stream",
+    },
+    form: {
+      name: "Nama perangkat",
+      host: "Host (v1 tidak dipakai)",
+      androidVersion: "Versi Android",
+      resolution: "Resolusi",
+      streamSeed: "Seed stream",
+      remark: "Catatan",
+      submit: "Simpan",
+      cancel: "Batal",
+      createTitle: "Perangkat baru",
+      editTitle: "Edit perangkat",
+    },
+    provider: {
+      generic: "Umum",
+      vmos: "VMOS",
+    },
+    status: {
+      offline: "Offline",
+      booting: "Menyala",
+      online: "Online",
+      error: "Gagal terhubung",
+    },
+    confirm: {
+      deleteTitle: "Hapus perangkat cloud phone ini?",
+      deleteDesc: "Menghapus catatan perangkat dari tenant ini (tidak bisa dibatalkan).",
+      yes: "Konfirmasi hapus",
+      no: "Batal",
     },
   },
 

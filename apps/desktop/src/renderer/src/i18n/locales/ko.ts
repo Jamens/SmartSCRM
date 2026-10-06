@@ -32,6 +32,7 @@ export const ko: DeepString<typeof zhCN> = {
     groupOps: '참여/퇴출',
     nurture: '상호 채팅',
     automation: "자동화",
+    cloudphone: "클라우드 폰",
     settings: '설정'
   },
   notifications: {
@@ -252,6 +253,51 @@ export const ko: DeepString<typeof zhCN> = {
       deleteDesc: "먼저 실행 중 작업 {{tasks}}개를 중지한 뒤 계정을 삭제합니다. 되돌릴 수 없습니다.",
       done: "완료: 작업 {{tasks}}개 중지",
       closeDone: "닫기 완료: 작업 {{tasks}}개 중지",
+    },
+  },
+
+  cloudphone: {
+    title: "클라우드 폰",
+    desc: "기기 관리 + 시뮬레이션 스트림 (v1 실제 VMOS 미연결, 오픈소스 방침 준수)",
+    newDevice: "기기 추가",
+    table: {
+      title: "클라우드 폰 기기",
+      desc: "기기를 선택하면 시뮬레이션 스트림 표시, 삭제는 확인 필요",
+      name: "이름",
+      provider: "제공자",
+      status: "상태",
+      specs: "사양",
+      actions: "",
+      empty: "기기가 없습니다. 오른쪽 위에서 추가",
+      selectHint: "왼쪽 기기를 선택해 스트림 보기",
+    },
+    form: {
+      name: "기기 이름",
+      host: "호스트 (v1 미사용)",
+      androidVersion: "안드로이드 버전",
+      resolution: "해상도",
+      streamSeed: "스트림 시드",
+      remark: "비고",
+      submit: "저장",
+      cancel: "취소",
+      createTitle: "기기 추가",
+      editTitle: "기기 편집",
+    },
+    provider: {
+      generic: "일반",
+      vmos: "VMOS",
+    },
+    status: {
+      offline: "오프라인",
+      booting: "시작 중",
+      online: "온라인",
+      error: "연결 실패",
+    },
+    confirm: {
+      deleteTitle: "이 클라우드 폰 기기를 삭제할까요?",
+      deleteDesc: "이 테넌트에서 기기 기록을 삭제합니다(되돌릴 수 없음).",
+      yes: "삭제",
+      no: "취소",
     },
   },
 

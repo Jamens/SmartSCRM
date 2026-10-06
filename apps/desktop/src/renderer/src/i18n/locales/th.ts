@@ -32,6 +32,7 @@ export const th: DeepString<typeof zhCN> = {
     groupOps: 'เข้ากลุ่ม/เตะกลุ่ม',
     nurture: 'แชทหมู่',
     automation: "อัตโนมัติ",
+    cloudphone: "โทรศัพท์คลาวด์",
     settings: 'การตั้งค่า'
   },
   notifications: {
@@ -252,6 +253,51 @@ export const th: DeepString<typeof zhCN> = {
       deleteDesc: "จะหยุดงาน {{tasks}} รายการก่อน แล้วค่อยลบบัญชี ไม่สามารถย้อนกลับได้",
       done: "เสร็จ: หยุดงาน {{tasks}} รายการ",
       closeDone: "ปิดแล้ว: หยุดงาน {{tasks}} รายการ",
+    },
+  },
+
+  cloudphone: {
+    title: "โทรศัพท์คลาวด์",
+    desc: "จัดการอุปกรณ์ + สตรีมจำลอง (v1 ไม่ต่อ VMOS จริง ตามกฎโอเพนซอร์ส)",
+    newDevice: "อุปกรณ์ใหม่",
+    table: {
+      title: "อุปกรณ์โทรศัพท์คลาวด์",
+      desc: "เลือกอุปกรณ์เพื่อดูสตรีมจำลอง การลบต้องยืนยัน",
+      name: "ชื่อ",
+      provider: "ผู้ให้บริการ",
+      status: "สถานะ",
+      specs: "สเปก",
+      actions: "",
+      empty: "ยังไม่มีอุปกรณ์ กด新增右上",
+      selectHint: "เลือกอุปกรณ์ด้านซ้ายเพื่อดูสตรีม",
+    },
+    form: {
+      name: "ชื่ออุปกรณ์",
+      host: "โฮสต์ (v1 ไม่ใช้)",
+      androidVersion: "เวอร์ชัน Android",
+      resolution: "ความละเอียด",
+      streamSeed: "ซีดสตรีม",
+      remark: "หมายเหตุ",
+      submit: "บันทึก",
+      cancel: "ยกเลิก",
+      createTitle: "อุปกรณ์ใหม่",
+      editTitle: "แก้ไขอุปกรณ์",
+    },
+    provider: {
+      generic: "ทั่วไป",
+      vmos: "VMOS",
+    },
+    status: {
+      offline: "ออฟไลน์",
+      booting: "กำลังเปิด",
+      online: "ออนไลน์",
+      error: "เชื่อมต่อล้มเหลว",
+    },
+    confirm: {
+      deleteTitle: "ลบอุปกรณ์โทรศัพท์คลาวด์นี้?",
+      deleteDesc: "ลบบันทึกอุปกรณ์ออกจากเทนแอนต์นี้ (ไม่สามารถย้อนกลับได้)",
+      yes: "ยืนยันลบ",
+      no: "ยกเลิก",
     },
   },
 

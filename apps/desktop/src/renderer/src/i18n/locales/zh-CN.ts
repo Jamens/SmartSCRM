@@ -35,6 +35,7 @@ export const zhCN = {
     groupOps: '加群/踢人',
     nurture: '互聊养号',
     automation: "自动化",
+    cloudphone: "云手机",
     settings: '设置'
   },
   notifications: {
@@ -257,6 +258,51 @@ export const zhCN = {
       deleteDesc: "将先停掉这些账号上共 {{tasks}} 个在跑任务，再删除账号。此操作不可逆。",
       done: "已处理：停掉 {{tasks}} 个任务",
       closeDone: "已关闭：停掉 {{tasks}} 个任务",
+    },
+  },
+
+  cloudphone: {
+    title: "云手机",
+    desc: "设备管理 + 模拟拉流（v1 不接真实 VMOS，符合开源红线）",
+    newDevice: "新建设备",
+    table: {
+      title: "云手机设备",
+      desc: "选中设备可看模拟拉流；删除走二次确认",
+      name: "名称",
+      provider: "厂商",
+      status: "状态",
+      specs: "规格",
+      actions: "",
+      empty: "暂无设备，点右上角新建",
+      selectHint: "选中左侧设备查看模拟拉流",
+    },
+    form: {
+      name: "设备名称",
+      host: "连接地址（v1 不消费）",
+      androidVersion: "安卓版本",
+      resolution: "分辨率",
+      streamSeed: "拉流种子",
+      remark: "备注",
+      submit: "保存",
+      cancel: "取消",
+      createTitle: "新建设备",
+      editTitle: "编辑设备",
+    },
+    provider: {
+      generic: "通用",
+      vmos: "VMOS",
+    },
+    status: {
+      offline: "离线",
+      booting: "启动中",
+      online: "在线",
+      error: "连接失败",
+    },
+    confirm: {
+      deleteTitle: "删除该云手机设备？",
+      deleteDesc: "将从本租户移除该设备记录（不可逆）。",
+      yes: "确认删除",
+      no: "取消",
     },
   },
 

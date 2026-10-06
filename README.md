@@ -6,7 +6,7 @@ Electron + React + TypeScript 桌面 SCRM 客户端，配 Spring Boot + MySQL �
 - 当前分支：`main`
 - 已交付范围：P0 骨架 → P1 登录/窗口壳 → P2 平台账号与内嵌页 → P3 客户域 → P4 素材库/快捷回复 → P5 翻译中心 → P6 聊天记录 → **P7 批量群发（B7）+ 会话级设置（B16）** → **设置页（A12 角标 / A13 主题 / A14 设备信息 / A15）**
 - **进行中**：**P8 群成员分析（B6）**——切面 1–5 已装到界面；**5c 交付闸已通过**（CDP 复检脚本 `tmp/cdp-recheck.mjs` 跑绿，界面真读到数 1 条群，验收台账见 `docs/notes/2026-10-02-b6-5c-acceptance.md`）；采集管线（Task 10 collector → Task 12 桥侧接线 → 8b 校准）**已交付**，见 §10
-- 未交付：Telegram 采集/发送链、话术引擎、代理指纹、云手机、报表
+- 未交付：Telegram 采集/发送链、话术引擎、代理指纹、报表
 - 体检与风险清单：[docs/notes/2026-09-25-module-audit.md](./docs/notes/2026-09-25-module-audit.md)（逐条带 `文件:行`）
 
 ## 一、环境要求
@@ -184,7 +184,7 @@ HTTP 请求
 |---|---|
 | `App.tsx` | `HashRouter` + 路由表；未登录跳 `LoginPage` |
 | `layouts/AppLayout.tsx` | 整体框架：`TitleBar` + `ModuleRail` + `AccountSidebar` + 内容区 |
-| `pages/` | 业务页面：`HomePage`(工作台)、`MessagesPage`(聊天记录)、`CustomersPage`、`LabelsPage`、`AudiencesPage`、`QuickRepliesPage`、`MaterialsPage`、`TranslationPage`、`DashboardPage`(B11 报表仪表盘)、`AiWorkspacePage`(B28 AI 工作区)、`ScriptPage`(B8 炒群引擎)、`GroupOpsPage`(B18/B19 加群踢人)、`NurturePlanPage`(B9 互聊养号)、`AutomationPage`(B20 自动化任务面板)、`LoginPage` 等 |
+| `pages/` | 业务页面：`HomePage`(工作台)、`MessagesPage`(聊天记录)、`CustomersPage`、`LabelsPage`、`AudiencesPage`、`QuickRepliesPage`、`MaterialsPage`、`TranslationPage`、`DashboardPage`(B11 报表仪表盘)、`AiWorkspacePage`(B28 AI 工作区)、`ScriptPage`(B8 炒群引擎)、`GroupOpsPage`(B18/B19 加群踢人)、`NurturePlanPage`(B9 互聊养号)、`AutomationPage`(B20 自动化任务面板)、`CloudPhonePage`(B10 云手机：设备管理 + 模拟拉流)、`LoginPage` 等 |
 | `components/AccountSidebar.tsx` | 账号列表 + 增删（删除即销毁视图） |
 | `components/AccountStage.tsx` | 内嵌视图舞台：量测容器 bounds，向主进程传 `injectConfig`（含 `apiBase`） |
 | `components/AddAccountDialog.tsx` / `ModuleRail.tsx` / `TitleBar.tsx` / `ModulePlaceholder.tsx` | 新建账号弹窗 / 左侧模块导航 / 自绘标题栏 / 未实现模块占位 |
