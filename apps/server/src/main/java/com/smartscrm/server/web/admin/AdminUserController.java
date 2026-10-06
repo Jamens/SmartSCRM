@@ -46,7 +46,21 @@ public class AdminUserController {
         Long operatorTenantId = principal == null ? null : principal.tenantId();
         return ApiResponse.ok(userService.create(
                 req.username(), req.password(), req.nickname(), req.tenantId(),
-                req.role(), req.status(), operatorTenantId));
+                req.role(), req.status(), operatorTenantId, req.portLimit()));
+    }
+
+    @PutMapping("/{id}/port-limit")
+    @PreAuthorize("hasAuthority('user:update')")
+    public ApiResponse<Void> setPortLimit(@PathVariable Long id, @RequestBody PortLimitRequest req) {
+        userService.setPortLimit(id, req.portLimit());
+        return ApiResponse.ok(null);
+    }
+
+    @PutMapping("/{id}/password")
+    @PreAuthorize("hasAuthority('user:resetPassword')")
+    public ApiResponse<Void> resetPassword(@PathVariable Long id, @RequestBody PasswordResetRequest req) {
+        userService.resetPassword(id, req.password());
+        return ApiResponse.ok(null);
     }
 
     @GetMapping("/{id}/roles")
@@ -96,5 +110,11 @@ public class AdminUserController {
     public record TeamAssignRequest(Set<Long> teamIds) {}
 
     /** Sub-account creation payload. */
-    public record UserCreateRequest(String username, String password, String nickname, Long tenantId, String role, Integer status) {}
+    public record UserCreateRequest(String username, String password, String nickname, Long tenantId, String role, Integer status, Integer portLimit) {}
+
+    /** Per-account port-limit update payload. */
+    public record PortLimitRequest(Integer portLimit) {}
+
+    /** Password-reset payload. */
+    public record PasswordResetRequest(String password) {}
 }

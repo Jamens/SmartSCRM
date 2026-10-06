@@ -24,6 +24,7 @@ export default function TeamList() {
   const qc = useQueryClient();
   const canCreate = useAuthStore((s) => s.menuCodes.includes('team:create'));
   const canDelete = useAuthStore((s) => s.menuCodes.includes('team:delete'));
+  const canUpdate = useAuthStore((s) => s.menuCodes.includes('team:update'));
 
   const [tenantId, setTenantId] = useState<number | undefined>();
   const [page, setPage] = useState(1);
@@ -35,10 +36,16 @@ export default function TeamList() {
     tenantId: undefined as number | undefined,
     name: '',
     parentId: undefined as number | undefined,
+    type: 1,
   });
 
   const [renameId, setRenameId] = useState<number | null>(null);
   const [renameName, setRenameName] = useState('');
+
+  const [configId, setConfigId] = useState<number | null>(null);
+  const [configType, setConfigType] = useState<number>(1);
+  const [configPushTicket, setConfigPushTicket] = useState<number>(0);
+  const [configPowers, setConfigPowers] = useState('');
 
   const [memberId, setMemberId] = useState<number | null>(null);
   const [memberSel, setMemberSel] = useState<number[]>([]);
@@ -68,6 +75,24 @@ export default function TeamList() {
     },
     onError: (e) => message.error((e as Error).message),
   });
+
+  const configMut = useMutation({
+    mutationFn: (p: { id: number; type: number; isPushTicket: number; powers: string }) =>
+      api.teamUpdateConfig(p.id, { type: p.type, isPushTicket: p.isPushTicket, powers: p.powers || null }),
+    onSuccess: () => {
+      message.success('部门属性已更新');
+      setConfigId(null);
+      qc.invalidateQueries({ queryKey: ['teams'] });
+    },
+    onError: (e) => message.error((e as Error).message),
+  });
+
+  const openConfig = (r: TeamRow) => {
+    setConfigId(r.id);
+    setConfigType(r.type ?? 1);
+    setConfigPushTicket(r.isPushTicket ?? 0);
+    setConfigPowers(r.powers ?? '');
+  };
 
   const deleteMut = useMutation({
     mutationFn: (id: number) => api.teamDelete(id),
@@ -115,8 +140,27 @@ export default function TeamList() {
       render: (v: number | null) => (v == null ? <Tag color="default">全局</Tag> : v),
     },
     {
+      title: '类型',
+      dataIndex: 'type',
+      width: 90,
+      render: (v: number | undefined) =>
+        v === 2 ? <Tag color="purple">DC</Tag> : <Tag>普通</Tag>,
+    },
+    {
+      title: '推送工单',
+      dataIndex: 'isPushTicket',
+      width: 90,
+      render: (v: number | undefined) => (v === 1 ? <Tag color="green">是</Tag> : <Tag>否</Tag>),
+    },
+    {
+      title: '权限',
+      dataIndex: 'powers',
+      width: 120,
+      render: (v: string | null | undefined) => (v ? <span>{v}</span> : <Tag color="default">-</Tag>),
+    },
+    {
       title: '操作',
-      width: 220,
+      width: 280,
       render: (_, r) => (
         <Space>
           <Button size="small" onClick={() => openMembers(r.id)}>
@@ -124,12 +168,16 @@ export default function TeamList() {
           </Button>
           <Button
             size="small"
+            disabled={!canUpdate}
             onClick={() => {
               setRenameId(r.id);
               setRenameName(r.name);
             }}
           >
             改名
+          </Button>
+          <Button size="small" disabled={!canUpdate} onClick={() => openConfig(r)}>
+            属性
           </Button>
           <Popconfirm title="删除该团队？" onConfirm={() => deleteMut.mutate(r.id)}>
             <Button size="small" danger disabled={!canDelete}>
@@ -217,6 +265,15 @@ export default function TeamList() {
             value={form.name}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
+          <Select
+            style={{ width: '100%' }}
+            value={form.type ?? 1}
+            onChange={(v) => setForm({ ...form, type: v })}
+            options={[
+              { value: 1, label: '普通' },
+              { value: 2, label: 'DC' },
+            ]}
+          />
         </Space>
       </Modal>
 
@@ -250,6 +307,42 @@ export default function TeamList() {
           optionFilterProp="label"
           showSearch
         />
+      </Modal>
+
+      <Modal
+        title="部门属性"
+        open={configId !== null}
+        onCancel={() => setConfigId(null)}
+        onOk={() => configMut.mutate({ id: configId as number, type: configType, isPushTicket: configPushTicket, powers: configPowers })}
+        confirmLoading={configMut.isPending}
+        okText="保存"
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <Select
+            style={{ width: '100%' }}
+            value={configType}
+            onChange={setConfigType}
+            options={[
+              { value: 1, label: '普通 (NORMAL)' },
+              { value: 2, label: 'DC' },
+            ]}
+          />
+          <Select
+            style={{ width: '100%' }}
+            value={configPushTicket}
+            onChange={setConfigPushTicket}
+            options={[
+              { value: 0, label: '不推送工单' },
+              { value: 1, label: '推送工单' },
+            ]}
+          />
+          <Input
+            placeholder="权限串（逗号分隔，可选）"
+            value={configPowers}
+            onChange={(e) => setConfigPowers(e.target.value)}
+            maxLength={255}
+          />
+        </Space>
       </Modal>
     </Card>
   );

@@ -67,6 +67,7 @@ export interface UserCreatePayload {
   tenantId?: number;
   role?: string; // legacy role: owner|admin|agent
   status?: number; // 1 active, 0 disabled
+  portLimit?: number | null; // null = unlimited; bounded by tenant.seat_limit
 }
 
 export interface UserTeamAssignPayload {
@@ -94,6 +95,12 @@ export interface TeamRow {
   parentId: number;
   name: string;
   scope: number;
+  /** 1 = NORMAL, 2 = DC. */
+  type?: number;
+  /** 1 = push tickets to this department, 0 = not. */
+  isPushTicket?: number;
+  /** Department permission string (comma-separated), nullable. */
+  powers?: string | null;
   status: number;
 }
 
@@ -104,6 +111,8 @@ export interface UserRow {
   nickname: string | null;
   role: string | null;
   status: number;
+  /** NULL = unlimited ports; otherwise bounded by the tenant's seat_limit. */
+  portLimit?: number | null;
 }
 
 /** any = one keyword is enough; all = every keyword must be present. */

@@ -20,6 +20,9 @@ public class AppUser {
     private String avatar;
     private String role;
     private Integer status;
+    /** NULL = unlimited ports; otherwise bounded by the owning tenant's seat_limit. */
+    @TableField("port_limit")
+    private Integer portLimit;
     private LocalDateTime createdAt;
     @TableField(update = "CURRENT_TIMESTAMP(3)")
     private LocalDateTime updatedAt;

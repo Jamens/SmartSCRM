@@ -49,7 +49,15 @@ public class AdminTeamController {
     @PostMapping
     @PreAuthorize("hasAuthority('team:create')")
     public ApiResponse<TeamRow> create(@Valid @RequestBody TeamRequest req) {
-        return ApiResponse.ok(teamService.create(req.scope(), req.tenantId(), req.name(), req.parentId()));
+        return ApiResponse.ok(teamService.create(req.scope(), req.tenantId(), req.name(), req.parentId(),
+                req.type(), req.isPushTicket(), req.powers()));
+    }
+
+    @PutMapping("/{id}/config")
+    @PreAuthorize("hasAuthority('team:update')")
+    public ApiResponse<Void> updateConfig(@PathVariable Long id, @Valid @RequestBody TeamConfigRequest req) {
+        teamService.updateConfig(id, req.type(), req.isPushTicket(), req.powers());
+        return ApiResponse.ok(null);
     }
 
     @PutMapping("/{id}/name")
@@ -78,7 +86,17 @@ public class AdminTeamController {
         @NotNull Integer scope,
         Long tenantId,
         @NotBlank String name,
-        Long parentId
+        Long parentId,
+        Integer type,
+        Integer isPushTicket,
+        String powers
+    ) {}
+
+    /** Department-attribute update payload (B22: type / isPushTicket / powers). */
+    public record TeamConfigRequest(
+        @NotNull Integer type,
+        @NotNull Integer isPushTicket,
+        String powers
     ) {}
 
     /** Membership assignment payload. */

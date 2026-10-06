@@ -25,6 +25,8 @@ export default function UserList() {
   const canAssignTeam = useAuthStore((s) => s.menuCodes.includes('user:assignTeam'));
   const canCreate = useAuthStore((s) => s.menuCodes.includes('user:create'));
   const canDelete = useAuthStore((s) => s.menuCodes.includes('user:delete'));
+  const canEdit = useAuthStore((s) => s.menuCodes.includes('user:update'));
+  const canResetPassword = useAuthStore((s) => s.menuCodes.includes('user:resetPassword'));
 
   const [tenantId, setTenantId] = useState<number | undefined>();
   const [keyword, setKeyword] = useState('');
@@ -41,10 +43,16 @@ export default function UserList() {
   const [createTenantId, setCreateTenantId] = useState<number | undefined>();
   const [createRole, setCreateRole] = useState<string>('agent');
   const [createStatus, setCreateStatus] = useState<number>(1);
+  const [createPortLimit, setCreatePortLimit] = useState<number | null>(null);
 
   const [teamId, setTeamId] = useState<number | null>(null);
   const [teamTenantId, setTeamTenantId] = useState<number | null>(null);
   const [teamSel, setTeamSel] = useState<number[]>([]);
+
+  const [portId, setPortId] = useState<number | null>(null);
+  const [portEdit, setPortEdit] = useState<number | null>(null);
+  const [resetId, setResetId] = useState<number | null>(null);
+  const [resetPassword, setResetPassword] = useState('');
 
   const { data, isLoading } = useQuery({
     queryKey: ['users', tenantId, keyword, page, pageSize],
@@ -105,6 +113,7 @@ export default function UserList() {
         tenantId: createTenantId,
         role: createRole,
         status: createStatus,
+        portLimit: createPortLimit,
       }),
     onSuccess: () => {
       message.success('用户已创建');
@@ -115,10 +124,37 @@ export default function UserList() {
       setCreateTenantId(undefined);
       setCreateRole('agent');
       setCreateStatus(1);
+      setCreatePortLimit(null);
       qc.invalidateQueries({ queryKey: ['users'] });
     },
     onError: (e) => message.error((e as Error).message),
   });
+
+  const portMut = useMutation({
+    mutationFn: (p: { id: number; portLimit: number | null }) => api.userSetPortLimit(p.id, p.portLimit),
+    onSuccess: () => {
+      message.success('端口上限已更新');
+      setPortId(null);
+      qc.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (e) => message.error((e as Error).message),
+  });
+
+  const resetMut = useMutation({
+    mutationFn: (p: { id: number; password: string }) => api.userResetPassword(p.id, p.password),
+    onSuccess: () => {
+      message.success('密码已重置');
+      setResetId(null);
+      setResetPassword('');
+      qc.invalidateQueries({ queryKey: ['users'] });
+    },
+    onError: (e) => message.error((e as Error).message),
+  });
+
+  const openPort = (r: UserRow) => {
+    setPortId(r.id);
+    setPortEdit(r.portLimit ?? null);
+  };
 
   const teamMut = useMutation({
     mutationFn: () => api.userAssignTeams(teamId as number, teamSel),
@@ -148,6 +184,7 @@ export default function UserList() {
     setCreateTenantId(undefined);
     setCreateRole('agent');
     setCreateStatus(1);
+    setCreatePortLimit(null);
     setCreateOpen(true);
   };
 
@@ -186,8 +223,15 @@ export default function UserList() {
       render: (s: number) => (s === 1 ? <Tag color="green">启用</Tag> : <Tag color="red">停用</Tag>),
     },
     {
+      title: '端口上限',
+      dataIndex: 'portLimit',
+      width: 100,
+      render: (v: number | null | undefined) =>
+        v == null ? <Tag color="default">不限</Tag> : <span>{v}</span>,
+    },
+    {
       title: '操作',
-      width: 300,
+      width: 380,
       render: (_, r) => (
         <Space>
           <Button size="small" disabled={!canAssign} onClick={() => openRoles(r.id)}>
@@ -195,6 +239,12 @@ export default function UserList() {
           </Button>
           <Button size="small" disabled={!canAssignTeam} onClick={() => openTeams(r.id, r.tenantId)}>
             分配团队
+          </Button>
+          <Button size="small" disabled={!canEdit} onClick={() => openPort(r)}>
+            端口上限
+          </Button>
+          <Button size="small" disabled={!canResetPassword} onClick={() => setResetId(r.id)}>
+            重置密码
           </Button>
           <Popconfirm
             title={r.status === 1 ? '停用该账号？' : '启用该账号？'}
@@ -346,6 +396,13 @@ export default function UserList() {
               { value: 0, label: '停用' },
             ]}
           />
+          <InputNumber
+            style={{ width: '100%' }}
+            placeholder="端口上限（留空=不限，受租户 seat_limit 约束）"
+            min={1}
+            value={createPortLimit}
+            onChange={(v) => setCreatePortLimit(v ?? null)}
+          />
         </Space>
       </Modal>
 
@@ -372,6 +429,45 @@ export default function UserList() {
           options={(teamsAllQ.data?.records ?? []).map((t: TeamRow) => ({ label: t.name, value: t.id }))}
           optionFilterProp="label"
           showSearch
+        />
+      </Modal>
+
+      <Modal
+        title="端口上限"
+        open={portId !== null}
+        onCancel={() => setPortId(null)}
+        onOk={() => portMut.mutate({ id: portId as number, portLimit: portEdit })}
+        confirmLoading={portMut.isPending}
+        okText="保存"
+      >
+        <Space direction="vertical" style={{ width: '100%' }} size="middle">
+          <InputNumber
+            style={{ width: '100%' }}
+            placeholder="留空=不限（受租户 seat_limit 约束）"
+            min={1}
+            value={portEdit}
+            onChange={(v) => setPortEdit(v ?? null)}
+          />
+          <div style={{ color: 'rgba(0,0,0,0.45)' }}>上限不得超过该账号所属租户的 seat_limit。</div>
+        </Space>
+      </Modal>
+
+      <Modal
+        title="重置密码"
+        open={resetId !== null}
+        onCancel={() => {
+          setResetId(null);
+          setResetPassword('');
+        }}
+        onOk={() => resetMut.mutate({ id: resetId as number, password: resetPassword })}
+        confirmLoading={resetMut.isPending}
+        okText="重置"
+      >
+        <Input.Password
+          value={resetPassword}
+          onChange={(e) => setResetPassword(e.target.value)}
+          placeholder="新密码（至少 6 位）"
+          status={resetPassword.length > 0 && resetPassword.length < 6 ? 'error' : undefined}
         />
       </Modal>
     </Card>

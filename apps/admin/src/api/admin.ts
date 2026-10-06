@@ -59,8 +59,17 @@ export const roleDelete = (id: number) => http.del<void>(`/api/admin/roles/${id}
 export const teamsPage = (p: { tenantId?: number; page?: number; pageSize?: number }) =>
   http.get<PageResult<TeamRow>>(`/api/admin/teams${qs(p)}`);
 export const teamMembers = (id: number) => http.get<number[]>(`/api/admin/teams/${id}/members`);
-export const teamCreate = (p: { scope: number; tenantId?: number; name: string; parentId?: number }) =>
-  http.post<TeamRow>('/api/admin/teams', p);
+export const teamCreate = (p: {
+  scope: number;
+  tenantId?: number;
+  name: string;
+  parentId?: number;
+  type?: number;
+  isPushTicket?: number;
+  powers?: string | null;
+}) => http.post<TeamRow>('/api/admin/teams', p);
+export const teamUpdateConfig = (id: number, p: { type: number; isPushTicket: number; powers?: string | null }) =>
+  http.put<void>(`/api/admin/teams/${id}/config`, p);
 export const teamRename = (id: number, name: string) =>
   http.put<void>(`/api/admin/teams/${id}/name${qs({ name })}`);
 export const teamAssignMembers = (id: number, userIds: number[]) =>
@@ -77,6 +86,10 @@ export const userSetStatus = (id: number, status: number) =>
   http.put<void>(`/api/admin/users/${id}/status${qs({ status })}`);
 export const userCreate = (p: UserCreatePayload) => http.post<UserRow>('/api/admin/users', p);
 export const userDelete = (id: number) => http.del<void>(`/api/admin/users/${id}`);
+export const userSetPortLimit = (id: number, portLimit: number | null) =>
+  http.put<void>(`/api/admin/users/${id}/port-limit`, { portLimit });
+export const userResetPassword = (id: number, password: string) =>
+  http.put<void>(`/api/admin/users/${id}/password`, { password });
 export const userTeams = (id: number) => http.get<number[]>(`/api/admin/users/${id}/teams`);
 export const userAssignTeams = (id: number, teamIds: number[]) =>
   http.put<void>(`/api/admin/users/${id}/teams`, { teamIds });

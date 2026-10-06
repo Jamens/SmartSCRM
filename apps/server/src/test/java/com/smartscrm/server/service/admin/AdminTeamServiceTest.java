@@ -1,6 +1,7 @@
 package com.smartscrm.server.service.admin;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
@@ -62,7 +63,7 @@ class AdminTeamServiceTest {
     @Test
     void create_requiresTenantForTenantScope() {
         BizException ex = assertThrows(BizException.class,
-                () -> service.create(2, null, "x", 0L));
+                () -> service.create(2, null, "x", 0L, 1, 0, null));
         assertEquals(40001, ex.getCode());
         verify(mapper, never()).insert(any(SysTeam.class));
     }
@@ -71,16 +72,65 @@ class AdminTeamServiceTest {
     void create_persistsTeam() {
         when(mapper.insert(any(SysTeam.class))).thenReturn(1);
 
-        TeamRow row = service.create(2, 10L, "客服二组", 0L);
+        TeamRow row = service.create(2, 10L, "客服二组", 0L, 1, 0, null);
 
         assertEquals("客服二组", row.name());
         assertEquals(2, row.scope());
+        assertEquals(1, row.type());
+        assertEquals(0, row.isPushTicket());
+        assertNull(row.powers());
         verify(mapper).insert(any(SysTeam.class));
     }
 
     @Test
+    void create_defaultsAndValidatesType() {
+        when(mapper.insert(any(SysTeam.class))).thenReturn(1);
+        // type=2 (DC) accepted
+        TeamRow dc = service.create(2, 10L, "DC组", 0L, 2, 1, "ticket,report");
+        assertEquals(2, dc.type());
+        assertEquals(1, dc.isPushTicket());
+        assertEquals("ticket,report", dc.powers());
+        // invalid type -> rejected
+        BizException ex = assertThrows(BizException.class,
+                () -> service.create(2, 10L, "bad", 0L, 9, 0, null));
+        assertEquals(40001, ex.getCode());
+        // invalid push ticket -> rejected
+        BizException ex2 = assertThrows(BizException.class,
+                () -> service.create(2, 10L, "bad", 0L, 1, 9, null));
+        assertEquals(40001, ex2.getCode());
+        // blank powers -> null
+        TeamRow blank = service.create(2, 10L, "空权", 0L, 1, 0, "   ");
+        assertNull(blank.powers());
+    }
+
+    @Test
+    void updateConfig_writesDepartmentAttributes() {
+        SysTeam t = team(7L, 10L, "组", 0L, 2);
+        when(mapper.selectById(7L)).thenReturn(t);
+        when(mapper.updateById(any(SysTeam.class))).thenReturn(1);
+
+        service.updateConfig(7L, 2, 1, "a,b");
+
+        assertEquals(2, t.getType());
+        assertEquals(1, t.getIsPushTicket());
+        assertEquals("a,b", t.getPowers());
+        verify(mapper).updateById(t);
+    }
+
+    @Test
+    void updateConfig_rejectsBadType() {
+        SysTeam t = team(8L, 10L, "组", 0L, 2);
+        when(mapper.selectById(8L)).thenReturn(t);
+
+        BizException ex = assertThrows(BizException.class,
+                () -> service.updateConfig(8L, 5, 0, null));
+        assertEquals(40001, ex.getCode());
+        verify(mapper, never()).updateById(any(SysTeam.class));
+    }
+
+    @Test
     void create_rejectsBlankName() {
-        assertThrows(BizException.class, () -> service.create(1, null, "  ", 0L));
+        assertThrows(BizException.class, () -> service.create(1, null, "  ", 0L, 1, 0, null));
     }
 
     @Test
