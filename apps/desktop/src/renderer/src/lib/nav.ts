@@ -3,6 +3,7 @@ import {
   Bell,
   Bot,
   FileText,
+  Fingerprint,
   Layers,
   ShieldAlert,
   Sprout,
@@ -63,6 +64,8 @@ export const NAV_ITEMS: NavItem[] = [
   { path: '/cloud-phone', i18nKey: 'nav.cloudphone', icon: Smartphone },
   // 代理池（B13）：代理 CRUD + 模拟出口探测（开源红线：探测不发起真实外连）。
   { path: '/proxy-pool', i18nKey: 'nav.proxypool', icon: Globe },
+  // 浏览器指纹配置（B14）：指纹档案 CRUD + 模拟生成（开源红线：生成不探测真实设备）。
+  { path: '/fingerprint-profiles', i18nKey: 'nav.fingerprint', icon: Fingerprint },
   // 日志中心（A19）：排查用的宿主能力，排在业务模块之后、设置之前。
   { path: '/logs', i18nKey: 'nav.logs', icon: FileText },
   // 设置排在最后：它是宿主能力，不是业务模块。
