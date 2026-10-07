@@ -62,16 +62,31 @@ public class SecurityConfig {
         return new BCryptPasswordEncoder();
     }
 
-    /** Local-only deployment: accept any loopback origin (vite dev server, file://, packaged app). */
-    @Bean
-    public CorsConfigurationSource corsConfigurationSource() {
+/**
+ * Local-only deployment: accept loopback origins (vite dev server) for browser clients.
+ *
+ * <p>关于打包态（2026-10-07 实测，Electron 39.8.10）：<b>{@code file://} 页面的请求不受 CORS 约束</b>
+ * —— 它连 {@code Origin} 头都不发、也不发预检，于是 {@code DefaultCorsProcessor} 因
+ * {@code requestOrigin == null} 直接跳过。证据与 A/B 对照见 README §7 第 6 条。
+ * 下面的 {@code file://*} 是防御性保留：万一某个客户端把 Origin 写成字面量 {@code file://…}，
+ * 它能被匹配上；它<b>不是</b>打包态能用的原因，别把因果搞反了。
+ *
+ * <p>抽成静态方法是为了让 {@code CorsOriginTest} 能直接跑这份<b>真实</b>配置——若测试自己抄一份
+ * 允许源列表，配置改了测试不会红，等于白测。
+ */
+static CorsConfiguration corsConfiguration() {
         CorsConfiguration config = new CorsConfiguration();
         config.setAllowedOriginPatterns(List.of("http://localhost:*", "http://127.0.0.1:*", "file://*"));
         config.setAllowedMethods(List.of("GET", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"));
         config.setAllowedHeaders(List.of("*"));
         config.setMaxAge(3600L);
+        return config;
+    }
+
+    @Bean
+    public CorsConfigurationSource corsConfigurationSource() {
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
-        source.registerCorsConfiguration("/api/**", config);
+        source.registerCorsConfiguration("/api/**", corsConfiguration());
         return source;
     }
 }
