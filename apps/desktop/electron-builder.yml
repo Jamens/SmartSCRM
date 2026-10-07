@@ -21,7 +21,10 @@ extraResources:
 win:
   executableName: desktop
 nsis:
-  artifactName: ${name}-${version}-setup.${ext}
+  # 用 ${productName} 而非 ${name}：本包名是**带作用域**的 `@smartscrm/desktop`，
+  # ${name} 会把 `/` 当成路径分隔符，输出路径变成 dist\@smartscrm\... 而该子目录不会被创建，
+  # makensis 直接报 "Can't open output file" 退出 1（2026-10-07 实测踩到）。
+  artifactName: ${productName}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}
   createDesktopShortcut: always
@@ -34,7 +37,7 @@ mac:
     - NSDownloadsFolderUsageDescription: Application requests access to the user's Downloads folder.
   notarize: false
 dmg:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${productName}-${version}.${ext}
 linux:
   target:
     - AppImage
@@ -43,7 +46,7 @@ linux:
   maintainer: electronjs.org
   category: Utility
 appImage:
-  artifactName: ${name}-${version}.${ext}
+  artifactName: ${productName}-${version}.${ext}
 npmRebuild: false
 publish:
   provider: generic
