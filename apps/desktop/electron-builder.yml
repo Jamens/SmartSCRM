@@ -25,9 +25,10 @@ extraResources:
 win:
   executableName: SmartSCRM
 nsis:
-  # 用 ${productName} 而非 ${name}：本包名是**带作用域**的 `@smartscrm/desktop`，
+  # 用 ${productName} 而非 ${name}：包名若带作用域（如早先的 `@smartscrm/desktop`），
   # ${name} 会把 `/` 当成路径分隔符，输出路径变成 dist\@smartscrm\... 而该子目录不会被创建，
   # makensis 直接报 "Can't open output file" 退出 1（2026-10-07 实测踩到）。
+  # 现包名已去掉作用域改为 smartscrm-desktop，但这里仍用 ${productName} 更稳（不依赖包名形态）。
   artifactName: ${productName}-${version}-setup.${ext}
   shortcutName: ${productName}
   uninstallDisplayName: ${productName}

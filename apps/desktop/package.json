@@ -1,5 +1,5 @@
 {
-    "name": "@smartscrm/desktop",
+    "name": "smartscrm-desktop",
     "version": "0.1.0",
     "description": "SmartSCRM desktop client (Electron + React + TypeScript)",
     "main": "./out/main/index.js",
