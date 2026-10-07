@@ -1606,6 +1606,38 @@ export const zhCN = {
     seats: '席位',
     aiTokens: 'AI 用量',
     translationChars: '翻译用量'
+  },
+  // B12 模拟支付门控：套餐目录（BASIC/PRO/FLAGSHIP 按 code 映射）+ 升级弹窗 + 超额软阻断提示。
+  plan: {
+    BASIC: '基础版',
+    PRO: '专业版',
+    FLAGSHIP: '旗舰版',
+    upgrade: '升级套餐',
+    dialog: {
+      title: '升级 / 充值套餐',
+      desc: '选择套餐并完成模拟支付后即时生效（演示环境，不会产生真实扣款）。',
+      current: '当前套餐',
+      free: '免费',
+      perMonth: ' / 月',
+      seats: '席位上限',
+      aiTokens: 'AI 用量上限',
+      translation: '翻译字符上限',
+      payTitle: '模拟支付宝支付',
+      activate: '确认开通',
+      payDesc: '请使用支付宝扫码（演示环境，不会产生真实扣款），确认后点击「支付成功」。',
+      paySuccess: '支付成功',
+      paying: '开通中…',
+      activated: '套餐已生效',
+      activateFailed: '开通失败，请重试',
+      back: '返回上一步',
+      close: '关闭'
+    },
+    overLimit: {
+      title: '用量已达上限',
+      desc: '当前套餐「{{plan}}」的「{{resource}}」已用尽，建议升级套餐或等待配额重置。',
+      upgrade: '去升级',
+      ignore: '仍要继续'
+    }
   }
 } as const
 

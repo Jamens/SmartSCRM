@@ -1625,5 +1625,36 @@ export const ko: DeepString<typeof zhCN> = {
     seats: '시트',
     aiTokens: 'AI 사용량',
     translationChars: '번역 문자 수'
+  },
+  plan: {
+    BASIC: '베이직',
+    PRO: '프로',
+    FLAGSHIP: '플래그십',
+    upgrade: '플랜 업그레이드',
+    dialog: {
+      title: '플랜 업그레이드 / 충전',
+      desc: '플랜을 선택하고 모의 결제를 완료하면 즉시 적용됩니다(데모 환경이므로 실제 결제는 없습니다).',
+      current: '현재 플랜',
+      free: '무료',
+      perMonth: ' / 월',
+      seats: '좌석 한도',
+      aiTokens: 'AI 사용량 한도',
+      translation: '번역 문자 한도',
+      payTitle: '알리페이 모의 결제',
+      activate: '활성화',
+      payDesc: '알리페이로 스캔하세요(데모 환경이므로 실제 결제는 없습니다). 확인 후 "결제 성공"을 누르세요.',
+      paySuccess: '결제 성공',
+      paying: '활성화 중…',
+      activated: '플랜이 적용되었습니다',
+      activateFailed: '활성화 실패, 다시 시도하세요',
+      back: '뒤로',
+      close: '닫기'
+    },
+    overLimit: {
+      title: '사용 한도에 도달했습니다',
+      desc: '현재 플랜 "{{plan}}"의 "{{resource}}" 한도를 모두 사용했습니다. 업그레이드하거나 할당량 초기화를 기다려주세요.',
+      upgrade: '업그레이드',
+      ignore: '그대로 진행'
+    }
   }
 }

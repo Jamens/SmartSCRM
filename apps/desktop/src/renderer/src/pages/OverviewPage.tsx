@@ -5,11 +5,14 @@
 import { useMemo } from 'react'
 import { useTranslation } from 'react-i18next'
 import { useNavigate } from 'react-router-dom'
-import { Coins, LayoutGrid, Server, TrendingUp } from 'lucide-react'
+import { Coins, CreditCard, LayoutGrid, Server, TrendingUp } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
+import { Button } from '@/components/ui/button'
 import { useDashboard } from '@/api/dashboard'
 import { useTenantInfo } from '@/api/tenant'
 import { useAccounts } from '@/stores/accounts'
+import { usePlanDialog } from '@/stores/planDialog'
+import PlanActivateDialog from '@/components/PlanActivateDialog'
 import { NAV_ITEMS } from '@/lib/nav'
 import { PLATFORMS } from '@/lib/platform'
 
@@ -41,6 +44,7 @@ export default function OverviewPage(): React.JSX.Element {
   const { data: tenant } = useTenantInfo()
   const { data: dash } = useDashboard(7)
   const { data: accounts } = useAccounts()
+  const openPlan = usePlanDialog((s) => s.openPlan)
 
   const byPlatform = useMemo(() => {
     const map = new Map<number, { online: number; total: number }>()
@@ -79,7 +83,9 @@ export default function OverviewPage(): React.JSX.Element {
           <CardContent className="flex flex-col gap-3">
             <div>
               <p className="text-sm font-medium">{tenant?.name ?? '—'}</p>
-              <p className="text-xs text-muted-foreground">{tenant?.planName ?? t('overview.defaultPlan')}</p>
+              <p className="text-xs text-muted-foreground">
+                {tenant?.planName ? t(`plan.${tenant.planName}`) : t('overview.defaultPlan')}
+              </p>
             </div>
             <UsageBar label={t('overview.seats')} used={dash?.accountsTotal ?? 0} limit={tenant?.seatLimit ?? null} />
           </CardContent>
@@ -136,6 +142,10 @@ export default function OverviewPage(): React.JSX.Element {
           <CardHeader className="flex-row items-center gap-2 space-y-0">
             <Coins className="size-4 text-primary" />
             <CardTitle className="text-base">{t('overview.usage')}</CardTitle>
+            <Button size="sm" variant="outline" className="ml-auto" onClick={openPlan}>
+              <CreditCard className="size-3.5" />
+              {t('plan.upgrade')}
+            </Button>
           </CardHeader>
           <CardContent className="grid grid-cols-1 gap-4 sm:grid-cols-3">
             <UsageBar label={t('overview.seats')} used={dash?.accountsTotal ?? 0} limit={tenant?.seatLimit ?? null} />
@@ -170,6 +180,8 @@ export default function OverviewPage(): React.JSX.Element {
           </div>
         </CardContent>
       </Card>
+
+      <PlanActivateDialog />
     </div>
   )
 }

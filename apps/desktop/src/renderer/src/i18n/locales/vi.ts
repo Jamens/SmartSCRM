@@ -1631,5 +1631,36 @@ export const vi: DeepString<typeof zhCN> = {
     seats: 'Ghế',
     aiTokens: 'Token AI',
     translationChars: 'Ký tự dịch'
+  },
+  plan: {
+    BASIC: 'Cơ bản',
+    PRO: 'Chuyên nghiệp',
+    FLAGSHIP: 'Cao cấp',
+    upgrade: 'Nâng cấp gói',
+    dialog: {
+      title: 'Nâng cấp / nạp tiền gói',
+      desc: 'Chọn gói và hoàn tất thanh toán mô phỏng để áp dụng ngay (môi trường demo, không tính phí thật).',
+      current: 'Gói hiện tại',
+      free: 'Miễn phí',
+      perMonth: ' / tháng',
+      seats: 'Giới hạn chỗ',
+      aiTokens: 'Giới hạn token AI',
+      translation: 'Giới hạn ký tự dịch',
+      payTitle: 'Thanh toán Alipay mô phỏng',
+      activate: 'Xác nhận kích hoạt',
+      payDesc: 'Quét bằng Alipay (demo, không tính phí thật), rồi nhấn "Thanh toán thành công".',
+      paySuccess: 'Thanh toán thành công',
+      paying: 'Đang kích hoạt…',
+      activated: 'Gói đã áp dụng',
+      activateFailed: 'Kích hoạt thất bại, vui lòng thử lại',
+      back: 'Quay lại',
+      close: 'Đóng'
+    },
+    overLimit: {
+      title: 'Đã đạt giới hạn sử dụng',
+      desc: '"{{resource}}" của gói "{{plan}}" đã hết. Cân nhắc nâng cấp gói hoặc chờ hạn mức được đặt lại.',
+      upgrade: 'Nâng cấp',
+      ignore: 'Vẫn tiếp tục'
+    }
   }
 }

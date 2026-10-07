@@ -1648,5 +1648,36 @@ export const id: DeepString<typeof zhCN> = {
     seats: 'Kursi',
     aiTokens: 'Token AI',
     translationChars: 'Karakter Terjemahan'
+  },
+  plan: {
+    BASIC: 'Dasar',
+    PRO: 'Pro',
+    FLAGSHIP: 'Flagship',
+    upgrade: 'Tingkatkan paket',
+    dialog: {
+      title: 'Tingkatkan / isi ulang paket',
+      desc: 'Pilih paket dan selesaikan pembayaran simulasi agar langsung berlaku (lingkungan demo, tanpa biaya nyata).',
+      current: 'Paket saat ini',
+      free: 'Gratis',
+      perMonth: ' / bulan',
+      seats: 'Batas kursi',
+      aiTokens: 'Batas token AI',
+      translation: 'Batas karakter terjemahan',
+      payTitle: 'Simulasikan pembayaran Alipay',
+      activate: 'Aktifkan',
+      payDesc: 'Pindai dengan Alipay (demo, tanpa biaya nyata), lalu tekan "Pembayaran berhasil".',
+      paySuccess: 'Pembayaran berhasil',
+      paying: 'Mengaktifkan…',
+      activated: 'Paket aktif',
+      activateFailed: 'Gagal mengaktifkan, coba lagi',
+      back: 'Kembali',
+      close: 'Tutup'
+    },
+    overLimit: {
+      title: 'Batas penggunaan tercapai',
+      desc: '"{{resource}}" pada paket "{{plan}}" sudah habis. Pertimbangkan peningkatan paket atau tunggu kuota direset.',
+      upgrade: 'Tingkatkan',
+      ignore: 'Lanjutkan saja'
+    }
   }
 }

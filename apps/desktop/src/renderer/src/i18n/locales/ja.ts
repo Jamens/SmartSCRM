@@ -1640,5 +1640,36 @@ export const ja: DeepString<typeof zhCN> = {
     seats: 'シート',
     aiTokens: 'AI 利用量',
     translationChars: '翻訳文字数'
+  },
+  plan: {
+    BASIC: 'ベーシック',
+    PRO: 'プロ',
+    FLAGSHIP: 'フラッグシップ',
+    upgrade: 'プランをアップグレード',
+    dialog: {
+      title: 'プランのアップグレード / チャージ',
+      desc: 'プランを選択し、模擬決済を完了すると即時反映されます（デモ環境のため実際の請求は発生しません）。',
+      current: '現在のプラン',
+      free: '無料',
+      perMonth: ' / 月',
+      seats: 'シート上限',
+      aiTokens: 'AI 使用量の上限',
+      translation: '翻訳文字数の上限',
+      payTitle: 'Alipay の模擬決済',
+      activate: '開通する',
+      payDesc: 'Alipay でスキャンしてください（デモ環境のため実際の請求は発生しません）。確認後「決済成功」を押してください。',
+      paySuccess: '決済成功',
+      paying: '開通中…',
+      activated: 'プランが有効になりました',
+      activateFailed: '開通に失敗しました。再試行してください',
+      back: '戻る',
+      close: '閉じる'
+    },
+    overLimit: {
+      title: '使用量の上限に達しました',
+      desc: '現在のプラン「{{plan}}」の「{{resource}}」を使い切りました。プランのアップグレードまたは上限のリセットをお待ちください。',
+      upgrade: 'アップグレード',
+      ignore: 'そのまま続行'
+    }
   }
 }

@@ -1634,5 +1634,36 @@ export const en: DeepString<typeof zhCN> = {
     seats: 'Seats',
     aiTokens: 'AI Tokens',
     translationChars: 'Translation Chars'
+  },
+  plan: {
+    BASIC: 'Basic',
+    PRO: 'Pro',
+    FLAGSHIP: 'Flagship',
+    upgrade: 'Upgrade plan',
+    dialog: {
+      title: 'Upgrade / top up plan',
+      desc: 'Pick a plan; it takes effect right after the simulated payment (demo environment, no real charge).',
+      current: 'Current plan',
+      free: 'Free',
+      perMonth: ' / month',
+      seats: 'Seat limit',
+      aiTokens: 'AI token limit',
+      translation: 'Translation char limit',
+      payTitle: 'Simulate Alipay payment',
+      activate: 'Activate',
+      payDesc: 'Scan with Alipay (demo environment, no real charge), then tap "Payment succeeded".',
+      paySuccess: 'Payment succeeded',
+      paying: 'Activating…',
+      activated: 'Plan activated',
+      activateFailed: 'Activation failed, please retry',
+      back: 'Back',
+      close: 'Close'
+    },
+    overLimit: {
+      title: 'Usage limit reached',
+      desc: 'The "{{resource}}" of your current plan "{{plan}}" is used up. Consider upgrading the plan or waiting for the quota to reset.',
+      upgrade: 'Upgrade',
+      ignore: 'Continue anyway'
+    }
   }
 }

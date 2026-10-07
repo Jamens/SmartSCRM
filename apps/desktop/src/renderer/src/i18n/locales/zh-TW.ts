@@ -1596,5 +1596,36 @@ export const zhTW: DeepString<typeof zhCN> = {
     seats: '席位',
     aiTokens: 'AI 用量',
     translationChars: '翻譯用量'
+  },
+  plan: {
+    BASIC: '基礎版',
+    PRO: '專業版',
+    FLAGSHIP: '旗艦版',
+    upgrade: '升級方案',
+    dialog: {
+      title: '升級 / 儲值方案',
+      desc: '選擇方案並完成模擬付款後即時生效（示範環境，不會產生實際扣款）。',
+      current: '目前方案',
+      free: '免費',
+      perMonth: ' / 月',
+      seats: '席位上限',
+      aiTokens: 'AI 用量上限',
+      translation: '翻譯字元上限',
+      payTitle: '模擬支付寶付款',
+      activate: '確認開通',
+      payDesc: '請使用支付寶掃碼（示範環境，不會產生實際扣款），確認後點擊「付款成功」。',
+      paySuccess: '付款成功',
+      paying: '開通中…',
+      activated: '方案已生效',
+      activateFailed: '開通失敗，請重試',
+      back: '返回上一步',
+      close: '關閉'
+    },
+    overLimit: {
+      title: '用量已達上限',
+      desc: '目前方案「{{plan}}」的「{{resource}}」已用盡，建議升級方案或等待配額重置。',
+      upgrade: '去升級',
+      ignore: '仍要繼續'
+    }
   }
 }
