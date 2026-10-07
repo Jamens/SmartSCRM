@@ -72,7 +72,7 @@
 | 项 | 现状 | 性质 |
 |---|---|---|
 | **B6 的 5c CDP 界面腿 20 条** | 已实跑 **18/20**（2026-10-05）。L3 归 16（本机 CDP 的「坐标→命中」层退化：`elementFromPoint` 对任何视口坐标都只回 `<html class="dark">`，连 `(10,10)` 都是），L20 属 `spawnSync` 对任何子进程都 `EBUSY`。台账 `docs/notes/2026-10-05-b6-5c-ui-leg.md` | **本机环境限制，非代码缺陷**。B6 的「可用」以 5c 完成为准，故台账仍标 🟡 |
-| **打包态的 CORS 疑虑已排除**，但 electron-builder 产物仍未跑 | 2026-10-07 实测推翻旧推断：`file://` 页面的跨源请求**不带 `Origin` 头也不发预检**（服务器只见 `Sec-Fetch-Site: cross-site`），`DefaultCorsProcessor` 因 `requestOrigin == null` 跳过；同一探针在 `http://` 下会被拦，证明探针有效。另排除两个疑虑：产物资源路径是 `./assets/…`（相对路径，不必配 `base`）；构建产物在 `file://` 下实测**完整渲染登录页**（`CorsOriginTest` 固化「回环放行 / 外部拒绝」两条真规则） | **余下未验**：electron-builder 真正打包 + 安装后的分发形态（asar 内 `__dirname` 解析、签名、auto-update 落盘路径），需用户在场 |
+| **打包态已实测跑通**（CORS 疑虑排除 + 登录链路端到端），但 electron-builder 产物仍未跑 | 2026-10-07 实测推翻旧推断：`file://` 页面的跨源请求**不带 `Origin` 头也不发预检**（服务器只见 `Sec-Fetch-Site: cross-site`），`DefaultCorsProcessor` 因 `requestOrigin == null` 跳过；同一探针在 `http://` 下会被拦，证明探针有效。另排除两个疑虑：产物资源路径是 `./assets/…`（相对路径，不必配 `base`）；**登录链路端到端跑通**——构建产物经 `file://` 启动 → 页内填表登录 → `POST /api/auth/login` → `/api/auth/me` → 主界面，25 项导航 + 首页概览渲染真实库数据（账号 4/共8、客户 6、群发 78、LINE 2/3 在线），B12「升级套餐」按钮亦正常显示。`CorsOriginTest` 固化「回环放行 / 外部拒绝」两条真规则 | **余下未验**：electron-builder 真正打包 + 安装后的分发形态（asar 内 `__dirname` 解析、签名、auto-update 落盘路径），需用户在场 |
 
 ### 5.2 本版明确不做（裁定，非遗漏）
 
