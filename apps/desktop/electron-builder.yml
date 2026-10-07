@@ -1,5 +1,9 @@
-appId: com.electron.app
-productName: desktop
+# 注意：这两个值原本是 electron-vite 脚手架的占位默认值（com.electron.app / desktop），
+# 会把安装目录、快捷方式名、卸载显示名、userData 路径全部带成 "desktop"。
+# productName 管**显示名**（快捷方式 / 开始菜单 / 卸载项 / userData 目录）；
+# 安装目录则来自 package.json 的 name（见文末说明）。
+appId: com.smartscrm.desktop
+productName: SmartSCRM
 directories:
   buildResources: build
 files:
@@ -19,7 +23,7 @@ extraResources:
   - from: resources/wa-js.bundle.js
     to: wa-js.bundle.js
 win:
-  executableName: desktop
+  executableName: SmartSCRM
 nsis:
   # 用 ${productName} 而非 ${name}：本包名是**带作用域**的 `@smartscrm/desktop`，
   # ${name} 会把 `/` 当成路径分隔符，输出路径变成 dist\@smartscrm\... 而该子目录不会被创建，
