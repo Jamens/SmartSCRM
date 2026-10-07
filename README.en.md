@@ -276,7 +276,7 @@ Conventions:
 4. **Dictionary changes require a backend restart**: `PhraseDict` loads once on first access and never invalidates (`service/PhraseDict.java:51-70`), and there is no phrase management endpoint.
 5. **Global search is `body LIKE '%q%'`** (`MessageQueryService.java:190`) with no usable index. FULLTEXT/ngram is the scaling path.
 6. **The packaged build has never been verified**: the renderer runs on `http://localhost` in dev but `file://` when packaged (`mainWindow.ts:66`), while CORS allows `http://localhost:*`, `http://127.0.0.1:*`, `file://*` (`SecurityConfig.java:64`). A `file://` document sends `Origin: null`, so the packaged app is expected to be blocked — **untested; verify this first.**
-7. **Authentication exists, authorization does not**: no `@PreAuthorize` / `hasRole` anywhere; `role` is issued but never consulted. The only isolation dimension is `tenant_id`.
+7. **Authentication exists, authorization does not — desktop / tenant-side only**: the desktop business APIs (`/api/materials`, `/api/messages`, etc.) have no `@PreAuthorize` / `hasRole`; `role` is issued but never consulted, and the only isolation dimension is `tenant_id`. **This no longer holds for the admin side**: `/api/admin/**` is guarded by `AdminPermissionInterceptor`, which resolves `menuCodes` from the database on every request and converts them into authorities; `@EnableMethodSecurity` is enabled (see the A16 entry in §8).
 8. **There is no request-level logging in the backend**: application code emits only two `log.info` calls (both in `DataSeeder`), and `GlobalExceptionHandler` has no logger and swallows the stack (`common/GlobalExceptionHandler.java:25-28`). What you do get at runtime is MyBatis DEBUG SQL (`application.yml:33-35`) — "what was queried", never "which request failed or was slow". Debugging means adding your own logging or querying the DB.
 9. **Page-side bundles drop `console` in production** (`build-inject.mjs:27`, `build-bridge.mjs:35`), so internal inject-layer errors neither surface nor leave a trace.
 10. **The Tencent translation route is not end-to-end verified**; see `docs/notes/2026-09-20-tencent-online-translation-deferred.md`.
@@ -284,11 +284,13 @@ Conventions:
 
 ## 8. What's next
 
-From the task queue (details in `docs/feature-checklist.md`):
+From the task queue (details in `docs/feature-checklist.md` and `docs/feature-backlog.md`):
 
-- P6 wrap-up: taskbar unread badge, settings page (theme switch, device info section)
-- Telegram chain: real-device DOM probe → inject selectors → collect → send
-- Priority fixes listed in the audit's §12 (delete confirmation, `apiBase` allowlist, collector retry stall, `nickname` clearing, `refresh` re-checking tenant status)
+- **B12 simulated payment gating (latest)** — plan activation on top of the V48 tenant usage model. Backend: `PlanCatalog` (BASIC ¥0 / PRO ¥199 / FLAGSHIP ¥599), `PlanDefVO`, and `TenantInfoService.activatePlan` (writes `plan_name` + the seat / AI / translation limits and clears usage), exposed as `GET /api/tenant/plans` + `POST /api/tenant/activate-plan` (no `@PreAuthorize`, same posture as `/info`: the tenant id is only ever read from `AuthPrincipal`). Frontend: `PlanActivateDialog` (pick plan → simulated Alipay payment → activate; the payment is a pure local simulation with zero real charge), an "Upgrade plan" entry on the home usage card, and a **soft** quota gate (`isOverLimit` + `PlanOverLimitDialog`) wired into `AddAccountDialog` — over-quota prompts locally but never hard-blocks the backend. Reuses the existing V48 columns; no new migration. Per-feature engineering notes live in `docs/feature-checklist.md`.
+- **Other recent deliveries** — B29 (imported session credentials instead of QR login), B28 (AI transfer rules + takeover queue), B27 (WhatsApp protocol-number channel + admin console), B26 (contact cache + local data cleanup / storage management), B25 (image / voice translation via OCR + ASR), B24 (home overview page), B23 (customer follow-ups), B22 (teams / sub-accounts), B21 (cloud account pool), B20 (automation panel), B19 / B18 (group auto join / kick), B17 (material buttons + ownership tiers), B16 (per-conversation translate toggles), and the A-series shell work (A4 multi-language, A6 auto-update, A7 perf metrics, A8 sensitive-word filtering, A9 change password, A10 in-app notifications, A11 help / FAQ, A12–A15 settings page + taskbar badge / theme switch / device info, A16 RBAC, A17 system notifications, A18 GPU fallback, A19 categorized log center).
+- **Status**: B1–B29 are delivered except **B6**, whose CDP UI leg sits at 18/20 — the 2 red legs are a local sandbox limitation (`spawnSync` returns `EBUSY` for any child process), not a code defect. The audit's §12 priority fixes (delete confirmation, `apiBase` allowlist, collector retry stall, `nickname` clearing, `refresh` tenant-status re-check) have been folded into the deliveries above — see `docs/feature-checklist.md`.
+- **Telegram chain**: real-device DOM probe → inject selectors → collect → send. Blocked externally (no local TG account).
+- **The packaged build has never been run end-to-end** — verify §7 item 6 first.
 
 ## 9. Commit conventions
 
