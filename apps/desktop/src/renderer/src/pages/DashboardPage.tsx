@@ -1,7 +1,7 @@
 import { useState } from 'react'
 import { useTranslation } from 'react-i18next'
 import dayjs from 'dayjs'
-import { Activity, Bot, MessageSquare, Users, Wallet } from 'lucide-react'
+import { Activity, Bot, Megaphone, MessageSquare, Users } from 'lucide-react'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useDashboard, useAccountStats } from '@/api/dashboard'
@@ -42,7 +42,7 @@ export default function DashboardPage(): React.JSX.Element {
     { key: 'accounts', icon: Bot, label: t('dashboard.accounts'), value: d?.accountsOnline ?? 0, sub: `${t('dashboard.of')} ${d?.accountsTotal ?? 0}` },
     { key: 'customers', icon: Users, label: t('dashboard.customers'), value: d?.customersTotal ?? 0, sub: '' },
     { key: 'conversations', icon: MessageSquare, label: t('dashboard.conversations'), value: d?.conversationsTotal ?? 0, sub: t('dashboard.activeConversations', { count: d?.activeConversations ?? 0 }) },
-    { key: 'tasks', icon: Wallet, label: t('dashboard.tasks'), value: d?.tasksTotal ?? 0, sub: t('dashboard.runningTasks', { count: d?.tasksRunning ?? 0 }) }
+    { key: 'tasks', icon: Megaphone, label: t('dashboard.tasks'), value: d?.tasksTotal ?? 0, sub: t('dashboard.runningTasks', { count: d?.tasksRunning ?? 0 }) }
   ]
 
   return (
