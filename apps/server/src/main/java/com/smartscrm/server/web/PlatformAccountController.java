@@ -3,8 +3,10 @@ package com.smartscrm.server.web;
 import com.smartscrm.server.common.ApiResponse;
 import com.smartscrm.server.entity.PlatformAccount;
 import com.smartscrm.server.security.AuthPrincipal;
+import com.smartscrm.server.service.AccountImpactService;
 import com.smartscrm.server.service.PlatformAccountService;
 import com.smartscrm.server.web.dto.PlatformAccountRequest;
+import com.smartscrm.server.web.vo.AccountImpactVO;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
@@ -25,9 +27,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class PlatformAccountController {
 
     private final PlatformAccountService service;
+    private final AccountImpactService impactService;
 
-    public PlatformAccountController(PlatformAccountService service) {
+    public PlatformAccountController(PlatformAccountService service, AccountImpactService impactService) {
         this.service = service;
+        this.impactService = impactService;
     }
 
     @GetMapping
@@ -65,6 +69,17 @@ public class PlatformAccountController {
     public ApiResponse<Void> delete(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
         service.delete(principal.tenantId(), id);
         return ApiResponse.ok(null);
+    }
+
+    /**
+     * 删除前的影响预检：这个账号名下会被级联带走多少行。只读，所以按 {@code account:read}
+     * 守（与凭据读取同一口径）——确认弹层要能在按下删除之前先问一句，而不是要求操作者
+     * 已经有写权限才看得见自己会丢什么。
+     */
+    @GetMapping("/{id}/impact")
+    @PreAuthorize("hasAuthority('account:read')")
+    public ApiResponse<AccountImpactVO> impact(@AuthenticationPrincipal AuthPrincipal principal, @PathVariable Long id) {
+        return ApiResponse.ok(impactService.impact(principal.tenantId(), id));
     }
 
     @PostMapping("/{id}/credential")

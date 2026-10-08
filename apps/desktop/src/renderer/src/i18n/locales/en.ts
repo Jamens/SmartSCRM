@@ -1292,6 +1292,21 @@ export const en: DeepString<typeof zhCN> = {
       deleteTitle: 'Delete account',
       importTitle: 'Import session credential'
     },
+    delete: {
+      title: 'Delete platform account',
+      desc: 'Account "{{name}}" will be deleted. The records below go with it and cannot be recovered:',
+      loading: 'Counting the records this will remove…',
+      failed: 'Could not count the impact. Confirming still deletes the account.',
+      empty: 'No history will be deleted with it.',
+      conversations: '{{num}} conversations',
+      messages: '{{num}} chat messages',
+      groups: '{{num}} group profiles',
+      memberStates: '{{num}} member snapshots',
+      memberEvents: '{{num}} member join/leave events',
+      yes: 'Delete',
+      no: 'Cancel',
+      failedDelete: 'Delete failed: {{msg}}'
+    },
     add: {
       title: 'Add platform account',
       desc: 'Add an embeddable channel account for the current team.',

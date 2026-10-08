@@ -90,7 +90,11 @@ public class PlatformAccountService {
         mapper.updateById(account);
     }
 
-    private PlatformAccount requireOwned(Long tenantId, Long id) {
+    /**
+     * 租户闸：账号不属于这个租户就当它不存在（40404，不用 403——403 会替别的租户确认
+     * 「这个 id 是有主的」）。删除、凭据与影响预检三条路共用这一处判定。
+     */
+    public PlatformAccount requireOwned(Long tenantId, Long id) {
         PlatformAccount account = mapper.selectById(id);
         if (account == null || !account.getTenantId().equals(tenantId)) {
             throw new BizException(40404, "账号不存在");

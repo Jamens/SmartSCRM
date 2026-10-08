@@ -1261,6 +1261,21 @@ export const zhTW: DeepString<typeof zhCN> = {
       deleteTitle: '刪除帳號',
       importTitle: '匯入會話憑證'
     },
+    delete: {
+      title: '刪除平台帳號',
+      desc: '將刪除帳號「{{name}}」，以下記錄會一起消失且無法復原：',
+      loading: '正在統計會連帶的記錄…',
+      failed: '暫時無法統計影響範圍，確認後仍可刪除。',
+      empty: '沒有會一起刪除的歷史記錄。',
+      conversations: '會話 {{num}} 個',
+      messages: '聊天訊息 {{num}} 則',
+      groups: '群組檔案 {{num}} 個',
+      memberStates: '群組成員快照 {{num}} 筆',
+      memberEvents: '成員進出異動 {{num}} 筆',
+      yes: '確認刪除',
+      no: '取消',
+      failedDelete: '刪除失敗：{{msg}}'
+    },
     add: {
       title: '新增平台帳號',
       desc: '為目前團隊新增一個可內嵌登入的渠道帳號。',

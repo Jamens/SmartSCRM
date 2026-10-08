@@ -1298,6 +1298,21 @@ export const ja: DeepString<typeof zhCN> = {
       deleteTitle: 'アカウントを削除',
       importTitle: 'セッション資格情報をインポート'
     },
+    delete: {
+      title: 'プラットフォームアカウントを削除',
+      desc: 'アカウント「{{name}}」を削除します。以下の記録も一緒に削除され、復元できません：',
+      loading: '影響する記録を数えています…',
+      failed: '影響範囲を集計できませんでした。削除はそのまま実行できます。',
+      empty: '一緒に削除される履歴はありません。',
+      conversations: '会話 {{num}} 件',
+      messages: 'チャットメッセージ {{num}} 件',
+      groups: 'グループ情報 {{num}} 件',
+      memberStates: 'メンバー情報 {{num}} 件',
+      memberEvents: 'メンバーの参加/退出 {{num}} 件',
+      yes: '削除する',
+      no: 'キャンセル',
+      failedDelete: '削除に失敗しました：{{msg}}'
+    },
     add: {
       title: 'プラットフォームアカウントを追加',
       desc: '現在のチームに埋め込みログイン可能なチャンネルアカウントを追加します。',

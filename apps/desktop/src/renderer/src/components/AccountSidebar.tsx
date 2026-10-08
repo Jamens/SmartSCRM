@@ -7,21 +7,17 @@ import { Button } from '@/components/ui/button'
 import { ScrollArea } from '@/components/ui/scroll-area'
 import AddAccountDialog from '@/components/AddAccountDialog'
 import ImportCredentialDialog from '@/components/ImportCredentialDialog'
-import {
-  useAccounts,
-  useDeleteAccount,
-  useSelectionStore,
-  type PlatformAccount
-} from '@/stores/accounts'
+import DeleteAccountDialog from '@/components/DeleteAccountDialog'
+import { useAccounts, useSelectionStore, type PlatformAccount } from '@/stores/accounts'
 
 export default function AccountSidebar(): React.JSX.Element {
   const { t } = useTranslation()
   const { data, isPending, isError } = useAccounts()
   const selectedId = useSelectionStore((s) => s.selectedId)
   const select = useSelectionStore((s) => s.select)
-  const remove = useDeleteAccount()
   const [dialogOpen, setDialogOpen] = useState(false)
   const [importTarget, setImportTarget] = useState<PlatformAccount | null>(null)
+  const [deleteTarget, setDeleteTarget] = useState<PlatformAccount | null>(null)
 
   const accounts = data ?? []
 
@@ -29,13 +25,15 @@ export default function AccountSidebar(): React.JSX.Element {
     if (selectedId === null && accounts.length > 0) select(accounts[0].id)
   }, [accounts, selectedId, select])
 
-  const handleDelete = (account: PlatformAccount): void => {
-    remove.mutate(account.id, {
-      onSuccess: () => {
-        if (isElectron) void window.scrm?.view.destroy(account.viewId)
-        if (selectedId === account.id) select(null)
-      }
-    })
+  /**
+   * 删除已在弹层里落库成功，这里只收尾：内嵌视图是真的挂在主进程上，不销毁就会留在
+   * 页面上盖住后面的账号；被删的正好是当前选中项时清空选中，让上面的 effect 归位到第一个。
+   */
+  const afterDeleted = (): void => {
+    if (!deleteTarget) return
+    if (isElectron) void window.scrm?.view.destroy(deleteTarget.viewId)
+    if (selectedId === deleteTarget.id) select(null)
+    setDeleteTarget(null)
   }
 
   return (
@@ -114,7 +112,7 @@ export default function AccountSidebar(): React.JSX.Element {
                   className="hidden shrink-0 rounded p-0.5 text-muted-foreground hover:text-destructive group-hover:block"
                   onClick={(e) => {
                     e.stopPropagation()
-                    handleDelete(account)
+                    setDeleteTarget(account)
                   }}
                   title={t('account.sidebar.deleteTitle')}
                 >
@@ -140,6 +138,18 @@ export default function AccountSidebar(): React.JSX.Element {
             if (!o) setImportTarget(null)
           }}
           account={importTarget}
+        />
+      )}
+
+      {deleteTarget && (
+        <DeleteAccountDialog
+          key={deleteTarget.id}
+          open={!!deleteTarget}
+          onOpenChange={(o) => {
+            if (!o) setDeleteTarget(null)
+          }}
+          account={deleteTarget}
+          onDeleted={afterDeleted}
         />
       )}
     </aside>

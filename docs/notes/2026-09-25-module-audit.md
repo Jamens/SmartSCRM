@@ -140,7 +140,7 @@ AccountSidebar/AddAccountDialog → POST /api/platform-accounts（viewId 缺省�
 
 ### 3.3 隐藏风险
 
-**R-13（高）删除账号会级联删掉整个聊天归档，且 UI 无二次确认。** 后端 `service/PlatformAccountService.java:52-55` 直接 `deleteById`，schema 侧 `V8__chat_history.sql:30` 与 `:59` 把 `fk_conv_account` / `fk_msg_account` 定为 `ON DELETE CASCADE`。渲染层 `components/AccountSidebar.tsx:99-106` 的删除按钮是 hover 才出现的图标，`:31` 成功后立刻 `window.scrm.view.destroy(...)`，**没有 confirm**。一次误点＝该账号名下所有 `chat_message` 行永久消失。
+**R-13（高）删除账号会级联删掉整个聊天归档，且 UI 无二次确认。** 后端 `service/PlatformAccountService.java:52-55` 直接 `deleteById`，schema 侧 `V8__chat_history.sql:30` 与 `:59` 把 `fk_conv_account` / `fk_msg_account` 定为 `ON DELETE CASCADE`。渲染层 `components/AccountSidebar.tsx:99-106` 的删除按钮是 hover 才出现的图标，`:31` 成功后立刻 `window.scrm.view.destroy(...)`，**没有 confirm**。一次误点＝该账号名下所有 `chat_message` 行永久消失。**（2026-10-08 已交付：删除改走 `DeleteAccountDialog` 二次确认 + 影响条数提示，见 §12 第 1 条。级联本身未变——归档仍然不可再生。）**
 
 **R-14（中）`viewId` 由客户端提供且只校验唯一性。** `PlatformAccountService.java:30-35` 只查重名；这个字符串直接成为分区名（`manager.ts:58`）。它不是安全边界（分区只影响 cookie 归属），但一个含 `/` 或空格的 viewId 会造出一个难以清理的分区目录。同时 `create` 的入参类型是实体本身（`PlatformAccount`），不是 DTO——意味着客户端可以塞 `tenantId`/`id`（`:28-29` 有覆盖，靠的是每行手工 set，而不是白名单）。
 
@@ -416,7 +416,7 @@ WhatsApp 页面 → 桥 normalize → post 'view:toHost' {channel:'msg-report'}
 
 **R-51（低）时间线会话头不分页。** `MessageQueryService.java:380-382`：`heads` 只按 `customer_id` 全取。消息侧有 `LIMIT`（`:374`），头没有。一个跨多账号多会话的客户会一次性带回所有头。
 
-**R-52（中）账号删除会带走聊天归档**（= R-13 在 P6 侧的另一半）。`V8__chat_history.sql:30/59` 的 CASCADE 让 P2a 那个无确认按钮变成高危操作。归档是不可再生数据（第三方页面已划走的会话补采不回来），所以这一条是本文档认为**优先级最高**的修复项。
+**R-52（中）账号删除会带走聊天归档**（= R-13 在 P6 侧的另一半）。`V8__chat_history.sql:30/59` 的 CASCADE 让 P2a 那个无确认按钮变成高危操作。归档是不可再生数据（第三方页面已划走的会话补采不回来），所以这一条是本文档认为**优先级最高**的修复项。**（2026-10-08 已交付：见 §12 第 1 条——弹层先报五档累计条数再等确认。）**
 
 **R-53（低）`applyStatus` 与 `accept` 的校验不对称是刻意的。** `MessageService.java:171-184` 的注释已解释（UPDATE 的 WHERE 钉住四列，错配只会 0 行；INSERT 错配会造脏行）。留在这里是为了防止后来者"顺手统一"。
 
@@ -590,7 +590,9 @@ grep -c "^2026.* ERROR " tmp/p6-backend.log   # 后端以日志文件启动时�
 
 按"不可逆后果优先"排：
 
-1. `AccountSidebar.tsx` 删除加确认 + 影响条数提示（R-13/R-52）。
+1. `AccountSidebar.tsx` 删除加确认 + 影响条数提示（R-13/R-52）。**已交付（2026-10-08）**：后端加 `GET /api/platform-accounts/{id}/impact`（`AccountImpactService`，`@PreAuthorize('account:read')`，回五个累计计数 `conversations/messages/groups/memberStates/memberEvents`，与 schema 侧五条 `ON DELETE CASCADE` 一一对应：`V8__chat_history.sql:30/59`、`V12__group_member_analysis.sql:30/62/91`）；渲染层新增 `DeleteAccountDialog.tsx`，沿用同文件既有的「一个 state + 一个兄弟弹层」形状（`deleteTarget` 与 `importTarget` 同构），`handleDelete` 改为只开弹层、mutate 挪进确认回调，确认期间两个按钮同置灰；**计数拉不到时不锁死删除**（显示「暂时无法统计影响范围」，删除仍可点），全 0 也照样确认、不特判。八语言包各补 `account.delete.*` 13 键。
+   验证（2026-10-08）：`AccountImpactServiceTest` 3 条；JS 单测 `accountImpact` 5 + `accountDeleteCopy` 5，`test:unit` **496/496**；四路 typecheck 全绿；改动文件 eslint `--quiet` 0 error；后端 `./mvnw test` **499 用例 0 失败**；HTTP 契约腿 `tmp/p1-impact-contract.mjs` **15/15**，其中两条是等式而非 `≥`：#8「弹层报的会话数 == 会话列表真翻页能翻出的行数」、#13「Σ各账号会话数 == 仪表盘 `conversationsTotal`」，另有一条反向证人 #9（累计 328 vs 90 天窗口 300）说明为什么不能复用 `/api/messages/stats` 做弹层。**待验证**：真机点垃圾桶 → 弹层出现且没删成那一格（需 dev 应用在 `:9223`）。
+   顺带发现（**未修，属另一项裁定**）：种子租户 `QA0002` 没有 `tenant_admin` 角色行（V14 只为 `invite_code='DEMO0001'` 播种该内置角色），`qa` 用户也没有任何 `sys_user_role` 绑定 ⇒ `selectMenuCodesByUserId` 对它返回空集，于是它打**任何**带 `@PreAuthorize` 的桌面业务端点都是 40300（实测 `tmp/p1-403-attribute.mjs`）。后果：HTTP 侧的「跨租户调用者」这条腿只能测到权限层，测不到租户闸；40404 而非 403 这一句因此由 #6（不存在的 id → 40404，实测）+ `impact_otherTenantAccount_failsBeforeCounting`（Java）覆盖——`requireOwned` 对「查不到」与「租户不符」走的是同一个 throw site（读码）。给 QA 租户补齐角色要写 RBAC 三张表，会改变其它腿对 `qa` 的观测，不在本次改动范围内。
 2. `authedFetch`/`ipc` 给 `apiBase` 加 allowlist（R-24）。
 3. `collectorHub` 失败后重新 `arm()` + 退避（R-41/R-42）。
 4. `AuthService.refresh` 补 `tenant.status` 与非空判断（R-05）。

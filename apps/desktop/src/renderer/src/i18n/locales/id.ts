@@ -1303,6 +1303,21 @@ export const id: DeepString<typeof zhCN> = {
       deleteTitle: 'Hapus akun',
       importTitle: 'Impor kredensial sesi'
     },
+    delete: {
+      title: 'Hapus akun platform',
+      desc: 'Akun "{{name}}" akan dihapus. Data di bawah ikut terhapus dan tidak dapat dipulihkan:',
+      loading: 'Menghitung data yang ikut terhapus…',
+      failed: 'Dampak tidak dapat dihitung. Penghapusan tetap bisa dilanjutkan.',
+      empty: 'Tidak ada riwayat yang ikut terhapus.',
+      conversations: '{{num}} percakapan',
+      messages: '{{num}} pesan chat',
+      groups: '{{num}} profil grup',
+      memberStates: '{{num}} snapshot anggota',
+      memberEvents: '{{num}} riwayat masuk/keluar anggota',
+      yes: 'Hapus',
+      no: 'Batal',
+      failedDelete: 'Gagal menghapus: {{msg}}'
+    },
     add: {
       title: 'Tambah akun platform',
       desc: 'Tambahkan akun saluran yang dapat login tertanam untuk tim saat ini.',

@@ -1271,6 +1271,21 @@ export const zhCN = {
       deleteTitle: '删除账号',
       importTitle: '导入会话凭据'
     },
+    delete: {
+      title: '删除平台账号',
+      desc: '将删除账号「{{name}}」，以下记录会一起消失且无法恢复：',
+      loading: '正在统计会连带的记录…',
+      failed: '暂时无法统计影响范围，确认后即可删除。',
+      empty: '没有会一起删除的历史记录。',
+      conversations: '会话 {{num}} 个',
+      messages: '聊天消息 {{num}} 条',
+      groups: '群档案 {{num}} 个',
+      memberStates: '群成员快照 {{num}} 条',
+      memberEvents: '成员进出流水 {{num}} 条',
+      yes: '确认删除',
+      no: '取消',
+      failedDelete: '删除失败：{{msg}}'
+    },
     add: {
       title: '新增平台账号',
       desc: '为当前团队添加一个可内嵌登录的渠道账号。',

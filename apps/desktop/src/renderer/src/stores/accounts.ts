@@ -34,6 +34,18 @@ export interface AccountInput {
   remark?: string | null
 }
 
+/**
+ * 删账号会被级联带走多少行。五个字段都是**累计行数**、不是最近 N 天（`/api/messages/stats`
+ * 那个是时间窗，拿它当"会丢多少"会少报历史）。后端只回五个数，界面读法在 `lib/accountImpact.ts`。
+ */
+export interface AccountImpact {
+  conversations: number
+  messages: number
+  groups: number
+  memberStates: number
+  memberEvents: number
+}
+
 const ACCOUNTS_KEY = ['platform-accounts'] as const
 
 export function useAccounts(): import("@tanstack/react-query").UseQueryResult<PlatformAccount[], Error> {
@@ -74,6 +86,20 @@ export function useAccountCredential(id: number | null, enabled: boolean): impor
     queryKey: ['account-credential', id],
     queryFn: () => http.get<CredentialPayload>(`/api/platform-accounts/${id}/credential`),
     enabled: enabled && id !== null
+  })
+}
+
+/**
+ * 删除前的影响预检。只在确认弹层打开时发（`enabled` 由调用方给 id），并且**不重试**：
+ * 这一读的产物是「让用户知道自己会丢多少」，读不到就直说读不到；默认那三次退避重试
+ * 只会把这句实话推迟十几秒，界面上这段时间长得和卡住一样。
+ */
+export function useAccountImpact(id: number | null): import("@tanstack/react-query").UseQueryResult<AccountImpact, Error> {
+  return useQuery({
+    queryKey: ['account-impact', id],
+    queryFn: () => http.get<AccountImpact>(`/api/platform-accounts/${id}/impact`),
+    enabled: id !== null,
+    retry: false
   })
 }
 

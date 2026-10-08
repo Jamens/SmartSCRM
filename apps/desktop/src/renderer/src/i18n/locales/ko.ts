@@ -1286,6 +1286,21 @@ export const ko: DeepString<typeof zhCN> = {
       deleteTitle: '계정 삭제',
       importTitle: '세션 자격 증명 가져오기'
     },
+    delete: {
+      title: '플랫폼 계정 삭제',
+      desc: '계정 "{{name}}"이(가) 삭제됩니다. 아래 기록도 함께 삭제되며 복구할 수 없습니다:',
+      loading: '함께 삭제될 기록을 계산하는 중…',
+      failed: '영향 범위를 집계하지 못했습니다. 삭제는 그대로 진행할 수 있습니다.',
+      empty: '함께 삭제될 이력이 없습니다.',
+      conversations: '대화 {{num}}건',
+      messages: '채팅 메시지 {{num}}건',
+      groups: '그룹 프로필 {{num}}건',
+      memberStates: '멤버 스냅샷 {{num}}건',
+      memberEvents: '멤버 참여/퇴장 {{num}}건',
+      yes: '삭제',
+      no: '취소',
+      failedDelete: '삭제 실패: {{msg}}'
+    },
     add: {
       title: '플랫폼 계정 추가',
       desc: '현재 팀에 임베드 로그인 가능한 채널 계정을 추가합니다.',

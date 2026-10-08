@@ -1288,6 +1288,21 @@ export const vi: DeepString<typeof zhCN> = {
       deleteTitle: 'Xóa tài khoản',
       importTitle: 'Nhập thông tin xác thực phiên'
     },
+    delete: {
+      title: 'Xóa tài khoản nền tảng',
+      desc: 'Tài khoản "{{name}}" sẽ bị xóa. Các bản ghi dưới đây bị xóa theo và không thể khôi phục:',
+      loading: 'Đang thống kê các bản ghi bị ảnh hưởng…',
+      failed: 'Không thống kê được phạm vi ảnh hưởng. Bạn vẫn có thể xóa.',
+      empty: 'Không có bản ghi lịch sử nào bị xóa kèm.',
+      conversations: '{{num}} cuộc trò chuyện',
+      messages: '{{num}} tin nhắn chat',
+      groups: '{{num}} hồ sơ nhóm',
+      memberStates: '{{num}} ảnh chụp thành viên',
+      memberEvents: '{{num}} lượt thành viên vào/ra',
+      yes: 'Xóa',
+      no: 'Hủy',
+      failedDelete: 'Xóa thất bại: {{msg}}'
+    },
     add: {
       title: 'Thêm tài khoản nền tảng',
       desc: 'Thêm một tài khoản kênh có thể đăng nhập nhúng cho nhóm hiện tại.',
