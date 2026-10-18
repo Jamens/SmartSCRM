@@ -71,6 +71,23 @@ class TakeoverServiceTest {
             applyWrapper(row, inv.getArgument(1));
             return 1;
         });
+        // 状态流转已改为 CAS（claimTakeover / claimTransferHuman，把前置状态钉进 WHERE）。
+        // 默认模拟"没人跟我抢"：落库并返回 1；并发用例自行覆盖成失配返回 0。
+        when(mapper.claimTakeover(any(), any(), any(), any(), any())).thenAnswer(inv -> {
+            row.setHandlingStatus(inv.getArgument(3));
+            row.setAssigneeId(inv.getArgument(4));
+            row.setWaitTakeoverAt(null);
+            row.setTransferReason(null);
+            return 1;
+        });
+        when(mapper.claimTransferHuman(any(), any(), any(), any(), any(), any(), any()))
+            .thenAnswer(inv -> {
+                row.setHandlingStatus(inv.getArgument(4));
+                row.setAssigneeId(null);
+                row.setWaitTakeoverAt(inv.getArgument(5));
+                row.setTransferReason(inv.getArgument(6));
+                return 1;
+            });
     }
 
     /** Mirror the SET clause onto the entity so we can assert real post-state, not just wiring. */
@@ -123,7 +140,7 @@ class TakeoverServiceTest {
         assertEquals("HUMAN_ACTIVE", vo.handlingStatus());
         assertEquals(42L, vo.assigneeId());
         assertNull(vo.transferReason());
-        verify(mapper).update(isNull(), any(LambdaUpdateWrapper.class));
+        verify(mapper).claimTakeover(eq(7L), eq(11L), eq("AI"), eq("HUMAN_ACTIVE"), eq(42L));
     }
 
     @Test

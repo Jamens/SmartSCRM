@@ -66,4 +66,40 @@ public interface ChatConversationMapper extends BaseMapper<ChatConversation> {
         + "   ORDER BY m.msg_time DESC, m.id DESC LIMIT 1), 512)"
         + " WHERE c.id = #{id} AND c.tenant_id = #{tenantId}")
     int replayHead(@Param("tenantId") Long tenantId, @Param("id") Long id);
+
+    /**
+     * CAS 式接管：只在会话**当前确实是 {@code fromStatus}** 时才把它改成 {@code toStatus}
+     * 并落上 {@code assigneeId}。
+     *
+     * <p>为什么要 CAS 而不是「先读后写」：两个坐席同时点接管时，「读—判—写」三步之间有窗口，
+     * 两边都会读到「还没人接管」而双双通过；MySQL 的 UPDATE 若不把 {@code handling_status}
+     * 放进 WHERE，谁后写谁覆盖，两个坐席都以为接管成功，实际上只有一个真在服务。
+     *
+     * <p>把前置状态写进 WHERE，让 InnoDB 的行锁替我们做判定：返回 <b>0 行</b>就是
+     * 「有人先我一步搬走了它」，调用方据此回 409 让前端刷新。与
+     * {@code BatchSendTaskMapper.moveTo} 同一套范式。
+     */
+    @Update("UPDATE chat_conversation SET handling_status = #{toStatus}, assignee_id = #{assigneeId},"
+        + " wait_takeover_at = NULL, transfer_reason = NULL"
+        + " WHERE id = #{id} AND tenant_id = #{tenantId} AND handling_status = #{fromStatus}")
+    int claimTakeover(@Param("tenantId") Long tenantId, @Param("id") Long id,
+                      @Param("fromStatus") String fromStatus, @Param("toStatus") String toStatus,
+                      @Param("assigneeId") Long assigneeId);
+
+    /**
+     * CAS 式转人工：同样把前置状态钉进 WHERE。返回 0 行表示会话已被坐席接管（或已被别人
+     * 转过人工），调用方据此拒绝，避免把正在服务的坐席踢回队列。
+     *
+     * <p>{@code fromStatus} 允许两种合法前置：AI 态（首次转人工）与 WAITING_TAKEOVER
+     * （重复转，幂等）。用 IN 而不是两个方法，是为了让「两种都合法」这条规则留在 SQL 里，
+     * 而不是散在 Java 层的 if。
+     */
+    @Update("UPDATE chat_conversation SET handling_status = #{toStatus}, assignee_id = NULL,"
+        + " wait_takeover_at = #{waitTakeoverAt}, transfer_reason = #{reason}"
+        + " WHERE id = #{id} AND tenant_id = #{tenantId} AND handling_status IN (#{aiStatus}, #{queuedStatus})")
+    int claimTransferHuman(@Param("tenantId") Long tenantId, @Param("id") Long id,
+                           @Param("aiStatus") String aiStatus, @Param("queuedStatus") String queuedStatus,
+                           @Param("toStatus") String toStatus,
+                           @Param("waitTakeoverAt") java.time.LocalDateTime waitTakeoverAt,
+                           @Param("reason") String reason);
 }
