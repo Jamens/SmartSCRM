@@ -196,8 +196,26 @@ public class CustomerService {
         labelChangeMapper.insert(row);
     }
 
+    /**
+     * 删客户。
+     *
+     * <p><b>连带清标签关联</b>：{@code customer_label} 按 {@code customer_id} 挂着，只删 customer
+     * 一张表会留下孤儿行——它的残留直接影响 {@code LabelService.useCounts}（那里按该表行数统计
+     * 「标签被多少人用了」），删完客户标签使用数会永久偏高且再也回不去。
+     *
+     * <p>加 {@code @Transactional}：附属表与主行必须同生共死，否则删到一半失败会留下
+     * 「客户没了但标签还挂着」这种比孤儿更难查的半成品。
+     *
+     * <p>跟进记录（customer_follow_up）与标签流水（customer_label_change）由各自的
+     * Service 管理删除口径，这里刻意不代劳——避免两个入口各删一半、或互相覆盖对方的规则。
+     */
+    @Transactional
     public void delete(Long tenantId, Long id) {
         requireOwned(tenantId, id);
+        // 带 tenant_id：不能只按 customer_id 删，否则跨租户同 id 的行会被误伤
+        customerLabelMapper.delete(new LambdaQueryWrapper<CustomerLabel>()
+            .eq(CustomerLabel::getTenantId, tenantId)
+            .eq(CustomerLabel::getCustomerId, id));
         customerMapper.deleteById(id);
     }
 
