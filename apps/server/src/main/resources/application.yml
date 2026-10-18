@@ -3,9 +3,13 @@ spring:
     name: scrm-server
 
   datasource:
-    url: jdbc:mysql://localhost:3306/smartscrm_react?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
-    username: root
-    password: "1234560"
+    # 口令与 JWT 密钥一律走环境变量注入，**不在仓库里放明文**。
+    # 本地开发：复制 application-local.yml.example 为 application-local.yml 填自己的值（该文件已被 git 忽略）。
+    # 部署：由部署方注入 SCRM_DB_PASSWORD / SCRM_JWT_SECRET。
+    # 注意：历史提交里曾有明文口令与密钥，视为已泄露，**必须轮换**，改配置不能撤销。
+    url: jdbc:mysql://${SCRM_DB_HOST:localhost}:${SCRM_DB_PORT:3306}/${SCRM_DB_NAME:smartscrm_react}?createDatabaseIfNotExist=true&useUnicode=true&characterEncoding=UTF-8&connectionCollation=utf8mb4_unicode_ci&serverTimezone=Asia/Shanghai&allowPublicKeyRetrieval=true&useSSL=false
+    username: ${SCRM_DB_USER:root}
+    password: ${SCRM_DB_PASSWORD:}
     driver-class-name: com.mysql.cj.jdbc.Driver
 
   flyway:
@@ -26,9 +30,23 @@ mybatis-plus:
 
 app:
   jwt:
-    secret: "smartscrm-local-dev-secret-key-please-change-32bytes-min"
+    # HMAC-SHA 至少要 32 字节（Keys.hmacShaKeyFor 的硬性要求），故这里**不给空默认值**：
+    # 未注入时启动即失败，好过悄悄用一个可预测的弱密钥把人签发出去。
+    secret: ${SCRM_JWT_SECRET:}
     access-ttl-seconds: 604800
     refresh-ttl-seconds: 5184000
+
+# B28 知识库向量检索：本地/自托管 embedding 端点（OpenAI 兼容，如 Ollama / LocalAI）。
+# 默认留空 = 检索不启用，调用检索接口会返回 40905 并提示配置，而不是静默返回空结果。
+# 口径同 B27 protocol：不默认外连商业云，端点与密钥都由部署方自行注入。
+# 本地 Ollama 示例：
+#   docker run -d -p 11434:11434 ollama/ollama
+#   ollama pull nomic-embed-text
+scrm:
+  embedding:
+    base-url: ${SCRM_EMBEDDING_BASE_URL:}
+    model: ${SCRM_EMBEDDING_MODEL:nomic-embed-text}
+    api-key: ${SCRM_EMBEDDING_API_KEY:}
 
 logging:
   level:

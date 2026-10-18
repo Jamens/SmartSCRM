@@ -1,5 +1,7 @@
 package com.smartscrm.server.common;
 
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.access.AccessDeniedException;
@@ -11,6 +13,8 @@ import org.springframework.web.bind.annotation.RestControllerAdvice;
 
 @RestControllerAdvice
 public class GlobalExceptionHandler {
+
+    private static final Logger log = LoggerFactory.getLogger(GlobalExceptionHandler.class);
 
     @ExceptionHandler(BizException.class)
     public ResponseEntity<ApiResponse<Void>> handleBiz(BizException e) {
@@ -58,8 +62,20 @@ public class GlobalExceptionHandler {
                 .body(ApiResponse.error(40500, method + "not supported here"));
     }
 
+    /**
+     * 兜底 500：<b>不回吐 {@code e.getMessage()}</b>。
+     *
+     * <p>未捕获异常的 message 常含底层细节——MyBatis 的 SQL 片段与表名列名、JDBC URL、
+     * 唯一约束名，{@code DataIntegrityViolationException} 还会带上出错的列值。这些交给客户端
+     * 等于把库结构和数据形状写进了响应体，攻破一次错误信息就能反推 schema。
+     *
+     * <p>细节只进服务端日志（带堆栈，运维能查），客户端只拿到一句固定文案 + 错误码。
+     * 需要给用户看的可读原因，走 {@link BizException} 显式抛出，那是有意设计的通道。
+     */
     @ExceptionHandler(Exception.class)
     public ResponseEntity<ApiResponse<Void>> handleOther(Exception e) {
-        return ResponseEntity.internalServerError().body(ApiResponse.error(50000, "internal error: " + e.getMessage()));
+        log.error("未捕获异常 {}#{}: {}", e.getClass().getName(),
+            e.getClass().getSimpleName(), e.getMessage(), e);
+        return ResponseEntity.internalServerError().body(ApiResponse.error(50000, "internal error"));
     }
 }

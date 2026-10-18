@@ -5,6 +5,7 @@ import { getMainWindow } from '../window/mainWindow'
 import { chromeUserAgent } from './chromeUserAgent'
 import { forgetPageBundleCache } from '../services/msgBridge/bridgeMount'
 import { unmountView } from '../services/msgBridge'
+import { assertViewUrlAllowed } from './allowedViewUrls'
 
 interface ManagedView {
   view: WebContentsView
@@ -110,6 +111,9 @@ export class WebContentsViewManager {
       seedCredential: seedCredential ?? null,
       seeded: false
     })
+    // 建视图前过白名单：渲染层一旦被 XSS 攻破，这里是拦住「把官方视图导航到钓鱼页」
+    // 的最后一道。不要因为「调用方是主进程自己」就跳过——preload 把它暴露给了渲染层。
+    assertViewUrlAllowed(url)
     view.webContents.loadURL(url)
     // 新视图的缩放要立刻对齐主窗口，否则第一帧会按默认 1.0 渲染，和已开着的视图比例不一致。
     this.syncZoomToWindow()
@@ -202,7 +206,10 @@ export class WebContentsViewManager {
   navigate(viewId: string, url: string): void {
     const managed = this.views.get(viewId)
     if (managed) {
+      // 导航前重新过白名单：视图里的第三方页面可能自己跳转到别的域
+      assertViewUrlAllowed(url)
       managed.url = url
+      managed.host = safeHost(url)
       managed.view.webContents.loadURL(url)
     }
   }
@@ -318,16 +325,31 @@ export class WebContentsViewManager {
     const root = rootHost(host)
 
     wc.setWindowOpenHandler(({ url }) => {
-      if (/^https?:\/\//.test(url)) void shell.openExternal(url)
+      // 只把 https 交给系统浏览器。放行 http 会让中间人可改写目标页；
+      // javascript:/file: 交给 openExternal 则是把任意协议交给了操作系统。
+      if (/^https:\/\//.test(url)) void shell.openExternal(url)
       return { action: 'deny' }
     })
 
     wc.on('will-navigate', (event, url) => {
-      if (!/^https?:/.test(url)) return
+      // 非 http(s) 直接拦：javascript:/data:/file: 都不该在受管视图里导航。
+      // 这里收严到 https ——原来 `/^https?:/` 放行了明文 http，那条路可被中间人改写。
+      if (!/^https:/.test(url)) {
+        event.preventDefault()
+        return
+      }
       const nextHost = safeHost(url)
       if (rootHost(nextHost) !== root && !SHARED_LOGIN_HOSTS.has(nextHost)) {
         event.preventDefault()
         void shell.openExternal(url)
+        return
+      }
+      // 同一登录域内也过一遍白名单：SHARED_LOGIN_HOSTS 与 allowedViewUrls 是两套口径，
+      // 这里取交集，避免出现「登录域允许、但不在受管视图白名单内」的漏网组合。
+      try {
+        assertViewUrlAllowed(url)
+      } catch {
+        event.preventDefault()
       }
     })
 

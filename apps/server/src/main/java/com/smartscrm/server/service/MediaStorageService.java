@@ -32,9 +32,15 @@ public class MediaStorageService {
     /**
      * Accept only what clients can present and we can serve back. Anything outside the list is
      * refused at upload time rather than stored and later refused at serve time.
+     *
+     * <p><b>刻意不收 {@code image/svg+xml}</b>：SVG 是 XML，能内嵌 {@code <script>} 与事件处理器，
+     * 属「可执行文档」而非「图片」。收进来就等于收进一个能在应用源里跑的脚本载体
+     * （存储型 XSS）。真要支持矢量图，让调用方先转成 PNG/WebP 再上传。
+     * 与 {@code MaterialController.serveMedia} 的 {@code Content-Disposition: attachment}
+     * 构成两道独立防线：上传侧不收、直出侧不渲染。
      */
     private static final List<String> ALLOWED_MIME = List.of(
-        "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp", "image/svg+xml",
+        "image/jpeg", "image/png", "image/gif", "image/webp", "image/bmp",
         "video/mp4", "video/webm", "video/quicktime", "video/x-matroska",
         "audio/mpeg", "audio/mp3", "audio/wav", "audio/x-wav", "audio/ogg", "audio/mp4", "audio/aac",
         "application/pdf",
@@ -52,7 +58,6 @@ public class MediaStorageService {
         Map.entry("image/gif", ".gif"),
         Map.entry("image/webp", ".webp"),
         Map.entry("image/bmp", ".bmp"),
-        Map.entry("image/svg+xml", ".svg"),
         Map.entry("video/mp4", ".mp4"),
         Map.entry("video/webm", ".webm"),
         Map.entry("video/quicktime", ".mov"),

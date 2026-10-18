@@ -126,8 +126,17 @@ public class MaterialController {
 
     /**
      * Serve a stored media file. {@code permitAll} in SecurityConfig: an {@code <img>}/{@code <video>}
-     * tag does not send the Bearer token, so the endpoint cannot require auth. Access control is the
-     * un-guessable UUID filename.
+     * tag does not send the Bearer token, so the URL filter chain cannot require auth. Method-level
+     * security ({@code material:read}) still applies on top of it.
+     *
+     * <p><b>为什么强制 attachment</b>：只要响应是 {@code inline}，浏览器就会在<b>本应用源</b>下
+     * 解释内容。SVG 能内嵌 {@code <script>}、HTML 能带事件处理器，两者一旦被当作 inline 资源
+     * 直出，就是存储型 XSS——攻击者上传一个"图"，受害者打开即在自己的应用源里执行脚本，
+     * 能读到 localStorage 里的 token。反过来，{@code Content-Disposition: attachment} 让浏览器
+     * 一律当下载处理，绝不渲染，{@code nosniff} 再堵死"猜 MIME"这条路。
+     *
+     * <p>代价是图片不再内联预览，要改成先下载再由前端 blob 预览。这是为了消除 XSS 付的价钱，
+     * 与 {@code nosniff} 一起构成两道独立防线——任一道单独存在都够，两道都在更稳。
      */
     @GetMapping("/materials/media/{name}")
     @PreAuthorize("hasAuthority('material:read')")
@@ -139,6 +148,12 @@ public class MaterialController {
         }
         response.setContentType(mediaStorage.mimeOf(p));
         response.setContentLengthLong(Files.size(p));
+        // 强制下载而非内联渲染：堵住 SVG/HTML 的存储型 XSS
+        response.setHeader("Content-Disposition",
+            "attachment; filename=\"" + Path.of(name).getFileName() + "\"");
+        // 禁止 MIME 嗅探，避免"声明 image/png 实为 HTML"这类绕过
+        response.setHeader("X-Content-Type-Options", "nosniff");
+        response.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
         response.setHeader("Cache-Control", "private, max-age=86400");
         Files.copy(p, response.getOutputStream());
         response.flushBuffer();
