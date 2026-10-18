@@ -13,6 +13,7 @@ import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.smartscrm.server.entity.AiTransferRule;
 import com.smartscrm.server.entity.ChatConversation;
 import com.smartscrm.server.entity.ChatMessage;
+import com.smartscrm.server.service.ai.AiReplyService;
 import com.smartscrm.server.entity.Customer;
 import com.smartscrm.server.entity.PlatformAccount;
 import com.smartscrm.server.entity.SensitiveWord;
@@ -45,6 +46,7 @@ class MessageServiceAcceptRuleTest {
     private TakeoverService takeover;
     private AiTransferRuleService aiRuleService;
     private SensitiveWordService sensitiveWordService;
+    private AiReplyService aiReplyService;
 
     private MessageService service;
 
@@ -63,9 +65,11 @@ class MessageServiceAcceptRuleTest {
         aiRuleService = mock(AiTransferRuleService.class);
         // A8 入站敏感词：mock 的 enabledWords 默认回空列表，所以本类既有用例不受影响（无词=不命中）。
         sensitiveWordService = mock(SensitiveWordService.class);
+        // B28 第四段 AI 建议：mock 默认返回 false，本类既有用例（只验转人工规则）不受影响。
+        aiReplyService = mock(AiReplyService.class);
 
         service = new MessageService(messageMapper, conversationMapper, customerMapper, accountMapper,
-            takeover, aiRuleService, sensitiveWordService);
+            takeover, aiRuleService, sensitiveWordService, aiReplyService);
 
         PlatformAccount account = new PlatformAccount();
         account.setId(5L);

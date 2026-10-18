@@ -4,6 +4,7 @@ import com.smartscrm.server.common.ApiResponse;
 import com.smartscrm.server.security.AuthPrincipal;
 import com.smartscrm.server.service.MessageQueryService;
 import com.smartscrm.server.service.TakeoverService;
+import com.smartscrm.server.service.ai.AiReplyService;
 import com.smartscrm.server.web.dto.ConversationLinkCustomerDTO;
 import com.smartscrm.server.web.vo.ConversationPageVO;
 import com.smartscrm.server.web.vo.ConversationVO;
@@ -26,10 +27,13 @@ public class ConversationController {
 
     private final MessageQueryService query;
     private final TakeoverService takeover;
+    private final AiReplyService aiReplyService;
 
-    public ConversationController(MessageQueryService query, TakeoverService takeover) {
+    public ConversationController(MessageQueryService query, TakeoverService takeover,
+                                  AiReplyService aiReplyService) {
         this.query = query;
         this.takeover = takeover;
+        this.aiReplyService = aiReplyService;
     }
 
     @GetMapping
@@ -75,6 +79,19 @@ public class ConversationController {
                                                      @PathVariable Long id,
                                                      @RequestParam(required = false) String reason) {
         return ApiResponse.ok(takeover.transferHuman(principal.tenantId(), id, reason));
+    }
+
+    /**
+     * 忽略 AI 建议：清掉该会话的建议内容/分数/出处。
+     * 坐席否决后调它，避免陈旧建议一直挂在接管台上被误用。
+     * 注意：这里**不**代替发送——建议从不自动发出，采用与否是坐席在客户端的操作。
+     */
+    @PostMapping("/{id}/dismiss-ai-suggestion")
+    @PreAuthorize("hasAuthority('message:write')")
+    public ApiResponse<ConversationVO> dismissAiSuggestion(@AuthenticationPrincipal AuthPrincipal principal,
+                                                           @PathVariable Long id) {
+        aiReplyService.clearSuggestion(principal.tenantId(), id);
+        return ApiResponse.ok(ConversationVO.of(query.requireOwned(principal.tenantId(), id)));
     }
 
     /**

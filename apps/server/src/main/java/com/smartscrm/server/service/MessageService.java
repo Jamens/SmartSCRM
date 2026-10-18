@@ -13,6 +13,7 @@ import com.smartscrm.server.mapper.ChatMessageMapper;
 import com.smartscrm.server.mapper.CustomerMapper;
 import com.smartscrm.server.mapper.PlatformAccountMapper;
 import com.smartscrm.server.service.AiTransferRuleService;
+import com.smartscrm.server.service.ai.AiReplyService;
 import com.smartscrm.server.service.msg.ChatKeys;
 import com.smartscrm.server.service.msg.MsgTimes;
 import com.smartscrm.server.service.msg.StatusLadder;
@@ -52,17 +53,19 @@ public class MessageService {
     private final TakeoverService takeover;
     private final AiTransferRuleService aiTransferRuleService;
     private final SensitiveWordService sensitiveWordService;
+    private final AiReplyService aiReplyService;
 
     public MessageService(ChatMessageMapper messageMapper, ChatConversationMapper conversationMapper,
                           CustomerMapper customerMapper, PlatformAccountMapper accountMapper,
                           @Lazy TakeoverService takeover, AiTransferRuleService aiTransferRuleService,
-                          SensitiveWordService sensitiveWordService) {
+                          SensitiveWordService sensitiveWordService, AiReplyService aiReplyService) {
         this.messageMapper = messageMapper;
         this.conversationMapper = conversationMapper;
         this.customerMapper = customerMapper;
         this.accountMapper = accountMapper;
         this.takeover = takeover;
         this.aiTransferRuleService = aiTransferRuleService;
+        this.aiReplyService = aiReplyService;
         this.sensitiveWordService = sensitiveWordService;
     }
 
@@ -184,18 +187,25 @@ public class MessageService {
             // 接管的会话不会被规则抢走。每个 chatKey 每批只评估一次。
             if ("in".equals(row.getDirection()) && row.getBody() != null
                     && evaluatedChatKeys.add(row.getChatKey())) {
-                AiTransferRule matched = aiTransferRuleService.firstMatch(tenantId, row.getBody());
-                if (matched != null) {
-                    ChatConversation conv = conversationMapper.selectOne(new LambdaQueryWrapper<ChatConversation>()
-                        .eq(ChatConversation::getTenantId, tenantId)
-                        .eq(ChatConversation::getAccountId, row.getAccountId())
-                        .eq(ChatConversation::getPlatform, row.getPlatform())
-                        .eq(ChatConversation::getChatKey, row.getChatKey())
-                        .last("LIMIT 1"));
-                    if (conv != null) {
+                ChatConversation conv = conversationMapper.selectOne(new LambdaQueryWrapper<ChatConversation>()
+                    .eq(ChatConversation::getTenantId, tenantId)
+                    .eq(ChatConversation::getAccountId, row.getAccountId())
+                    .eq(ChatConversation::getPlatform, row.getPlatform())
+                    .eq(ChatConversation::getChatKey, row.getChatKey())
+                    .last("LIMIT 1"));
+
+                // B28 第四段 — AI 自动应答。顺序在转人工规则**之后**是有意的：
+                // 规则命中的语义是「这条客户消息 AI 处理不了」（情绪激动/投诉/要人工），
+                // 那就不该再给建议——转人工才是这一轮该做的事。
+                // 建议本身只是写进会话头供坐席参考，不外发（后端无出站通道）。
+                if (conv != null) {
+                    AiTransferRule matched = aiTransferRuleService.firstMatch(tenantId, row.getBody());
+                    if (matched != null) {
                         String reason = matched.getTransferReason() != null
                             ? matched.getTransferReason() : ("rule:" + matched.getRuleName());
                         takeover.transferIfAi(tenantId, conv.getId(), reason);
+                    } else {
+                        aiReplyService.suggestIfAi(tenantId, conv.getId(), row.getBody());
                     }
                 }
             }

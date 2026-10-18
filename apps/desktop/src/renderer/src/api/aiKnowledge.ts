@@ -35,10 +35,13 @@ export interface AiNurtureVO {
 }
 /** 助手草稿（未落库） */
 export interface PersonaDraft { template: string; name: string; tone: string; prompt: string }
-/** 接管台会话（TakeoverService.queue 的形状，前端只用到这些） */
+/** 接管台会话（TakeoverService.queue 的形状，前端只用到这些）
+ *  aiSuggestion* 是 B28 第四段的 AI 建议：仅建议、从不由后端自动发出，
+ *  采用与否是坐席在客户端的操作。score 是置信度，null 表示这轮没有建议。 */
 export interface TakeoverQueueItem {
   id: number; chatKey: string; platform: string; title: string | null
   handlingStatus: string; waitTakeoverAt: string | null; transferReason: string | null
+  aiSuggestion: string | null; aiSuggestionScore: number | null; aiSuggestionQaId: number | null
 }
 
 const QK = { roles: ['ai','roles'], cats: ['ai','categories'], qa: ['ai','qa'],
@@ -103,6 +106,56 @@ export function useQaMutations(): {
     update: useMutation({ mutationFn: ({ id, patch }) => http.put<KnowledgeQaVO>(`/api/knowledge-qa/${id}`, patch), onSuccess: inv }),
     remove: useMutation({ mutationFn: (id) => http.del<void>(`/api/knowledge-qa/${id}`), onSuccess: inv })
   }
+}
+
+// ---------- 向量检索 ----------
+// score 是余弦相似度（0~1），随结果返回是为了让页面能显示匹配度，
+// 运营据此判断这条够不够格拿去回答，也能据此调 threshold。
+export interface KnowledgeSearchHitVO {
+  id: number; roleId: number | null; categoryId: number | null
+  question: string; answer: string; source: string; score: number
+}
+export interface KnowledgeSearchCapabilityVO { available: boolean; model: string }
+
+/** 检索是否可用（embedding 端点是否配置）。未配置时页面应隐藏检索入口，而不是报错。 */
+export function useKnowledgeSearchCapability(): UseQueryResult<KnowledgeSearchCapabilityVO, Error> {
+  return useQuery({
+    queryKey: [...QK.qa, 'search-capability'],
+    queryFn: () => http.get<KnowledgeSearchCapabilityVO>('/api/knowledge-qa/search/capability'),
+    staleTime: 5 * 60_000
+  })
+}
+
+/** 向量检索。enabled 由调用方按 capability.available + query 非空来控制。 */
+export function useKnowledgeSearch(params: {
+  query: string
+  topK?: number
+  threshold?: number
+  roleId?: number | null
+  categoryId?: number | null
+}, enabled = true): UseQueryResult<KnowledgeSearchHitVO[], Error> {
+  const q = new URLSearchParams()
+  q.set('q', params.query)
+  if (params.topK) q.set('topK', String(params.topK))
+  if (params.threshold != null) q.set('threshold', String(params.threshold))
+  if (params.roleId) q.set('roleId', String(params.roleId))
+  if (params.categoryId) q.set('categoryId', String(params.categoryId))
+  const qs = q.toString()
+  return useQuery({
+    queryKey: [...QK.qa, 'search', qs],
+    queryFn: () => http.get<KnowledgeSearchHitVO[]>(`/api/knowledge-qa/search?${qs}`),
+    enabled: enabled && params.query.trim() !== '',
+    staleTime: 30_000
+  })
+}
+
+/** 构建/刷新检索索引。内容与模型未变的会自动跳过，可安全重复点。 */
+export function useBuildSearchIndex(): UseMutationResult<{ indexed: number; model: string }, Error, void, unknown> {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: () => http.post<{ indexed: number; model: string }>('/api/knowledge-qa/search-index'),
+    onSuccess: (): void => { void qc.invalidateQueries({ queryKey: [...QK.qa, 'search'] }) }
+  })
 }
 
 // ---------- 文档管线 ----------
@@ -173,11 +226,17 @@ export function useTakeoverQueue(): UseQueryResult<TakeoverQueueItem[], Error> {
 export function useTakeoverActions(): {
   takeover: UseMutationResult<unknown, Error, number, unknown>
   resumeAi: UseMutationResult<unknown, Error, number, unknown>
+  dismissAiSuggestion: UseMutationResult<unknown, Error, number, unknown>
 } {
   const qc = useQueryClient()
   const inv = (): void => { void qc.invalidateQueries({ queryKey: QK.queue }) }
   return {
     takeover: useMutation({ mutationFn: (id) => http.post(`/api/conversations/${id}/takeover`), onSuccess: inv }),
-    resumeAi: useMutation({ mutationFn: (id) => http.post(`/api/conversations/${id}/resume-ai`), onSuccess: inv })
+    resumeAi: useMutation({ mutationFn: (id) => http.post(`/api/conversations/${id}/resume-ai`), onSuccess: inv }),
+    // 坐席否决建议：只清建议，不代替发送——采用与否是客户端的操作
+    dismissAiSuggestion: useMutation({
+      mutationFn: (id) => http.post(`/api/conversations/${id}/dismiss-ai-suggestion`),
+      onSuccess: inv
+    })
   }
 }

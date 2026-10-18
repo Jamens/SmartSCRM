@@ -33,6 +33,12 @@ public class ChatConversation {
     private Long assigneeId;
     /** 前向钩子：AI 人设引擎（B28 延后子特性）的实例 id，当前逻辑不消费。 */
     private Long aiPersonaId;
+    /** B28 第四段：AI 检索出的建议答案。坐席在接管台确认后才会真的发出去。 */
+    private String aiSuggestion;
+    /** 建议的置信度（余弦相似度 0~1）；坐席据此判断该不该用。 */
+    private Float aiSuggestionScore;
+    /** 建议对应的知识库 QA id，便于坐席回溯出处。 */
+    private Long aiSuggestionQaId;
     /** 进入 WAITING_TAKEOVER 的时间，供队列按等待时长排序。 */
     private LocalDateTime waitTakeoverAt;
     /** 转人工原因（规则触发或坐席手动转人工时填写）。 */

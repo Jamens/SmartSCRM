@@ -50,7 +50,17 @@ class AiKnowledgeServiceTest {
         chunkMapper = mock(KnowledgeChunkMapper.class);
         roleService = new AiRoleService(roleMapper);
         categoryService = new AiCategoryService(categoryMapper);
-        qaService = new KnowledgeQaService(qaMapper, chunkMapper);
+        qaService = new KnowledgeQaService(qaMapper, chunkMapper, roleMapper, categoryMapper);
+        // create 会校验 roleId/categoryId 归属本租户（防跨租户挂靠）。本类用例用 roleId=1/categoryId=2，
+        // 这里给出归属成立的默认桩；归属校验自己的用例在下方单独覆盖。
+        AiRole ownedRole = new AiRole();
+        ownedRole.setId(1L);
+        ownedRole.setTenantId(TENANT);
+        when(roleMapper.selectById(1L)).thenReturn(ownedRole);
+        AiCategory ownedCat = new AiCategory();
+        ownedCat.setId(2L);
+        ownedCat.setTenantId(TENANT);
+        when(categoryMapper.selectById(2L)).thenReturn(ownedCat);
     }
 
     // ===== 角色 =====
@@ -92,6 +102,41 @@ class AiKnowledgeServiceTest {
     }
 
     // ===== QA =====
+
+    /**
+     * 归属校验：roleId / categoryId 给了就必须属于本租户。
+     *
+     * <p>这条与同文件 {@code createDerived} 校验分片归属是同一条纪律。不校验的话，
+     * 一个租户能把 QA 挂到别人的角色上，检索按角色收窄时会串到别人的知识，
+     * 而这种错挂从界面上完全看不出来。
+     */
+    @Test
+    void qaCreate_rejectsRoleOrCategoryOfOtherTenant() {
+        AiRole foreignRole = new AiRole();
+        foreignRole.setId(9L);
+        foreignRole.setTenantId(999L);
+        when(roleMapper.selectById(9L)).thenReturn(foreignRole);
+        assertThrows(BizException.class,
+            () -> qaService.create(TENANT, 9L, null, "问", "答", null));
+
+        AiCategory foreignCat = new AiCategory();
+        foreignCat.setId(8L);
+        foreignCat.setTenantId(999L);
+        when(categoryMapper.selectById(8L)).thenReturn(foreignCat);
+        assertThrows(BizException.class,
+            () -> qaService.create(TENANT, null, 8L, "问", "答", null));
+
+        verify(qaMapper, never()).insert(any(KnowledgeQa.class));
+    }
+
+    /** 归属不存在（对方把角色删了）与归属他人同等对待，都拒绝。 */
+    @Test
+    void qaCreate_rejectsNullRoleOrCategory() {
+        when(roleMapper.selectById(77L)).thenReturn(null);
+        assertThrows(BizException.class,
+            () -> qaService.create(TENANT, 77L, null, "问", "答", null));
+        verify(qaMapper, never()).insert(any(KnowledgeQa.class));
+    }
 
     @Test
     void qaCreate_setsManualSourceAndEnabled() {

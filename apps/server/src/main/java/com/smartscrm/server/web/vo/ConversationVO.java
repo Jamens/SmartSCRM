@@ -6,7 +6,8 @@ import java.time.LocalDateTime;
 public record ConversationVO(
     Long id, Long accountId, String platform, String chatKey, String title, Boolean isGroup,
     Long customerId, LocalDateTime lastMsgTime, String lastMsgBody, Integer unreadCount,
-    String handlingStatus, Long assigneeId, Long aiPersonaId, LocalDateTime waitTakeoverAt, String transferReason
+    String handlingStatus, Long assigneeId, Long aiPersonaId, LocalDateTime waitTakeoverAt, String transferReason,
+    String aiSuggestion, Float aiSuggestionScore, Long aiSuggestionQaId
 ) {
 
     public static ConversationVO of(ChatConversation c) {
@@ -14,6 +15,7 @@ public record ConversationVO(
             c.getIsGroup() != null && c.getIsGroup() == 1, c.getCustomerId(), c.getLastMsgTime(),
             c.getLastMsgBody(), c.getUnreadCount(),
             c.getHandlingStatus(), c.getAssigneeId(), c.getAiPersonaId(), c.getWaitTakeoverAt(),
-            c.getTransferReason());
+            c.getTransferReason(),
+            c.getAiSuggestion(), c.getAiSuggestionScore(), c.getAiSuggestionQaId());
     }
 }

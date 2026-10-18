@@ -2,8 +2,12 @@ package com.smartscrm.server.service;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smartscrm.server.common.BizException;
+import com.smartscrm.server.entity.AiCategory;
+import com.smartscrm.server.entity.AiRole;
 import com.smartscrm.server.entity.KnowledgeChunk;
 import com.smartscrm.server.entity.KnowledgeQa;
+import com.smartscrm.server.mapper.AiCategoryMapper;
+import com.smartscrm.server.mapper.AiRoleMapper;
 import com.smartscrm.server.mapper.KnowledgeChunkMapper;
 import com.smartscrm.server.mapper.KnowledgeQaMapper;
 import java.util.List;
@@ -23,10 +27,15 @@ public class KnowledgeQaService {
 
     private final KnowledgeQaMapper mapper;
     private final KnowledgeChunkMapper chunkMapper;
+    private final AiRoleMapper roleMapper;
+    private final AiCategoryMapper categoryMapper;
 
-    public KnowledgeQaService(KnowledgeQaMapper mapper, KnowledgeChunkMapper chunkMapper) {
+    public KnowledgeQaService(KnowledgeQaMapper mapper, KnowledgeChunkMapper chunkMapper,
+                              AiRoleMapper roleMapper, AiCategoryMapper categoryMapper) {
         this.mapper = mapper;
         this.chunkMapper = chunkMapper;
+        this.roleMapper = roleMapper;
+        this.categoryMapper = categoryMapper;
     }
 
     public List<KnowledgeQa> list(Long tenantId, Long roleId, Long categoryId, Integer status) {
@@ -41,6 +50,7 @@ public class KnowledgeQaService {
     /** 手写建一条 QA（source 固定 manual，派生来源为空）。 */
     @Transactional
     public KnowledgeQa create(Long tenantId, Long roleId, Long categoryId, String question, String answer, Integer status) {
+        requireOwned(tenantId, roleId, categoryId);
         KnowledgeQa q = new KnowledgeQa();
         q.setTenantId(tenantId);
         q.setRoleId(roleId);
@@ -51,6 +61,28 @@ public class KnowledgeQaService {
         q.setStatus(status == null ? 1 : (status == 0 ? 0 : 1));
         mapper.insert(q);
         return q;
+    }
+
+    /**
+     * roleId / categoryId 的归属校验：两者可空（=不绑定），给了就必须属于本租户。
+     *
+     * <p>与 {@link #createDerived} 对分片做归属校验是同一条纪律。不校验的话，
+     * 一个租户能把 QA 挂到别的租户的角色/分类上——检索时按角色收窄会串到别人的知识，
+     * 而这种错挂从界面上完全看不出来。
+     */
+    private void requireOwned(Long tenantId, Long roleId, Long categoryId) {
+        if (roleId != null) {
+            AiRole role = roleMapper.selectById(roleId);
+            if (role == null || !tenantId.equals(role.getTenantId())) {
+                throw new BizException(40404, "角色不存在: " + roleId);
+            }
+        }
+        if (categoryId != null) {
+            AiCategory cat = categoryMapper.selectById(categoryId);
+            if (cat == null || !tenantId.equals(cat.getTenantId())) {
+                throw new BizException(40404, "分类不存在: " + categoryId);
+            }
+        }
     }
 
     @Transactional

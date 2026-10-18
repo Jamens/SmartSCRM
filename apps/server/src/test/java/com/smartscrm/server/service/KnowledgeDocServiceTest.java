@@ -14,6 +14,8 @@ import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.KnowledgeChunk;
 import com.smartscrm.server.entity.KnowledgeQa;
+import com.smartscrm.server.mapper.AiCategoryMapper;
+import com.smartscrm.server.mapper.AiRoleMapper;
 import com.smartscrm.server.mapper.KnowledgeChunkMapper;
 import com.smartscrm.server.mapper.KnowledgeDocMapper;
 import com.smartscrm.server.mapper.KnowledgeQaMapper;
@@ -45,7 +47,8 @@ class KnowledgeDocServiceTest {
         chunkMapper = mock(KnowledgeChunkMapper.class);
         qaMapper = mock(KnowledgeQaMapper.class);
         docService = new KnowledgeDocService(docMapper, chunkMapper, qaMapper);
-        qaService = new KnowledgeQaService(qaMapper, chunkMapper);
+        qaService = new KnowledgeQaService(qaMapper, chunkMapper,
+            mock(AiRoleMapper.class), mock(AiCategoryMapper.class));
     }
 
     // ===== 切分纯逻辑 =====
