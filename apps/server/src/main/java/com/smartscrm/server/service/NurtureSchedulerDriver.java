@@ -1,5 +1,6 @@
 package com.smartscrm.server.service;
 
+import com.smartscrm.server.service.msg.MsgTimes;
 import java.time.LocalDateTime;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -26,7 +27,7 @@ public class NurtureSchedulerDriver {
     @Scheduled(fixedDelay = 30_000, initialDelay = 20_000)
     public void tick() {
         try {
-            int made = executor.scheduleDue(LocalDateTime.now());
+            int made = executor.scheduleDue(LocalDateTime.now(MsgTimes.CHAT_ZONE));
             if (made > 0) {
                 log.info("[nurture] tick: 生成 {} 条待发发言", made);
             }

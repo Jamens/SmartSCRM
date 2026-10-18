@@ -1,5 +1,6 @@
 package com.smartscrm.server.service;
 
+import com.smartscrm.server.service.msg.MsgTimes;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.ScriptPlaybook;
@@ -253,7 +254,7 @@ public class ScriptSchedulerService {
     @Transactional
     public void heartbeat(Long taskId) {
         taskMapper.update(null, new com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper<ScriptTask>()
-            .eq(ScriptTask::getId, taskId).set(ScriptTask::getHeartbeatAt, LocalDateTime.now()));
+            .eq(ScriptTask::getId, taskId).set(ScriptTask::getHeartbeatAt, LocalDateTime.now(MsgTimes.CHAT_ZONE)));
     }
 
     /** 回收心跳超时的 running task → error（不卡住调度）。 */

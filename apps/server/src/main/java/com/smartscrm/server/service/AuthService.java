@@ -1,5 +1,6 @@
 package com.smartscrm.server.service;
 
+import com.smartscrm.server.service.msg.MsgTimes;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.AppUser;
@@ -122,7 +123,7 @@ public class AuthService {
         Device device = deviceMapper.selectOne(new LambdaQueryWrapper<Device>()
             .eq(Device::getAppUserId, userId)
             .eq(Device::getDeviceId, req.deviceId()));
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(MsgTimes.CHAT_ZONE);
         if (device == null) {
             device = new Device();
             device.setAppUserId(userId);

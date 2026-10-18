@@ -1,5 +1,6 @@
 package com.smartscrm.server.service;
 
+import com.smartscrm.server.service.msg.MsgTimes;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.CloudAccount;
@@ -139,7 +140,7 @@ public class CloudAccountService {
         local.setStatus("online".equals(a.getStatus()) ? 1 : 0);
         local.setRemark("云账号池同步 #" + a.getId());
         PlatformAccount created = platformAccountService.create(tenantId, local);
-        a.setSyncedAt(LocalDateTime.now());
+        a.setSyncedAt(LocalDateTime.now(MsgTimes.CHAT_ZONE));
         a.setSyncedAccountId(created.getId());
         mapper.updateById(a);
         return a;

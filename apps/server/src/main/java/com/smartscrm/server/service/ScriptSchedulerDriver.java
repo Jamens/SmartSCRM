@@ -1,5 +1,6 @@
 package com.smartscrm.server.service;
 
+import com.smartscrm.server.service.msg.MsgTimes;
 import com.smartscrm.server.entity.ScriptTask;
 import com.smartscrm.server.entity.ScriptTaskStep;
 import com.smartscrm.server.mapper.ScriptTaskMapper;
@@ -31,7 +32,7 @@ public class ScriptSchedulerDriver {
     @Scheduled(fixedDelay = 10_000, initialDelay = 15_000)
     public void tick() {
         try {
-            LocalDateTime now = LocalDateTime.now();
+            LocalDateTime now = LocalDateTime.now(MsgTimes.CHAT_ZONE);
             int stale = scheduler.reapStale(now);
             int advanced = scheduler.scheduleDue(now);
             if (stale > 0 || advanced > 0) {

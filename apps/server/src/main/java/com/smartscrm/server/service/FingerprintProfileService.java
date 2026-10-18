@@ -1,5 +1,6 @@
 package com.smartscrm.server.service;
 
+import com.smartscrm.server.service.msg.MsgTimes;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.FingerprintProfile;
@@ -113,7 +114,7 @@ public class FingerprintProfileService {
                 + System.nanoTime(), 1L << 48);
         applyFingerprint(d, seed);
         d.setStatus("active");
-        d.setGeneratedAt(LocalDateTime.now());
+        d.setGeneratedAt(LocalDateTime.now(MsgTimes.CHAT_ZONE));
         mapper.updateById(d);
         return d;
     }

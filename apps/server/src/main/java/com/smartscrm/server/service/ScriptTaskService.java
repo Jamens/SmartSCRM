@@ -1,5 +1,6 @@
 package com.smartscrm.server.service;
 
+import com.smartscrm.server.service.msg.MsgTimes;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.ScriptPlaybook;
@@ -58,7 +59,7 @@ public class ScriptTaskService {
         if (exist != null) {
             return exist;
         }
-        LocalDateTime now = LocalDateTime.now();
+        LocalDateTime now = LocalDateTime.now(MsgTimes.CHAT_ZONE);
         ScriptTask t = new ScriptTask();
         t.setTenantId(tenantId);
         t.setPlaybookId(playbookId);
@@ -107,7 +108,7 @@ public class ScriptTaskService {
     @Transactional
     public boolean advanceNow(Long tenantId, Long taskId) {
         get(tenantId, taskId);
-        return scheduler.advance(taskId, LocalDateTime.now());
+        return scheduler.advance(taskId, LocalDateTime.now(MsgTimes.CHAT_ZONE));
     }
 
     /** 桌面端/前端回报某步结果。 */
@@ -137,20 +138,32 @@ public class ScriptTaskService {
         return t;
     }
 
+    /**
+     * 解析逗号分隔或 JSON 数组形态的 id 列表。
+     *
+     * <p><b>刻意不吞异常</b>：这份 id 列表是账号池与 failover 链路的唯一来源，
+     * 解析失败若返回空列表（原来的写法），表现是「切号静默失效」——任务永不 failover，
+     * 且没有任何日志能从结果里看出发生过什么。宁可让这条记录当场建失败（调用方抛 400），
+     * 也不要一个看起来正常、实际什么都不做的空列表。
+     */
     private static List<Long> parseIds(String json) {
-        try {
-            if (json == null) return List.of();
-            String body = json.trim();
-            if (body.startsWith("[") && body.endsWith("]")) body = body.substring(1, body.length() - 1);
-            if (body.isBlank()) return List.of();
-            List<Long> out = new java.util.ArrayList<>();
-            for (String p : body.split(",")) {
-                String s = p.trim();
-                if (!s.isEmpty()) out.add(Long.parseLong(s));
+        if (json == null) return List.of();
+        String body = json.trim();
+        if (body.startsWith("[") && body.endsWith("]")) body = body.substring(1, body.length() - 1);
+        if (body.isBlank()) return List.of();
+        List<Long> out = new java.util.ArrayList<>();
+        for (String p : body.split(",")) {
+            String s = p.trim();
+            if (s.isEmpty()) {
+                continue;
             }
-            return out;
-        } catch (RuntimeException e) {
-            return List.of();
+            try {
+                out.add(Long.parseLong(s));
+            } catch (NumberFormatException e) {
+                throw new com.smartscrm.server.common.BizException(40000,
+                    "账号 id 列表格式非法：'" + s + "' 不是数字");
+            }
         }
+        return out;
     }
 }

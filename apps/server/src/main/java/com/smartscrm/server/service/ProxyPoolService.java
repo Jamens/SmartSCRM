@@ -1,5 +1,6 @@
 package com.smartscrm.server.service;
 
+import com.smartscrm.server.service.msg.MsgTimes;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.ProxyPool;
@@ -122,7 +123,7 @@ public class ProxyPoolService {
         d.setEgressIp(egressIp);
         d.setEgressGeo(geo);
         d.setLatencyMs(latency);
-        d.setLastCheckedAt(LocalDateTime.now());
+        d.setLastCheckedAt(LocalDateTime.now(MsgTimes.CHAT_ZONE));
         mapper.updateById(d);
         return d;
     }

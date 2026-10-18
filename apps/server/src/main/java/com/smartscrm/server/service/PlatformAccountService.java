@@ -1,5 +1,6 @@
 package com.smartscrm.server.service;
 
+import com.smartscrm.server.service.msg.MsgTimes;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.PlatformAccount;
@@ -85,7 +86,7 @@ public class PlatformAccountService {
         PlatformAccount account = requireOwned(tenantId, id);
         account.setStatus(status);
         if (status != null && status == 1) {
-            account.setLastLoginAt(LocalDateTime.now());
+            account.setLastLoginAt(LocalDateTime.now(MsgTimes.CHAT_ZONE));
         }
         mapper.updateById(account);
     }
