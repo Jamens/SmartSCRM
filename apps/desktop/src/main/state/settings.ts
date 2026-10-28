@@ -8,6 +8,7 @@ import {
   type EffectiveTheme,
   type ThemePref
 } from '@shared/theme'
+import { FP_TOGGLE_KEYS, type FpToggleKey } from '@shared/fingerprint'
 
 /**
  * 用户设置。与会话文件（`session.ts`）同住 `userData`，但**不加密**：
@@ -44,6 +45,17 @@ export interface AppSettings {
    * 绝不硬编码任何商业云端点）。由部署方/用户填自己的地址，填了才拉清单比版本。
    */
   updateManifestUrl: string
+  /**
+   * B14 浏览器指纹注入的总开关。**默认 `false`（见 DEFAULTS 旁的注释）**。
+   * 关 = 任何账号都不施加指纹，一个字节都不下发；开也不等于立刻生效——
+   * 还必须账号显式绑了一份档案（R2），且该档案解析出的参数非空。
+   */
+  fingerprintEnabled: boolean
+  /**
+   * 八项指纹能力的单项开关（R9）。没出现的项视为**开**；显式写 `false` 才关。
+   * 只有在 `fingerprintEnabled` 为 true 时才有意义——总开关关着时这里记的是用户的选择，不生效。
+   */
+  fingerprintToggles: Partial<Record<FpToggleKey, boolean>>
 }
 
 /** 交给渲染层的完整快照：`effective` 由主进程解析，页面只负责挂类名。 */
@@ -60,7 +72,12 @@ const DEFAULTS: AppSettings = {
   hardwareAcceleration: true,
   gpuSafeMode: false,
   language: FALLBACK_LOCALE,
-  updateManifestUrl: ''
+  updateManifestUrl: '',
+  // 默认关，且**默认关是有意的，不是保守**：这项能力明确越过了本仓原本「模拟生成、不探测真实设备、
+  // 不伪装真实运行环境」的红线口径（README §7 已同步写明）。能力就位，但不替用户做这个决定——
+  // 必须用户显式绑档案 + 显式开启，指纹才会落到视图上。改这个默认值等于替所有老用户默认开启伪装。
+  fingerprintEnabled: false,
+  fingerprintToggles: {}
 }
 
 const settingsFile = (): string => join(app.getPath('userData'), 'scrm-settings.json')
@@ -94,6 +111,20 @@ function mergeKnown(base: AppSettings, raw: unknown): AppSettings {
     // 更新源只存字符串（默认空=不外连）；非字符串一律不采信。trim 掉首尾空白与换行。
     if (typeof patch.updateManifestUrl === 'string') {
       next.updateManifestUrl = patch.updateManifestUrl.trim()
+    }
+    // 同上口径：总开关只认真布尔。
+    if (typeof patch.fingerprintEnabled === 'boolean') {
+      next.fingerprintEnabled = patch.fingerprintEnabled
+    }
+    // 单项开关只认对象，且逐项过滤掉不在 FP_TOGGLE_KEYS 里的键：
+    // 留着认识不了的键等于"以后加了新项，老档里躺着一个同名的假值"，而这一层的语义是"没出现 = 开"。
+    if (patch.fingerprintToggles && typeof patch.fingerprintToggles === 'object') {
+      const known: Partial<Record<FpToggleKey, boolean>> = {}
+      for (const key of FP_TOGGLE_KEYS) {
+        const value = (patch.fingerprintToggles as Record<string, unknown>)[key]
+        if (typeof value === 'boolean') known[key] = value
+      }
+      next.fingerprintToggles = known
     }
   }
   return next

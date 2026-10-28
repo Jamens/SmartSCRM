@@ -142,6 +142,28 @@ export const ko: DeepString<typeof zhCN> = {
     safeModeRecover:
       '이전 시작은 GPU 프로세스 크래시로 자동으로 여기로 전환되었습니다. 일반 모드로 복구를 시도할 수 있습니다:',
     retryStandard: '표준 모드 재시도',
+    // 브라우저 핑거프린트(B14)
+    fingerprint: {
+      title: '브라우저 핑거프린트',
+      desc: '핑거프린트 프로필이 바인딩된 계정에 한해 내장 뷰에 브라우저 핑거프린트(UA / 시간대 / Canvas / WebGL 등)를 적용해, 같은 테넌트 아래 여러 계정의 실행 환경이 서로 구분되게 합니다. 프로필이 바인딩되지 않은 계정은 전혀 영향을 받지 않습니다.',
+      masterTitle: '핑거프린트 주입 사용',
+      masterDetail:
+        '켜면 프로필이 바인딩된 계정이 내장 뷰를 열 때 핑거프린트가 적용되고, 끄면 어떤 계정에도 적용되지 않습니다. 변경은 다음에 뷰를 열거나 다시 로드할 때 반영됩니다.',
+      browser: '현 호스트(브라우저 미리보기)는 이 스위치를 저장하지 않습니다',
+      defaultOffNote:
+        '기본값은 꺼짐입니다. 핑거프린트 주입(Canvas 노이즈 / WebGL 위장 / Audio 교란)은 페이지의 자동화 탐지가 실제 기기 값을 읽지 못하게 하는 것이 목적이며, 이는 이 프로젝트가 처음에 정한 "실제 기기를 탐지하거나 위장하지 않는다"는 오픈소스 기준을 넘어섭니다. 따라서 다음 두 가지가 모두 충족될 때만 동작합니다. 계정이 명시적으로 프로필을 바인딩했고, 여기서 명시적으로 켰을 때입니다.',
+      itemsTitle: '항목별 스위치(프로필이 바인딩된 계정에만 적용)',
+      items: {
+        navigator: 'Navigator 속성(CPU 코어 수 / 메모리 / 언어 / 플랫폼 / Client Hints)',
+        canvas: 'Canvas 노이즈(픽셀 읽기 시 ±1 교란. 화면 자체는 변하지 않습니다)',
+        webgl: 'WebGL 벤더와 렌더러',
+        audio: 'Audio 샘플 교란(진폭 ≤ 1e-6, 청각상 들리지 않음)',
+        font: '폰트 탐지(measureText 방식)',
+        mediaDevices: '미디어 장치 열거',
+        iframe: '동적 iframe 적용',
+        timezone: '시간대 덮어쓰기'
+      }
+    },
     deviceInfo: '기기 정보',
     deviceInfoDesc:
       '이 기기와 이 앱의 현황입니다. 기기 코드와 OS 버전은 로그인 시 백엔드 device에 보고한 기준을 따르므로 카드에 표시된 값과 저장된 값은 동일해야 합니다.',
@@ -1285,6 +1307,14 @@ export const ko: DeepString<typeof zhCN> = {
       empty: '아직 계정이 없습니다. 오른쪽 위 + 를 클릭해 추가하세요.',
       deleteTitle: '계정 삭제',
       importTitle: '세션 자격 증명 가져오기'
+    },
+    fingerprint: {
+      label: '핑거프린트 프로필',
+      none: '바인딩 없음(핑거프린트 미적용)',
+      confirmTitle: '핑거프린트 프로필을 변경할까요?',
+      confirmDesc: '계정 "{{name}}"의 내장 뷰가 즉시 다시 로드되며, 보내지 않은 초안 내용은 사라집니다.',
+      confirmYes: '변경',
+      cancel: '취소'
     },
     delete: {
       title: '플랫폼 계정 삭제',

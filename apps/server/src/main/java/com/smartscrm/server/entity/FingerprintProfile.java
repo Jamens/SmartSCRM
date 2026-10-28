@@ -29,6 +29,12 @@ public class FingerprintProfile {
     private String browser;
     /** User-Agent（生成结果）。 */
     private String userAgent;
+    /** Client Hints 平台（如 "Windows"）；为 null 时客户端不改 navigator.userAgentData.platform（R7）。 */
+    private String uaPlatform;
+    /** Client Hints 平台版本（如 "15.0.0"）；为 null 时不改。 */
+    private String uaPlatformVersion;
+    /** Client Hints brands，JSON 形如 [{"brand":"Chromium","version":"140"}]；非法 JSON 时按缺失处理。 */
+    private String brandsJson;
     /** 分辨率（生成结果，WxH）。 */
     private String screenResolution;
     /** 时区（生成结果，IANA）。 */

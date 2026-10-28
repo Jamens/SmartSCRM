@@ -32,10 +32,13 @@ export default defineConfig(
     }
   },
   {
-    // 构建脚本 / 集成测试脚本是 JS（.mjs），无法写 TS 返回类型注解，且该规则对其无意义
-    files: ['scripts/**/*.mjs', 'test/**/*.mjs', '**/*.bundle.mjs'],
+    // 构建脚本 / 集成测试脚本是 JS（.mjs / .js），无法写 TS 返回类型注解，且该规则对其无意义。
+    // `test/**/*.js` 也在内：Electron 主脚本（如 fingerprint-probe/probe-main.js）只能是 CJS 的
+    // .js，require() 是它唯一可用的导入方式。
+    files: ['scripts/**/*.mjs', 'test/**/*.mjs', 'test/**/*.js', '**/*.bundle.mjs'],
     rules: {
-      '@typescript-eslint/explicit-function-return-type': 'off'
+      '@typescript-eslint/explicit-function-return-type': 'off',
+      '@typescript-eslint/no-require-imports': 'off'
     }
   },
   {

@@ -14,6 +14,11 @@ export interface PlatformAccount {
   status: number
   /** 是否已导入会话凭据（免扫码登录）。不携带凭据原文。 */
   hasCredential?: boolean
+  /**
+   * B14 绑定的指纹档案；null/缺失 = 不施加任何指纹（spec R2：未绑定 = 行为与改动前一致）。
+   * 渲染层只负责"选哪一份"，不读档案字段、不参与参数拼装（R10）。
+   */
+  fingerprintProfileId?: number | null
   remark: string | null
   lastLoginAt: string | null
   createdAt: string

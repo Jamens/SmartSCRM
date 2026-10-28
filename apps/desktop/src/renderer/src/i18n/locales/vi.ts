@@ -142,6 +142,29 @@ export const vi: DeepString<typeof zhCN> = {
     safeModeRecover:
       'Lần khởi động trước bị tự chuyển đây do tiến trình GPU sập. Có thể thử khôi phục chế độ chuẩn:',
     retryStandard: 'Thử lại chế độ chuẩn',
+    // Vân tay trình duyệt (B14)
+    fingerprint: {
+      title: 'Vân tay trình duyệt',
+      desc: 'Với tài khoản đã gắn hồ sơ vân tay, áp dụng vân tay trình duyệt (UA / múi giờ / Canvas / WebGL và các mục khác) lên chế độ xem nhúng của tài khoản đó, để nhiều tài khoản trong cùng một tenant có môi trường chạy khác biệt nhau. Tài khoản chưa gắn hồ sơ hoàn toàn không bị ảnh hưởng.',
+      masterTitle: 'Bật tiêm vân tay',
+      masterDetail:
+        'Khi bật, tài khoản đã gắn hồ sơ sẽ được áp dụng vân tay khi mở chế độ xem nhúng; khi tắt, không tài khoản nào bị tác động. Thay đổi có hiệu lực ở lần mở (hoặc tải lại) chế độ xem tiếp theo.',
+      browser: 'Môi trường hiện tại (xem trước trong trình duyệt) không lưu công tắc này',
+      defaultOffNote:
+        'Mặc định tắt: tiêm vân tay (nhiễu Canvas / giả mạo WebGL / nhiễu Audio) nhằm khiến các cơ chế phát hiện tự động của trang không đọc được giá trị thiết bị thật, điều này vượt qua giới hạn mã nguồn mở mà dự án này đã vạch ra từ đầu: không dò và không ngụy trang thiết bị thật. Vì vậy nó chỉ có hiệu lực khi cả hai điều kiện đều thỏa: tài khoản gắn hồ sơ một cách rõ ràng, và công tắc này được bật một cách rõ ràng.',
+      itemsTitle: 'Công tắc từng mục (chỉ tác động đến tài khoản đã gắn hồ sơ)',
+      items: {
+        navigator:
+          'Thuộc tính Navigator (số nhân CPU / bộ nhớ / ngôn ngữ / nền tảng / Client Hints)',
+        canvas: 'Nhiễu Canvas (+-1 khi đọc pixel; hình ảnh trang hiển thị không đổi)',
+        webgl: 'Nhà cung cấp và bộ dựng WebGL',
+        audio: 'Nhiễu mẫu Audio (biên độ ≤ 1e-6, tai người không nghe thấy)',
+        font: 'Dò phông chữ (measureText)',
+        mediaDevices: 'Liệt kê thiết bị media',
+        iframe: 'Phủ iframe động',
+        timezone: 'Ghi đè múi giờ'
+      }
+    },
     deviceInfo: 'Thông tin thiết bị',
     deviceInfoDesc:
       'Hiện trạng của máy này và ứng dụng này. Mã máy và phiên bản hệ điều hành lấy theo chuẩn báo lên backend device khi đăng nhập, nên dòng hiển thị trên thẻ phải trùng với lưu trong kho.',
@@ -1287,6 +1310,14 @@ export const vi: DeepString<typeof zhCN> = {
       empty: 'Chưa có tài khoản nào. Nhấn + ở góc trên bên phải để thêm.',
       deleteTitle: 'Xóa tài khoản',
       importTitle: 'Nhập thông tin xác thực phiên'
+    },
+    fingerprint: {
+      label: 'Hồ sơ vân tay',
+      none: 'Chưa gắn (không áp dụng vân tay)',
+      confirmTitle: 'Xác nhận đổi hồ sơ vân tay?',
+      confirmDesc: 'Chế độ xem nhúng của tài khoản "{{name}}" sẽ được tải lại ngay lập tức, nội dung nháp chưa gửi sẽ bị mất.',
+      confirmYes: 'Xác nhận đổi',
+      cancel: 'Hủy'
     },
     delete: {
       title: 'Xóa tài khoản nền tảng',

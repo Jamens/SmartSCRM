@@ -9,6 +9,8 @@ export interface AccountEntry {
   platform: ChatPlatform | null
   name: string
   viewId: string
+  /** B14：绑定的指纹档案 id；null = 不施加任何指纹（R2）。 */
+  fingerprintProfileId: number | null
 }
 
 const TTL_MS = 5 * 60_000
@@ -25,7 +27,9 @@ function toEntry(row: AccountRow): AccountEntry {
     platformType: row.platformType,
     platform: platformOfAccountType(row.platformType),
     name: row.name,
-    viewId: row.viewId
+    viewId: row.viewId,
+    // `?? null`：后端没带这列（旧库 / 未跑 V53）时按未绑定处理，绝不当成"绑了某个档案"。
+    fingerprintProfileId: row.fingerprintProfileId ?? null
   }
 }
 

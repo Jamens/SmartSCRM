@@ -40,6 +40,9 @@ apps/desktop/resources/inject.bundle.js
 apps/desktop/resources/msg-bridge.bundle.js
 apps/desktop/resources/wa-js.bundle.js
 
+# Generated browser fingerprint bundle (built by apps/desktop build:fingerprint)
+apps/desktop/resources/fingerprint.bundle.js
+
 # Local verification scratch (throwaway probes and logs)
 tmp/
 

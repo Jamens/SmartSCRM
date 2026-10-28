@@ -1,5 +1,6 @@
 // src/main/services/msgBridge/msgApi.ts
 import type { MsgStatus, SendRequest } from '../../../shared/chatTypes.ts'
+import type { FingerprintRuntime } from '../../../shared/fingerprint.ts'
 import type { BatchPayload, BatchResult } from './collectorHub.ts'
 
 export interface AccountRow {
@@ -8,6 +9,8 @@ export interface AccountRow {
   viewId: string
   name: string
   status: number
+  /** B14：绑定的指纹档案；null = 不施加任何指纹（R2）。后端未下发该列时按"未绑定"处理。 */
+  fingerprintProfileId?: number | null
 }
 
 export interface MsgApiOptions {
@@ -23,6 +26,8 @@ export interface MsgApi {
   postBatch(payload: BatchPayload): Promise<BatchResult | null>
   postStatuses(input: { accountId: number; chatKey: string; updates: StatusUpdate[] }): Promise<{ updated: number } | null>
   listAccounts(): Promise<AccountRow[]>
+  /** 账号当前绑定的已解析指纹参数；未绑定 / 后端不可用 / 未登录一律 `null`。 */
+  fingerprintRuntime(accountId: number): Promise<FingerprintRuntime | null>
 }
 
 export interface StatusUpdate {
@@ -112,6 +117,27 @@ export function createMsgApi(opts: MsgApiOptions): MsgApi {
         return env.code === 0 && Array.isArray(env.data) ? env.data : []
       } catch {
         return []
+      }
+    },
+    /**
+     * 未绑定档案时后端是 `code:0` + `data:null`——那不是失败，是"这个账号不该有指纹"（R2）。
+     * 所以判空看 `data` 而不是看 `code`；非 2xx / code≠0 / 网络异常一律折 `null`，**不抛**：
+     * 没登录或后端不可用不是异常，抛上去只会让建视图这一步整个挂掉，而指纹是增强不是前提。
+     */
+    async fingerprintRuntime(accountId: number): Promise<FingerprintRuntime | null> {
+      const token = opts.token()
+      if (!token) return null
+      try {
+        const res = await doFetch(`${base}/api/platform-accounts/${accountId}/fingerprint-runtime`, {
+          headers: { authorization: `Bearer ${token}` },
+          signal: AbortSignal.timeout(timeoutMs)
+        })
+        if (!res.ok) return null
+        const env = (await res.json()) as Envelope<FingerprintRuntime | null>
+        if (env.code !== 0 || !env.data) return null
+        return env.data
+      } catch {
+        return null
       }
     }
   }

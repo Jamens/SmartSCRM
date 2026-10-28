@@ -4,8 +4,15 @@ import com.smartscrm.server.service.msg.MsgTimes;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.FingerprintProfile;
+import com.smartscrm.server.entity.PlatformAccount;
 import com.smartscrm.server.mapper.FingerprintProfileMapper;
+import com.smartscrm.server.mapper.PlatformAccountMapper;
+import com.smartscrm.server.web.vo.FingerprintRuntimeVO;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Set;
 import org.springframework.stereotype.Service;
@@ -42,10 +49,92 @@ public class FingerprintProfileService {
         "Apple M1", "Mesa Intel(R) UHD Graphics", "AMD Radeon RX 580");
     private static final int[] DEVICE_MEMS = {2, 4, 8, 16};
 
-    private final FingerprintProfileMapper mapper;
+    /** 解析 brands_json 用。形制同 service/batch 与 service/provider：自备一份，不注册 Spring 的 mapper bean。 */
+    private static final ObjectMapper JSON = new ObjectMapper();
 
-    public FingerprintProfileService(FingerprintProfileMapper mapper) {
+    private final FingerprintProfileMapper mapper;
+    private final PlatformAccountMapper accountMapper;
+
+    public FingerprintProfileService(FingerprintProfileMapper mapper, PlatformAccountMapper accountMapper) {
         this.mapper = mapper;
+        this.accountMapper = accountMapper;
+    }
+
+    /**
+     * 账号的运行时指纹参数（spec R2/R7）：未绑档案返回 {@code null}——未绑定是合法状态，
+     * 不施加任何指纹，也不兜底生成一份。档案不存在或不属于本租户同样返回 {@code null}：
+     * 读到别的租户的档案等于把人家的运行环境配置交出去，宁可什么都不给。
+     *
+     * <p>解析一律「缺项不改」：brands 的 JSON 坏了就只有 brands 为 null，噪声种子没写（null/空白）
+     * 就只有那一个种子为 null，其余字段照常下发。一个字段坏掉不能带走整个指纹。
+     */
+    public FingerprintRuntimeVO runtimeOf(Long tenantId, Long accountId) {
+        PlatformAccount account = accountMapper.selectById(accountId);
+        if (account == null || !tenantId.equals(account.getTenantId())) {
+            throw new BizException(40404, "账号不存在");
+        }
+        Long profileId = account.getFingerprintProfileId();
+        if (profileId == null) {
+            return null;
+        }
+        FingerprintProfile d = mapper.selectById(profileId);
+        if (d == null || !tenantId.equals(d.getTenantId())) {
+            return null;
+        }
+        return new FingerprintRuntimeVO(
+            d.getId(),
+            d.getSeed(),
+            d.getUserAgent(),
+            d.getUaPlatform(),
+            d.getUaPlatformVersion(),
+            parseBrands(d.getBrandsJson()),
+            d.getLocale(),
+            d.getTimezone(),
+            d.getHardwareConcurrency(),
+            d.getDeviceMemory(),
+            d.getWebglVendor(),
+            d.getWebglRenderer(),
+            parseSeed(d.getCanvasNoise()),
+            parseSeed(d.getAudioNoise()));
+    }
+
+    /** brands_json → BrandVO 列表。null/空/非法 JSON/不是数组 → null（该项不改），不抛。 */
+    private static List<FingerprintRuntimeVO.BrandVO> parseBrands(String json) {
+        if (json == null || json.isBlank()) {
+            return null;
+        }
+        try {
+            JsonNode arr = JSON.readTree(json);
+            if (!arr.isArray()) {
+                return null;
+            }
+            List<FingerprintRuntimeVO.BrandVO> out = new ArrayList<>();
+            for (JsonNode node : arr) {
+                out.add(new FingerprintRuntimeVO.BrandVO(
+                    node.path("brand").asText(null), node.path("version").asText(null)));
+            }
+            return out;
+        } catch (Exception e) {
+            return null;
+        }
+    }
+
+    /**
+     * 噪声种子：任意非空字符串 → 稳定的 32 位无符号数（FNV-1a 32）。
+     * 不按十进制/十六进制解析——生成器写的是 32 位 hex 串，且 "12345678" 这类形态有二义性；
+     * 哈希对旧数据（hex）与新数据都成立，且同串恒同值（指纹要"稳定"）。null/空白 = 缺项 -> null（R7）。
+     */
+    private static Long parseSeed(String raw) {
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        // 手写 FNV-1a 而不是 String.hashCode()：后者只是"当前实现碰巧如此"，不是跨版本的契约。
+        long hash = 0x811c9dc5L;
+        for (byte b : raw.getBytes(StandardCharsets.UTF_8)) {
+            hash = (hash ^ (b & 0xff)) & 0xffffffffL;
+            hash = (hash * 0x01000193L) & 0xffffffffL;
+        }
+        return hash;
     }
 
     /** 新建指纹档案。name 必填；os/browser 落库归一（未知→windows/chrome）；status 默认 inactive。 */

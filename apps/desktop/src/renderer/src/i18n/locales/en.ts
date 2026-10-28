@@ -143,6 +143,29 @@ export const en: DeepString<typeof zhCN> = {
     safeModeRecover:
       'Last launch was auto-switched here after a GPU crash. You can try restoring normal mode:',
     retryStandard: 'Retry standard mode',
+    // Browser fingerprint (B14)
+    fingerprint: {
+      title: 'Browser fingerprint',
+      desc: 'For accounts bound to a fingerprint profile, apply a browser fingerprint (user agent / timezone / Canvas / WebGL and more) to their embedded view, so accounts under the same tenant look like different machines. Accounts without a bound profile are not affected at all.',
+      masterTitle: 'Enable fingerprint injection',
+      masterDetail:
+        'When on, accounts with a bound profile get the fingerprint applied when their embedded view opens; when off, no account is touched. The change takes effect the next time a view is opened (or reloaded).',
+      browser: 'This host (browser preview) does not persist this switch',
+      defaultOffNote:
+        'Off by default: fingerprint injection (Canvas noise / WebGL spoofing / Audio perturbation) exists to keep the automation checks of a page from reading real device values, which crosses the open-source line this project originally drew: never probe or disguise a real device. It therefore takes effect only when two things are both true: an account explicitly binds a profile, and this switch is explicitly turned on.',
+      itemsTitle: 'Per-item switches (only affect accounts with a bound profile)',
+      items: {
+        navigator:
+          'Navigator properties (CPU cores / memory / languages / platform / Client Hints)',
+        canvas: 'Canvas noise (+-1 on pixel reads; the rendered page itself is unchanged)',
+        webgl: 'WebGL vendor and renderer',
+        audio: 'Audio sample perturbation (amplitude <= 1e-6, inaudible)',
+        font: 'Font probing (measureText)',
+        mediaDevices: 'Media device enumeration',
+        iframe: 'Dynamic iframe coverage',
+        timezone: 'Timezone override'
+      }
+    },
     deviceInfo: 'Device info',
     deviceInfoDesc:
       'The state of this machine and this app. The machine code and OS version follow the same口径 reported to the backend `device` at login, so what’s shown here should match what’s stored.',
@@ -1291,6 +1314,15 @@ export const en: DeepString<typeof zhCN> = {
       empty: 'No accounts yet. Click + at the top right to add one.',
       deleteTitle: 'Delete account',
       importTitle: 'Import session credential'
+    },
+    fingerprint: {
+      label: 'Fingerprint profile',
+      none: 'Not bound (no fingerprint applied)',
+      confirmTitle: 'Switch the fingerprint profile?',
+      confirmDesc:
+        'The embedded view of account "{{name}}" will be reloaded immediately, and unsent draft content will be lost.',
+      confirmYes: 'Switch it',
+      cancel: 'Cancel'
     },
     delete: {
       title: 'Delete platform account',

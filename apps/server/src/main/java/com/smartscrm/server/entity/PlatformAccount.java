@@ -22,6 +22,11 @@ public class PlatformAccount {
     private String phone;
     private String avatar;
     private String viewId;
+    /**
+     * 绑定的指纹档案（B14 指纹注入）。NULL = 该账号不施加任何指纹，行为与绑定前完全一致（spec R2）——
+     * 未绑定是合法状态，不做兜底生成。
+     */
+    private Long fingerprintProfileId;
     /** 导入的会话凭据（导出的 localStorage JSON 原文），用于免扫码登录。 */
     @TableField("session_credential")
     private String sessionCredential;

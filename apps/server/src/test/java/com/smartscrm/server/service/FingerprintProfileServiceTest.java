@@ -14,6 +14,7 @@ import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.FingerprintProfile;
 import com.smartscrm.server.mapper.FingerprintProfileMapper;
+import com.smartscrm.server.mapper.PlatformAccountMapper;
 import java.util.List;
 import java.util.Set;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
@@ -38,7 +39,7 @@ class FingerprintProfileServiceTest {
     void setUp() {
         TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new Configuration(), ""), FingerprintProfile.class);
         mapper = mock(FingerprintProfileMapper.class);
-        svc = new FingerprintProfileService(mapper);
+        svc = new FingerprintProfileService(mapper, mock(PlatformAccountMapper.class));
     }
 
     private static FingerprintProfile profile(Long id, Long tenantId) {
