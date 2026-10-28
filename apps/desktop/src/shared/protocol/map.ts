@@ -7,6 +7,7 @@
 // 所以这里拿到的是 data payload（ProtocolInboundMessage / ProtocolStatusPush），不是整个信封。
 
 import { normalizeInbound, normalizeStatusPush, wpStatusToMsgStatus } from './normalize.ts'
+import { DEFAULT_PROTOCOL_SOURCE, type ProtocolSource } from './types.ts'
 import type { SendReceipt } from '../chatTypes.ts'
 import type {
   ProtocolInboundMessage,
@@ -16,20 +17,41 @@ import type {
 } from './types.ts'
 
 /**
+ * TG 会话标识 -> chat_key：正整数串（单聊）/ -100 前缀负整数串（超级群）。
+ * **不**把 TG 数字 id 编造成 xxx@c.us 的伪 JID——chat_key 只要内部一致即可，
+ * 不需要长得像另一个平台（spec §2.2）。
+ *
+ * 形态与 Java 侧 `ChatKeys.TG_CHAT = ^-?\d{4,20}$` 同形：可带一个负号，
+ * 数字部分去前导零后长度 4–20。非整数形态（含 WA 的 xxx@c.us）一律 null（静默丢弃，不入站）。
+ */
+export function tgChatKeyOf(peer: number | string | null | undefined): string | null {
+  if (peer == null) return null
+  const raw = String(peer).trim()
+  if (raw === '') return null
+  if (!/^-?\d+$/.test(raw)) return null
+  const negative = raw.startsWith('-')
+  const digits = (negative ? raw.slice(1) : raw).replace(/^0+/, '')
+  if (digits.length < 4 || digits.length > 20) return null
+  return `${negative ? '-' : ''}${digits}`
+}
+
+/**
  * 一条入站消息 payload -> 单条消息入库批量。
  * 实时推送用 'live'；落库面 activeChatKey 传 null（协议号无 UI 活动会话上下文，
  * 入站消息一律计未读，与网页 WA 的"当前打开会话不计未读"逻辑解耦）。
  * payload 缺 peerJid 且无 conversationId 时返回 null（静默丢弃，不入站）。
+ * @param protocolSource 透传给 normalizeInbound，只影响 msgType 的取值域解释（R5：输出同形）。
  */
 export function inboundMessageToBatch(
   accountId: number,
-  msg: ProtocolInboundMessage | null | undefined
+  msg: ProtocolInboundMessage | null | undefined,
+  protocolSource: ProtocolSource = DEFAULT_PROTOCOL_SOURCE
 ): IngestBatch | null {
   if (!msg || (msg.peerJid == null && msg.conversationId == null)) return null
   return {
     accountId,
     activeChatKey: null,
-    messages: [normalizeInbound(msg, 'live')]
+    messages: [normalizeInbound(msg, 'live', protocolSource)]
   }
 }
 

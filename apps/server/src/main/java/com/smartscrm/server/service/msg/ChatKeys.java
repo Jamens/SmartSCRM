@@ -31,6 +31,10 @@ public final class ChatKeys {
             case 4 -> "telegram";
             // WA 协议号：与 WA 同形态，复用现有入库面（B27 入站腿）。出站腿依赖外部 protocol 服务。
             case 7 -> "whatsapp";
+            // TG 协议源（MTProto）：与 4 = TG 网页版区分——4 走 WebContentsView + 注入翻译层，
+            // 8 走外部协议网关、不建视图。chat_key 同为 TG 数字形态，复用 telegram 入库面。
+            // 前端同名映射在 @shared/chatPlatform.ts（TELEGRAM_PROTOCOL_ACCOUNT_TYPE）：两处必须同时改。
+            case 8 -> "telegram";
             default -> null;
         };
     }

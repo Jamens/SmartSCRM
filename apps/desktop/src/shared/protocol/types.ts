@@ -6,6 +6,21 @@
 import type { MediaType, MsgSource, MsgStatus } from '../chatTypes.ts'
 
 // ---------------------------------------------------------------------------
+// 协议源（B27 WA 协议号 / 本 spec 的 TG 协议源）
+// ---------------------------------------------------------------------------
+
+/** 外部协议源。'wa-protocol' = B27 WA 协议号；'telegram' = TG 协议源。 */
+export type ProtocolSource = 'wa-protocol' | 'telegram'
+/** 缺省源：既有的 WA 协议号链路。不给 source 的调用点行为与改造前完全一致。 */
+export const DEFAULT_PROTOCOL_SOURCE: ProtocolSource = 'wa-protocol'
+
+/** 一个要接进同步管理的协议源账号：`accountId` + 它属于哪个源。 */
+export interface ProtocolSourceEntry {
+  accountId: number
+  source: ProtocolSource
+}
+
+// ---------------------------------------------------------------------------
 // WS 信封与网关 payload
 // ---------------------------------------------------------------------------
 
@@ -16,6 +31,16 @@ export interface ProtocolWsEnvelope<T = unknown> {
   data?: T
 }
 
+// TG 协议源复用本结构（R8：字段名沿用 wp 前缀，一个字不改）。下面四项的 TG 真实形状
+// **形态待实测**（R7，期二拿到账号后逐条回填；现在只留注释，不加字段、不写死逻辑）：
+// 1. msgType：WA 是 1-7/99 的数值域，TG 预期是名称域（photo/voice/animation/video_note…），
+//    真实取值域未验证 → 见 normalize.ts 的 tgMsgTypeToMediaType（未知一律回落 text）。
+// 2. 时间戳：TG 给的是否为 epoch 秒、落在 waTimestamp 还是 createdAt，未验证 →
+//    归一化仍按既有的 `waTimestamp ?? createdAt` 优先级取（normalize.ts）。
+// 3. senderJid：TG 的发送人是否带 `user#id` 形态（而非 WA 的 `xxx@c.us`），未验证 →
+//    按原样透传成 senderKey，不做解析。
+// 4. 已读回执：TG 是否有与 WA_MSG_STATUS_PUSH 等价的已读事件，未验证 →
+//    TG 侧暂只用 TG_MSG_STATUS_PUSH，其 status 取值域同样待实测。
 /** WA_MSG_IN_PUSH.data —— 一条入站/出站消息（RocketMQ wa_msg_in_push）。 */
 export interface ProtocolInboundMessage {
   schemaVersion?: string
@@ -89,12 +114,17 @@ export interface ProtocolAccountStatusPush {
   changedAt?: string
 }
 
-/** WS 事件名。网关还会推别的事件，这条通道只消费 WA_* 四个。 */
+/** WS 事件名。网关还会推别的事件，这条通道只消费 WA_* 四个；TG 源另用 TG_* 三个（下方追加，既有条目不动）。 */
 export const PROTOCOL_WS_TYPES = {
   MSG_IN: 'WA_MSG_IN_PUSH',
   MSG_STATUS: 'WA_MSG_STATUS_PUSH',
   ACCOUNT_STATUS: 'WA_ACCOUNT_STATUS_PUSH',
-  KICK_OUT: 'KICK_OUT'
+  KICK_OUT: 'KICK_OUT',
+  // TG 协议源（期一）：与 WA_* 一一对应，只是事件名分开——网关侧与排障日志要能一眼看出源（D1）。
+  // 信封形状、PING/PONG、关闭码语义全部沿用 WA，一个字都没改（R2）。
+  TG_MSG_IN: 'TG_MSG_IN_PUSH',
+  TG_MSG_STATUS: 'TG_MSG_STATUS_PUSH',
+  TG_ACCOUNT_STATUS: 'TG_ACCOUNT_STATUS_PUSH'
 } as const
 
 /** 鉴权失败：刷新 token 后重试（关闭码 4001–4004）。 */

@@ -1,8 +1,14 @@
 // src/renderer/src/services/protocol/manager.ts
-// 每个 type-7（WA 协议号）账号起一个 ProtocolClient，把网关 WS 实时推送的
-// 入站消息 / 状态帧，归一化后转发到现有后端入库面（/api/messages/batch、/api/messages/status）。
+// 每个外部协议源账号（type-7 WA 协议号 / type-8 TG 协议源）起一个 ProtocolClient，把网关
+// WS 实时推送的入站消息 / 状态帧，归一化后转发到现有后端入库面（/api/messages/batch、/api/messages/status）。
 // 形态是「渲染进程直连网关 -> 落库到统一入库面，不经 WebView」：协议引擎不在客户端，
 // 所以这一条链没有 IPC、没有注入层、没有本地表。
+//
+// 多源并列（期一）：两个源**共用同一份网关契约**（信封、PING/PONG、关闭码语义），差别只有
+// 网关地址与 WS 事件名的前缀（WA_* / TG_*）。因此本文件对源做的唯一区分是：
+// - attach 时按 entry.source 选 { baseUrl, wsUrl }（TG 取 tgBaseUrl / tgWsUrl）；
+// - handler 闭包捕获 entry.source 并透传给 inboundMessageToBatch（只影响 msgType 取值域解释）。
+// 归一化之后的 Output 与源无关（@shared/protocol/normalize.ts），主进程侧不知道数据来自哪个源。
 //
 // 设计要点：
 // - 纯映射（payload -> DTO）放在 @shared/protocol/map.ts，本文件只做"接线 + 生命周期"。
@@ -14,6 +20,11 @@
 // 把 conversationId -> peerJid(=chatKey) 记下来，状态推送到达时反查 chatKey 再转发。
 
 import { inboundMessageToBatch, runProtocolSend, statusPushToStatus } from '@shared/protocol/map.ts'
+import {
+  DEFAULT_PROTOCOL_SOURCE,
+  type ProtocolSource,
+  type ProtocolSourceEntry
+} from '@shared/protocol/types.ts'
 import type {
   IngestBatch,
   IngestStatus,
@@ -26,6 +37,14 @@ import { ProtocolClient, type ProtocolClientOptions } from './client.ts'
 export interface ProtocolSyncDeps {
   baseUrl: string
   wsUrl: string
+  /**
+   * TG 协议源（type-8）的网关地址，缺省 ''。未配置时 TG 源**完全静默**——
+   * client 拿到空 wsUrl 就不建连，绝不向任何外部服务发起连接。
+   * 放可选位是为了不动 B27 已验证的构造（D3）。
+   */
+  tgBaseUrl?: string
+  /** 同 tgBaseUrl：TG 源的 WS 地址，缺省 '' = 静默。 */
+  tgWsUrl?: string
   getToken: () => string | null
   /** 转发单条消息批量到 /api/messages/batch。 */
   ingest: (batch: IngestBatch) => Promise<unknown>
@@ -57,6 +76,9 @@ export function getActiveProtocolManager(): ProtocolSyncManager | null {
 export class ProtocolSyncManager {
   private clients = new Map<number, ProtocolClient>()
 
+  /** 已接进来的每个账号属于哪个源。clientFor 惰性建连时要按它选网关地址。 */
+  private sourceByAccount = new Map<number, ProtocolSource>()
+
   /**
    * conversationId -> chatKey(peerJid) 映射，按账号隔离。
    * 用于把"无 chatKey 的状态推送"反查到正确的 chatKey（见 handleStatus）。
@@ -69,35 +91,49 @@ export class ProtocolSyncManager {
    * 按账号集合校准运行中的 client：新增的起连接，消失的断开。
    * 已存在且未停的连接保持不动（避免账号列表变化引起 WS 抖动）。
    */
-  start(accountIds: number[]): void {
-    const wanted = new Set(accountIds)
+  start(entries: ProtocolSourceEntry[]): void {
+    const wanted = new Set(entries.map((e) => e.accountId))
     for (const id of [...this.clients.keys()]) {
       if (!wanted.has(id)) this.detach(id)
     }
-    for (const id of accountIds) {
-      const existing = this.clients.get(id)
+    for (const entry of entries) {
+      // 同一账号换了源（罕见但致命：会把 TG 帧打到 WA 网关），先拆再重建
+      if (this.sourceByAccount.get(entry.accountId) !== entry.source) {
+        this.detach(entry.accountId)
+        this.attach(entry)
+        continue
+      }
+      const existing = this.clients.get(entry.accountId)
       if (existing && !existing.isStopped()) continue
-      this.attach(id)
+      this.attach(entry)
     }
   }
 
-  private attach(accountId: number): ProtocolClient | null {
-    const client = this.makeClient(accountId)
-    this.clients.set(accountId, client as ProtocolClient)
+  private attach(entry: ProtocolSourceEntry): ProtocolClient | null {
+    const client = this.makeClient(entry)
+    this.clients.set(entry.accountId, client as ProtocolClient)
+    this.sourceByAccount.set(entry.accountId, entry.source)
     client.connect()
     return client as ProtocolClient
   }
 
-  /** 取某账号的 client：已存在且未停则复用，否则惰性建连。出站发送走这条。 */
+  /**
+   * 取某账号的 client：已存在且未停则复用，否则按该账号已注册的 source 惰性建连。
+   * source 取不到（账号从未登记过）时退回 WA 协议号——改造前的行为，不会误连 TG 网关。
+   */
   private clientFor(accountId: number): ProtocolClient | null {
     const existing = this.clients.get(accountId)
     if (existing && !existing.isStopped()) return existing
-    return this.attach(accountId)
+    return this.attach({
+      accountId,
+      source: this.sourceByAccount.get(accountId) ?? DEFAULT_PROTOCOL_SOURCE
+    })
   }
 
   private detach(accountId: number): void {
     this.clients.get(accountId)?.disconnect()
     this.clients.delete(accountId)
+    this.sourceByAccount.delete(accountId)
     this.chatKeyByConversation.delete(accountId)
   }
 
@@ -118,13 +154,19 @@ export class ProtocolSyncManager {
     )
   }
 
-  private makeClient(accountId: number): ProtocolClient {
+  /**
+   * 建一个账号的 client：地址按 source 分流，两个源的其余选项完全一致。
+   * handler 闭包捕获 source 并透传给下方 handler——这是多源改造里唯一需要"记住来源"的地方。
+   */
+  private makeClient(entry: ProtocolSourceEntry): ProtocolClient {
+    const source = entry.source
+    const telegram = source === 'telegram'
     const opts: ProtocolClientOptions = {
-      baseUrl: this.deps.baseUrl,
-      wsUrl: this.deps.wsUrl,
+      baseUrl: telegram ? (this.deps.tgBaseUrl ?? '') : this.deps.baseUrl,
+      wsUrl: telegram ? (this.deps.tgWsUrl ?? '') : this.deps.wsUrl,
       getToken: this.deps.getToken,
-      onInbound: (data: unknown) => void this.handleInbound(accountId, data),
-      onStatus: (data: unknown) => void this.handleStatus(accountId, data),
+      onInbound: (data: unknown) => void this.handleInbound(entry.accountId, data, source),
+      onStatus: (data: unknown) => void this.handleStatus(entry.accountId, data, source),
       onAuthFailure: this.deps.onAuthFailure
     }
     return (
@@ -154,21 +196,29 @@ export class ProtocolSyncManager {
     return this.chatKeyByConversation.get(accountId)?.get(conversationId)
   }
 
-  private async handleInbound(accountId: number, data: unknown): Promise<void> {
+  private async handleInbound(
+    accountId: number,
+    data: unknown,
+    protocolSource: ProtocolSource
+  ): Promise<void> {
     const msg = data as ProtocolInboundMessage | null
     if (!msg) return
     // 先记下 conversationId -> peerJid，供后续状态推送反查 chatKey
     this.recordChatKey(accountId, msg.conversationId, msg.peerJid)
-    const batch = inboundMessageToBatch(accountId, msg)
+    const batch = inboundMessageToBatch(accountId, msg, protocolSource)
     if (!batch) return
     try {
       await this.deps.ingest(batch)
     } catch (e) {
-      console.error('[protocol] inbound ingest failed', accountId, e)
+      console.error('[protocol] inbound ingest failed', protocolSource, accountId, e)
     }
   }
 
-  private async handleStatus(accountId: number, data: unknown): Promise<void> {
+  private async handleStatus(
+    accountId: number,
+    data: unknown,
+    protocolSource: ProtocolSource
+  ): Promise<void> {
     const push = data as ProtocolStatusPush | null
     if (!push) return
     // 状态推送只有 conversationId + messageId，无 chatKey：反查映射
@@ -178,6 +228,7 @@ export class ProtocolSyncManager {
       // 无法定位 chatKey，安全丢弃（不入错会话）；后续由历史拉取补偿。
       console.warn(
         '[protocol] status push without chatKey mapping, dropped',
+        protocolSource,
         accountId,
         push.conversationId,
         push.messageId
@@ -189,7 +240,7 @@ export class ProtocolSyncManager {
     try {
       await this.deps.applyStatus(status)
     } catch (e) {
-      console.error('[protocol] status apply failed', accountId, e)
+      console.error('[protocol] status apply failed', protocolSource, accountId, e)
     }
   }
 
