@@ -91,6 +91,25 @@ test('listAccounts 在非 2xx / 结构不对时给空数组而不是抛', async 
   assert.deepEqual(await createMsgApi({ token: () => 'T', fetchImpl: down.impl }).listAccounts(), [])
 })
 
+test('fingerprintRuntime 在后端 500 时返回 null 而不是抛', async () => {
+  const down = fakeFetch({ ok: false, body: null })
+  const api = createMsgApi({ token: () => 'T', fetchImpl: down.impl })
+  // 指纹是增强不是前提：后端跪了 = "这个账号本轮没指纹"，绝不能把建视图这一步整个带崩。
+  assert.equal(await api.fingerprintRuntime(7), null)
+  assert.equal(down.calls[0].url, 'http://localhost:8180/api/platform-accounts/7/fingerprint-runtime')
+
+  const biz = fakeFetch({ body: { code: 40300, message: 'forbidden' } })
+  assert.equal(await createMsgApi({ token: () => 'T', fetchImpl: biz.impl }).fingerprintRuntime(7), null)
+
+  // 未绑定是 `code:0` + `data:null`：那不是失败，是"不该有指纹"（R2）。
+  const unbound = fakeFetch({ body: { code: 0, data: null } })
+  assert.equal(await createMsgApi({ token: () => 'T', fetchImpl: unbound.impl }).fingerprintRuntime(7), null)
+
+  const noToken = fakeFetch({ body: { code: 0, data: {} } })
+  assert.equal(await createMsgApi({ token: () => null, fetchImpl: noToken.impl }).fingerprintRuntime(7), null)
+  assert.equal(noToken.calls.length, 0, '未登录就不该出网')
+})
+
 test('空文本与超长文本不发出去', () => {
   assert.equal(isSendable({ accountId: 1, chatKey: 'c', text: '   ', localId: 'L' }), false)
   assert.equal(isSendable({ accountId: 1, chatKey: 'c', text: 'x'.repeat(5_001), localId: 'L' }), false)

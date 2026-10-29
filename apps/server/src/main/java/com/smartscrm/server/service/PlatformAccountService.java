@@ -2,6 +2,7 @@ package com.smartscrm.server.service;
 
 import com.smartscrm.server.service.msg.MsgTimes;
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.smartscrm.server.common.BizException;
 import com.smartscrm.server.entity.PlatformAccount;
 import com.smartscrm.server.mapper.PlatformAccountMapper;
@@ -14,9 +15,11 @@ import org.springframework.stereotype.Service;
 public class PlatformAccountService {
 
     private final PlatformAccountMapper mapper;
+    private final FingerprintProfileService fingerprintService;
 
-    public PlatformAccountService(PlatformAccountMapper mapper) {
+    public PlatformAccountService(PlatformAccountMapper mapper, FingerprintProfileService fingerprintService) {
         this.mapper = mapper;
+        this.fingerprintService = fingerprintService;
     }
 
     public List<PlatformAccount> list(Long tenantId) {
@@ -70,6 +73,26 @@ public class PlatformAccountService {
     /** 读取凭据原文（仅专门的 GET /credential 使用，列表已忽略）。 */
     public String getCredential(Long tenantId, Long id) {
         return requireOwned(tenantId, id).getSessionCredential();
+    }
+
+    /**
+     * 绑定/解绑指纹档案（B14 指纹注入，spec R1：一个账号最多一份）。
+     * {@code profileId} 为 null 即解绑——解绑后该账号不施加任何指纹（R2）。
+     * 非 null 时 {@link FingerprintProfileService#get} 会挡住别租户的档案（40404）。
+     *
+     * <p>这里用 {@code LambdaUpdateWrapper.set} 而不是 {@code updateById}：MyBatis-Plus 默认的
+     * NOT_NULL 字段策略会把 null 值从 SET 里剔掉，解绑就写不进库（写了也还是原值）。
+     */
+    public PlatformAccount bindFingerprint(Long tenantId, Long id, Long profileId) {
+        PlatformAccount account = requireOwned(tenantId, id);
+        if (profileId != null) {
+            fingerprintService.get(tenantId, profileId);
+        }
+        mapper.update(null, new LambdaUpdateWrapper<PlatformAccount>()
+            .eq(PlatformAccount::getId, account.getId())
+            .set(PlatformAccount::getFingerprintProfileId, profileId));
+        account.setFingerprintProfileId(profileId);
+        return account;
     }
 
     private PlatformAccount withHasFlag(PlatformAccount account) {

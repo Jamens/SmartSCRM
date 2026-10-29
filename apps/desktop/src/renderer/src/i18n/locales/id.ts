@@ -144,6 +144,29 @@ export const id: DeepString<typeof zhCN> = {
     safeModeRecover:
       'Peluncuran terakhir dialihkan ke sini secara otomatis karena proses GPU crash. Anda dapat mencoba memulihkan mode normal:',
     retryStandard: 'Coba lagi mode standar',
+    // Sidik jari browser (B14)
+    fingerprint: {
+      title: 'Sidik jari browser',
+      desc: 'Untuk akun yang terikat ke profil sidik jari, terapkan sidik jari browser (UA / zona waktu / Canvas / WebGL dan lainnya) pada tampilan tersematnya, agar beberapa akun dalam satu tenant tampak seperti mesin yang berbeda. Akun tanpa profil yang terikat sama sekali tidak terpengaruh.',
+      masterTitle: 'Aktifkan injeksi sidik jari',
+      masterDetail:
+        'Saat aktif, akun dengan profil terikat akan diberi sidik jari saat tampilan tersematnya dibuka; saat nonaktif, tidak ada akun yang disentuh. Perubahan berlaku pada saat tampilan dibuka (atau dimuat ulang) berikutnya.',
+      browser: 'Host saat ini (pratinjau browser) tidak menyimpan tombol ini',
+      defaultOffNote:
+        'Nonaktif secara bawaan: injeksi sidik jari (noise Canvas / pemalsuan WebGL / gangguan Audio) bertujuan agar pemeriksaan otomatis halaman tidak dapat membaca nilai perangkat nyata, yang melampaui batas open-source yang sejak awal ditarik proyek ini: tidak mendeteksi dan tidak menyamarkan perangkat nyata. Karena itu ia hanya berlaku bila dua hal sama-sama terpenuhi: akun mengikat profil secara eksplisit, dan tombol ini dinyalakan secara eksplisit.',
+      itemsTitle: 'Tombol per item (hanya berlaku bagi akun dengan profil terikat)',
+      items: {
+        navigator:
+          'Properti Navigator (jumlah inti CPU / memori / bahasa / platform / Client Hints)',
+        canvas: 'Noise Canvas (+-1 saat membaca piksel; tampilan halaman sendiri tidak berubah)',
+        webgl: 'Vendor dan renderer WebGL',
+        audio: 'Gangguan sampel Audio (amplitudo ≤ 1e-6, tidak terdengar)',
+        font: 'Deteksi font (measureText)',
+        mediaDevices: 'Enumerasi perangkat media',
+        iframe: 'Cakupan iframe dinamis',
+        timezone: 'Timpa zona waktu'
+      }
+    },
     deviceInfo: 'Informasi perangkat',
     deviceInfoDesc:
       'Status mesin ini dan aplikasi ini. Kode mesin dan versi sistem diambil sesuai kaliber device yang dilaporkan ke backend saat login, sehingga yang tertulis di kartu seharusnya sama dengan yang tersimpan di database.',
@@ -1302,6 +1325,14 @@ export const id: DeepString<typeof zhCN> = {
       empty: 'Belum ada akun. Klik + di kanan atas untuk menambah.',
       deleteTitle: 'Hapus akun',
       importTitle: 'Impor kredensial sesi'
+    },
+    fingerprint: {
+      label: 'Profil sidik jari',
+      none: 'Tidak terikat (tidak ada sidik jari yang diterapkan)',
+      confirmTitle: 'Yakin mengganti profil sidik jari?',
+      confirmDesc: 'Tampilan tersemat akun "{{name}}" akan dimuat ulang seketika, dan draf yang belum dikirim akan hilang.',
+      confirmYes: 'Ya, ganti',
+      cancel: 'Batal'
     },
     delete: {
       title: 'Hapus akun platform',

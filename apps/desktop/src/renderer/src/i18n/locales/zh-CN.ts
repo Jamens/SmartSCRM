@@ -145,6 +145,27 @@ export const zhCN = {
     safeModeFatal: '降级模式下 GPU 仍崩溃（原因：{{reason}}），多半是显卡驱动问题，建议更新驱动。',
     safeModeRecover: '上次启动因 GPU 进程崩溃被自动切到这里。可以尝试恢复正常模式：',
     retryStandard: '重试标准模式',
+    // 浏览器指纹（B14）
+    fingerprint: {
+      title: '浏览器指纹',
+      desc: '对已绑定指纹档案的账号，在其内嵌视图上施加浏览器指纹（UA / 时区 / Canvas / WebGL 等），让同一租户下多个账号的运行环境互相区分。未绑定档案的账号完全不受影响。',
+      masterTitle: '启用指纹注入',
+      masterDetail: '打开后，已绑定档案的账号在打开内嵌视图时会被施加指纹；关掉则所有账号都不施加。改动在下一次打开（或重载）视图时生效。',
+      browser: '当前宿主（浏览器预览）不落盘此开关',
+      defaultOffNote:
+        '默认关闭：指纹注入（Canvas 噪声 / WebGL 伪装 / Audio 扰动）的目的就是让页面的自动化检测读不到真实设备值，这与本项目原本「不探测、不伪装真实设备」的开源口径相冲突。因此它只在两件事都做到时才生效：账号显式绑定了一份档案，且这里显式打开。',
+      itemsTitle: '分项开关（只对已绑定档案的账号起作用）',
+      items: {
+        navigator: 'Navigator 属性（CPU 核数 / 内存 / 语言 / 平台 / Client Hints）',
+        canvas: 'Canvas 噪声（读取像素时加 ±1 扰动，页面画面本身不变）',
+        webgl: 'WebGL 厂商与渲染器',
+        audio: 'Audio 采样扰动（幅度 ≤ 1e-6，人耳不可闻）',
+        font: '字体探测（measureText 口径）',
+        mediaDevices: '媒体设备枚举',
+        iframe: '动态 iframe 覆盖',
+        timezone: '时区覆盖'
+      }
+    },
     // 设备信息
     deviceInfo: '设备信息',
     deviceInfoDesc:
@@ -1270,6 +1291,14 @@ export const zhCN = {
       empty: '还没有账号，点击右上角 + 添加',
       deleteTitle: '删除账号',
       importTitle: '导入会话凭据'
+    },
+    fingerprint: {
+      label: '指纹档案',
+      none: '未绑定（不施加指纹）',
+      confirmTitle: '确认切换指纹档案？',
+      confirmDesc: '账号「{{name}}」的内嵌视图会立即重载，未发送的草稿内容会丢失。',
+      confirmYes: '确认切换',
+      cancel: '取消'
     },
     delete: {
       title: '删除平台账号',

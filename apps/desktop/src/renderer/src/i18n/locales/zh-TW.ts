@@ -137,6 +137,27 @@ export const zhTW: DeepString<typeof zhCN> = {
     safeModeFatal: '降級模式下 GPU 仍崩潰（原因：{{reason}}），多半是顯卡驅動問題，建議更新驅動。',
     safeModeRecover: '上次啟動因 GPU 程序崩潰被自動切到這裡。可以嘗試恢復正常模式：',
     retryStandard: '重試標準模式',
+    // 瀏覽器指紋（B14）
+    fingerprint: {
+      title: '瀏覽器指紋',
+      desc: '對已綁定指紋檔案的帳號，在其內嵌視圖上施加瀏覽器指紋（UA / 時區 / Canvas / WebGL 等），讓同一租戶下多個帳號的運行環境互相區分。未綁定檔案的帳號完全不受影響。',
+      masterTitle: '啟用指紋注入',
+      masterDetail: '打開後，已綁定檔案的帳號在打開內嵌視圖時會被施加指紋；關掉則所有帳號都不施加。改動在下次打開（或重新載入）視圖時生效。',
+      browser: '目前宿主（瀏覽器預覽）不落盤此開關',
+      defaultOffNote:
+        '預設關閉：指紋注入（Canvas 雜訊 / WebGL 偽裝 / Audio 擾動）的目的就是讓頁面的自動化檢測讀不到真實設備值，這與本專案原本「不探測、不偽裝真實設備」的開源口徑相衝突。因此它只在兩件事都做到時才生效：帳號顯式綁定了一份檔案，且這裡顯式打開。',
+      itemsTitle: '分項開關（只對已綁定檔案的帳號起作用）',
+      items: {
+        navigator: 'Navigator 屬性（CPU 核心數 / 記憶體 / 語言 / 平台 / Client Hints）',
+        canvas: 'Canvas 雜訊（讀取像素時加 ±1 擾動，頁面畫面本身不變）',
+        webgl: 'WebGL 廠商與渲染器',
+        audio: 'Audio 取樣擾動（幅度 ≤ 1e-6，人耳不可聞）',
+        font: '字體探測（measureText 口徑）',
+        mediaDevices: '媒體設備枚舉',
+        iframe: '動態 iframe 覆蓋',
+        timezone: '時區覆蓋'
+      }
+    },
     deviceInfo: '裝置資訊',
     deviceInfoDesc:
       '這台機器與這個應用的現狀。機器碼與系統版本按登錄時上報後端 device 那份口徑取，所以卡片上寫的與庫裡存的應當是同一串。',
@@ -1260,6 +1281,14 @@ export const zhTW: DeepString<typeof zhCN> = {
       empty: '還沒有帳號，點擊右上角 + 新增',
       deleteTitle: '刪除帳號',
       importTitle: '匯入會話憑證'
+    },
+    fingerprint: {
+      label: '指紋檔案',
+      none: '未綁定（不施指紋）',
+      confirmTitle: '確認切換指紋檔案？',
+      confirmDesc: '帳號「{{name}}」的內嵌視圖會立即重新載入，未發送的草稿內容會遺失。',
+      confirmYes: '確認切換',
+      cancel: '取消'
     },
     delete: {
       title: '刪除平台帳號',

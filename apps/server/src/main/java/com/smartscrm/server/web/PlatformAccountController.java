@@ -4,9 +4,11 @@ import com.smartscrm.server.common.ApiResponse;
 import com.smartscrm.server.entity.PlatformAccount;
 import com.smartscrm.server.security.AuthPrincipal;
 import com.smartscrm.server.service.AccountImpactService;
+import com.smartscrm.server.service.FingerprintProfileService;
 import com.smartscrm.server.service.PlatformAccountService;
 import com.smartscrm.server.web.dto.PlatformAccountRequest;
 import com.smartscrm.server.web.vo.AccountImpactVO;
+import com.smartscrm.server.web.vo.FingerprintRuntimeVO;
 import jakarta.validation.Valid;
 import jakarta.validation.constraints.NotBlank;
 import java.util.List;
@@ -28,10 +30,13 @@ public class PlatformAccountController {
 
     private final PlatformAccountService service;
     private final AccountImpactService impactService;
+    private final FingerprintProfileService fingerprintService;
 
-    public PlatformAccountController(PlatformAccountService service, AccountImpactService impactService) {
+    public PlatformAccountController(PlatformAccountService service, AccountImpactService impactService,
+                                     FingerprintProfileService fingerprintService) {
         this.service = service;
         this.impactService = impactService;
+        this.fingerprintService = fingerprintService;
     }
 
     @GetMapping
@@ -106,6 +111,39 @@ public class PlatformAccountController {
         return ApiResponse.ok(new CredentialPayload(service.getCredential(principal.tenantId(), id)));
     }
 
+    /**
+     * 绑定/解绑指纹档案（B14）。body 的 profileId 为 null 即解绑；非 null 时由 service 校验
+     * 该档案属于本租户，不属于则 40404。
+     */
+    @PatchMapping("/{id}/fingerprint")
+    @PreAuthorize("hasAuthority('account:write')")
+    public ApiResponse<Void> bindFingerprint(@AuthenticationPrincipal AuthPrincipal principal,
+                                             @PathVariable Long id,
+                                             @RequestBody BindRequest req) {
+        service.bindFingerprint(principal.tenantId(), id, req.profileId());
+        return ApiResponse.ok(null);
+    }
+
+    /** 解绑指纹档案。与 PATCH 带 null 等价，给 UI 一个语义明确的出口。 */
+    @DeleteMapping("/{id}/fingerprint")
+    @PreAuthorize("hasAuthority('account:write')")
+    public ApiResponse<Void> clearFingerprint(@AuthenticationPrincipal AuthPrincipal principal,
+                                              @PathVariable Long id) {
+        service.bindFingerprint(principal.tenantId(), id, null);
+        return ApiResponse.ok(null);
+    }
+
+    /**
+     * 该账号的运行时指纹参数（已解析，客户端拿到直接用）。
+     * 未绑档案时 {@code data} 为 null 而 {@code code} 仍为 0——未绑定是合法状态，不是错误（spec R2）。
+     */
+    @GetMapping("/{id}/fingerprint-runtime")
+    @PreAuthorize("hasAuthority('account:read')")
+    public ApiResponse<FingerprintRuntimeVO> fingerprintRuntime(@AuthenticationPrincipal AuthPrincipal principal,
+                                                               @PathVariable Long id) {
+        return ApiResponse.ok(fingerprintService.runtimeOf(principal.tenantId(), id));
+    }
+
     private PlatformAccount toEntity(PlatformAccountRequest req) {
         PlatformAccount account = new PlatformAccount();
         account.setPlatformType(req.platformType());
@@ -124,5 +162,9 @@ public class PlatformAccountController {
     }
 
     public record CredentialPayload(String credential) {
+    }
+
+    /** 绑定指纹档案的请求体。profileId 为 null = 解绑。 */
+    public record BindRequest(Long profileId) {
     }
 }

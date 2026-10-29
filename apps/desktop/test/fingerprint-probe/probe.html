@@ -1,0 +1,61 @@
+<!doctype html>
+<!--
+  B14 真机探针页（R4 验收）。
+
+  三条读数在**页面脚本执行时**就写进 document.title——不等 DOMContentLoaded、不等 load：
+  "注入的脚本到底早到什么程度"正是要验的东西，等了就分不清是"注入得早"还是"页面自己跑得晚"。
+
+  格式：`navigator.hardwareConcurrency|canvas 像素和|WebGL RENDERER`，WebGL 取不到写 `none`。
+  画布尺寸固定 64x64（= 16384 字节），run.mjs 里算噪声增量要用同一个尺寸，改这里必须同步改那里。
+-->
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <title>probe</title>
+  </head>
+  <body>
+    <script>
+      ;(function () {
+        var CANVAS_W = 64
+        var CANVAS_H = 64
+
+        var hc = navigator.hardwareConcurrency
+
+        var sum = -1
+        try {
+          var c = document.createElement('canvas')
+          c.width = CANVAS_W
+          c.height = CANVAS_H
+          var ctx = c.getContext('2d')
+          // 两块不透明的整块填充：整数坐标、无抗锯齿，未注入时逐字节可复现。
+          // 颜色刻意避开 0 / 255——噪声是 ±1，撞到钳位边界就会少算一点，像素和就对不上了。
+          ctx.fillStyle = '#3366aa'
+          ctx.fillRect(0, 0, CANVAS_W, CANVAS_H)
+          ctx.fillStyle = '#aa3366'
+          ctx.fillRect(8, 8, CANVAS_W - 16, CANVAS_H - 16)
+          var data = ctx.getImageData(0, 0, CANVAS_W, CANVAS_H).data
+          sum = 0
+          for (var i = 0; i < data.length; i++) sum += data[i]
+        } catch (e) {
+          sum = -1
+        }
+
+        var renderer = 'none'
+        try {
+          var c2 = document.createElement('canvas')
+          var gl = c2.getContext('webgl') || c2.getContext('experimental-webgl')
+          if (gl) {
+            var ext = gl.getExtension('WEBGL_debug_renderer_info')
+            var pname = ext ? ext.UNMASKED_RENDERER_WEBGL : gl.RENDERER
+            var raw = gl.getParameter(pname)
+            if (raw) renderer = String(raw)
+          }
+        } catch (e) {
+          renderer = 'none'
+        }
+
+        document.title = hc + '|' + sum + '|' + renderer
+      })()
+    </script>
+  </body>
+</html>

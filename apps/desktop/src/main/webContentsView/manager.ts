@@ -6,6 +6,9 @@ import { chromeUserAgent } from './chromeUserAgent'
 import { forgetPageBundleCache } from '../services/msgBridge/bridgeMount'
 import { unmountView } from '../services/msgBridge'
 import { assertViewUrlAllowed } from './allowedViewUrls'
+import { resolveRuntimeForView } from '../services/fingerprint/resolve'
+import { applyFingerprint } from '../services/fingerprint/applier'
+import { fingerprintBundle } from '../services/fingerprint/bundle'
 
 interface ManagedView {
   view: WebContentsView
@@ -16,6 +19,12 @@ interface ManagedView {
   seedCredential: string | null
   /** 凭据注入标记：只在每次视图生命周期内注入一次，避免 dom-ready（重载会再触发）无限循环。 */
   seeded: boolean
+  /**
+   * 首次 `loadURL` 是否已发出。指纹解析把装载推迟到了建视图之后（D3），
+   * 在这段空窗里 webContents 还在 about:blank、`isLoading()` 是 false，
+   * `inject()` 会据此立刻跑一遍 inject.bundle.js 打到空白文档上。用它把空窗标出来。
+   */
+  pendingLoad: boolean
 }
 
 interface InjectEntry {
@@ -89,6 +98,11 @@ export class WebContentsViewManager {
     }
 
     view.webContents.on('dom-ready', () => {
+      // pendingLoad 期间的那次 dom-ready 属于指纹引导装载（applier 为了拿到 CDP target 自己
+      // 导航的 about:blank，见 services/fingerprint/applier.ts 的 ensureCdpTarget）。
+      // 那是个空文档：凭据写不进去（localStorage 没有可用源），inject 打上去也随文档一起消失。
+      // 放它过去的话 maybeSeed 会把 seeded 标成已注入并 reload，真正的首屏反而再也不注入凭据。
+      if (this.views.get(viewId)?.pendingLoad) return
       // 顶层文档每次装载都会重新走一遍 dom-ready：旧页面的 wa-js Store 已经随文档一起没了，
       // 不清掉"已装 wa-js"记录，msgBridge 重挂时会跳过 wa 段，桥对着不存在的 Store 采不到东西。
       // （实测 Electron 39 的 WebContentsView 上 did-navigate 对 reload 不触发，dom-ready 才是可靠信号。）
@@ -109,16 +123,51 @@ export class WebContentsViewManager {
       host: safeHost(url),
       visible: false,
       seedCredential: seedCredential ?? null,
-      seeded: false
+      seeded: false,
+      pendingLoad: true
     })
     // 建视图前过白名单：渲染层一旦被 XSS 攻破，这里是拦住「把官方视图导航到钓鱼页」
     // 的最后一道。不要因为「调用方是主进程自己」就跳过——preload 把它暴露给了渲染层。
     assertViewUrlAllowed(url)
-    view.webContents.loadURL(url)
+    // 加载**不再同步发生**：指纹解析要读后端，而 UA / Accept-Language / 时区 / 文档前脚本
+    // 必须在首个请求发出之前就设好（R5 / R4）。所以先建视图、后异步解析、解析完再 loadURL。
+    void this.loadWithFingerprint(viewId, url)
     // 新视图的缩放要立刻对齐主窗口，否则第一帧会按默认 1.0 渲染，和已开着的视图比例不一致。
     this.syncZoomToWindow()
     this.emit(viewId, 'created', url)
     return true
+  }
+
+  /**
+   * B14：解析指纹 → 施加 → 才 loadURL（计划 D3）。
+   *
+   * 解析是异步的（要读后端），而 UA / 时区 / 文档前脚本必须在首个请求之前设好——
+   * 同步 loadURL 满足不了，所以顺序只能是"建视图时不动，装载时先补身份再发第一个请求"。
+   * `resolveRuntimeForView` 任一步取不到就返回 null，此时这里退化为与改动前完全一致的
+   * 一次 `loadURL`（R2：未绑定 / 开关关 = 不施加任何指纹）。
+   *
+   * 两处 `views` 复查不是冗余：等待期间用户可以关掉账号，而对着已 `close()` 的 webContents
+   * 调 CDP / loadURL 会抛 `Object has been destroyed`——那会把一个正常的关闭动作变成未捕获异常。
+   *
+   * 顺序上仍然是"先施加、后首次 loadURL"（D3）：`applyFingerprint` 里为了让 CDP 拿到 target
+   * 会先自己导航一次 `about:blank`（从未导航过的视图上没有 target，见 applier.ts），
+   * 那是空的一声不吭的装载，不经过本节目的页面脚本，等这一步走完才发真正的第一个请求。
+   */
+  private async loadWithFingerprint(viewId: string, url: string): Promise<void> {
+    const runtime = await resolveRuntimeForView(viewId)
+    const managed = this.views.get(viewId)
+    if (!managed) return // 等待期间视图被销毁
+    if (runtime) {
+      const bundle = fingerprintBundle()
+      if (bundle) await applyFingerprint(managed.view.webContents, runtime, bundle.source)
+      if (!this.views.has(viewId)) return // 施加期间又被销毁
+    }
+    try {
+      managed.pendingLoad = false
+      managed.view.webContents.loadURL(url)
+    } catch {
+      /* 视图已失效：关掉账号与装载撞在同一帧时，这次装载就该无声放弃 */
+    }
   }
 
   /**
@@ -262,7 +311,7 @@ export class WebContentsViewManager {
     const managed = this.views.get(viewId)
     if (!managed) return
     this.injects.set(viewId, { channel, config, injected: false })
-    if (!managed.view.webContents.isLoading()) void this.runInject(viewId)
+    if (!managed.pendingLoad && !managed.view.webContents.isLoading()) void this.runInject(viewId)
   }
 
   uninject(viewId: string): void {

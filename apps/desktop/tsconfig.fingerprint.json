@@ -1,0 +1,14 @@
+{
+  "extends": "@electron-toolkit/tsconfig/tsconfig.web.json",
+  "include": ["src/fingerprint/**/*"],
+  "exclude": ["src/fingerprint/**/*.test.ts"],
+  "compilerOptions": {
+    "composite": false,
+    "noEmit": true,
+    "lib": ["ES2021", "DOM", "DOM.Iterable"],
+    "types": [],
+    "baseUrl": ".",
+    "paths": { "@shared/*": ["src/shared/*"] },
+    "allowImportingTsExtensions": true
+  }
+}

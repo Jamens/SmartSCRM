@@ -4,6 +4,7 @@ import {
   BellRing,
   Eye,
   EyeOff,
+  Fingerprint,
   HardDrive,
   KeyRound,
   Languages,
@@ -32,6 +33,7 @@ import {
 } from '@/lib/theme'
 import { useBadgeEnabled } from '@/lib/unreadBadge'
 import { useNotifyEnabled } from '@/lib/desktopNotify'
+import { useFingerprintSettings } from '@/lib/fingerprintSettings'
 import { useGpuFatal, useGpuSettings } from '@/lib/gpu'
 import { useLanguage } from '@/lib/language'
 import SensitiveWordsCard from '@/components/SensitiveWordsCard'
@@ -42,6 +44,7 @@ import { changePassword } from '@/api/auth'
 import { API_BASE, ApiError } from '@/lib/http'
 import { cn } from '@/lib/utils'
 import { SUPPORTED_LOCALES, type LocaleCode } from '@shared/i18n'
+import { FP_TOGGLE_KEYS } from '@shared/fingerprint'
 import type { ThemePref } from '@shared/theme'
 
 const THEME_OPTIONS: Array<{ pref: ThemePref; labelKey: string; hintKey: string; icon: typeof Sun }> = [
@@ -66,6 +69,8 @@ export default function SettingsPage(): React.JSX.Element {
   // 图形降级（A18）。开关与崩溃状态都只在主进程落盘，这里只是它的一个客户端。
   const gpu = useGpuSettings()
   const gpuFatal = useGpuFatal()
+  // 浏览器指纹注入（B14）。总开关默认关，八项单项开关在未显式关掉时视为开。
+  const fp = useFingerprintSettings()
   // 卡片上那行现状读的是角标自己那份查询（同一个缓存键，不会多打一次请求）。
   const unread = useUnreadTotal()
   const device = useDeviceInfo()
@@ -422,6 +427,60 @@ export default function SettingsPage(): React.JSX.Element {
                   </button>
                 </div>
               ) : null}
+            </CardContent>
+          </Card>
+
+          {/* 浏览器指纹（B14）：宿主施加，放在图形之后、设备信息之前——它改的正是内嵌视图的运行环境。 */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Fingerprint className="size-4 text-primary" />
+                {t('settings.fingerprint.title')}
+              </CardTitle>
+              <CardDescription>{t('settings.fingerprint.desc')}</CardDescription>
+            </CardHeader>
+            <CardContent className="flex flex-col gap-4">
+              <div className="flex items-start justify-between gap-6">
+                <div className="min-w-0">
+                  <p className="text-sm font-medium text-foreground">{t('settings.fingerprint.masterTitle')}</p>
+                  <p className="text-xs text-muted-foreground">{t('settings.fingerprint.masterDetail')}</p>
+                  <p className="mt-1 text-xs text-muted-foreground" data-testid="fp-status">
+                    {fp.host === 'browser'
+                      ? t('settings.fingerprint.browser')
+                      : fp.enabled
+                        ? t('settings.enabled')
+                        : t('settings.disabled')}
+                  </p>
+                </div>
+                <Switch
+                  aria-label={t('settings.fingerprint.masterTitle')}
+                  checked={fp.enabled}
+                  disabled={fp.host === 'browser'}
+                  onCheckedChange={(v) => fp.setEnabled(v === true)}
+                  data-testid="fp-master"
+                />
+              </div>
+
+              <p className="rounded-lg border border-amber-500/30 bg-amber-500/5 px-3 py-2 text-xs text-foreground">
+                {t('settings.fingerprint.defaultOffNote')}
+              </p>
+
+              <div className="flex flex-col gap-2">
+                <p className="text-xs text-muted-foreground">{t('settings.fingerprint.itemsTitle')}</p>
+                {FP_TOGGLE_KEYS.map((key) => (
+                  <div key={key} className="flex items-start justify-between gap-6" data-testid={`fp-item-${key}`}>
+                    <div className="min-w-0">
+                      <p className="text-sm text-foreground">{t(`settings.fingerprint.items.${key}`)}</p>
+                    </div>
+                    <Switch
+                      aria-label={t(`settings.fingerprint.items.${key}`)}
+                      checked={fp.toggles[key] !== false}
+                      disabled={fp.host === 'browser' || !fp.enabled}
+                      onCheckedChange={(v) => fp.setToggle(key, v === true)}
+                    />
+                  </div>
+                ))}
+              </div>
             </CardContent>
           </Card>
 
