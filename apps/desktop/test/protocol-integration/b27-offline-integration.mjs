@@ -83,7 +83,7 @@ export async function runB27() {
     const gw = await startGateway()
     const sinks = makeSinks()
     const mgr = buildManager(ProtocolSyncManager, gw, sinks)
-    mgr.start([7])
+    mgr.start([{ accountId: 7, source: 'wa-protocol' }])
     await waitFor(() => gw.clients.size >= 1)
     gw.broadcast('WA_MSG_IN_PUSH', {
       conversationId: 555,
@@ -121,7 +121,7 @@ export async function runB27() {
     const gw = await startGateway()
     const sinks = makeSinks()
     const mgr = buildManager(ProtocolSyncManager, gw, sinks)
-    mgr.start([7])
+    mgr.start([{ accountId: 7, source: 'wa-protocol' }])
     await waitFor(() => gw.clients.size >= 1)
     gw.broadcast('WA_MSG_IN_PUSH', {
       conversationId: 555,
@@ -148,7 +148,7 @@ export async function runB27() {
     const gw = await startGateway()
     const sinks = makeSinks()
     const mgr = buildManager(ProtocolSyncManager, gw, sinks)
-    mgr.start([7])
+    mgr.start([{ accountId: 7, source: 'wa-protocol' }])
     await waitFor(() => gw.clients.size >= 1)
     const receipt = await mgr.send(7, CHAT_KEY, 'hello')
     assert(receipt.ok === true, `send receipt ok (got ${JSON.stringify(receipt)})`)
@@ -171,7 +171,7 @@ export async function runB27() {
     const gw = await startGateway()
     const sinks = makeSinks()
     const mgr = buildManager(ProtocolSyncManager, gw, sinks)
-    mgr.start([7])
+    mgr.start([{ accountId: 7, source: 'wa-protocol' }])
     await waitFor(() => gw.clients.size >= 1)
     const before = gw.pongCount
     gw.pingClients()
@@ -193,7 +193,7 @@ export async function runB27() {
         return 'ok'
       }
     })
-    mgr.start([8])
+    mgr.start([{ accountId: 8, source: 'wa-protocol' }])
     await waitFor(() => gw.clients.size >= 1, 6000)
     gw.broadcast('WA_MSG_IN_PUSH', {
       conversationId: 556,
@@ -213,7 +213,7 @@ export async function runB27() {
     const gw = await startGateway()
     const sinks = makeSinks()
     const mgr = buildManager(ProtocolSyncManager, gw, sinks, { getToken: () => 'kick' })
-    mgr.start([9])
+    mgr.start([{ accountId: 9, source: 'wa-protocol' }])
     await waitFor(() => gw.clients.size === 0, 6000)
     gw.broadcast('WA_MSG_IN_PUSH', {
       conversationId: 557,

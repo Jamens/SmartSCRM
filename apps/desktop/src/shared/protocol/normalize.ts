@@ -11,6 +11,7 @@
 // 网关真实 payload schema 已确认；其余字段透明透传。
 
 import type { MediaType, MsgStatus, MsgSource } from '../chatTypes.ts'
+import { DEFAULT_PROTOCOL_SOURCE, type ProtocolSource } from './types.ts'
 import type {
   ProtocolInboundMessage,
   IngestMessage,
@@ -61,6 +62,34 @@ export function wpMsgTypeToMediaType(msgType?: number | string): MediaType {
   return map[String(msgType).toLowerCase()] ?? 'text'
 }
 
+/**
+ * TG 侧 msgType -> MediaType。**取值域待实测**（R7）：TG 用的不是 WA 的 1-7/99 数值域，
+ * 而是名称域（photo / voice / animation / video_note / document / sticker …），
+ * WA 那张表认不出会一律回落 text，所以 TG 必须走自己的一张表。
+ * 未知 / 缺省值同样回落 'text'——宁可当文本收下，也不静默丢消息。
+ */
+export function tgMsgTypeToMediaType(msgType?: number | string): MediaType {
+  if (msgType == null) return 'text'
+  const map: Record<string, MediaType> = {
+    text: 'text',
+    photo: 'image',
+    image: 'image',
+    video: 'video',
+    // animation（GIF）与 video_note（圆形视频）在落库面都没有对应枚举，归 video。
+    animation: 'video',
+    video_note: 'video',
+    voice: 'audio',
+    audio: 'audio',
+    document: 'document',
+    file: 'document',
+    sticker: 'sticker',
+    location: 'location',
+    contact: 'contact',
+    unknown: 'unknown'
+  }
+  return map[String(msgType).toLowerCase()] ?? 'text'
+}
+
 /** 网关状态（0-6 或枚举名）-> 我们统一的 MsgStatus。Revoked 归 failed；空值返回 undefined。 */
 export function wpStatusToMsgStatus(status?: number | string | null): MsgStatus | undefined {
   if (status == null || status === '') return undefined
@@ -84,11 +113,19 @@ export function toEpochSec(value?: string | number | null): number {
 /**
  * 一条网关消息 -> 落库单条消息。
  * accountId 不在此处出现（IngestMessage 不携带），由上层 inboundMessageToBatch 在 IngestBatch 层补。
+ *
+ * TG 语义说明（R8：不改契约，只在此处解释）：`from`（0 收 / 1 发）的 TG 取值由**网关侧**
+ * 把 MTProto 的 `out` 布尔转换而来，客户端不做二次解释——这里对两个源用的是同一行判定。
+ * `protocolSource` 只影响 msgType 的取值域解释（WA 数值域 / TG 名称域），
+ * 其余字段与 WA 支逐字相同（R5：输出同形，主进程侧不需要知道数据来自哪个源）。
+ *
  * @param source 实时推送用 'live'，历史拉取用 'backfill'。
+ * @param protocolSource 协议源，缺省 'wa-protocol'（不给就是改造前的行为）。
  */
 export function normalizeInbound(
   msg: ProtocolInboundMessage,
-  source: MsgSource = 'live'
+  source: MsgSource = 'live',
+  protocolSource: ProtocolSource = DEFAULT_PROTOCOL_SOURCE
 ): IngestMessage {
   const direction: 'in' | 'out' = msg.from === 1 ? 'out' : 'in'
   // 入站（对方发来）状态恒 received；出站（我方发出）按网关给的状态落，缺省 sent。
@@ -102,7 +139,10 @@ export function normalizeInbound(
     senderKey: msg.senderJid,
     senderName: msg.senderName,
     body: msg.content?.text ?? null,
-    mediaType: wpMsgTypeToMediaType(msg.msgType),
+    mediaType:
+      protocolSource === 'telegram'
+        ? tgMsgTypeToMediaType(msg.msgType)
+        : wpMsgTypeToMediaType(msg.msgType),
     mediaSummary: msg.content?.fileName ?? null,
     msgTimeEpochSec: toEpochSec(msg.waTimestamp ?? msg.createdAt),
     status,

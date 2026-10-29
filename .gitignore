@@ -53,3 +53,6 @@ _tmp_*
 
 # WorkBuddy 项目数据（记忆 / 会话产物，非源码）
 .workbuddy/
+
+# 隔离工作区（git worktree add 落在这里，不是源码树的一部分）
+.worktrees/

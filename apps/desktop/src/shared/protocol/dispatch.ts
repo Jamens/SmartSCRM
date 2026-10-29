@@ -20,16 +20,23 @@ export interface ProtocolWsHandlers {
   onUnknown?: (envelope: ProtocolWsEnvelope) => void
 }
 
-/** 按信封 event 分派到对应 handler，并把 envelope.data 透传过去；未知事件交给 onUnknown（缺省静默丢弃）。 */
+/**
+ * 按信封 event 分派到对应 handler，并把 envelope.data 透传过去；未知事件交给 onUnknown（缺省静默丢弃）。
+ * TG_* 三个事件名与 WA_* 路由到**同一批** handler：源的区别只在 manager 侧记录的 source，
+ * 分派层不区分（R5：主进程/入库面不知道数据来自哪个源）。
+ */
 export function dispatchWsFrame(envelope: ProtocolWsEnvelope, handlers: ProtocolWsHandlers): void {
   switch (envelope?.event) {
     case PROTOCOL_WS_TYPES.MSG_IN:
+    case PROTOCOL_WS_TYPES.TG_MSG_IN:
       handlers.onMessage(envelope.data)
       return
     case PROTOCOL_WS_TYPES.MSG_STATUS:
+    case PROTOCOL_WS_TYPES.TG_MSG_STATUS:
       handlers.onStatus(envelope.data)
       return
     case PROTOCOL_WS_TYPES.ACCOUNT_STATUS:
+    case PROTOCOL_WS_TYPES.TG_ACCOUNT_STATUS:
       handlers.onAccountStatus(envelope.data)
       return
     case PROTOCOL_WS_TYPES.KICK_OUT:
