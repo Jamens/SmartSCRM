@@ -15,6 +15,7 @@ import java.util.List;
 import java.util.Map;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
+import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
@@ -47,7 +48,15 @@ public class ChatClient {
     /** 一条 chat message：role=system/user/assistant，content 为正文。 */
     public record Msg(String role, String content) {}
 
-    /** Spring 构造：配置全走 {@code @Value} 注入，默认空 = 未启用。 */
+    /**
+     * Spring 构造：配置全走 {@code @Value} 注入，默认空 = 未启用。
+     *
+     * <p><b>必须显式 {@code @Autowired}</b>：本类另有一个包可见的 7 参构造器供单测直接 new。
+     * Spring 在「多构造器且无人标注」时不会去猜带 {@code @Value} 的那个，而是退回**无参构造器**，
+     * 结果就是应用启动期 {@code NoSuchMethodException: ChatClient.<init>()}——纯 Mockito 单测
+     * 覆盖不到（它们绕开了 Spring），只有真正启动上下文才会暴露。
+     */
+    @Autowired
     public ChatClient(
             @Value("${scrm.chat.base-url:}") String baseUrl,
             @Value("${scrm.chat.model:}") String model,

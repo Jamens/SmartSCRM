@@ -2,6 +2,7 @@ package com.smartscrm.server.service.ai;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -11,6 +12,7 @@ import com.sun.net.httpserver.HttpExchange;
 import com.sun.net.httpserver.HttpHandler;
 import com.sun.net.httpserver.HttpServer;
 import java.io.IOException;
+import java.lang.reflect.Constructor;
 import java.net.InetSocketAddress;
 import java.net.http.HttpClient;
 import java.nio.charset.StandardCharsets;
@@ -19,6 +21,7 @@ import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.function.Executable;
+import org.springframework.beans.factory.annotation.Autowired;
 
 /**
  * ChatClient 契约单测：用 JDK 自带 {@code com.sun.net.httpserver.HttpServer} 起本地 mock，
@@ -28,6 +31,24 @@ class ChatClientTest {
 
     private HttpServer server;
     private MockHandler handler;
+
+    /**
+     * 启动期回归守卫：本类有两个构造器。纯 Mockito/JDK-mock 单测绕开了 Spring，
+     * 若带 {@code @Value} 的构造器漏标 {@code @Autowired}，Spring 在多构造器场景会退回
+     * **无参构造器**并在启动时抛 {@code NoSuchMethodException: ChatClient.<init>()}。
+     * 真机启动才暴露过一次，这里用反射把它钉死。
+     */
+    @Test
+    void springInjectionConstructorIsExplicitlyMarked() throws NoSuchMethodException {
+        Constructor<ChatClient> springCtor = ChatClient.class.getDeclaredConstructor(
+            String.class, String.class, String.class, long.class, int.class, double.class);
+        assertNotNull(springCtor.getAnnotation(Autowired.class),
+            "带 @Value 的 Spring 构造器必须显式 @Autowired，否则应用启动失败");
+
+        Constructor<ChatClient> testCtor = ChatClient.class.getDeclaredConstructor(
+            String.class, String.class, String.class, long.class, int.class, double.class, HttpClient.class);
+        assertNull(testCtor.getAnnotation(Autowired.class), "7 参测试构造器不得参与 Spring 注入");
+    }
 
     @BeforeEach
     void startServer() throws IOException {
