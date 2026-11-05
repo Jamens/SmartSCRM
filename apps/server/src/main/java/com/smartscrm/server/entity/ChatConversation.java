@@ -39,6 +39,8 @@ public class ChatConversation {
     private Float aiSuggestionScore;
     /** 建议对应的知识库 QA id，便于坐席回溯出处。 */
     private Long aiSuggestionQaId;
+    /** B28 人设引擎：retrieval=知识库标准答案 | model=人设模型生成；NULL=无建议或旧数据。 */
+    private String aiSuggestionSource;
     /** 进入 WAITING_TAKEOVER 的时间，供队列按等待时长排序。 */
     private LocalDateTime waitTakeoverAt;
     /** 转人工原因（规则触发或坐席手动转人工时填写）。 */

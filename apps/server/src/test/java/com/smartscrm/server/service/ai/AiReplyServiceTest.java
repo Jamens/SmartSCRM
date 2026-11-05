@@ -13,16 +13,20 @@ import static org.mockito.Mockito.never;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
 import com.smartscrm.server.entity.AiPersona;
 import com.smartscrm.server.entity.ChatConversation;
 import com.smartscrm.server.entity.KnowledgeQa;
 import com.smartscrm.server.mapper.AiPersonaMapper;
 import com.smartscrm.server.mapper.ChatConversationMapper;
+import java.util.List;
+import java.util.Objects;
 import org.apache.ibatis.builder.MapperBuilderAssistant;
 import org.apache.ibatis.session.Configuration;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.mockito.ArgumentCaptor;
 
 /**
  * B28 第四段 AI 自动应答单测。
@@ -196,8 +200,39 @@ class AiReplyServiceTest {
     // ===== 清理 =====
 
     @Test
-    void clearSuggestion_clearsAllThreeFields() {
+    void clearSuggestion_clearsAllFourFieldsIncludingSource() {
         service.clearSuggestion(TENANT, CONV);
-        verify(conversationMapper).update(any(), any());
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<LambdaUpdateWrapper<ChatConversation>> cap =
+            ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
+        verify(conversationMapper).update(any(), cap.capture());
+        LambdaUpdateWrapper<ChatConversation> w = cap.getValue();
+        // 纯单测环境 getSqlSet() 暴露实体属性名（驼峰），生产由 MyBatis 映射成下划线列
+        String set = w.getSqlSet();
+        assertTrue(set.contains("aiSuggestion"));
+        assertTrue(set.contains("aiSuggestionScore"));
+        assertTrue(set.contains("aiSuggestionQaId"));
+        assertTrue(set.contains("aiSuggestionSource"), "D3：否决建议必须一并清空 ai_suggestion_source");
+        long nulls = w.getParamNameValuePairs().values().stream().filter(Objects::isNull).count();
+        assertEquals(4L, nulls, "四列全部显式置 null");
+    }
+
+    @Test
+    void suggest_marksSourceRetrievalOnAutoReply() {
+        stubConversation("AI", null);
+        when(searchService.available()).thenReturn(true);
+        when(searchService.search(eq(TENANT), anyString(), anyInt(), any(), any(), any()))
+            .thenReturn(List.of(new KnowledgeSearchService.Hit(qa(9L), 0.82f)));
+
+        assertTrue(service.suggestIfAi(TENANT, CONV, "怎么退货？"));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<LambdaUpdateWrapper<ChatConversation>> cap =
+            ArgumentCaptor.forClass(LambdaUpdateWrapper.class);
+        verify(conversationMapper).update(any(), cap.capture());
+        LambdaUpdateWrapper<ChatConversation> w = cap.getValue();
+        assertTrue(w.getSqlSet().contains("aiSuggestionSource"), "自动应答老链路也要标来源");
+        assertTrue(w.getParamNameValuePairs().containsValue("retrieval"), "来源 = retrieval");
     }
 }

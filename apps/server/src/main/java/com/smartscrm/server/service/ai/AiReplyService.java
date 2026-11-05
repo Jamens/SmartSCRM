@@ -36,6 +36,7 @@ public class AiReplyService {
 
     private static final Logger log = LoggerFactory.getLogger(AiReplyService.class);
     private static final String AI = "AI";
+    private static final String SOURCE_RETRIEVAL = "retrieval";
 
     /**
      * 出建议的置信度门限。默认定得偏高：错答案比没答案伤害大得多，
@@ -106,7 +107,9 @@ public class AiReplyService {
             .eq(ChatConversation::getHandlingStatus, AI)
             .set(ChatConversation::getAiSuggestion, best.qa().getAnswer())
             .set(ChatConversation::getAiSuggestionScore, best.score())
-            .set(ChatConversation::getAiSuggestionQaId, best.qa().getId()));
+            .set(ChatConversation::getAiSuggestionQaId, best.qa().getId())
+            // 自动应答这条老链路也标来源，避免与新的模型建议来源不一致（S1）
+            .set(ChatConversation::getAiSuggestionSource, SOURCE_RETRIEVAL));
         log.info("AI 建议已生成 conversationId={} score={} qaId={}",
             conversationId, best.score(), best.qa().getId());
         return true;
@@ -124,7 +127,7 @@ public class AiReplyService {
         return persona.getRoleId();
     }
 
-    /** 坐席确认或否决后清掉建议，避免陈旧建议一直挂在接管台上。 */
+    /** 坐席确认或否决后清掉建议，避免陈旧建议一直挂在接管台上。D3：source 列一并清空。 */
     @Transactional
     public void clearSuggestion(Long tenantId, Long conversationId) {
         conversationMapper.update(null, new LambdaUpdateWrapper<ChatConversation>()
@@ -132,6 +135,7 @@ public class AiReplyService {
             .eq(ChatConversation::getTenantId, tenantId)
             .set(ChatConversation::getAiSuggestion, (String) null)
             .set(ChatConversation::getAiSuggestionScore, (Float) null)
-            .set(ChatConversation::getAiSuggestionQaId, (Long) null));
+            .set(ChatConversation::getAiSuggestionQaId, (Long) null)
+            .set(ChatConversation::getAiSuggestionSource, (String) null));
     }
 }
