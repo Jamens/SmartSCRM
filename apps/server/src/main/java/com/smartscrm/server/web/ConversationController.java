@@ -1,10 +1,17 @@
 package com.smartscrm.server.web;
 
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.smartscrm.server.common.ApiResponse;
+import com.smartscrm.server.common.BizException;
+import com.smartscrm.server.entity.AiPersona;
+import com.smartscrm.server.entity.ChatConversation;
+import com.smartscrm.server.mapper.ChatConversationMapper;
 import com.smartscrm.server.security.AuthPrincipal;
+import com.smartscrm.server.service.AiPersonaService;
 import com.smartscrm.server.service.MessageQueryService;
 import com.smartscrm.server.service.TakeoverService;
 import com.smartscrm.server.service.ai.AiReplyService;
+import com.smartscrm.server.service.ai.PersonaEngine;
 import com.smartscrm.server.web.dto.ConversationLinkCustomerDTO;
 import com.smartscrm.server.web.vo.ConversationPageVO;
 import com.smartscrm.server.web.vo.ConversationVO;
@@ -16,6 +23,7 @@ import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.PutMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -28,12 +36,19 @@ public class ConversationController {
     private final MessageQueryService query;
     private final TakeoverService takeover;
     private final AiReplyService aiReplyService;
+    private final AiPersonaService personaService;
+    private final PersonaEngine personaEngine;
+    private final ChatConversationMapper conversationMapper;
 
     public ConversationController(MessageQueryService query, TakeoverService takeover,
-                                  AiReplyService aiReplyService) {
+                                  AiReplyService aiReplyService, AiPersonaService personaService,
+                                  PersonaEngine personaEngine, ChatConversationMapper conversationMapper) {
         this.query = query;
         this.takeover = takeover;
         this.aiReplyService = aiReplyService;
+        this.personaService = personaService;
+        this.personaEngine = personaEngine;
+        this.conversationMapper = conversationMapper;
     }
 
     @GetMapping
@@ -82,7 +97,7 @@ public class ConversationController {
     }
 
     /**
-     * 忽略 AI 建议：清掉该会话的建议内容/分数/出处。
+     * 忽略 AI 建议：清掉该会话的建议内容/分数/出处/来源。
      * 坐席否决后调它，避免陈旧建议一直挂在接管台上被误用。
      * 注意：这里**不**代替发送——建议从不自动发出，采用与否是坐席在客户端的操作。
      */
@@ -124,5 +139,42 @@ public class ConversationController {
                                                          @PathVariable Long id,
                                                          @Valid @RequestBody ConversationLinkCustomerDTO dto) {
         return ApiResponse.ok(query.linkCustomer(principal.tenantId(), id, dto.customerId()));
+    }
+
+    /** 绑定人设请求体：personaId 为 null 表示解绑。 */
+    public record AiPersonaBindRequest(Long personaId) {}
+
+    /**
+     * 绑定 / 解绑会话人设（S3：显式绑定，绝不按角色自动套用）。
+     * personaId=null 即解绑；非 null 时人设必须属于本租户且 enabled=1，否则抛业务异常（不静默忽略）。
+     * 租户一律取 {@code principal.tenantId()}，绝不信任 body。
+     */
+    @PutMapping("/{id}/ai-persona")
+    @PreAuthorize("hasAuthority('message:write')")
+    public ApiResponse<ConversationVO> bindAiPersona(@AuthenticationPrincipal AuthPrincipal principal,
+                                                     @PathVariable Long id,
+                                                     @RequestBody(required = false) AiPersonaBindRequest req) {
+        Long tenantId = principal.tenantId();
+        query.requireOwned(tenantId, id);
+        Long personaId = req == null ? null : req.personaId();
+        if (personaId != null) {
+            AiPersona p = personaService.get(tenantId, personaId);
+            if (p.getEnabled() == null || p.getEnabled() != 1) {
+                throw new BizException(40000, "人设已停用，不能绑定: " + personaId);
+            }
+        }
+        conversationMapper.update(null, new LambdaUpdateWrapper<ChatConversation>()
+            .eq(ChatConversation::getId, id)
+            .eq(ChatConversation::getTenantId, tenantId)
+            .set(ChatConversation::getAiPersonaId, personaId));
+        return ApiResponse.ok(ConversationVO.of(query.requireOwned(tenantId, id)));
+    }
+
+    /** 坐席点按生成回复建议（检索优先、模型兜底）：委托 {@link PersonaEngine}，租户取 principal。 */
+    @PostMapping("/{id}/generate-ai-suggestion")
+    @PreAuthorize("hasAuthority('message:write')")
+    public ApiResponse<ConversationVO> generateAiSuggestion(@AuthenticationPrincipal AuthPrincipal principal,
+                                                            @PathVariable Long id) {
+        return ApiResponse.ok(personaEngine.suggest(principal.tenantId(), id));
     }
 }

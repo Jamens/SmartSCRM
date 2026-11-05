@@ -48,6 +48,22 @@ scrm:
     model: ${SCRM_EMBEDDING_MODEL:nomic-embed-text}
     api-key: ${SCRM_EMBEDDING_API_KEY:}
 
+  # B28 AI 人设引擎的 chat 端点（OpenAI 兼容，如 Ollama / LocalAI / vLLM）。
+  # base-url / model / api-key 默认空 = 功能未启用：ChatClient.available() 为 false，
+  # 不默认外连任何商业云。端点值一律由部署方通过环境变量注入，仓库不写死地址。
+  # 本地 Ollama 开通示例（先拉一个中文 chat 模型，端点值用环境变量注入）：
+  #   export SCRM_CHAT_BASE_URL=<你的本地 OpenAI 兼容端点>
+  #   export SCRM_CHAT_MODEL=<中文 chat 模型名>
+  #   SCRM_CHAT_API_KEY 留空即可（本地端免鉴权，客户端不会发 Authorization 头）
+  chat:
+    base-url: ${SCRM_CHAT_BASE_URL:}
+    model: ${SCRM_CHAT_MODEL:}
+    api-key: ${SCRM_CHAT_API_KEY:}
+    timeout-ms: ${SCRM_CHAT_TIMEOUT_MS:30000}
+    max-tokens: ${SCRM_CHAT_MAX_TOKENS:512}
+    temperature: ${SCRM_CHAT_TEMPERATURE:0.3}
+    history-size: ${SCRM_CHAT_HISTORY_SIZE:10}
+
 logging:
   level:
     com.smartscrm: debug

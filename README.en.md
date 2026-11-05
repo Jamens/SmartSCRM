@@ -256,8 +256,15 @@ cd apps/server && ./mvnw test
 # all four typecheck surfaces
 cd apps/desktop && pnpm typecheck
 
-# package (includes the inject/bridge bundles)
+# packaging (includes the inject/bridge bundles)
 cd apps/desktop && pnpm build && pnpm build:win
+
+# B28 persona engine offline contract (zero network, mock OpenAI-compatible endpoint, 18 cases)
+cd apps/desktop && pnpm test:ai
+
+# B28 real-model probe: talks to local Ollama to verify tone changes with the persona
+# pull qwen2.5:3b and nomic-embed-text first; override endpoint/model with SCRM_CHAT_* env vars
+cd apps/desktop && pnpm test:ai:real
 ```
 
 Conventions:
@@ -283,6 +290,9 @@ Conventions:
 11. `docs/notes/2026-09-22-legacy-feature-gap.md` (feature gap table) is **deliberately not committed** — local only.
 
 ## 8. What's next
+
+- **B28 has one outstanding acceptance leg**: the end-to-end HTTP path (start MySQL + Spring Boot, then `PUT /api/conversations/{id}/ai-persona` -> `POST .../generate-ai-suggestion` -> verify the four `chat_conversation` columns) has not been executed. The offline contract harness (`pnpm test:ai`) and the local real-model probe (`pnpm test:ai:real`) both pass, but they only cover the wire/source contract and a direct model-endpoint call respectively. Neither substitutes for the other or for end-to-end acceptance.
+
 
 From the task queue (details in `docs/feature-checklist.md` and `docs/feature-backlog.md`):
 

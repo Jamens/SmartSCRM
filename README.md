@@ -274,6 +274,13 @@ cd apps/desktop && pnpm build && pnpm build:win
 # B27 协议号通道离线联调（不依赖真实网关，纯 Node 跑通协议接线）
 cd apps/desktop && pnpm test:b27
 
+# B28 人设引擎离线契约（零外网 mock OpenAI 兼容端，18 条）
+cd apps/desktop && pnpm test:ai
+
+# B28 真机探针：直连本地 Ollama 验证「换人设语气变化」
+# 需先拉 qwen2.5:3b 与 nomic-embed-text；端点/模型可用 SCRM_CHAT_* 覆盖
+cd apps/desktop && pnpm test:ai:real
+
 # 管理端前端（apps/admin）：typecheck + lint + 生产构建
 cd apps/admin && pnpm typecheck
 cd apps/admin && pnpm lint
@@ -310,6 +317,9 @@ cd apps/admin && pnpm build
     - **为什么现在做不了**：MTProto 登录必须走**手机号收验证码**，构造客户端还需要 my.telegram.org 申请的 `api_id` / `api_hash`——**当前两者都没有**，所以期一交付物只能证明"契约层自洽"，**不能证明能采到真数据**。所有新增文件头已写「期一：契约层，未经真机验证」标记；帧里四个字段（msgType 取值域、时间戳落在 `waTimestamp` 还是 `createdAt`、`senderJid` 是否带 `user#id` 形态、已读回执的等价事件）**形态待实测**，期二拿到账号后逐条回填到 `normalize.ts` / `map.ts`，不动 `dispatch.ts` / `manager.ts`。期一交付后，拿到凭据时只需替换网关实现，客户端一侧不动。
 
 ## 八、下一步在做什么
+
+- **B28 剩余一条验收欠账**：端到端 HTTP 腿（起 MySQL + Spring Boot，走 `PUT /api/conversations/{id}/ai-persona` → `POST .../generate-ai-suggestion` → 回查 `chat_conversation` 四列）尚未执行。离线契约 harness（`pnpm test:ai`）与本地模型真机探针（`pnpm test:ai:real`）均已通过，但二者分别只覆盖线路/源码契约与模型端点直连，**不得互相冒充，也不得冒充端到端验收**。
+
 
 任务队列视角（详见 `docs/feature-checklist.md` 与 `docs/feature-backlog.md`）：
 

@@ -7,11 +7,13 @@ import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { cn } from '@/lib/utils'
+import { canGenerate, sourceBadge } from '@/lib/aiSuggestion'
 import { deriveQaPreview } from '@shared/aiKnowledge'
 import {
   useAiCategories, useAiPersonas, useAiNurture, useDocChunks, useDocMutations, useKnowledgeDocs,
   useKnowledgeQa, useQaMutations, useRoleMutations, useAiRoles, useCategoryMutations, useGeneratePersona,
-  usePersonaMutations, useSaveNurture, useTakeoverActions, useTakeoverQueue
+  usePersonaMutations, useSaveNurture, useTakeoverActions, useTakeoverQueue,
+  useBindPersona, useGenerateSuggestion
 } from '@/api/aiKnowledge'
 
 type Tab = 'kb' | 'docs' | 'persona' | 'nurture' | 'queue'
@@ -329,23 +331,79 @@ function QueueTab(): React.JSX.Element {
   const { t } = useTranslation()
   const queue = useTakeoverQueue()
   const act = useTakeoverActions()
+  const personas = useAiPersonas()
+  const bind = useBindPersona()
+  const gen = useGenerateSuggestion()
   return (
     <Card>
       <CardHeader><CardTitle>{t('ai.queue.title')}</CardTitle><CardDescription>{t('ai.queue.desc')}</CardDescription></CardHeader>
-      <CardContent>
+      <CardContent className="flex flex-col gap-2">
+        {/* 人设列表要 knowledge:read；拉不到只提示，不阻断接管 / 恢复 AI */}
+        {personas.isError && (
+          <p className="text-xs text-destructive" data-testid="queue-persona-error">{t('ai.queue.personaLoadFailed')}</p>
+        )}
+        {/* 端点停掉 / 模型失败必须给明确错误，界面不留「看起来像成功」的静默状态 */}
+        {(gen.isError || bind.isError) && (
+          <p className="text-xs text-destructive" role="alert" data-testid="queue-action-error">
+            {gen.error?.message || bind.error?.message || t('ai.queue.generateFailed')}
+          </p>
+        )}
         <ul className="flex flex-col divide-y divide-border/50 text-sm" data-testid="queue-list">
-          {(queue.data ?? []).map((c) => (
-            <li key={c.id} className="flex items-center gap-3 py-2">
-              <span className="min-w-0 flex-1">
-                <span className="block truncate font-medium">{c.title ?? c.chatKey}</span>
-                <span className="block truncate text-xs text-muted-foreground">
-                  {c.transferReason ?? '—'}{c.waitTakeoverAt ? ` · ${dayjs(c.waitTakeoverAt).format('MM-DD HH:mm')}` : ''}
-                </span>
-              </span>
-              <Button size="sm" onClick={() => act.takeover.mutate(c.id)} disabled={act.takeover.isPending}>{t('ai.queue.takeover')}</Button>
-              <Button size="sm" variant="ghost" onClick={() => act.resumeAi.mutate(c.id)}>{t('ai.queue.resume')}</Button>
-            </li>
-          ))}
+          {(queue.data ?? []).map((c) => {
+            const badge = sourceBadge(c.aiSuggestionSource)
+            const generating = gen.isPending && gen.variables === c.id
+            return (
+              <li key={c.id} className="flex flex-col gap-2 py-2">
+                <div className="flex items-center gap-3">
+                  <span className="min-w-0 flex-1">
+                    <span className="block truncate font-medium">{c.title ?? c.chatKey}</span>
+                    <span className="block truncate text-xs text-muted-foreground">
+                      {c.transferReason ?? '—'}{c.waitTakeoverAt ? ` · ${dayjs(c.waitTakeoverAt).format('MM-DD HH:mm')}` : ''}
+                    </span>
+                  </span>
+                  <select
+                    aria-label={t('ai.queue.persona')}
+                    className="rounded-md border border-input bg-transparent px-2 py-1.5 text-sm"
+                    value={c.aiPersonaId ?? ''}
+                    disabled={bind.isPending}
+                    onChange={(e) => bind.mutate({ id: c.id, personaId: e.target.value === '' ? null : Number(e.target.value) })}
+                    data-testid={`queue-persona-${c.id}`}
+                  >
+                    <option value="">{t('ai.queue.personaPlaceholder')}</option>
+                    {/* 停用项保留回显但不可新选：已绑定的停用项若被过滤掉，下拉会出现空 value */}
+                    {(personas.data ?? []).map((p) => (
+                      <option key={p.id} value={p.id} disabled={!p.enabled}>{p.name}</option>
+                    ))}
+                  </select>
+                  {/* 文案刻意不承诺「人设」：检索命中时给的是知识库标准答案（S1） */}
+                  <Button size="sm" variant="outline"
+                    title={c.aiPersonaId == null ? t('ai.queue.noPersonaHint') : undefined}
+                    disabled={!canGenerate(c, gen.isPending)}
+                    onClick={() => gen.mutate(c.id)}
+                    data-testid={`queue-generate-${c.id}`}>
+                    {generating ? t('ai.queue.generating') : t('ai.queue.generate')}
+                  </Button>
+                  <Button size="sm" onClick={() => act.takeover.mutate(c.id)} disabled={act.takeover.isPending}>{t('ai.queue.takeover')}</Button>
+                  <Button size="sm" variant="ghost" onClick={() => act.resumeAi.mutate(c.id)}>{t('ai.queue.resume')}</Button>
+                </div>
+                {c.aiSuggestion && (
+                  <div className="flex items-start gap-2 rounded-md bg-muted/40 px-3 py-2 text-xs"
+                    data-testid={`queue-suggestion-${c.id}`}>
+                    <p className="min-w-0 flex-1 whitespace-pre-wrap break-words">{c.aiSuggestion}</p>
+                    {badge && (
+                      <Badge variant="outline"
+                        className={cn(c.aiSuggestionSource === 'model' && 'border-amber-500/60 text-amber-600')}
+                        data-testid={`queue-source-${c.id}`}>
+                        {t(badge)}
+                      </Badge>
+                    )}
+                    <Button size="sm" variant="ghost" className="shrink-0"
+                      onClick={() => act.dismissAiSuggestion.mutate(c.id)}>{t('ai.queue.dismiss')}</Button>
+                  </div>
+                )}
+              </li>
+            )
+          })}
           {(queue.data ?? []).length === 0 && <li className="py-2 text-xs text-muted-foreground">{t('ai.queue.empty')}</li>}
         </ul>
       </CardContent>

@@ -31,8 +31,8 @@ public class AiPersonaController {
 
     public record PersonaRequest(@NotBlank String name, Long roleId, String tone, String prompt,
                                  String template, Integer enabled) {}
-    /** 助手草稿（未落库）：人工确认后再 POST /ai-personas。 */
-    public record DraftVO(String template, String name, String tone, String prompt) {}
+    /** 助手草稿（未落库）：人工确认后再 POST /ai-personas。source=template / model 标 prompt 来源。 */
+    public record DraftVO(String template, String name, String tone, String prompt, String source) {}
 
     @GetMapping
     @PreAuthorize("hasAuthority('knowledge:read')")
@@ -49,12 +49,12 @@ public class AiPersonaController {
             req.tone(), req.prompt(), req.template(), req.enabled())));
     }
 
-    /** 人设助手：按语气标签套模板产**草稿**（不落库、不调外部模型）。 */
+    /** 人设助手：按语气标签产**草稿**（不落库）；端点已配置时可由模型生成 prompt，失败回落模板。 */
     @PostMapping("/generate")
     @PreAuthorize("hasAuthority('knowledge:write')")
     public ApiResponse<DraftVO> generate(@RequestParam(required = false) String tone) {
         var d = service.generateDraft(tone);
-        return ApiResponse.ok(new DraftVO(d.template(), d.name(), d.tone(), d.prompt()));
+        return ApiResponse.ok(new DraftVO(d.template(), d.name(), d.tone(), d.prompt(), d.source()));
     }
 
     @PutMapping("/{id}")
