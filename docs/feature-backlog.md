@@ -1,6 +1,6 @@
 # 待办功能清单（backlog）
 
-**重写** 2026-10-07 · **复核修订** 2026-10-13（第二节：B2 移出「真缺口」，新增「二之二」记录 B28 曾被误判为已交付）· **来源** `docs/feature-checklist.md`（阶段与范围的唯一权威；本表只答「还剩什么」，两项冲突时以清单为准）
+**重写** 2026-10-07 · **复核修订** 2026-10-13（第二节：B2 移出「真缺口」，新增「二之二」记录 B28 曾被误判为已交付）· **对标补充** 2026-11-05（新增「二之四」11 项核验过的真缺口 + 「5.3」核销 6 项误判缺口）· **来源** `docs/feature-checklist.md`（阶段与范围的唯一权威；本表只答「还剩什么」，两项冲突时以清单为准）
 
 ## 为什么要重写
 
@@ -63,6 +63,29 @@
 
 ---
 
+## 二之四、对标后新增的真缺口（2026-11-05 核验）
+
+这一节是 2026-11-05 做横向对标时逐项 grep 出来的缺口，**每条都附核验证据**。
+和第二节的区别：第二节是台账复核时发现的，这一节是对标时发现的——**对标材料里有六项
+被列成「别人领先、我们没有」，grep 之后发现我们早已交付**（见 5.3）。
+所以这一节只收**核验过、代码里确实没有**的。
+
+| # | 项 | 核验证据 | 量级 |
+|---|---|---|---|
+| 2 | **剧本包导入导出（xlsx 三件套）** | 全仓 `剧本包\|scriptPackage\|manifest.json` **零命中**。现有 `script_role` / `script_playbook` / `script_playbook_step` 三层只能靠 UI 手敲，无批量入口。导出侧只有群成员那一条 `groupCollect/export.ts`（ExcelJS 14 列），**剧本域没有任何 Excel 依赖** | 中 |
+| 3 | **敏感词按账号分组生效** | `V22__sensitive_word.sql` 只有 `tenant_id / word / category / enabled`，`category` 注释明写「不参与命中」。无账号分组维度，也无 group_id 外键 | 中 |
+| 4 | **AI 阶梯养号（按天分阶段 + 模型生成对话）** | `AiNurtureSetting` 有 `tone / template / daily_limit / active_ratio / quiet_hours`，但**没有「阶梯」结构**（无 day 级动作表）；`AiPersonaService` 类注释白纸黑字「助手**不调外部模型**……按语气标签套内置模板产草稿」。`NurturePlan` 有 `at_points / speaking_rounds`，但那是**一天内**的时间点分布，不是跨天阶梯 | 中 |
+| 5 | **知识库团队 / 个人分层** | `V26__ai_knowledge_core.sql` 的 `knowledge_qa` 无 `scope` / `owner_account_id` 列，只有 `role_id / category_id`。检索侧 `KnowledgeSearchService` 按租户 + 角色 + 分类召回，没有归属人维度 | 小 |
+| 6 | **群链接（invite link）入群 + 入群时间** | `V32__group_ops.sql` 的 `group_join_item` 有 `invite_code` 和 `group_name`（预览回填），**无 `group_link`、无 `joined_at`**。当前只能凭邀请码入群 | 小 |
+| 7 | **协议号消息回执独立落库** | 全仓无 `protocol_message_receipt` 一类表。B27 的入站/出站腿都通了，但回执状态无处存，只在采集批次里带过 | 小 |
+| 8 | **协议号原生 UI（账号页 + 会话页）** | `apps/desktop/src/renderer/src/pages/` 28 个页面里**没有协议号账号页、也没有协议号会话页**；B27 目前只有后台链路 + `useProtocolSync` 钩子，**没有人工可点的界面** | 中 |
+| 9 | **会话分组（会话文件夹）** | 无会话分组表。`chat_group` 是群注册表不是分组；`cloud_account_group` 是云账号池分组，也不是 | 小 |
+| 10 | **指纹补 domRect + webgpu 两类 hook** | `fingerprint/tasks/` 只有 7 个：audio / canvas / font / iframe / mediaDevices / navigator / webgl（timezone 走 CDP `Emulation.setTimezoneOverride`，不在 tasks 里）。**缺 domRect 与 webgpu** | 小 |
+| 11 | **发送后自检 + 自动撤回** | `batchSend/sensitiveGate.ts` 是**发送前**拦截（命中就不发）；`batch:recall` 是**人工/批次触发的**撤回。缺「发出去之后回读校验、命中就自动撤回」这一段 | 小 |
+| 12 | **账号级陌生人配额 / 群发扣活跃度** | `tenant` 侧只有 `seat_limit` / `ai_token_limit` / `translation_char_limit`（V15 / V48），**没有账号级的「每日陌生人上限」「群发超量扣活跃度」** | 小 |
+
+---
+
 ## 三、外部阻塞（排期无用，等外部条件）
 
 | 阻塞 | 卡住了什么 | 解除条件 |
@@ -101,6 +124,20 @@
 | **A6 自动安装 / 替换 exe** | 检查 + 通知 + 下载到本地均已交付，只差自动安装。核验：全仓无 `quitAndInstall` / `autoUpdater`。Windows 替换正在运行的程序有坑，主动留后续 |
 | **B7 v2 随机 Emoji / 话术干扰** | v1 明确只到纯文本；这是抗风控手段，不在 v1 范围内 |
 | **每日养号计划 runner** | 不属 B9（本地互聊）也不属 B10（云手机），形态依赖云端下发。**属形态裁定，不是实现问题**，裁定前不占阶段、不给编号 |
+
+### 5.3 对标时核销的六项（2026-11-05，别再做一遍）
+
+做横向对标时，外部材料把这六项列成「竞品领先、我们没有」。**逐项 grep 之后，我们早已交付**——
+记录在此，免得下次又被当成缺口重开一遍：
+
+| 曾被说成缺口 | 实际状态（核验证据） |
+|---|---|
+| 群成员进出群事件追踪 | `V12__group_member_analysis.sql` 有 `group_member_event`（`event_type` = added/joined/left/removed/promoted/demoted，带 `actor_key` / `target` / `dedup_key`）+ `group_member_state`（`is_in_group` / `latest_join_at` / `latest_leave_at` / `exit_method` / `join_count`）。`GroupMemberService` 有完整写入链 |
+| 定时调度 + 随机间隔 | `V29__script_engine_core.sql` 的 `script_task.next_run_at` + `idx_st_due` 索引 + `heartbeat_at`；`ScriptSchedulerService` / `ScriptSchedulerDriver` / `NurtureSchedulerDriver` 三套驱动；随机间隔 + 抖动在 `NurturePlan.interval_min_sec/interval_max_sec/jitter_pct` 与 `group_join_task` 同款，且 `shared/groupOps.ts` 用「种子 + 线性同余」保证可复现 |
+| 客户自定义人群（标签 + 关键词） | `AudienceService` 已实现 `keyword` + `tagIds` 两条件 AND，`AudiencesPage` 有界面，`customer_audience` 表在库里 |
+| 存储管理 + 性能监控 | `StorageCard.tsx` 有存储用量卡；`SettingsPage.tsx:374` 有主进程运行时指标 3s 轮询 |
+| 对话内独立翻译设置 | `V9__conversation_setting_scope_key.sql` 已做会话级 scope key；`TranslationSetting` / `TranslationMediaController` 支持图片 OCR + 语音 ASR |
+| 按钮消息字数约束 | `MaterialButtons.requireValid` 已按 wa-js 4.6.0 真实规则校验（1–3 个按钮、按钮文字 ≤20 字、reply 按钮不可与 url/call 混用） |
 
 ---
 
