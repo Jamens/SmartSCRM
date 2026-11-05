@@ -33,15 +33,21 @@ export interface AiPersonaVO {
 export interface AiNurtureVO {
   dailyLimit: number; activeRatio: number; quietHours: string | null; recommend: string
 }
-/** 助手草稿（未落库） */
-export interface PersonaDraft { template: string; name: string; tone: string; prompt: string }
+/** 助手草稿（未落库）。source=template 内置模板 / model 模型生成 prompt。 */
+export interface PersonaDraft {
+  template: string; name: string; tone: string; prompt: string; source: string
+}
 /** 接管台会话（TakeoverService.queue 的形状，前端只用到这些）
  *  aiSuggestion* 是 B28 第四段的 AI 建议：仅建议、从不由后端自动发出，
- *  采用与否是坐席在客户端的操作。score 是置信度，null 表示这轮没有建议。 */
+ *  采用与否是坐席在客户端的操作。score 是置信度，null 表示这轮没有建议。
+ *  aiSuggestionSource（V54）：retrieval=知识库标准答案 / model=人设模型生成；
+ *  null = 无建议或旧数据。aiPersonaId 为 null 时生成按钮必须禁用（S4）。 */
 export interface TakeoverQueueItem {
   id: number; chatKey: string; platform: string; title: string | null
   handlingStatus: string; waitTakeoverAt: string | null; transferReason: string | null
   aiSuggestion: string | null; aiSuggestionScore: number | null; aiSuggestionQaId: number | null
+  aiSuggestionSource: 'retrieval' | 'model' | null
+  aiPersonaId: number | null
 }
 
 const QK = { roles: ['ai','roles'], cats: ['ai','categories'], qa: ['ai','qa'],
@@ -239,4 +245,29 @@ export function useTakeoverActions(): {
       onSuccess: inv
     })
   }
+}
+
+// ---------- B28 人设引擎：会话绑定 + 点按生成建议 ----------
+
+/** 显式绑定人设（S3）；personaId=null 即解绑。后端校验本租户 + enabled=1。 */
+export function useBindPersona(): UseMutationResult<unknown, Error, { id: number; personaId: number | null }, unknown> {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: ({ id, personaId }) =>
+      http.put(`/api/conversations/${id}/ai-persona`, { personaId }),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: QK.queue }) }
+  })
+}
+
+/**
+ * 坐席点按生成回复建议（R4：只由坐席触发，不自动调模型）。
+ * 检索命中时后端返回的是知识库标准答案，**不是人设生成的**，
+ * 故按钮文案不承诺「人设」，靠返回的 aiSuggestionSource 徽标区分（S1）。
+ */
+export function useGenerateSuggestion(): UseMutationResult<unknown, Error, number, unknown> {
+  const qc = useQueryClient()
+  return useMutation({
+    mutationFn: (id) => http.post(`/api/conversations/${id}/generate-ai-suggestion`),
+    onSuccess: () => { void qc.invalidateQueries({ queryKey: QK.queue }) }
+  })
 }
