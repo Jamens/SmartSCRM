@@ -265,6 +265,11 @@ cd apps/desktop && pnpm test:ai
 # B28 real-model probe: talks to local Ollama to verify tone changes with the persona
 # pull qwen2.5:3b and nomic-embed-text first; override endpoint/model with SCRM_CHAT_* env vars
 cd apps/desktop && pnpm test:ai:real
+
+# B28 end-to-end HTTP: requires MySQL + Spring Boot running; credentials and seed IDs via B28_E2E_* env vars
+# The two legs need different server configs: chat-only -> model path; with embedding -> retrieval path
+cd apps/desktop && pnpm test:ai:e2e
+cd apps/desktop && pnpm test:ai:e2e:retrieval
 ```
 
 Conventions:
@@ -291,7 +296,11 @@ Conventions:
 
 ## 8. What's next
 
-- **B28 has one outstanding acceptance leg**: the end-to-end HTTP path (start MySQL + Spring Boot, then `PUT /api/conversations/{id}/ai-persona` -> `POST .../generate-ai-suggestion` -> verify the four `chat_conversation` columns) has not been executed. The offline contract harness (`pnpm test:ai`) and the local real-model probe (`pnpm test:ai:real`) both pass, but they only cover the wire/source contract and a direct model-endpoint call respectively. Neither substitutes for the other or for end-to-end acceptance.
+- **B28 persona-engine acceptance is closed**: offline contract 18/18, local real-model probe 7/7,
+  end-to-end HTTP legs `test:ai:e2e` 10/10 and `test:ai:e2e:retrieval` 6/6, all against real MySQL + Spring Boot + Ollama.
+  The three layers are not interchangeable: contract checks the wire/source, the probe checks a direct model call,
+  and the end-to-end legs check the HTTP path, permissions and the four persisted columns.
+  The end-to-end run also caught and fixed a startup-time constructor injection defect (see spec §1.3).
 
 
 From the task queue (details in `docs/feature-checklist.md` and `docs/feature-backlog.md`):

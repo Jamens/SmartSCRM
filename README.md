@@ -281,6 +281,11 @@ cd apps/desktop && pnpm test:ai
 # 需先拉 qwen2.5:3b 与 nomic-embed-text；端点/模型可用 SCRM_CHAT_* 覆盖
 cd apps/desktop && pnpm test:ai:real
 
+# B28 端到端 HTTP 验收：需 MySQL + Spring Boot 已启动，凭据与种子 ID 走 B28_E2E_* 环境变量
+# 两条腿后端配置不同，分开跑：只配 chat -> 走模型；另配 embedding -> 走检索
+cd apps/desktop && pnpm test:ai:e2e
+cd apps/desktop && pnpm test:ai:e2e:retrieval
+
 # 管理端前端（apps/admin）：typecheck + lint + 生产构建
 cd apps/admin && pnpm typecheck
 cd apps/admin && pnpm lint
@@ -318,7 +323,10 @@ cd apps/admin && pnpm build
 
 ## 八、下一步在做什么
 
-- **B28 剩余一条验收欠账**：端到端 HTTP 腿（起 MySQL + Spring Boot，走 `PUT /api/conversations/{id}/ai-persona` → `POST .../generate-ai-suggestion` → 回查 `chat_conversation` 四列）尚未执行。离线契约 harness（`pnpm test:ai`）与本地模型真机探针（`pnpm test:ai:real`）均已通过，但二者分别只覆盖线路/源码契约与模型端点直连，**不得互相冒充，也不得冒充端到端验收**。
+- **B28 AI 人设引擎验收已闭合**：离线契约 18/18、本地模型真机探针 7/7、端到端 HTTP 腿
+  `test:ai:e2e` 10/10 + `test:ai:e2e:retrieval` 6/6 全部通过（真实 MySQL + Spring Boot + Ollama）。
+  三层分工不互相替代：契约层验线路/源码守卫，探针层验模型端点直连，端到端层验 HTTP 链路 + 权限 + 落库四列。
+  端到端腿还抓到并修掉了一个启动期构造器注入缺陷（见 spec §1.3）。
 
 
 任务队列视角（详见 `docs/feature-checklist.md` 与 `docs/feature-backlog.md`）：

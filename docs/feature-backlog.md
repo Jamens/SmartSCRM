@@ -53,7 +53,7 @@
 
 **当天已补**（V51 向量检索 + V52 AI 自动应答，详见 checklist 的 B28 第五/六段）。**当时仍空**：AI 人设引擎（`ai_persona_id` 这个 hook 一直没被消费，现有 AI 走的是知识库检索，两者不是一回事——人设引擎 = 调模型按角色提示词生成，检索 = 从已有 QA 里找）。
 
-**2026-11-05 补记：这一项缺口已消**。分支 `feat/b28-persona-engine` 交付第七段：`ChatClient`（OpenAI 兼容、端点/模型全走 env 注入且默认空）+ `PersonaEngine`（检索优先、模型兜底、检索未启用/失败不阻断模型）+ V54 `ai_suggestion_source` + 绑定/生成两个端点 + 接管台下拉/生成按钮/来源徽标/否决 + 8 语 i18n + `AiPersonaService` 草稿模型分支。验证：后端 559→595 单测全绿、桌面 557→562 单测全绿、离线契约 harness 18/18、真机探针 7/7（极简人设 12 字 vs 共情人设 143 字，语气可区分）、五路 typecheck / 桌面 build / admin build 通过。**唯一欠账**：端到端 HTTP 腿（起 MySQL + Spring Boot，走 `PUT /ai-persona` → `POST /generate-ai-suggestion` → 回查四列）未跑；不得拿端点直连探针或 mock 契约冒充。
+**2026-11-05 补记：这一项缺口已消**。分支 `feat/b28-persona-engine` 交付第七段：`ChatClient`（OpenAI 兼容、端点/模型全走 env 注入且默认空）+ `PersonaEngine`（检索优先、模型兜底、检索未启用/失败不阻断模型）+ V54 `ai_suggestion_source` + 绑定/生成两个端点 + 接管台下拉/生成按钮/来源徽标/否决 + 8 语 i18n + `AiPersonaService` 草稿模型分支。验证：后端 559→595 单测全绿、桌面 557→562 单测全绿、离线契约 harness 18/18、真机探针 7/7（极简人设 12 字 vs 共情人设 143 字，语气可区分）、五路 typecheck / 桌面 build / admin build 通过。**2026-11-06 端到端验收补齐**：真实 MySQL + Spring Boot + Ollama 下 `test:ai:e2e` 10/10（模型腿，极简 14 字 vs 共情 122 字）与 `test:ai:e2e:retrieval` 6/6（检索腿，余弦 0.877、`source=retrieval`、qaId/score 落库）；并抓修一个启动期构造器注入缺陷（`ChatClient` 漏标 `@Autowired`，595 条 mock 单测全绿却起不来应用）。**此项已完全闭合，无欠账**。
 
 > 教训记在这里，别再犯：台账标 ✅ 之前应 grep 一次实际能力，不只看表结构和 CRUD 有没有。本表上一版就是这么废掉的。
 

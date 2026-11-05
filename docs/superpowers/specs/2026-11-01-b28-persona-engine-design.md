@@ -1,6 +1,6 @@
 # B28 AI 人设引擎（生成建议 · 坐席点按）
 
-> 状态：**主体已交付**（2026-11-05 用户拍板并实施；端到端 HTTP 腿未跑，见 §1.3 / README §八） · 规格编写 2026-11-01
+> 状态：**已交付**（2026-11-05 实施；2026-11-06 端到端 HTTP 验收通过，见 §1.3） · 规格编写 2026-11-01
 > 上游：`docs/superpowers/specs/2026-10-06-b28-ai-knowledge-design.md`（B28 主 spec，本 spec 补它没做完的那一段）
 > 对标：`docs/feature-backlog.md` §二之二「B28 的真实缺口」
 
@@ -84,9 +84,21 @@ B28 已经交付了六段（知识库三栏 / 文档管线 / 人设 CRUD 与模�
   ① 两份人设的语气确实可区分（极简人设 12 字「请告知客户具体发货时间。」vs 共情人设 143 字带致歉与后续步骤）；
   ② 端点不可达时明确失败（40906）且 `text=null`，不留半截建议；③ `/v1/embeddings` 返回 768 维。
   离线契约 harness 另跑 18/18，覆盖请求形状与 401 / 500 / 畸形 JSON / 超时 / 缺 choices 等失败收敛，并直接读生产源码做静态守卫。
-- **仍缺的一条**：**端到端 HTTP 腿未跑**——需起 MySQL + Spring Boot，走 `PUT /{id}/ai-persona` → `POST /{id}/generate-ai-suggestion` → 回查 `chat_conversation` 四列，
-  并验证前端错误提示与来源徽标。本机目前只有 MySQL 在 3306、后端未起、无测试用 SpringBootTest/MockMvc 基建与租户种子数据，故显式挂起。
-  **不得用端点直连探针或 mock 契约冒充端到端验收**
+- **端到端 HTTP 腿已执行（2026-11-06，MySQL + Spring Boot + 真实 Ollama 全通）**：
+  - `e2e-http.mjs` **10/10**：登录 → 绑定人设 → 生成建议 → 回查四列 → 否决 → 解绑 → 双闸拒绝 → 无 token 403 → 跨租户 40404。
+    模型腿极简人设 14 字「请耐心等待，我们会尽快处理。」vs 共情人设 122 字带致歉与后续步骤——**语气随人设变化在真实 HTTP 链路上成立**；
+    `source=model` 且 `score`/`qaId` 显式为 null（D2）；否决后四列全清含 source（D3）；失败不写库（R5）。
+  - `e2e-retrieval.mjs` **6/6**：启用 `SCRM_EMBEDDING_BASE_URL` 后造标准 QA + 建索引（余弦 0.877），
+    生成建议返回 `source=retrieval`、正文等于知识库标准答案、`qaId`/`score` 有值，否决后四列清空。
+  - 两条腿**分别在不同后端配置下跑**：只配 chat 时按 D1 跳过检索全走模型；同时配 embedding 时检索优先命中即不调模型。
+- **端到端腿抓到的真实缺陷**（mock 单测覆盖不到）：`ChatClient` 有两个构造器、Spring 构造漏标 `@Autowired`，
+  多构造器时 Spring 退回无参构造器并在启动期抛 `NoSuchMethodException: ChatClient.<init>()`。
+  已修复并补反射回归守卫（`ChatClientTest.springInjectionConstructorIsExplicitlyMarked`）。
+  这类「595 条单测全绿但应用起不来」的问题，正是端到端腿不可替代的价值。
+- **复现前置**：起 MySQL（Flyway 自动建库并跑到 V54）+ 后端注入
+  `SCRM_DB_PASSWORD` / `SCRM_JWT_SECRET` / `SCRM_CHAT_BASE_URL` / `SCRM_CHAT_MODEL`（检索腿另加 `SCRM_EMBEDDING_BASE_URL`），
+  准备一个账号与会话/人设种子，再用环境变量把凭据与 ID 喂给两个 e2e 脚本（仓库不落任何账号或口令）。
+  命令见 README §六。
 
 ---
 

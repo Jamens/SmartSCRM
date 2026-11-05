@@ -18,6 +18,8 @@
         "test:tg": "node test/telegram-protocol/run.mjs",
         "test:ai": "node test/ai-persona/run.mjs",
         "test:ai:real": "node test/ai-persona/real-model-probe.mjs",
+        "test:ai:e2e": "node test/ai-persona/e2e-http.mjs",
+        "test:ai:e2e:retrieval": "node test/ai-persona/e2e-retrieval.mjs",
         "build:inject": "node scripts/build-inject.mjs",
         "watch:inject": "node scripts/build-inject.mjs --watch",
         "build:bridge": "node scripts/build-bridge.mjs",
