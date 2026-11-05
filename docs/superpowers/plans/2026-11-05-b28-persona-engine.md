@@ -143,9 +143,9 @@
 
 ### 任务 12：8 语 i18n
 - 文件：`apps/desktop/src/renderer/src/i18n/locales/{zh-CN,zh-TW,en,ja,ko,id,th,vi}.ts`
-- 要做：在 `ai.queue` 下补 9 个 key：`persona` / `personaPlaceholder` / `generate` / `generating` /
-  `sourceKnowledge` / `sourceModel` / `noPersonaHint` / `dismiss` / `personaLoadFailed`。
-  zh-CN 与 en 写准确文案，其余 6 语可沿用 en 文案但**必须补齐 key**（i18n 类型会检查）。
+- 要做：在 `ai.queue` 下补 **10 个** key：`persona` / `personaPlaceholder` / `generate` / `generating` /
+  `sourceKnowledge` / `sourceModel` / `noPersonaHint` / `dismiss` / `personaLoadFailed` / `generateFailed`（最后一条是 review 时补的「生成失败可见」，真机腿 R5 要求）。
+  zh-CN、en 写准确文案，其余 6 语也给了本地化短文案（**必须补齐 key**，i18n 类型会检查）。
 - 验证：`pnpm run typecheck:web` 全绿；8 个文件 grep 都能命中 `sourceModel`。
 
 ---
@@ -170,9 +170,13 @@
   不得把端点直连探针的结果冒充端到端验收。
 
 ### 任务 15：全量验证
-- 命令：`pnpm run typecheck` / `pnpm --filter smartscrm-desktop run test:unit` / `./mvnw test -q` /
-  `pnpm run build` / `pnpm lint`（既有 2 个 error 位于 `allowedViewUrls.verify.mjs`，非本次引入，记录不修）
-- 预期：五路 typecheck 全绿；桌面单测 ≥557+新增；后端 ≥559+新增；build 通过。
+- **实际命令**（根包没有 `build` / `lint` 脚本，计划初稿写错了，按真实脚本走）：
+  `pnpm run typecheck` / `pnpm --filter smartscrm-desktop run test:unit` / `./mvnw test -q` /
+  `pnpm --filter smartscrm-desktop run test:ai` / `pnpm --filter smartscrm-desktop run build` /
+  `pnpm --filter @smartscrm/admin run lint` / `pnpm --filter @smartscrm/admin run build` /
+  `pnpm --filter smartscrm-desktop run lint`
+- lint 既有 2 个 error 位于 `src/main/webContentsView/allowedViewUrls.verify.mjs`（`explicit-function-return-type`），非本次引入，记录不修；
+  另有全仓库 CRLF 引起的 6 万余条 prettier warning，同属既有风格问题。本次新增文件 lint error 已清零。
 
 ---
 
@@ -193,11 +197,29 @@
 
 ## 5. 红线复核清单（提交前逐条打勾）
 
-- [ ] 端点与模型名全走配置注入，**默认空**，仓库里无硬编码商业云地址
-- [ ] 只产出建议，后端无任何出站发送调用
-- [ ] 检索优先、模型兜底；检索失败不阻断模型（D1），模型失败**绝不写库**（R5）
-- [ ] 未绑人设 = 无模型路径，按钮前端禁用 + 后端拒绝双闸
-- [ ] 租户隔离：人设 / 角色 / 会话 / 消息全按 `principal.tenantId()` 收窄
+- [x] 端点与模型名全走配置注入，**默认空**，仓库里无硬编码商业云地址
+- [x] 只产出建议，后端无任何出站发送调用
+- [x] 检索优先、模型兜底；检索失败不阻断模型（D1），模型失败**绝不写库**（R5）
+- [x] 未绑人设 = 无模型路径，按钮前端禁用 + 后端拒绝双闸
+- [x] 租户隔离：人设 / 角色 / 会话 / 消息全按 `principal.tenantId()` 收窄
+
+---
+
+## 6. 实施记录（2026-11-05）
+
+| 任务 | 结果 |
+|---|---|
+| 1–9 后端 | `c96335c` 已提交。后端 559 → **595/0**；review 无 Critical，两个 Minor 记录不改（`resolveRolePrompt` 静默跳过不存在角色；`AiPersonaService` 双构造器靠 `@Autowired` 区分） |
+| 10–12 前端 | 纯函数 5 条先红后绿；`QueueTab` 重写；8 语 × 10 key。review 修 3 处：停用项保留回显禁用、生成中别行提示误标、**生成失败可见** |
+| 13 离线契约 | 实做 **18 条**（要求 ≥8）：14 条线路层 + 4 条读生产源码的静态契约守卫，避免「mock 全绿、实现漂移」。新增 `test:ai` 脚本 |
+| 14 真机腿 | **7/7**，`test:ai:real`。极简人设 12 字 vs 共情人设 143 字；端点不可达 40906 且 `text=null`；embedding 768 维。**端到端 HTTP 腿未跑**，见下 |
+| 15 全量验证 | 五路 typecheck ✅；桌面单测 557 → **562/0**；后端 595/0；契约 18/18；真机 7/7；桌面 build ✅；admin lint ✅ / build ✅；lint 仅剩 2 个既有 error |
+| 16 台账 | `feature-backlog` §一/§二之二、`feature-checklist` B28 第七段、README §六/§八、README.en §6/§8、spec 头部与 §1.3/§2.8/§3/§4 全部回填 |
+| 17 评审合并 | 逐任务对照；合并回 `main` 并清理 worktree |
+
+**唯一未闭合项**：端到端 HTTP 腿（MySQL + Spring Boot + 两个端点 + 回查四列 + 前端错误提示/来源徽标）。
+本机 MySQL 在 3306，但后端未起、无 `application-local.yml`、无 DB 凭据与租户种子数据，也没有 SpringBootTest/MockMvc 测试基建，
+按 spec §1.3 显式挂起并在所有交付文档标注；**不得拿真机探针或 mock 契约冒充**。
 - [ ] system 段不含客户正文（提示词注入防线）
 - [ ] 无流式输出；无自动触发；失败不留半截建议
 - [ ] 真机腿若未跑，交付说明里**显式标注**

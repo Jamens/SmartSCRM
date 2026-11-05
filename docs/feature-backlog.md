@@ -22,7 +22,7 @@
 已交付、但历史上被误判成「没做」过的几项，重点记一下：
 
 - **B27** 协议号通道 —— 入站 + 出站腿均已接线，离线联调 harness 6/6 通过。卡的是自托管网关真机联调（第三节），不是代码
-- **B28** AI 知识库 —— 三栏 + 文档管线 + 人设助手 + 养号 + 接管队列 + 规则引擎，前后端全闭环。**2026-10-13 补第五/六段**：向量检索（V51）+ AI 自动应答（V52）。但**人设引擎本身仍空**，见「二之二」
+- **B28** AI 知识库 —— 三栏 + 文档管线 + 人设助手 + 养号 + 接管队列 + 规则引擎，前后端全闭环。**2026-10-13 补第五/六段**：向量检索（V51）+ AI 自动应答（V52）。**2026-11-05 补第七段**：AI 人设引擎（`ai_persona_id` hook 已消费），见「二之二」；剩端到端 HTTP 验收一条欠账
 - **B22** 部门三字段 / 子账号端口上限 / 重置密码 —— 补章时确认真实缺失，已于 `fc2b07d` 补齐
 - **B7** 批量群发 —— 已交付（`BatchSendService` + `BatchSendController` + `BatchSendServiceTest` 都在）。只差真发/真撤回各 1 次的**验证**（第三节）
 
@@ -51,7 +51,9 @@
 - `KnowledgeQaService` 当时只有 list/create/update/delete，**无任何检索方法**——知识库存得进、检索不出
 - `TakeoverService` 自述 `ai_persona_id` 是 forward hook，**not consulted by any logic yet**
 
-**当天已补**（V51 向量检索 + V52 AI 自动应答，详见 checklist 的 B28 第五/六段）。**当前仍空**：AI 人设引擎（`ai_persona_id` 这个 hook 至今没被消费，现有 AI 走的是知识库检索，两者不是一回事——人设引擎 = 调模型按角色提示词生成，检索 = 从已有 QA 里找）。
+**当天已补**（V51 向量检索 + V52 AI 自动应答，详见 checklist 的 B28 第五/六段）。**当时仍空**：AI 人设引擎（`ai_persona_id` 这个 hook 一直没被消费，现有 AI 走的是知识库检索，两者不是一回事——人设引擎 = 调模型按角色提示词生成，检索 = 从已有 QA 里找）。
+
+**2026-11-05 补记：这一项缺口已消**。分支 `feat/b28-persona-engine` 交付第七段：`ChatClient`（OpenAI 兼容、端点/模型全走 env 注入且默认空）+ `PersonaEngine`（检索优先、模型兜底、检索未启用/失败不阻断模型）+ V54 `ai_suggestion_source` + 绑定/生成两个端点 + 接管台下拉/生成按钮/来源徽标/否决 + 8 语 i18n + `AiPersonaService` 草稿模型分支。验证：后端 559→595 单测全绿、桌面 557→562 单测全绿、离线契约 harness 18/18、真机探针 7/7（极简人设 12 字 vs 共情人设 143 字，语气可区分）、五路 typecheck / 桌面 build / admin build 通过。**唯一欠账**：端到端 HTTP 腿（起 MySQL + Spring Boot，走 `PUT /ai-persona` → `POST /generate-ai-suggestion` → 回查四列）未跑；不得拿端点直连探针或 mock 契约冒充。
 
 > 教训记在这里，别再犯：台账标 ✅ 之前应 grep 一次实际能力，不只看表结构和 CRUD 有没有。本表上一版就是这么废掉的。
 
